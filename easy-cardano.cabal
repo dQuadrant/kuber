@@ -1,0 +1,54 @@
+cabal-version:      2.4
+name:               cardano-market
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+license: Apache-2.0
+license-files: LICENSE
+author:             Sudip Bhattarai
+maintainer:         Sudip Bhattarai
+
+-- A copyright notice.
+-- copyright:
+-- category:
+-- extra-source-files: CHANGELOG.md
+
+library
+  exposed-modules:
+
+    Cardano.Contrib.Easy.Util
+    Cardano.Contrib.Easy.Api
+  other-modules:
+   Cardano.Contrib.Easy.Context
+   Cardano.Contrib.Easy.Error
+   Cardano.Contrib.Easy.TxFramework
+   Cardano.Contrib.Easy.Parsers
+
+    -- Plutus.Contract.Wallet.Utils
+  hs-source-dirs: src
+  build-depends:
+      base >= 4.9 && <5
+    , containers
+    , bytestring
+    , serialise
+    , text
+    , filepath
+    , directory
+    , aeson
+    , text-conversions
+    , cardano-api
+    , cardano-ledger-alonzo
+    , cardano-slotting
+    , shelley-spec-ledger
+    , plutus-ledger-api
+    , plutus-ledger
+    , plutus-tx
+    , ouroboros-network
