@@ -68,6 +68,8 @@ txPayTo addr v= TxOperationBuilder{
     ctxSignatures=[]
   }
 
+
+
 txPayToPkh:: PubKeyHash  ->Value ->TxOperationBuilder
 txPayToPkh pkh v= TxOperationBuilder{
     ctxInputs=[],
@@ -140,21 +142,28 @@ txRedeemUtxoWithValidator utxo validator _data _redeemer =TxOperationBuilder{
     script  = Plutus.unValidatorScript validator
 
 
-mkTxAndSubmit :: IsNetworkCtx v =>v ->TxOperationBuilder
-  -> SigningKey PaymentKey
-  -> IO TxId
-mkTxAndSubmit networkCtx (TxOperationBuilder input output signature ) sKey   = do
-  let walletAddr=skeyToAddr sKey
+data TxResult=TxResult {
+   txResultFee :: Lovelace ,
+   txResultIns::[(TxIn, Cardano.Api.Shelley.TxOut AlonzoEra)],
+   txResultBodyCotent::TxBodyContent BuildTx AlonzoEra,
+   txResultBody:: TxBody AlonzoEra
+}
+
+
+
+mkTx :: IsNetworkCtx v =>v ->TxOperationBuilder
+  -> AddressInEra AlonzoEra 
+  -> IO TxResult
+mkTx networkCtx (TxOperationBuilder input output signature ) walletAddrInEra   = do
   (NetworkContext conn network pParam) <- toNetworkContext networkCtx
-  UTxO walletUtxos <- queryUtxos conn (toAddressAny walletAddr)
-  mappedOutput <-mapM (toOuotput network) output 
+  walletAddr <-unMaybe (SomeError "unexpected error converting address to another type") (deserialiseAddress (AsAddressAny)  ((serialiseAddress  walletAddrInEra))) 
+  UTxO walletUtxos <- queryUtxos conn walletAddr
+  mappedOutput <- mapM (toOuotput network) output 
   (operationUtxos,txins) <- resolveAndSumIns conn input
   let operationUtoSum=foldMap txOutValue (Map.elems operationUtxos)
   if not hasScriptInput
-  then (do
-      (inputs,content,body) <- executeMkBalancedBody pParam  (UTxO walletUtxos) (mkBody  txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum (skeyToAddrInEra sKey)
-      signAndSubmitTxBody conn  body sKey
-    )
+  then executeMkBalancedBody pParam  (UTxO walletUtxos) (mkBody  txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum walletAddrInEra
+    
   else (do
     (FullNetworkContext _ _ _ systemStart eraHistory ) <- toFullNetworkContext networkCtx
     let possibleCollaterals= Map.filter isOnlyAdaTxOut walletUtxos
@@ -163,10 +172,10 @@ mkTxAndSubmit networkCtx (TxOperationBuilder input output signature ) sKey   = d
     let txInsCollateral=TxInsCollateral CollateralInAlonzoEra  [myCollateral ]
 
     let bodyRevsion0 =   mkBody txins mappedOutput txInsCollateral pParam
-    (usedWalletUtxos,balancedRevisionContent0,balancedRevision0)<-case
+    (TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0)<-case
         mkBalancedBody
           pParam (UTxO walletUtxos) bodyRevsion0 operationUtoSum
-          (skeyToAddrInEra sKey)
+          walletAddrInEra
       of
         Left tbe -> throw $ SomeError $ "First Balance :" ++ show tbe
         Right x0 -> pure x0
@@ -180,7 +189,8 @@ mkTxAndSubmit networkCtx (TxOperationBuilder input output signature ) sKey   = d
     modifiedIns<- case v of
       Left tvie -> throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
       Right mp -> applyTxInExecutionUnits (txIns balancedRevisionContent0) orderedIns mp
-    balanceAndSubmitBody conn sKey (mkBody  modifiedIns mappedOutput txInsCollateral pParam) (UTxO walletUtxos) operationUtoSum)
+    executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum walletAddrInEra)
+    
   where
     hasScriptInput = any (\case
                               ScriptCtxTxIn x0 -> True
@@ -289,14 +299,13 @@ mkTxAndSubmit networkCtx (TxOperationBuilder input output signature ) sKey   = d
        Right res -> pure res
 
 mkBalancedBody :: ProtocolParameters
-  -> UTxO era
+  -> UTxO AlonzoEra
   -> TxBodyContent BuildTx AlonzoEra
   -> Value
   -> AddressInEra AlonzoEra
   -> Either
       TxBodyError
-      ([(TxIn, Cardano.Api.Shelley.TxOut era)],
-        TxBodyContent BuildTx AlonzoEra, TxBody AlonzoEra)
+      TxResult
 mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
     do
       -- first iteration
@@ -318,17 +327,17 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
         then do
           let  modifiedBody'=(modifiedBody txIns1 modifiedChange1 fee1 )
           txBody<-makeTransactionBody modifiedBody'
-          Right (inputs1,modifiedBody',txBody)
+          Right (TxResult fee1 inputs1  modifiedBody'  txBody)
         else do
           txbody2 <- makeTransactionBody bodyContent2
           let fee2=evaluateTransactionFee pParams txbody2 1 0
               modifiedChange2= change2 <> negLovelace fee2 <> lovelaceToValue fee1
           if fee2 == fee1
-            then Right  (inputs2,bodyContent2,txbody2)
+            then Right  (TxResult fee2 inputs2 bodyContent2 txbody2)
             else do
               let body=modifiedBody txIns2 modifiedChange2 fee2
               txBody <- makeTransactionBody body
-              Right (inputs2,body,txBody)
+              Right (TxResult fee2 inputs2 body txBody)
 
   where
   performBalance  change fee= do
@@ -423,12 +432,11 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
 
 executeMkBalancedBody :: Applicative f =>
   ProtocolParameters
-  -> UTxO era
+  -> UTxO AlonzoEra
   -> TxBodyContent BuildTx AlonzoEra
   -> Value
   -> AddressInEra AlonzoEra
-  -> f ([(TxIn, Cardano.Api.Shelley.TxOut era)],
-      TxBodyContent BuildTx AlonzoEra, TxBody AlonzoEra)
+  -> f TxResult
 executeMkBalancedBody  pParams utxos  txbody inputSum walletAddr=do
   let balancedBody=mkBalancedBody pParams utxos txbody inputSum walletAddr
   case balancedBody of
@@ -456,12 +464,18 @@ balanceAndSubmitBody conn sKey body utxos sum  = do
 
     }
   let balancedBody = mkBalancedBody pParam  utxos body sum   $  skeyToAddrInEra sKey
+  
   submitEitherBalancedBody conn  balancedBody sKey
 
+submitEitherBalancedBody :: 
+  LocalNodeConnectInfo CardanoMode
+  ->  Either TxBodyError TxResult
+  -> SigningKey PaymentKey
+  -> IO TxId
 submitEitherBalancedBody conn eitherBalancedBody skey =
       --End Balance transaction body with fee
   case  eitherBalancedBody of
     Left tbe ->
       throw $ SomeError $  "Coding Error : Balanced TxBody has error : " ++  (show tbe)
-    Right (_,_,txBody) ->signAndSubmitTxBody conn txBody skey
+    Right (TxResult _ _ _ txBody) ->signAndSubmitTxBody conn txBody skey
 
