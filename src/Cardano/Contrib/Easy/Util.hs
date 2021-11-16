@@ -18,7 +18,7 @@ import System.FilePath (joinPath)
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress))
 import qualified Cardano.Ledger.Alonzo.Tx as LedgerBody
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(SubmitSuccess, SubmitFail))
-import Data.Text.Conversions (convertText, Base16 (unBase16), FromText (fromText))
+import Data.Text.Conversions (convertText, Base16 (unBase16), FromText (fromText), ToText (toText))
 import Data.Functor ((<&>))
 
 import qualified Data.Text as T
@@ -95,7 +95,10 @@ addrToMaybePkh (ShelleyAddress net cre sr) = do
   where
     hash= case cre of
       ScriptHashObj _ ->Nothing
-      KeyHashObj kh -> case kh of { KeyHash ha -> Just $ toStrict $ serialise ha }
+      KeyHashObj kh -> case kh of { KeyHash ha -> unHex $ init $ tail$ show  ha }
+    
+    unHex ::  ToText a => a -> Maybe  ByteString
+    unHex v = convertText (toText v) <&> unBase16
 
 addrInEraToPkh :: MonadFail m =>AddressInEra AlonzoEra -> m PubKeyHash 
 addrInEraToPkh a = case a of { AddressInEra atie ad -> case ad of
