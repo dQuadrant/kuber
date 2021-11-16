@@ -105,8 +105,14 @@ addrInEraToPkh a = case a of { AddressInEra atie ad -> case ad of
                                       ByronAddress ad' -> fail "Byron address is not supported"
                                       ShelleyAddress net cre sr -> case cre of
                                         ScriptHashObj sh -> fail "Expected PublicKey address got Script Address"
-                                        KeyHashObj kh -> pure $ PubKeyHash $ toBuiltin $  case kh of { KeyHash ha ->   toStrict $ serialise ha }   
+                                        KeyHashObj kh -> case kh of { KeyHash ha -> case unHex $ init $ tail $ show ha of
+                                                                        Nothing -> fail "Unexpected"
+                                                                        Just bs -> pure $ PubKeyHash (toBuiltin bs)
+                                                                    }
                                         } 
+    where
+    unHex ::  ToText a => a -> Maybe  ByteString
+    unHex v = convertText (toText v) <&> unBase16
 
 queryUtxos :: LocalNodeConnectInfo CardanoMode-> AddressAny -> IO (UTxO AlonzoEra)
 queryUtxos conn addr=do
