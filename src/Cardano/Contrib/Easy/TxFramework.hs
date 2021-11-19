@@ -211,16 +211,16 @@ mkTx networkCtx (TxOperationBuilder input output signature ) walletAddrInEra   =
             Just a -> case a of
               Left e -> throw $ SomeError  $ "ResolveExecutionUnit for txin: "++ show e
               Right exUnits ->pure $  case  item of { BuildTxWith wit -> case wit of
-                                  KeyWitness kwic -> throw $ SomeError  $ "ResolveExecutionUnit for txin: wrong hit "
-                                  ScriptWitness swic sw -> case sw of
-                                    SimpleScriptWitness slie ssv ss -> throw $ SomeError  $ "ResolveExecutionUnit for txin: wrong hit "
-                                    PlutusScriptWitness slie psv ps sd sd' eu ->
-                                      (
-                                         txIn
-                                        , BuildTxWith $  ScriptWitness ScriptWitnessForSpending
-                                            $ PlutusScriptWitness  slie psv ps sd sd' exUnits
-                                      )
-                              }
+                                KeyWitness kwic -> throw $ SomeError  $ "ResolveExecutionUnit for txin: wrong hit "
+                                ScriptWitness swic sw -> case sw of
+                                  SimpleScriptWitness slie ssv ss -> throw $ SomeError  $ "ResolveExecutionUnit for txin: wrong hit "
+                                  PlutusScriptWitness slie psv ps sd sd' eu ->
+                                    (
+                                        txIn
+                                      , BuildTxWith $  ScriptWitness ScriptWitnessForSpending
+                                          $ PlutusScriptWitness  slie psv ps sd sd' exUnits
+                                    )
+                                    }
         transformIn (txIn,wit) exUnit= (txIn  ,case BuildTxWith $ KeyWitness KeyWitnessForSpending of {
           BuildTxWith wit' -> wit } )
 
@@ -289,9 +289,7 @@ mkTx networkCtx (TxOperationBuilder input output signature ) walletAddrInEra   =
     defaultExunits=ExecutionUnits 10000 10000
     isOnlyAdaTxOut (TxOut a v d) = case v of
                                         TxOutAdaOnly oasie lo -> True
-                                        TxOutValue masie va ->case valueToList va of
-                                          [(AdaAssetId,_)]->True
-                                          _ -> False
+                                        TxOutValue masie va -> selectAsset  va AdaAssetId >0
     unWrapBalance f = do
       x <- f
       case  x  of
