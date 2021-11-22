@@ -288,8 +288,12 @@ mkTx networkCtx (TxOperationBuilder input output signature ) walletAddrInEra   =
                             exUnits
     defaultExunits=ExecutionUnits 10000 10000
     isOnlyAdaTxOut (TxOut a v d) = case v of
+                                        -- only ada then it's ok
                                         TxOutAdaOnly oasie lo -> True
-                                        TxOutValue masie va -> selectAsset  va AdaAssetId >0
+                                        -- make sure that it has only one asset and that one is ada asset.
+                                        TxOutValue masie va -> length vals == 1 && snd(head vals) > 0
+                                              where
+                                                vals=valueToList  va
     unWrapBalance f = do
       x <- f
       case  x  of
