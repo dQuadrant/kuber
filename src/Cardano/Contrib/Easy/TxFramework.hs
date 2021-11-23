@@ -17,7 +17,7 @@ import PlutusTx (ToData)
 import Cardano.Slotting.Time
 import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
 import qualified Data.Map as Map
-import qualified Data.Set
+import qualified Data.Set as Set
 import Data.Map (Map)
 import Control.Exception
 import Data.Either
@@ -29,6 +29,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Ledger.Scripts (Validator)
 import Codec.Serialise (serialise)
 import Cardano.Contrib.Easy.Context
+import Data.Set (Set)
 
 data TestCtxIn  = UtxoCtxIn (UTxO AlonzoEra) | TxInCtxIn TxIn | ScriptCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,TxIn) | ScriptUtxoCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,UTxO AlonzoEra)deriving (Show)
 data TestCtxOut =
@@ -43,7 +44,7 @@ data TestCtxOut =
 data TxOperationBuilder=TxOperationBuilder{
     ctxInputs:: [TestCtxIn], -- inputs in this transaction
     ctxOutputs::[TestCtxOut], -- outputs in this transaction
-    ctxSignatures ::[SigningKey PaymentKey ] -- public key signatures in this transaction
+    ctxSignatures :: [SigningKey PaymentKey] -- public key signatures in this transaction
   } deriving(Show)
 
 
@@ -56,7 +57,7 @@ instance Semigroup TxOperationBuilder where
   }
 
 instance Monoid TxOperationBuilder where
-  mempty = TxOperationBuilder [] [] []
+  mempty = TxOperationBuilder [] [] [] 
 -- mkTxWithWallet :: SigningKey PaymentKey -> TxOperationBuilder -> Ledger.Tx
 
 -- In this transaction, pay some value to the wallet.
@@ -65,9 +66,15 @@ txPayTo:: AddressInEra AlonzoEra ->Value ->TxOperationBuilder
 txPayTo addr v= TxOperationBuilder{
     ctxInputs=[],
     ctxOutputs=[AddrCtxOut  (addr, v)],
-    ctxSignatures=[]
+    ctxSignatures=[] 
   }
 
+txConsumeUtxos :: UTxO AlonzoEra -> TxOperationBuilder
+txConsumeUtxos utxo = TxOperationBuilder{
+  ctxInputs=[UtxoCtxIn  utxo],
+  ctxOutputs=[],
+  ctxSignatures=[]
+}
 
 
 txPayToPkh:: PubKeyHash  ->Value ->TxOperationBuilder
@@ -127,6 +134,13 @@ txRedeemUtxo utxo script _data _redeemer =TxOperationBuilder{
     ctxSignatures=[]
   }
 
+txAddSignature :: SigningKey PaymentKey -> TxOperationBuilder
+txAddSignature skey =TxOperationBuilder{
+  ctxInputs= [],
+  ctxOutputs=[],
+  ctxSignatures=[skey]
+}
+
 -- Redeem from Script Address.
 txRedeemUtxoWithValidator :: (ToData a2, ToData a3) =>
   UTxO AlonzoEra
@@ -183,7 +197,7 @@ mkTx networkCtx (TxOperationBuilder input output signature ) walletAddrInEra   =
     let (orderedIns,orderedOuts)=case balancedRevision0 of {
           ShelleyTxBody sbe
           (LedgerBody.TxBody ins _ outs _ _ _ _ _ _ _ _ _ _) scs tbsd m_ad tsv
-          -> (Data.Set.map fromShelleyTxIn ins,outs)
+          -> (Set.map fromShelleyTxIn ins,outs)
     }
     let v= evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
     modifiedIns<- case v of
@@ -201,7 +215,7 @@ mkTx networkCtx (TxOperationBuilder input output signature ) walletAddrInEra   =
       -> Map ScriptWitnessIndex (Either ScriptExecutionError ExecutionUnits)
       -> IO [(TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))]
     applyTxInExecutionUnits ins orderedIns execUnitMap = do
-      mapM   doMap (zip [0..] (Data.Set.toList orderedIns))
+      mapM   doMap (zip [0..] (Set.toList orderedIns))
       where
         insMap=Map.fromList ins
         doMap  (index,txIn)= case Map.lookup txIn insMap of
@@ -257,7 +271,6 @@ mkTx networkCtx (TxOperationBuilder input output signature ) walletAddrInEra   =
         PkhCtxOut (pkh,value)-> case pkhToMaybeAddr network pkh of
           Nothing -> throw $ SomeError "PubKeyHash couldn't be converted to address"
           Just aie -> pure $ TxOut aie (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumHashNone
-
 
     mkBody ins outs collateral pParam =
           (TxBodyContent {
@@ -398,7 +411,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
       TxOutValue _ v -> v
 
   txOutValue (TxOut _ v _) = v
-
+  
   modifiedOuts= map includeMin (txOuts txbody)
   includeMin txOut= case txOut of {TxOut addr v hash-> case v of
                                      TxOutAdaOnly oasie lo -> txOut
