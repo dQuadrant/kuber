@@ -152,20 +152,20 @@ data TxResult=TxResult {
 
 
 mkTx :: IsNetworkCtx v =>v ->TxOperationBuilder
-  -> AddressInEra AlonzoEra 
+  -> AddressInEra AlonzoEra
   -> IO TxResult
 mkTx networkCtx (TxOperationBuilder input output signature ) walletAddrInEra   = do
-  (NetworkContext conn network pParam) <- toNetworkContext networkCtx
-  walletAddr <-unMaybe (SomeError "unexpected error converting address to another type") (deserialiseAddress (AsAddressAny)  ((serialiseAddress  walletAddrInEra))) 
+  (NetworkContext conn  pParam) <- toNetworkContext networkCtx
+  walletAddr <-unMaybe (SomeError "unexpected error converting address to another type") (deserialiseAddress AsAddressAny (serialiseAddress  walletAddrInEra))
   UTxO walletUtxos <- queryUtxos conn walletAddr
-  mappedOutput <- mapM (toOuotput network) output 
+  mappedOutput <- mapM (toOuotput (networkCtxNetwork networkCtx)) output
   (operationUtxos,txins) <- resolveAndSumIns conn input
   let operationUtoSum=foldMap txOutValue (Map.elems operationUtxos)
   if not hasScriptInput
   then executeMkBalancedBody pParam  (UTxO walletUtxos) (mkBody  txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum walletAddrInEra
-    
+
   else (do
-    (FullNetworkContext _ _ _ systemStart eraHistory ) <- toFullNetworkContext networkCtx
+    (FullNetworkContext _  _ systemStart eraHistory ) <- toFullNetworkContext networkCtx
     let possibleCollaterals= Map.filter isOnlyAdaTxOut walletUtxos
     if null possibleCollaterals then throw (SomeError "BuildTx: No utxo usable as collateral") else pure ()
     let (myCollateral,_)= head $ Map.toList possibleCollaterals
@@ -183,14 +183,14 @@ mkTx networkCtx (TxOperationBuilder input output signature ) walletAddrInEra   =
     let (orderedIns,orderedOuts)=case balancedRevision0 of {
           ShelleyTxBody sbe
           (LedgerBody.TxBody ins _ outs _ _ _ _ _ _ _ _ _ _) scs tbsd m_ad tsv
-          -> (Data.Set.map (\v->fromShelleyTxIn v ) ins,outs)
+          -> (Data.Set.map fromShelleyTxIn ins,outs)
     }
     let v= evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
     modifiedIns<- case v of
       Left tvie -> throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
       Right mp -> applyTxInExecutionUnits (txIns balancedRevisionContent0) orderedIns mp
     executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum walletAddrInEra)
-    
+
   where
     hasScriptInput = any (\case
                               ScriptCtxTxIn x0 -> True
@@ -205,7 +205,7 @@ mkTx networkCtx (TxOperationBuilder input output signature ) walletAddrInEra   =
       where
         insMap=Map.fromList ins
         doMap  (index,txIn)= case Map.lookup txIn insMap of
-          Nothing   ->  throw $ SomeError  $ "Look how they maccasacred my boy"
+          Nothing   ->  throw $ SomeError   "Look how they maccasacred my boy"
           Just item -> case Map.lookup (ScriptWitnessIndexTxIn index) execUnitMap of
             Nothing -> pure (txIn,item)
             Just a -> case a of
@@ -311,7 +311,7 @@ mkBalancedBody :: ProtocolParameters
 mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
     do
       -- first iteration
-      let (inputs1,change1) =minimize txouts startingChange 
+      let (inputs1,change1) =minimize txouts startingChange
           txIns1=map utxoToTxBodyIn inputs1
           bodyContent1=modifiedBody (map utxoToTxBodyIn inputs1) change1 startingFee
       txBody1 <- unEither $ case makeTransactionBody bodyContent1 of
@@ -376,7 +376,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
 
   minimize' utxos remainingChange = (doMap,remainingChange)
     where
-      doMap=map (\(txin,txout) -> (tobodyIn txin)) utxos
+      doMap=map (\(txin,txout) -> tobodyIn txin) utxos
       tobodyIn _in=(_in,BuildTxWith $ KeyWitness KeyWitnessForSpending)
       val  out= txOutValueToValue $ txOutValue  out
 
@@ -388,7 +388,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
   startingChange=(negateValue $ foldMap (txOutValueToValue  . txOutValue ) modifiedOuts )  --already existing outputs
                   <> (if  null (txIns txbody) then mempty else inputSum) -- already existing inputs
                   <> (foldMap (txOutValueToValue  . txOutValue) $  Map.elems utxoMap) -- sum of all the available utxos
-                  <> negateValue (lovelaceToValue startingFee) 
+                  <> negateValue (lovelaceToValue startingFee)
   utxoToTxOut (UTxO map)=Map.toList map
 
   txOutValueToValue :: TxOutValue era -> Value
@@ -402,9 +402,9 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
   modifiedOuts= map includeMin (txOuts txbody)
   includeMin txOut= case txOut of {TxOut addr v hash-> case v of
                                      TxOutAdaOnly oasie lo -> txOut
-                                     TxOutValue masie va -> 
-                                       if selectAsset va AdaAssetId == Quantity  0 
-                                       then TxOut  addr (TxOutValue masie (va <> lovelaceToValue  (Lovelace 2_000_000))) hash 
+                                     TxOutValue masie va ->
+                                       if selectAsset va AdaAssetId == Quantity  0
+                                       then TxOut  addr (TxOutValue masie (va <> lovelaceToValue  (Lovelace 2_000_000))) hash
                                        else txOut }
   modifiedBody txins change fee= content
     where
@@ -465,11 +465,11 @@ balanceAndSubmitBody conn sKey body utxos sum  = do
         Nothing -> queryProtocolParam conn
 
     }
-  let balancedBody = mkBalancedBody pParam  utxos body sum   $  skeyToAddrInEra sKey
-  
+  let balancedBody = mkBalancedBody pParam  utxos body sum   $  skeyToAddrInEra sKey (localNodeNetworkId conn)
+
   submitEitherBalancedBody conn  balancedBody sKey
 
-submitEitherBalancedBody :: 
+submitEitherBalancedBody ::
   LocalNodeConnectInfo CardanoMode
   ->  Either TxBodyError TxResult
   -> SigningKey PaymentKey
@@ -478,6 +478,6 @@ submitEitherBalancedBody conn eitherBalancedBody skey =
       --End Balance transaction body with fee
   case  eitherBalancedBody of
     Left tbe ->
-      throw $ SomeError $  "Coding Error : Balanced TxBody has error : " ++  (show tbe)
+      throw $ SomeError $  "Coding Error : Balanced TxBody has error : " ++  show tbe
     Right (TxResult _ _ _ txBody) ->signAndSubmitTxBody conn txBody skey
 

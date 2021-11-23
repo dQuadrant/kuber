@@ -8,67 +8,74 @@ import Cardano.Contrib.Easy.Util
     ( getDefaultConnection,
       queryProtocolParam,
       querySystemStart,
-      queryEraHistory )
+      queryEraHistory, getNetworkFromEnv )
 import Data.Functor ((<&>))
 class IsNetworkCtx v where
   toNetworkContext :: v-> IO NetworkContext
   toFullNetworkContext :: v->IO FullNetworkContext
-  getConn :: v-> LocalNodeConnectInfo CardanoMode
+  networkCtxConn :: v-> LocalNodeConnectInfo CardanoMode
+
   networkCtxNetwork :: v -> NetworkId
+  networkCtxNetwork v = localNodeNetworkId $ networkCtxConn v 
 
-data MinimalNetworkContext=
-    MinimalNetworkContext {
-      conn :: LocalNodeConnectInfo CardanoMode,
-      network :: NetworkId
-    }
-
-
+newtype MinimalNetworkContext= MinimalNetworkContext (LocalNodeConnectInfo CardanoMode)
+ 
 instance IsNetworkCtx MinimalNetworkContext where
-  toNetworkContext  (MinimalNetworkContext conn network)=
-        queryProtocolParam conn <&> NetworkContext conn network
-  toFullNetworkContext  (MinimalNetworkContext conn network) = do
+  toNetworkContext  (MinimalNetworkContext conn )=
+        queryProtocolParam conn <&> NetworkContext conn 
+  toFullNetworkContext  (MinimalNetworkContext conn ) = do
         eHistory <-queryEraHistory conn
         systemStart <-querySystemStart conn
         protocolPrams <-queryProtocolParam conn
-        pure  $ FullNetworkContext conn network protocolPrams  systemStart eHistory
-  getConn (MinimalNetworkContext conn _)= conn 
-  networkCtxNetwork (MinimalNetworkContext conn network)=network 
+        pure  $ FullNetworkContext conn  protocolPrams  systemStart eHistory
+  networkCtxConn (MinimalNetworkContext conn )= conn 
+  networkCtxNetwork (MinimalNetworkContext conn )=localNodeNetworkId conn 
 
 data  NetworkContext=NetworkContext {
       ctxConn :: LocalNodeConnectInfo CardanoMode,
-      ctxNetwork :: NetworkId,
       ctxProtocolParameters:: ProtocolParameters
     }
 instance IsNetworkCtx NetworkContext where
   toNetworkContext  = pure
-  toFullNetworkContext  (NetworkContext conn network pParams) = do
+  toFullNetworkContext  (NetworkContext conn  pParams) = do
         eHistory <-queryEraHistory conn
         systemStart <-querySystemStart conn
-        pure  $ FullNetworkContext conn network pParams  systemStart eHistory
-  getConn (NetworkContext conn _ _)= conn 
-  networkCtxNetwork (NetworkContext _ net _ ) = net
+        pure  $ FullNetworkContext conn  pParams  systemStart eHistory
+  networkCtxConn (NetworkContext conn  _)= conn 
 
 data  FullNetworkContext=FullNetworkContext  {
       fctxConn :: LocalNodeConnectInfo CardanoMode,
-      fctxNetwork :: NetworkId,
       fctxProtocolParameters:: ProtocolParameters,
       fctxSystemStart :: SystemStart,
       fctxEraHistory :: EraHistory CardanoMode
     }
 
 instance IsNetworkCtx FullNetworkContext where
-  toNetworkContext  (FullNetworkContext conn network pParam _ _ ) = pure $ NetworkContext conn network pParam
+  toNetworkContext  (FullNetworkContext conn  pParam _ _ ) = pure $ NetworkContext conn  pParam
   toFullNetworkContext =pure
-  getConn (FullNetworkContext conn _ _ _ _)= conn 
-  networkCtxNetwork (FullNetworkContext _ network _ _ _ )=network
+  networkCtxConn (FullNetworkContext conn _  _ _)= conn 
 
 
 getDefaultMainnetContext :: IO MinimalNetworkContext
 getDefaultMainnetContext =  do 
-  conn <-getDefaultConnection 
-  pure $ MinimalNetworkContext conn Mainnet
+  conn <-getDefaultConnection "mainnet" Mainnet
+  pure $ MinimalNetworkContext conn 
 
 getDefaultTestnetContext :: IO MinimalNetworkContext
 getDefaultTestnetContext = do
-  conn <-getDefaultConnection 
-  pure $ MinimalNetworkContext conn (Testnet  (NetworkMagic 1097911063))
+  let network=Testnet  (NetworkMagic 1097911063)
+  conn <-getDefaultConnection  "testnet" network
+  pure $ MinimalNetworkContext conn 
+
+readContextFromEnv :: IO MinimalNetworkContext
+readContextFromEnv = readContextFromEnv' "NETWORK"
+
+readContextFromEnv' :: String -> IO MinimalNetworkContext
+readContextFromEnv' envKey = do 
+  v <- getNetworkFromEnv envKey
+  case v of 
+    Mainnet -> getDefaultMainnetContext
+    (Testnet  (NetworkMagic 1097911063)) -> getDefaultTestnetContext
+    net ->  do 
+      conn <- getDefaultConnection "" net
+      pure $ MinimalNetworkContext conn  

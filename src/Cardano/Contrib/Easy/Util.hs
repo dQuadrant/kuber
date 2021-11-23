@@ -33,14 +33,14 @@ import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 import Shelley.Spec.Ledger.API (Credential(ScriptHashObj, KeyHashObj), KeyHash (KeyHash))
 import Codec.Serialise (serialise)
 import Cardano.Api.Byron (Address(ByronAddress))
-import Data.Text (Text)
 import qualified Data.Aeson as JSON
 import qualified Data.Text.Encoding as TSE
 import Cardano.Contrib.Easy.Parsers
 import qualified Data.Map as Map
+import Data.Char (toLower)
 
-localNodeConnInfo :: FilePath -> LocalNodeConnectInfo CardanoMode
-localNodeConnInfo = LocalNodeConnectInfo (CardanoModeParams (EpochSlots 21600))  (Testnet  (NetworkMagic 1097911063))
+localNodeConnInfo :: NetworkId -> FilePath   -> LocalNodeConnectInfo CardanoMode
+localNodeConnInfo = LocalNodeConnectInfo (CardanoModeParams (EpochSlots 21600))
 
 readSignKey :: FilePath -> IO (SigningKey PaymentKey)
 readSignKey file = do
@@ -62,14 +62,14 @@ readSignKey file = do
 getDefaultSignKey :: IO (SigningKey PaymentKey)
 getDefaultSignKey= getWorkPath ["default.skey"] >>= readSignKey
 
-skeyToAddr:: SigningKey PaymentKey -> Shelley.Address ShelleyAddr
-skeyToAddr skey =
-  makeShelleyAddress (Testnet  (NetworkMagic 1097911063))  credential NoStakeAddress
+skeyToAddr:: SigningKey PaymentKey -> NetworkId -> Shelley.Address ShelleyAddr
+skeyToAddr skey network =
+  makeShelleyAddress  network  credential NoStakeAddress
   where
     credential=PaymentCredentialByKey  $ verificationKeyHash   $ getVerificationKey  skey
 
-skeyToAddrInEra ::  SigningKey PaymentKey -> AddressInEra AlonzoEra
-skeyToAddrInEra skey=makeShelleyAddressInEra (Testnet  (NetworkMagic 1097911063))  credential NoStakeAddress
+skeyToAddrInEra ::  SigningKey PaymentKey -> NetworkId -> AddressInEra AlonzoEra
+skeyToAddrInEra skey network=makeShelleyAddressInEra network   credential NoStakeAddress
   where
     credential=PaymentCredentialByKey  $ verificationKeyHash   $ getVerificationKey  skey
 
@@ -90,17 +90,16 @@ pkhToMaybeAddr network (PubKeyHash pkh) =do
 
 addrToMaybePkh :: Cardano.Api.Shelley.Address ShelleyAddr -> Maybe PubKeyHash
 addrToMaybePkh (ShelleyAddress net cre sr) = do
-  _hash <-hash
-  pure $ PubKeyHash $ toBuiltin _hash
+  PubKeyHash . toBuiltin <$> hash
   where
     hash= case cre of
       ScriptHashObj _ ->Nothing
       KeyHashObj kh -> case kh of { KeyHash ha -> unHex $ init $ tail$ show  ha }
-    
+
     unHex ::  ToText a => a -> Maybe  ByteString
     unHex v = convertText (toText v) <&> unBase16
 
-addrInEraToPkh :: MonadFail m =>AddressInEra AlonzoEra -> m PubKeyHash 
+addrInEraToPkh :: MonadFail m =>AddressInEra AlonzoEra -> m PubKeyHash
 addrInEraToPkh a = case a of { AddressInEra atie ad -> case ad of
                                       ByronAddress ad' -> fail "Byron address is not supported"
                                       ShelleyAddress net cre sr -> case cre of
@@ -109,7 +108,7 @@ addrInEraToPkh a = case a of { AddressInEra atie ad -> case ad of
                                                                         Nothing -> fail "Unexpected"
                                                                         Just bs -> pure $ PubKeyHash (toBuiltin bs)
                                                                     }
-                                        } 
+                                        }
     where
     unHex ::  ToText a => a -> Maybe  ByteString
     unHex v = convertText (toText v) <&> unBase16
@@ -128,17 +127,29 @@ queryUtxos conn addr=do
                     $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo (QueryUTxO (QueryUTxOByAddress (Set.fromList qfilter)) )
 
 
-getDefaultConnection :: IO (LocalNodeConnectInfo CardanoMode)
-getDefaultConnection = do
+getDefaultConnection :: String -> NetworkId ->  IO (LocalNodeConnectInfo CardanoMode)
+getDefaultConnection networkName networkId= do
   sockEnv <- try $ getEnv "CARDANO_NODE_SOCKET_PATH"
   socketPath <-case  sockEnv of
     Left (e::IOError) -> do
-          defaultSockPath<- getWorkPath ["testnet","node.socket"]
+          defaultSockPath<- getWorkPath ( if null networkName then ["node.socket"] else [networkName,"node.socket"])
           exists<-doesFileExist defaultSockPath
           if exists then return defaultSockPath else throw (SomeError $ "Socket File is Missing: "++defaultSockPath ++"\n\tSet environment variable CARDANO_NODE_SOCKET_PATH  to use different path")
     Right s -> pure s
-  pure (localNodeConnInfo socketPath)
+  pure (localNodeConnInfo networkId socketPath )
 
+getNetworkFromEnv :: String -> IO NetworkId
+getNetworkFromEnv envKey =  do
+  networkEnv <- try $ getEnv envKey
+  case  networkEnv of
+    Left (e::IOError) -> do
+          pure (Testnet  (NetworkMagic 1097911063))
+    Right s ->  case map toLower s of
+      "mainnet" -> pure  Mainnet
+      "testnet" -> pure $ Testnet  (NetworkMagic 1097911063)
+      _  -> case read s of
+        Just v -> pure (Testnet  (NetworkMagic v))
+        _ -> fail "Invalid network id"
 
 queryProtocolParam :: LocalNodeConnectInfo CardanoMode -> IO ProtocolParameters
 queryProtocolParam conn=do
@@ -209,7 +220,7 @@ positiveValue :: Value -> Bool
 positiveValue v = not $ any (\(aid,Quantity q) -> q<0) (valueToList v)
 
 calculateTxoutMinLovelace :: TxOut AlonzoEra -> ProtocolParameters -> Maybe Lovelace
-calculateTxoutMinLovelace txout pParams=do 
+calculateTxoutMinLovelace txout pParams=do
   Lovelace costPerWord <- protocolParamUTxOCostPerWord pParams
   Just $ Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo  txout) * costPerWord
 
