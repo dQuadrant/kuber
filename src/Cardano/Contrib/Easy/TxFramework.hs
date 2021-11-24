@@ -30,6 +30,7 @@ import Ledger.Scripts (Validator)
 import Codec.Serialise (serialise)
 import Cardano.Contrib.Easy.Context
 import Data.Set (Set)
+import Data.Maybe (mapMaybe, catMaybes)
 
 data TestCtxIn  = UtxoCtxIn (UTxO AlonzoEra) | TxInCtxIn TxIn | ScriptCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,TxIn) | ScriptUtxoCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,UTxO AlonzoEra)deriving (Show)
 data TestCtxOut =
@@ -57,7 +58,7 @@ instance Semigroup TxOperationBuilder where
   }
 
 instance Monoid TxOperationBuilder where
-  mempty = TxOperationBuilder [] [] [] 
+  mempty = TxOperationBuilder [] [] []
 -- mkTxWithWallet :: SigningKey PaymentKey -> TxOperationBuilder -> Ledger.Tx
 
 -- In this transaction, pay some value to the wallet.
@@ -66,7 +67,7 @@ txPayTo:: AddressInEra AlonzoEra ->Value ->TxOperationBuilder
 txPayTo addr v= TxOperationBuilder{
     ctxInputs=[],
     ctxOutputs=[AddrCtxOut  (addr, v)],
-    ctxSignatures=[] 
+    ctxSignatures=[]
   }
 
 txConsumeUtxos :: UTxO AlonzoEra -> TxOperationBuilder
@@ -323,24 +324,30 @@ mkBalancedBody :: ProtocolParameters
       TxResult
 mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
     do
+      sanitizedOutputs <- if  Nothing `elem` modifiedOuts
+              then
+                Left TxBodyMissingProtocolParams
+              else
+                Right $ catMaybes modifiedOuts
+
       -- first iteration
-      let (inputs1,change1) =minimize txouts startingChange
+      let (inputs1,change1) =minimize txouts  $ startingChange sanitizedOutputs
           txIns1=map utxoToTxBodyIn inputs1
-          bodyContent1=modifiedBody (map utxoToTxBodyIn inputs1) change1 startingFee
+          bodyContent1=modifiedBody sanitizedOutputs (map utxoToTxBodyIn inputs1) change1 startingFee
       txBody1 <- unEither $ case makeTransactionBody bodyContent1 of
         Left tbe -> Left $ SomeError $ show tbe
-        Right tb -> Right $ tb
+        Right tb -> Right  tb
 
       let modifiedChange1=change1 <> negLovelace  fee1 <> lovelaceToValue startingFee
           fee1= evaluateTransactionFee pParams txBody1 1 0
           (inputs2,change2)= minimize txouts modifiedChange1
           txIns2=map utxoToTxBodyIn inputs2
-          bodyContent2 =modifiedBody txIns2 change2 fee1
+          bodyContent2 =modifiedBody sanitizedOutputs txIns2 change2 fee1
        -- if selected utxos are  sufficient to pay transaction fees, just use the fee and make txBody
        -- otherwide, reselect txins and recalculate fee. it's very improbable that the we will need more txouts now
       if positiveValue modifiedChange1
         then do
-          let  modifiedBody'=(modifiedBody txIns1 modifiedChange1 fee1 )
+          let  modifiedBody'=modifiedBody sanitizedOutputs txIns1 modifiedChange1 fee1
           txBody<-makeTransactionBody modifiedBody'
           Right (TxResult fee1 inputs1  modifiedBody'  txBody)
         else do
@@ -350,20 +357,20 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
           if fee2 == fee1
             then Right  (TxResult fee2 inputs2 bodyContent2 txbody2)
             else do
-              let body=modifiedBody txIns2 modifiedChange2 fee2
+              let body=modifiedBody sanitizedOutputs txIns2 modifiedChange2 fee2
               txBody <- makeTransactionBody body
               Right (TxResult fee2 inputs2 body txBody)
 
   where
-  performBalance  change fee= do
+  performBalance sanitizedOuts  change fee= do
             let (inputs,change') =minimize txouts (change <> negLovelace fee)
-                bodyContent=modifiedBody (map utxoToTxBodyIn inputs) change' fee
+                bodyContent=modifiedBody sanitizedOuts (map utxoToTxBodyIn inputs) change' fee
             txBody1<-makeTransactionBody bodyContent
 
             let modifiedChange1=change' <> negLovelace  fee' <> lovelaceToValue fee
                 fee'= evaluateTransactionFee pParams txBody1 1 0
                 (inputs2,change2)= minimize txouts modifiedChange1
-                newBody =modifiedBody (map utxoToTxBodyIn inputs2) change2 fee'
+                newBody =modifiedBody sanitizedOuts (map utxoToTxBodyIn inputs2) change2 fee'
             if fee' == fee
               then Right (bodyContent,change,fee)
               else Right (newBody, modifiedChange1,fee')
@@ -398,10 +405,11 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
   -- change is whatever will remain after making payment.
   -- At the beginning, we will assume that we will all the available utxos, 
   -- so it should be a +ve value, otherwise it means we don't have sufficient balance to fulfill the transaction 
-  startingChange=(negateValue $ foldMap (txOutValueToValue  . txOutValue ) modifiedOuts )  --already existing outputs
-                  <> (if  null (txIns txbody) then mempty else inputSum) -- already existing inputs
-                  <> (foldMap (txOutValueToValue  . txOutValue) $  Map.elems utxoMap) -- sum of all the available utxos
-                  <> negateValue (lovelaceToValue startingFee)
+  startingChange outputs =
+        negateValue (foldMap (txOutValueToValue  . txOutValue ) outputs)  --already existing outputs
+    <>  (if  null (txIns txbody) then mempty else inputSum) -- already existing inputs
+    <>  foldMap (txOutValueToValue  . txOutValue) (Map.elems utxoMap) -- sum of all the available utxos
+    <>  negateValue (lovelaceToValue startingFee)
   utxoToTxOut (UTxO map)=Map.toList map
 
   txOutValueToValue :: TxOutValue era -> Value
@@ -411,23 +419,28 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
       TxOutValue _ v -> v
 
   txOutValue (TxOut _ v _) = v
-  
+
   modifiedOuts= map includeMin (txOuts txbody)
-  includeMin txOut= case txOut of {TxOut addr v hash-> case v of
-                                     TxOutAdaOnly oasie lo -> txOut
+  includeMin txOut= do case txOut of {TxOut addr v hash-> case v of
+                                     TxOutAdaOnly oasie lo -> Just txOut
                                      TxOutValue masie va ->
                                        if selectAsset va AdaAssetId == Quantity  0
-                                       then TxOut  addr (TxOutValue masie (va <> lovelaceToValue  (Lovelace 2_000_000))) hash
-                                       else txOut }
-  modifiedBody txins change fee= content
+                                       then performMinCalculation addr va hash
+                                       else Just txOut }
+    where
+      performMinCalculation addr val hash=do
+        minLovelace <- minval addr $ val <> lovelaceToValue (Lovelace 1_000_000)
+        Just $ TxOut  addr (TxOutValue MultiAssetInAlonzoEra  (val <> lovelaceToValue minLovelace)) hash
+      minval add v= calculateTxoutMinLovelace (TxOut add (TxOutValue MultiAssetInAlonzoEra v) TxOutDatumHashNone ) pParams
+
+  modifiedBody initialOuts txins change fee= content
     where
       content=(TxBodyContent  {
             txIns=txins ++ txIns txbody,
             txInsCollateral=txInsCollateral txbody,
             txOuts=  if nullValue change
-                  then modifiedOuts
-                  else modifiedOuts ++ [ TxOut  walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumHashNone]  ,
-              -- [TxOut alonzoAddr (TxOutValue MultiAssetInAlonzoEra (lovelaceToValue $ Lovelace 5927107)) TxOutDatumHashNone ],
+                  then initialOuts
+                  else initialOuts ++ [ TxOut  walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumHashNone]  ,
             txFee=TxFeeExplicit TxFeesExplicitInAlonzoEra  fee,
             -- txValidityRange=(TxValidityNoLowerBound,TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra),
             txValidityRange = txValidityRange txbody,
