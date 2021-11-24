@@ -224,6 +224,13 @@ calculateTxoutMinLovelace txout pParams=do
   Lovelace costPerWord <- protocolParamUTxOCostPerWord pParams
   Just $ Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo  txout) * costPerWord
 
+calculateTxoutMinLovelaceFunc :: ProtocolParameters  -> Maybe ( TxOut AlonzoEra -> Lovelace)
+calculateTxoutMinLovelaceFunc pParams = do 
+  Lovelace costPerWord <- protocolParamUTxOCostPerWord pParams
+  pure $ f costPerWord
+  where 
+    f cpw txout =Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo  txout) * cpw
+
 toPlutusAssetClass :: AssetId -> AssetClass
 toPlutusAssetClass (AssetId (PolicyId hash) (AssetName name)) = AssetClass (CurrencySymbol $ toBuiltin $ serialiseToRawBytes hash , TokenName $ toBuiltin name)
 toPlutusAssetClass AdaAssetId  =AssetClass (CurrencySymbol $ fromString "", TokenName $ fromString "")
