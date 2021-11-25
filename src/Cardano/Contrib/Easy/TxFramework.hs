@@ -398,10 +398,10 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
                                        then performMinCalculation addr va hash
                                        else Just txOut }
     where
-      performMinCalculation addr val hash=do
-        minLovelace <- minval addr $ val <> lovelaceToValue (Lovelace 1_000_000)
+      performMinCalculation addr val hash =do
+        minLovelace <- minval addr (val <> lovelaceToValue (Lovelace 1_000_000)) hash
         Just $ TxOut  addr (TxOutValue MultiAssetInAlonzoEra  (val <> lovelaceToValue minLovelace)) hash
-      minval add v= calculateTxoutMinLovelace (TxOut add (TxOutValue MultiAssetInAlonzoEra v) TxOutDatumHashNone ) pParams
+      minval add v hash= calculateTxoutMinLovelace (TxOut add (TxOutValue MultiAssetInAlonzoEra v) hash ) pParams
 
   modifiedBody initialOuts txins change fee= content
     where
