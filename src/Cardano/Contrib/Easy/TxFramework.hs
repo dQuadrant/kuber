@@ -32,19 +32,21 @@ import Cardano.Contrib.Easy.Context
 import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes)
 
-data TestCtxIn  = UtxoCtxIn (UTxO AlonzoEra) | TxInCtxIn TxIn | ScriptCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,TxIn) | ScriptUtxoCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,UTxO AlonzoEra)deriving (Show)
-data TestCtxOut =
+data TxCtxInput  = UtxoCtxIn (UTxO AlonzoEra) | TxInCtxIn TxIn | ScriptCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,TxIn) | ScriptUtxoCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,UTxO AlonzoEra)deriving (Show)
+data TxCtxOutput =
     AddrCtxOut (AddressInEra AlonzoEra,Value)
   | PkhCtxOut (PubKeyHash,Value)
   | ScriptCtxOut (PlutusScript PlutusScriptV1,Value, Hash ScriptData)  deriving (Show)
 
-
+-- select a utxo and add change to it.
+data TxCtxChange = TxCtxChangeUnset | TxCtxChange TxCtxOutput | TxCtxChangeAddr (AddressInEra AlonzoEra) deriving (Show)
 -- Context Builder for test transaction
 -- You will not use this directly, instead use builder functions
 -- to compose this structure.
 data TxOperationBuilder=TxOperationBuilder{
-    ctxInputs:: [TestCtxIn], -- inputs in this transaction
-    ctxOutputs::[TestCtxOut], -- outputs in this transaction
+    ctxChange:: TxCtxChange,
+    ctxInputs:: [TxCtxInput], -- inputs in this transaction
+    ctxOutputs::[TxCtxOutput], -- outputs in this transaction
     ctxSignatures :: [SigningKey PaymentKey] -- public key signatures in this transaction
   } deriving(Show)
 
@@ -52,39 +54,36 @@ data TxOperationBuilder=TxOperationBuilder{
 
 instance Semigroup TxOperationBuilder where
   (<>) ctx1 ctx2=TxOperationBuilder{
+          ctxChange= case ctxChange ctx2 of
+            TxCtxChangeUnset -> ctxChange ctx1
+            _  -> ctxChange ctx2 ,
     ctxInputs=ctxInputs ctx1 ++ ctxInputs ctx2,
     ctxOutputs=ctxOutputs ctx1 ++ ctxOutputs ctx2,
     ctxSignatures=ctxSignatures ctx1 ++ctxSignatures ctx2
   }
 
+txUseForChange  operation = if null (ctxOutputs operation) 
+  then TxOperationBuilder (ctxChange operation) [] [] []
+  else TxOperationBuilder (TxCtxChange $ head $ ctxOutputs operation) [] [] []
+
 instance Monoid TxOperationBuilder where
-  mempty = TxOperationBuilder [] [] []
+  mempty = TxOperationBuilder TxCtxChangeUnset [] [] []
 -- mkTxWithWallet :: SigningKey PaymentKey -> TxOperationBuilder -> Ledger.Tx
 
+ctxInput v =  TxOperationBuilder TxCtxChangeUnset [v] [] []
+ctxOutput v = TxOperationBuilder TxCtxChangeUnset [] [v] []
+ctxSignature v = TxOperationBuilder TxCtxChangeUnset [] [] [v]
 -- In this transaction, pay some value to the wallet.
 -- It will be included in the tx_out of this transaction
 txPayTo:: AddressInEra AlonzoEra ->Value ->TxOperationBuilder
-txPayTo addr v= TxOperationBuilder{
-    ctxInputs=[],
-    ctxOutputs=[AddrCtxOut  (addr, v)],
-    ctxSignatures=[]
-  }
+txPayTo addr v= ctxOutput $ AddrCtxOut  (addr, v)
 
 txConsumeUtxos :: UTxO AlonzoEra -> TxOperationBuilder
-txConsumeUtxos utxo = TxOperationBuilder{
-  ctxInputs=[UtxoCtxIn  utxo],
-  ctxOutputs=[],
-  ctxSignatures=[]
-}
+txConsumeUtxos utxo =  ctxInput $ UtxoCtxIn  utxo
 
 
 txPayToPkh:: PubKeyHash  ->Value ->TxOperationBuilder
-txPayToPkh pkh v= TxOperationBuilder{
-    ctxInputs=[],
-    ctxOutputs=[PkhCtxOut  (pkh, v)],
-    ctxSignatures=[]
-  }
-
+txPayToPkh pkh v= ctxOutput $   PkhCtxOut  (pkh, v)
 -- In this transaction send  x lovelace to an wallet.
 -- It will appear in tx_out
 txPayLovelaceTo :: AddressInEra AlonzoEra  -> Integer -> TxOperationBuilder
@@ -95,67 +94,41 @@ txPayLovelaceTo w v=txPayTo w (lovelaceToValue $quantityToLovelace $ Quantity v)
 -- It's a script that we depend on. but we are not testing it.
 -- So, the validator of this script will not be executed.
 txPayToScript:: ToData _data=>PlutusScript PlutusScriptV1 -> _data -> Value->TxOperationBuilder
-txPayToScript script _data v =TxOperationBuilder{
-    ctxInputs=[],
-    ctxOutputs=[ScriptCtxOut (script,v,hashScriptData  $ dataToScriptData   _data)],
-    ctxSignatures=[]
-  }
+txPayToScript script _data v = ctxOutput $ ScriptCtxOut (script,v,hashScriptData  $ dataToScriptData   _data)
 
 -- Lock value and data in a script.
 -- It's a script that we depend on. but we are not testing it.
 -- So, the validator of this script will not be executed.
 txPayToValidator:: ToData _data=>Validator  -> _data -> Value->TxOperationBuilder
-txPayToValidator validator _data v =TxOperationBuilder{
-    ctxInputs=[],
-    ctxOutputs=[ScriptCtxOut (PlutusScriptSerialised serialisedScript ,v,hashScriptData  $ dataToScriptData   _data)],
-    ctxSignatures=[]
-  }
+txPayToValidator validator _data v = ctxOutput $  ScriptCtxOut (PlutusScriptSerialised serialisedScript ,v,hashScriptData  $ dataToScriptData   _data)
   where
     serialisedScript :: SBS.ShortByteString
     serialisedScript = SBS.toShort . LBS.toStrict $ serialise script
     script  = Plutus.unValidatorScript validator
 
-
-
 -- Redeem from Script Address.
 txRedeem:: (ToData _data,ToData redeemer)=>TxIn -> PlutusScript PlutusScriptV1 ->_data-> redeemer -> TxOperationBuilder
-txRedeem txin script _data _redeemer =TxOperationBuilder{
-    ctxInputs=[ScriptCtxTxIn (script,dataToScriptData _data,dataToScriptData _redeemer,txin)],
-    ctxOutputs=[],
-    ctxSignatures=[]
-  }
+txRedeem txin script _data _redeemer = ctxInput $ ScriptCtxTxIn (script,dataToScriptData _data,dataToScriptData _redeemer,txin)
 
 -- Redeem from Script Address.
 txRedeemUtxo :: (ToData a2, ToData a3) =>
   UTxO AlonzoEra
   -> PlutusScript PlutusScriptV1 -> a2 -> a3 -> TxOperationBuilder
-txRedeemUtxo utxo script _data _redeemer =TxOperationBuilder{
-    ctxInputs=[ScriptUtxoCtxTxIn (script,dataToScriptData _data,dataToScriptData _redeemer,utxo)],
-    ctxOutputs=[],
-    ctxSignatures=[]
-  }
+txRedeemUtxo utxo script _data _redeemer = ctxInput $ ScriptUtxoCtxTxIn (script,dataToScriptData _data,dataToScriptData _redeemer,utxo)
 
 txAddSignature :: SigningKey PaymentKey -> TxOperationBuilder
-txAddSignature skey =TxOperationBuilder{
-  ctxInputs= [],
-  ctxOutputs=[],
-  ctxSignatures=[skey]
-}
+txAddSignature = ctxSignature
 
 -- Redeem from Script Address.
 txRedeemUtxoWithValidator :: (ToData a2, ToData a3) =>
   UTxO AlonzoEra
   -> Validator -> a2 -> a3 -> TxOperationBuilder
-txRedeemUtxoWithValidator utxo validator _data _redeemer =TxOperationBuilder{
-    ctxInputs=[ScriptUtxoCtxTxIn (PlutusScriptSerialised  serialisedScript ,dataToScriptData _data,dataToScriptData _redeemer,utxo)],
-    ctxOutputs=[],
-    ctxSignatures=[]
-  }
+txRedeemUtxoWithValidator utxo validator _data _redeemer =
+    ctxInput $ ScriptUtxoCtxTxIn (PlutusScriptSerialised  serialisedScript ,dataToScriptData _data,dataToScriptData _redeemer,utxo)
   where
     serialisedScript :: SBS.ShortByteString
     serialisedScript = SBS.toShort . LBS.toStrict $ serialise script
     script  = Plutus.unValidatorScript validator
-
 
 data TxResult=TxResult {
    txResultFee :: Lovelace ,
@@ -164,12 +137,10 @@ data TxResult=TxResult {
    txResultBody:: TxBody AlonzoEra
 }
 
-
-
 mkTx :: IsNetworkCtx v =>v ->TxOperationBuilder
   -> AddressInEra AlonzoEra
   -> IO TxResult
-mkTx networkCtx (TxOperationBuilder input output signature ) walletAddrInEra   = do
+mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrInEra   = do
   (NetworkContext conn  pParam) <- toNetworkContext networkCtx
   walletAddr <-unMaybe (SomeError "unexpected error converting address to another type") (deserialiseAddress AsAddressAny (serialiseAddress  walletAddrInEra))
   UTxO walletUtxos <- queryUtxos conn walletAddr
@@ -259,20 +230,19 @@ mkTx networkCtx (TxOperationBuilder input output signature ) walletAddrInEra   =
       TxOutAdaOnly oasie lo -> lovelaceToValue lo
       TxOutValue masie va -> va
 
-    toInput ( inCtx ::TestCtxIn)= case inCtx of
+    toInput ( inCtx ::TxCtxInput)= case inCtx of
       UtxoCtxIn (UTxO mp) -> Right $  map (\item-> (item,(fst item,BuildTxWith $ KeyWitness KeyWitnessForSpending)))   (Map.toList mp)
       TxInCtxIn ti -> Left (ti,BuildTxWith $ KeyWitness KeyWitnessForSpending)
       ScriptCtxTxIn (script,_data,_redeemer,txin) -> Left (txin,BuildTxWith $  ScriptWitness ScriptWitnessForSpending $ plutusWitness script _data _redeemer defaultExunits)
       ScriptUtxoCtxTxIn (script, _data,_redeemer,UTxO mp) -> Right $ map (\item-> (item,(fst  item,BuildTxWith $  ScriptWitness ScriptWitnessForSpending $ plutusWitness script _data _redeemer defaultExunits)))  (Map.toList mp)
 
-    toOuotput network (outCtx :: TestCtxOut) =  do
+    toOuotput network (outCtx :: TxCtxOutput) =  do
       case outCtx of
         AddrCtxOut (addr,value) -> pure $ TxOut addr (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumHashNone
         ScriptCtxOut (script,value,dataHash) -> pure $ TxOut (makeShelleyAddressInEra network (PaymentCredentialByScript  $  hashScript   (PlutusScript PlutusScriptV1   script)) NoStakeAddress) (TxOutValue MultiAssetInAlonzoEra  value ) (TxOutDatumHash ScriptDataInAlonzoEra dataHash)
         PkhCtxOut (pkh,value)-> case pkhToMaybeAddr network pkh of
           Nothing -> throw $ SomeError "PubKeyHash couldn't be converted to address"
           Just aie -> pure $ TxOut aie (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumHashNone
-
     mkBody ins outs collateral pParam =
           (TxBodyContent {
             txIns=ins ,
@@ -493,17 +463,17 @@ balanceAndSubmitBody conn sKey body utxos sum  = do
     }
   let balancedBody = mkBalancedBody pParam  utxos body sum   $  skeyToAddrInEra sKey (localNodeNetworkId conn)
 
-  submitEitherBalancedBody conn  balancedBody sKey
+  submitEitherBalancedBody conn  balancedBody [sKey]
 
 submitEitherBalancedBody ::
   LocalNodeConnectInfo CardanoMode
   ->  Either TxBodyError TxResult
-  -> SigningKey PaymentKey
+  -> [SigningKey PaymentKey]
   -> IO TxId
-submitEitherBalancedBody conn eitherBalancedBody skey =
+submitEitherBalancedBody conn eitherBalancedBody skeys =
       --End Balance transaction body with fee
   case  eitherBalancedBody of
     Left tbe ->
       throw $ SomeError $  "Coding Error : Balanced TxBody has error : " ++  show tbe
-    Right (TxResult _ _ _ txBody) ->signAndSubmitTxBody conn txBody skey
+    Right (TxResult _ _ _ txBody) ->signAndSubmitTxBody conn txBody skeys
 
