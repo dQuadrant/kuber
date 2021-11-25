@@ -31,6 +31,7 @@ import Codec.Serialise (serialise)
 import Cardano.Contrib.Easy.Context
 import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes)
+import Data.List (intercalate)
 
 data TxCtxInput  = UtxoCtxIn (UTxO AlonzoEra) | TxInCtxIn TxIn | ScriptCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,TxIn) | ScriptUtxoCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,UTxO AlonzoEra)deriving (Show)
 data TxCtxOutput =
@@ -62,7 +63,7 @@ instance Semigroup TxOperationBuilder where
     ctxSignatures=ctxSignatures ctx1 ++ctxSignatures ctx2
   }
 
-txUseForChange  operation = if null (ctxOutputs operation) 
+txUseForChange  operation = if null (ctxOutputs operation)
   then TxOperationBuilder (ctxChange operation) [] [] []
   else TxOperationBuilder (TxCtxChange $ head $ ctxOutputs operation) [] [] []
 
@@ -176,10 +177,13 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
     modifiedIns<- case v of
       Left tvie -> throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
       Right mp -> applyTxInExecutionUnits (txIns balancedRevisionContent0) orderedIns mp
+    putStrLn $ "Modified Inputs :" ++  intercalate "\n   " (map show modifiedIns)
+    putStrLn $ "Previous Inputs :" ++  intercalate "\n   " (map show orderedIns)
+
     executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum walletAddrInEra signatureCount)
 
   where
-    signatureCount = (fromIntegral $ length signature + 1)
+    signatureCount = fromIntegral $ length signature + 1
     hasScriptInput = any (\case
                               ScriptCtxTxIn x0 -> True
                               ScriptUtxoCtxTxIn x0 -> True
@@ -195,7 +199,7 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
         doMap  (index,txIn)= case Map.lookup txIn insMap of
           Nothing   ->  throw $ SomeError   "Look how they maccasacred my boy"
           Just item -> case Map.lookup (ScriptWitnessIndexTxIn index) execUnitMap of
-            Nothing -> pure (txIn,item)
+            Nothing -> pure (txIn,item) -- this should never happen
             Just a -> case a of
               Left e -> throw $ SomeError  $ "ResolveExecutionUnit for txin: "++ show e
               Right exUnits ->pure $  case  item of { BuildTxWith wit -> case wit of
@@ -408,8 +412,15 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
 
   modifiedBody initialOuts txins change fee= content
     where
+      reorderInputs :: [(TxIn, a)] -> [(TxIn,a)]
+      reorderInputs txIns = map ((\key-> (key,forceJust $ Map.lookup key  mapped)) . fromShelleyTxIn) ordered
+        where
+          ordered=   Set.toList $  Set.fromList (map (toShelleyTxIn . fst) txIns)
+          mapped= Map.fromList txIns
+          forceJust (Just a) = a
+
       content=(TxBodyContent  {
-            txIns=txins ++ txIns txbody,
+            txIns= reorderInputs$ txins ++ txIns txbody,
             txInsCollateral=txInsCollateral txbody,
             txOuts=  if nullValue change
                   then initialOuts
@@ -437,7 +448,7 @@ executeMkBalancedBody :: Applicative f =>
   -> TxBodyContent BuildTx AlonzoEra
   -> Value
   -> AddressInEra AlonzoEra
-  -> Word 
+  -> Word
   -> f TxResult
 executeMkBalancedBody  pParams utxos  txbody inputSum walletAddr signatureCount=do
   let balancedBody=mkBalancedBody pParams utxos txbody inputSum walletAddr signatureCount
