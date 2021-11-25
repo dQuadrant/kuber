@@ -148,7 +148,7 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
   (operationUtxos,txins) <- resolveAndSumIns conn input
   let operationUtoSum=foldMap txOutValue (Map.elems operationUtxos)
   if not hasScriptInput
-  then executeMkBalancedBody pParam  (UTxO walletUtxos) (mkBody  txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum walletAddrInEra
+  then executeMkBalancedBody pParam  (UTxO walletUtxos) (mkBody  txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum walletAddrInEra signatureCount
 
   else (do
     (FullNetworkContext _  _ systemStart eraHistory ) <- toFullNetworkContext networkCtx
@@ -161,7 +161,7 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
     (TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0)<-case
         mkBalancedBody
           pParam (UTxO walletUtxos) bodyRevsion0 operationUtoSum
-          walletAddrInEra
+          walletAddrInEra (fromIntegral $ length signature + 1)
       of
         Left tbe -> throw $ SomeError $ "First Balance :" ++ show tbe
         Right x0 -> pure x0
@@ -175,9 +175,10 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
     modifiedIns<- case v of
       Left tvie -> throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
       Right mp -> applyTxInExecutionUnits (txIns balancedRevisionContent0) orderedIns mp
-    executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum walletAddrInEra)
+    executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum walletAddrInEra signatureCount)
 
   where
+    signatureCount = (fromIntegral $ length signature + 1)
     hasScriptInput = any (\case
                               ScriptCtxTxIn x0 -> True
                               ScriptUtxoCtxTxIn x0 -> True
@@ -289,10 +290,11 @@ mkBalancedBody :: ProtocolParameters
   -> TxBodyContent BuildTx AlonzoEra
   -> Value
   -> AddressInEra AlonzoEra
+  -> Word
   -> Either
       TxBodyError
       TxResult
-mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
+mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCount =
     do
       sanitizedOutputs <- if  Nothing `elem` modifiedOuts
               then
@@ -309,7 +311,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr =
         Right tb -> Right  tb
 
       let modifiedChange1=change1 <> negLovelace  fee1 <> lovelaceToValue startingFee
-          fee1= evaluateTransactionFee pParams txBody1 1 0
+          fee1= evaluateTransactionFee pParams txBody1 signatureCount 0
           (inputs2,change2)= minimize txouts modifiedChange1
           txIns2=map utxoToTxBodyIn inputs2
           bodyContent2 =modifiedBody sanitizedOutputs txIns2 change2 fee1
@@ -434,9 +436,10 @@ executeMkBalancedBody :: Applicative f =>
   -> TxBodyContent BuildTx AlonzoEra
   -> Value
   -> AddressInEra AlonzoEra
+  -> Word 
   -> f TxResult
-executeMkBalancedBody  pParams utxos  txbody inputSum walletAddr=do
-  let balancedBody=mkBalancedBody pParams utxos txbody inputSum walletAddr
+executeMkBalancedBody  pParams utxos  txbody inputSum walletAddr signatureCount=do
+  let balancedBody=mkBalancedBody pParams utxos txbody inputSum walletAddr signatureCount
   case balancedBody of
     Left e -> throw $ SomeError $ show e
     Right v ->pure v
@@ -461,7 +464,7 @@ balanceAndSubmitBody conn sKey body utxos sum  = do
         Nothing -> queryProtocolParam conn
 
     }
-  let balancedBody = mkBalancedBody pParam  utxos body sum   $  skeyToAddrInEra sKey (localNodeNetworkId conn)
+  let balancedBody = mkBalancedBody pParam  utxos body sum    (skeyToAddrInEra sKey (localNodeNetworkId conn))  1
 
   submitEitherBalancedBody conn  balancedBody [sKey]
 
