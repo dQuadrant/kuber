@@ -72,6 +72,7 @@ instance Monoid TxOperationBuilder where
 
 ctxInput v =  TxOperationBuilder TxCtxChangeUnset [v] [] []
 ctxOutput v = TxOperationBuilder TxCtxChangeUnset [] [v] []
+ctxSignature :: SigningKey PaymentKey -> TxOperationBuilder
 ctxSignature v = TxOperationBuilder TxCtxChangeUnset [] [] [v]
 -- In this transaction, pay some value to the wallet.
 -- It will be included in the tx_out of this transaction
@@ -169,7 +170,7 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
     let (orderedIns,orderedOuts)=case balancedRevision0 of {
           ShelleyTxBody sbe
           (LedgerBody.TxBody ins _ outs _ _ _ _ _ _ _ _ _ _) scs tbsd m_ad tsv
-          -> (Set.map fromShelleyTxIn ins,outs)
+          -> (map fromShelleyTxIn  $ Set.toList ins,outs)
     }
     let v= evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
     modifiedIns<- case v of
@@ -184,11 +185,11 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
                               ScriptUtxoCtxTxIn x0 -> True
                               _ -> False )  input
     applyTxInExecutionUnits :: [(TxIn,BuildTxWith  BuildTx (Witness WitCtxTxIn AlonzoEra))]
-      -> Data.Set.Set TxIn
+      -> [TxIn]
       -> Map ScriptWitnessIndex (Either ScriptExecutionError ExecutionUnits)
       -> IO [(TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))]
     applyTxInExecutionUnits ins orderedIns execUnitMap = do
-      mapM   doMap (zip [0..] (Set.toList orderedIns))
+      mapM   doMap (zip [0..] orderedIns)
       where
         insMap=Map.fromList ins
         doMap  (index,txIn)= case Map.lookup txIn insMap of
