@@ -32,6 +32,7 @@ import Cardano.Contrib.Easy.Context
 import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes)
 import Data.List (intercalate)
+import qualified Data.Foldable as Foldable
 
 data TxCtxInput  = UtxoCtxIn (UTxO AlonzoEra) | TxInCtxIn TxIn | ScriptCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,TxIn) | ScriptUtxoCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,UTxO AlonzoEra)deriving (Show)
 data TxCtxOutput =
@@ -173,12 +174,11 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
           (LedgerBody.TxBody ins _ outs _ _ _ _ _ _ _ _ _ _) scs tbsd m_ad tsv
           -> (map fromShelleyTxIn  $ Set.toList ins,outs)
     }
-    let v= evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
-    modifiedIns<- case v of
+    let eExunits= evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
+    modifiedIns<- case eExunits of
       Left tvie -> throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
       Right mp -> applyTxInExecutionUnits (txIns balancedRevisionContent0) orderedIns mp
-    putStrLn $ "Modified Inputs :" ++  intercalate "\n   " (map show modifiedIns)
-    putStrLn $ "Previous Inputs :" ++  intercalate "\n   " (map show orderedIns)
+    putStrLn $ "exUnits :: " ++ show eExunits
 
     executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum walletAddrInEra signatureCount)
 
@@ -203,9 +203,9 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
             Just a -> case a of
               Left e -> throw $ SomeError  $ "ResolveExecutionUnit for txin: "++ show e
               Right exUnits ->pure $  case  item of { BuildTxWith wit -> case wit of
-                                KeyWitness kwic -> throw $ SomeError  $ "ResolveExecutionUnit for txin: wrong hit "
+                                KeyWitness kwic -> throw $ SomeError  "ResolveExecutionUnit for txin: wrong hit "
                                 ScriptWitness swic sw -> case sw of
-                                  SimpleScriptWitness slie ssv ss -> throw $ SomeError  $ "ResolveExecutionUnit for txin: wrong hit "
+                                  SimpleScriptWitness slie ssv ss -> throw $ SomeError   "ResolveExecutionUnit for txin: wrong hit "
                                   PlutusScriptWitness slie psv ps sd sd' eu ->
                                     (
                                         txIn
@@ -301,14 +301,13 @@ mkBalancedBody :: ProtocolParameters
       TxResult
 mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCount =
     do
-      sanitizedOutputs <- if  Nothing `elem` modifiedOuts
-              then
-                Left TxBodyMissingProtocolParams
-              else
-                Right $ catMaybes modifiedOuts
+      minLovelaceCalc <-case calculateTxoutMinLovelaceFunc pParams of
+        Nothing -> Left TxBodyMissingProtocolParams
+        Just f -> Right f
 
       -- first iteration
-      let (inputs1,change1) =minimize txouts  $ startingChange sanitizedOutputs
+      let sanitizedOutputs = modifiedOuts minLovelaceCalc
+          (inputs1,change1) =minimize txouts  $ startingChange sanitizedOutputs
           txIns1=map utxoToTxBodyIn inputs1
           bodyContent1=modifiedBody sanitizedOutputs (map utxoToTxBodyIn inputs1) change1 startingFee
       txBody1 <- unEither $ case makeTransactionBody bodyContent1 of
@@ -317,7 +316,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
 
       let modifiedChange1=change1 <> negLovelace  fee1 <> lovelaceToValue startingFee
           fee1= evaluateTransactionFee pParams txBody1 signatureCount 0
-          (inputs2,change2)= minimize txouts modifiedChange1
+          (inputs2,change2)= minimizeConsideringChange minLovelaceCalc txouts modifiedChange1
           txIns2=map utxoToTxBodyIn inputs2
           bodyContent2 =modifiedBody sanitizedOutputs txIns2 change2 fee1
        -- if selected utxos are  sufficient to pay transaction fees, just use the fee and make txBody
@@ -369,6 +368,34 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
             val = txOutValueToValue $ txOutValue  txOut
             newChange= remainingChange <> negateValue val
 
+  minimizeConsideringChange f available change=if existingLove < minLove
+    then
+       (case Foldable.find (\(tin,utxo) -> extraLove utxo > (minLove- existingLove)) unmatched of
+         Just val -> (fst matched ++ [val],change <> txOutValueToValue ( txOutValue $ snd val ))
+         Nothing -> matched
+       )
+    else
+      matched
+    where
+      matched=minimize available change
+      unmatched = Map.toList $ Map.filterWithKey  (\k _ -> k `notElem` matchedSet)  utxoMap
+      matchedSet=Set.fromList $ map fst $  fst matched
+      --Current Lovelace amount in the change utxo
+      existingLove = case  selectAsset change AdaAssetId   of
+        Quantity n -> n
+      --minimun Lovelace required in the change utxo
+      minLove = case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumHashNone of
+          Lovelace l -> l
+      -- extra lovelace in this txout over the txoutMinLovelace
+      extraLove txout = selectLove - minLoveInThisTxout
+          where
+            minLoveInThisTxout=case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra $ val <>change) TxOutDatumHashNone of
+                Lovelace l -> l
+            val= txOutValueToValue $ txOutValue txout
+            selectLove = case selectAsset val AdaAssetId of { Quantity n -> n }
+
+
+
   utxoToTxBodyIn (txIn,_) =(txIn,BuildTxWith $ KeyWitness KeyWitnessForSpending)
 
   minimize' utxos remainingChange = (doMap,remainingChange)
@@ -397,18 +424,19 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
 
   txOutValue (TxOut _ v _) = v
 
-  modifiedOuts= map includeMin (txOuts txbody)
-  includeMin txOut= do case txOut of {TxOut addr v hash-> case v of
-                                     TxOutAdaOnly oasie lo -> Just txOut
+  modifiedOuts calculator = map (includeMin calculator) (txOuts  txbody)
+  includeMin calculator txOut= do case txOut of {TxOut addr v hash-> case v of
+                                     TxOutAdaOnly oasie lo ->  txOut
                                      TxOutValue masie va ->
                                        if selectAsset va AdaAssetId == Quantity  0
                                        then performMinCalculation addr va hash
-                                       else Just txOut }
+                                       else  txOut }
     where
-      performMinCalculation addr val hash =do
-        minLovelace <- minval addr (val <> lovelaceToValue (Lovelace 1_000_000)) hash
-        Just $ TxOut  addr (TxOutValue MultiAssetInAlonzoEra  (val <> lovelaceToValue minLovelace)) hash
-      minval add v hash= calculateTxoutMinLovelace (TxOut add (TxOutValue MultiAssetInAlonzoEra v) hash ) pParams
+      performMinCalculation addr val hash =TxOut  addr (TxOutValue MultiAssetInAlonzoEra  (val <> lovelaceToValue minLovelace)) hash
+        where
+         minLovelace = minval addr (val <> lovelaceToValue (Lovelace 1_000_000)) hash
+
+      minval add v hash= calculator (TxOut add (TxOutValue MultiAssetInAlonzoEra v) hash )
 
   modifiedBody initialOuts txins change fee= content
     where
