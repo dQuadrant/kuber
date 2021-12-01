@@ -148,10 +148,10 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
   walletAddr <-unMaybe (SomeError "unexpected error converting address to another type") (deserialiseAddress AsAddressAny (serialiseAddress  walletAddrInEra))
   UTxO walletUtxos <- queryUtxos conn walletAddr
   mappedOutput <- mapM (toOuotput (networkCtxNetwork networkCtx)) output
-  (operationUtxos,txins) <- resolveAndSumIns conn input
+  (operationUtxos,_txins) <- resolveAndSumIns conn input
   let operationUtoSum=foldMap txOutValue (Map.elems operationUtxos)
   if not hasScriptInput
-  then executeMkBalancedBody pParam  (UTxO walletUtxos) (mkBody  txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum walletAddrInEra signatureCount
+  then executeMkBalancedBody pParam  (UTxO walletUtxos) (mkBody  _txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum walletAddrInEra signatureCount
 
   else (do
     (FullNetworkContext _  _ systemStart eraHistory ) <- toFullNetworkContext networkCtx
@@ -160,7 +160,7 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
     let (myCollateral,_)= head $ Map.toList possibleCollaterals
     let txInsCollateral=TxInsCollateral CollateralInAlonzoEra  [myCollateral ]
 
-    let bodyRevsion0 =   mkBody txins mappedOutput txInsCollateral pParam
+    let bodyRevsion0 =   mkBody _txins mappedOutput txInsCollateral pParam
     _result<-case
         mkBalancedBody
           pParam (UTxO walletUtxos) bodyRevsion0 operationUtoSum
@@ -181,12 +181,14 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
           putStrLn  "[WARNING] :: exUnit calculation failed using default"  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
           pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0
       Right mp ->do 
-        case applyTxInExecutionUnits (txIns balancedRevisionContent0) orderedIns mp of
+        case applyTxInExecutionUnits _txins (txIns balancedRevisionContent0) orderedIns mp of
           Left se -> do 
             putStrLn $ "[WARNING] :: exUnit calculation failed using default :" ++ show se  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
             pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0
           Right modifiedIns -> do 
-           executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum walletAddrInEra signatureCount)
+            putStrLn "[DEBUG] exunit calculation success"
+            putStrLn $ "Modified Ins:: \n" ++ show modifiedIns
+            executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum walletAddrInEra signatureCount)
 
   where
     signatureCount = fromIntegral $ length signature + 1
@@ -194,13 +196,17 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
                               ScriptCtxTxIn x0 -> True
                               ScriptUtxoCtxTxIn x0 -> True
                               _ -> False )  input
-    applyTxInExecutionUnits :: [(TxIn,BuildTxWith  BuildTx (Witness WitCtxTxIn AlonzoEra))]
+    applyTxInExecutionUnits ::
+         [(TxIn,BuildTxWith  BuildTx (Witness WitCtxTxIn AlonzoEra))] 
+      -> [(TxIn,BuildTxWith  BuildTx (Witness WitCtxTxIn AlonzoEra))]
       -> [TxIn]
       -> Map ScriptWitnessIndex (Either ScriptExecutionError ExecutionUnits)
       -> Either SomeError [(TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))]
-    applyTxInExecutionUnits ins orderedIns execUnitMap = do
-      mapM   doMap (zip [0..] orderedIns)
+    applyTxInExecutionUnits originalIns ins orderedIns execUnitMap = do
+      resolvedIns <- mapM   doMap (zip [0..] orderedIns)
+      pure $ filter (\v -> fst v   `elem` oldSet) resolvedIns
       where
+        oldSet=Set.fromList $ map fst originalIns
         insMap=Map.fromList ins
         doMap  (index,txIn)= case Map.lookup txIn insMap of
           Nothing   ->  Left $  SomeError   "Look how they maccasacred my boy"
@@ -313,21 +319,20 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
 
       -- first iteration
       let sanitizedOutputs = modifiedOuts minLovelaceCalc
-          (inputs1,change1) =minimize txouts  $ startingChange sanitizedOutputs
+          (inputs1,change1) =minimize txouts  $ startingChange txouts sanitizedOutputs startingFee
           txIns1=map utxoToTxBodyIn inputs1
           bodyContent1=modifiedBody sanitizedOutputs (map utxoToTxBodyIn inputs1) change1 startingFee
       txBody1 <- unEither $ case makeTransactionBody bodyContent1 of
         Left tbe -> Left $ SomeError $ show tbe
         Right tb -> Right  tb
-
       let modifiedChange1=change1 <> negLovelace  fee1 <> lovelaceToValue startingFee
           fee1= evaluateTransactionFee pParams txBody1 signatureCount 0
-          (inputs2,change2)= minimizeConsideringChange minLovelaceCalc txouts modifiedChange1
+          (inputs2,change2)= minimizeConsideringChange minLovelaceCalc txouts (startingChange txouts sanitizedOutputs fee1)
           txIns2=map utxoToTxBodyIn inputs2
           bodyContent2 =modifiedBody sanitizedOutputs txIns2 change2 fee1
        -- if selected utxos are  sufficient to pay transaction fees, just use the fee and make txBody
        -- otherwide, reselect txins and recalculate fee. it's very improbable that the we will need more txouts now
-      if positiveValue modifiedChange1 && isProperChange minLovelaceCalc  modifiedChange1
+      if positiveValue modifiedChange1 && isProperChange minLovelaceCalc modifiedChange1
         then do
           let  modifiedBody'=modifiedBody sanitizedOutputs txIns1 modifiedChange1 fee1
           txBody<-makeTransactionBody modifiedBody'
@@ -339,9 +344,9 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
           if fee2 == fee1
             then Right  (TxResult fee2 inputs2 bodyContent2 txbody2)
             else do
-              let body=modifiedBody sanitizedOutputs txIns2 modifiedChange2 fee2
-              txBody <- makeTransactionBody body
-              Right (TxResult fee2 inputs2 body txBody)
+              let body3=modifiedBody sanitizedOutputs txIns2 modifiedChange2 fee2
+              txBody3 <- makeTransactionBody body3
+              Right (TxResult fee2 inputs2 body3 txBody3)
 
   where
   performBalance sanitizedOuts  change fee= do
@@ -377,7 +382,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
   minimizeConsideringChange f available change=if existingLove < minLove
     then
        (case Foldable.find (\(tin,utxo) -> extraLove utxo > (minLove- existingLove)) unmatched of
-         Just val -> (fst matched ++ [val],change <> txOutValueToValue ( txOutValue $ snd val ))
+         Just val -> (fst matched ++ [val],snd matched <> txOutValueToValue ( txOutValue $ snd val ))
          Nothing -> matched
        )
     else
@@ -387,7 +392,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
       unmatched = Map.toList $ Map.filterWithKey  (\k _ -> k `notElem` matchedSet)  utxoMap
       matchedSet=Set.fromList $ map fst $  fst matched
       --Current Lovelace amount in the change utxo
-      existingLove = case  selectAsset change AdaAssetId   of
+      existingLove = case  selectAsset (snd  matched) AdaAssetId   of
         Quantity n -> n
       --minimun Lovelace required in the change utxo
       minLove = case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumHashNone of
@@ -411,22 +416,22 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
 
   utxoToTxBodyIn (txIn,_) =(txIn,BuildTxWith $ KeyWitness KeyWitnessForSpending)
 
-  minimize' utxos remainingChange = (doMap,remainingChange)
-    where
-      doMap=map (\(txin,txout) -> tobodyIn txin) utxos
-      tobodyIn _in=(_in,BuildTxWith $ KeyWitness KeyWitnessForSpending)
-      val  out= txOutValueToValue $ txOutValue  out
+  -- minimize' utxos remainingChange = (doMap,remainingChange)
+  --   where
+  --     doMap=map (\(txin,txout) -> tobodyIn txin) utxos
+  --     tobodyIn _in=(_in,BuildTxWith $ KeyWitness KeyWitnessForSpending)
+  --     val  out= txOutValueToValue $ txOutValue  out
 
 
 
   -- change is whatever will remain after making payment.
   -- At the beginning, we will assume that we will all the available utxos, 
   -- so it should be a +ve value, otherwise it means we don't have sufficient balance to fulfill the transaction 
-  startingChange outputs =
+  startingChange available outputs  fee=
         negateValue (foldMap (txOutValueToValue  . txOutValue ) outputs)  --already existing outputs
     <>  (if  null (txIns txbody) then mempty else inputSum) -- already existing inputs
-    <>  foldMap (txOutValueToValue  . txOutValue) (Map.elems utxoMap) -- sum of all the available utxos
-    <>  negateValue (lovelaceToValue startingFee)
+    <>  Foldable.foldMap (txOutValueToValue  . txOutValue . snd) available -- sum of all the available utxos
+    <>  negateValue (lovelaceToValue fee)
   utxoToTxOut (UTxO map)=Map.toList map
 
   txOutValueToValue :: TxOutValue era -> Value
