@@ -161,13 +161,14 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
     let txInsCollateral=TxInsCollateral CollateralInAlonzoEra  [myCollateral ]
 
     let bodyRevsion0 =   mkBody txins mappedOutput txInsCollateral pParam
-    (TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0)<-case
+    _result<-case
         mkBalancedBody
           pParam (UTxO walletUtxos) bodyRevsion0 operationUtoSum
           walletAddrInEra (fromIntegral $ length signature + 1)
       of
         Left tbe -> throw $ SomeError $ "First Balance :" ++ show tbe
         Right x0 -> pure x0
+    let (TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0) = _result
     let usedUtxos=UTxO (Map.fromList usedWalletUtxos <> operationUtxos)
     let (orderedIns,orderedOuts)=case balancedRevision0 of {
           ShelleyTxBody sbe
@@ -175,12 +176,17 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
           -> (map fromShelleyTxIn  $ Set.toList ins,outs)
     }
     let eExunits= evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
-    modifiedIns<- case eExunits of
-      Left tvie -> throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
-      Right mp -> applyTxInExecutionUnits (txIns balancedRevisionContent0) orderedIns mp
-    putStrLn $ "exUnits :: " ++ show eExunits
-
-    executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum walletAddrInEra signatureCount)
+    case eExunits of
+      Left tvie ->do 
+          putStrLn  "[WARNING] :: exUnit calculation failed using default"  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
+          pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0
+      Right mp ->do 
+        case applyTxInExecutionUnits (txIns balancedRevisionContent0) orderedIns mp of
+          Left se -> do 
+            putStrLn $ "[WARNING] :: exUnit calculation failed using default :" ++ show se  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
+            pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0
+          Right modifiedIns -> do 
+           executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum walletAddrInEra signatureCount)
 
   where
     signatureCount = fromIntegral $ length signature + 1
@@ -191,18 +197,18 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
     applyTxInExecutionUnits :: [(TxIn,BuildTxWith  BuildTx (Witness WitCtxTxIn AlonzoEra))]
       -> [TxIn]
       -> Map ScriptWitnessIndex (Either ScriptExecutionError ExecutionUnits)
-      -> IO [(TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))]
+      -> Either SomeError [(TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))]
     applyTxInExecutionUnits ins orderedIns execUnitMap = do
       mapM   doMap (zip [0..] orderedIns)
       where
         insMap=Map.fromList ins
         doMap  (index,txIn)= case Map.lookup txIn insMap of
-          Nothing   ->  throw $ SomeError   "Look how they maccasacred my boy"
+          Nothing   ->  Left $  SomeError   "Look how they maccasacred my boy"
           Just item -> case Map.lookup (ScriptWitnessIndexTxIn index) execUnitMap of
             Nothing -> pure (txIn,item) -- this should never happen
             Just a -> case a of
-              Left e -> throw $ SomeError  $ "ResolveExecutionUnit for txin: "++ show e
-              Right exUnits ->pure $  case  item of { BuildTxWith wit -> case wit of
+              Left e -> Left $ SomeError  $ "ResolveExecutionUnit for txin: "++ show e
+              Right exUnits ->Right $  case  item of { BuildTxWith wit -> case wit of
                                 KeyWitness kwic -> throw $ SomeError  "ResolveExecutionUnit for txin: wrong hit "
                                 ScriptWitness swic sw -> case sw of
                                   SimpleScriptWitness slie ssv ss -> throw $ SomeError   "ResolveExecutionUnit for txin: wrong hit "
@@ -210,7 +216,7 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
                                     (
                                         txIn
                                       , BuildTxWith $  ScriptWitness ScriptWitnessForSpending
-                                          $ PlutusScriptWitness  slie psv ps sd sd' exUnits
+                                          $ PlutusScriptWitness  slie psv ps sd sd' (ExecutionUnits {executionSteps=1794494645, executionMemory=5334093})
                                     )
                                     }
         transformIn (txIn,wit) exUnit= (txIn  ,case BuildTxWith $ KeyWitness KeyWitnessForSpending of {
@@ -276,7 +282,7 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
                             (ScriptDatumForTxIn _data) -- script data
                             redeemer -- script redeemer
                             exUnits
-    defaultExunits=ExecutionUnits 10000 10000
+    defaultExunits=ExecutionUnits {executionSteps=1794494645, executionMemory=5334093}
     isOnlyAdaTxOut (TxOut a v d) = case v of
                                         -- only ada then it's ok
                                         TxOutAdaOnly oasie lo -> True
@@ -512,7 +518,7 @@ submitEitherBalancedBody ::
   LocalNodeConnectInfo CardanoMode
   ->  Either TxBodyError TxResult
   -> [SigningKey PaymentKey]
-  -> IO TxId
+  -> IO (Tx AlonzoEra)
 submitEitherBalancedBody conn eitherBalancedBody skeys =
       --End Balance transaction body with fee
   case  eitherBalancedBody of

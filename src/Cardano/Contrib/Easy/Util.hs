@@ -187,13 +187,13 @@ dataToScriptData :: (ToData a1) => a1 -> ScriptData
 dataToScriptData sData =  fromPlutusData $ toData sData
 
 signAndSubmitTxBody :: LocalNodeConnectInfo CardanoMode
-  -> TxBody AlonzoEra -> [SigningKey PaymentKey] -> IO TxId
+  -> TxBody AlonzoEra -> [SigningKey PaymentKey] -> IO (Tx AlonzoEra)
 signAndSubmitTxBody conn txBody skeys= do
       let (ins,outs)=case txBody of { ShelleyTxBody sbe (LedgerBody.TxBody ins outs _ _ _ _ _ _ _ _ _ _ _ ) scs tbsd m_ad tsv -> (ins,outs) }
           tx = makeSignedTransaction (map toWitness skeys) txBody -- witness and txBody
       res <-submitTxToNodeLocal conn $  TxInMode tx AlonzoEraInCardanoMode
       case res of
-        SubmitSuccess ->  pure $ getTxId txBody
+        SubmitSuccess ->  pure tx
         SubmitFail reason ->
           case reason of
             TxValidationErrorInMode err _eraInMode ->  throw$ SomeError $ "SubmitTx: " ++ show  err
