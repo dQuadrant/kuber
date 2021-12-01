@@ -327,7 +327,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
           bodyContent2 =modifiedBody sanitizedOutputs txIns2 change2 fee1
        -- if selected utxos are  sufficient to pay transaction fees, just use the fee and make txBody
        -- otherwide, reselect txins and recalculate fee. it's very improbable that the we will need more txouts now
-      if positiveValue modifiedChange1
+      if positiveValue modifiedChange1 && isProperChange minLovelaceCalc  modifiedChange1
         then do
           let  modifiedBody'=modifiedBody sanitizedOutputs txIns1 modifiedChange1 fee1
           txBody<-makeTransactionBody modifiedBody'
@@ -400,6 +400,13 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
             val= txOutValueToValue $ txOutValue txout
             selectLove = case selectAsset val AdaAssetId of { Quantity n -> n }
 
+  isProperChange f change = existingLove >  minLove
+    where
+      existingLove = case  selectAsset change AdaAssetId   of
+        Quantity n -> n
+      --minimun Lovelace required in the change utxo
+      minLove = case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumHashNone of
+          Lovelace l -> l
 
 
   utxoToTxBodyIn (txIn,_) =(txIn,BuildTxWith $ KeyWitness KeyWitnessForSpending)
