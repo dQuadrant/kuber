@@ -178,16 +178,14 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
     let eExunits= evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
     case eExunits of
       Left tvie ->do 
-          putStrLn  "[WARNING] :: exUnit calculation failed using default"  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
+          putStrLn  "[WARNING] :: exUnit calculation failed. Using default"  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
           pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0
       Right mp ->do 
         case applyTxInExecutionUnits _txins (txIns balancedRevisionContent0) orderedIns mp of
           Left se -> do 
-            putStrLn $ "[WARNING] :: exUnit calculation failed using default :" ++ show se  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
+            putStrLn $ "[WARNING] :: exUnit application failed. Using default :" ++ show se  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
             pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0
           Right modifiedIns -> do 
-            putStrLn "[DEBUG] exunit calculation success"
-            putStrLn $ "Modified Ins:: \n" ++ show modifiedIns
             executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum walletAddrInEra signatureCount)
 
   where
