@@ -167,7 +167,7 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature ) pa
     _result<-case
         mkBalancedBody
           pParam (UTxO walletUtxos) bodyRevsion0 operationUtoSum
-          changeAddrInEra (fromIntegral $ length signature + 1)
+          changeAddrInEra signatureCount
       of
         Left tbe -> throw $ SomeError $ "First Balance :" ++ show tbe
         Right x0 -> pure x0
@@ -340,7 +340,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
           Right (TxResult fee1 inputs1  modifiedBody'  txBody)
         else do
           txbody2 <- makeTransactionBody bodyContent2
-          let fee2=evaluateTransactionFee pParams txbody2 1 0
+          let fee2=evaluateTransactionFee pParams txbody2 signatureCount 0
               modifiedChange2= change2 <> negLovelace fee2 <> lovelaceToValue fee1
           if fee2 == fee1
             then Right  (TxResult fee2 inputs2 bodyContent2 txbody2)
@@ -356,7 +356,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
             txBody1<-makeTransactionBody bodyContent
 
             let modifiedChange1=change' <> negLovelace  fee' <> lovelaceToValue fee
-                fee'= evaluateTransactionFee pParams txBody1 1 0
+                fee'= evaluateTransactionFee pParams txBody1 signatureCount 0
                 (inputs2,change2)= minimize txouts modifiedChange1
                 newBody =modifiedBody sanitizedOuts (map utxoToTxBodyIn inputs2) change2 fee'
             if fee' == fee
