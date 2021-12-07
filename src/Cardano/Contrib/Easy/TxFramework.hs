@@ -140,18 +140,21 @@ data TxResult=TxResult {
    txResultBody:: TxBody AlonzoEra
 }
 
-mkTx :: IsNetworkCtx v =>v ->TxOperationBuilder
+mkTx ctx builder walletAddr =mkTxWithChange ctx builder walletAddr walletAddr
+
+mkTxWithChange :: IsNetworkCtx v =>v ->TxOperationBuilder
   -> AddressInEra AlonzoEra
+  ->  AddressInEra AlonzoEra
   -> IO TxResult
-mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrInEra   = do
+mkTxWithChange networkCtx (TxOperationBuilder change input output signature ) payerAddrInEra changeAddrInEra   = do
   (NetworkContext conn  pParam) <- toNetworkContext networkCtx
-  walletAddr <-unMaybe (SomeError "unexpected error converting address to another type") (deserialiseAddress AsAddressAny (serialiseAddress  walletAddrInEra))
+  walletAddr <-unMaybe (SomeError "unexpected error converting address to another type") (deserialiseAddress AsAddressAny (serialiseAddress  payerAddrInEra))
   UTxO walletUtxos <- queryUtxos conn walletAddr
   mappedOutput <- mapM (toOuotput (networkCtxNetwork networkCtx)) output
   (operationUtxos,_txins) <- resolveAndSumIns conn input
   let operationUtoSum=foldMap txOutValue (Map.elems operationUtxos)
   if not hasScriptInput
-  then executeMkBalancedBody pParam  (UTxO walletUtxos) (mkBody  _txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum walletAddrInEra signatureCount
+  then executeMkBalancedBody pParam  (UTxO walletUtxos) (mkBody  _txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum changeAddrInEra signatureCount
 
   else (do
     (FullNetworkContext _  _ systemStart eraHistory ) <- toFullNetworkContext networkCtx
@@ -164,7 +167,7 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
     _result<-case
         mkBalancedBody
           pParam (UTxO walletUtxos) bodyRevsion0 operationUtoSum
-          walletAddrInEra (fromIntegral $ length signature + 1)
+          changeAddrInEra (fromIntegral $ length signature + 1)
       of
         Left tbe -> throw $ SomeError $ "First Balance :" ++ show tbe
         Right x0 -> pure x0
@@ -186,7 +189,7 @@ mkTx networkCtx (TxOperationBuilder change input output signature ) walletAddrIn
             putStrLn $ "[WARNING] :: exUnit application failed. Using default :" ++ show se  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
             pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0
           Right modifiedIns -> do 
-            executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum walletAddrInEra signatureCount)
+            executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum changeAddrInEra signatureCount)
 
   where
     signatureCount = fromIntegral $ length signature + 1
