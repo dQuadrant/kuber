@@ -40,6 +40,8 @@ data TxCtxOutput =
   | PkhCtxOut (PubKeyHash,Value)
   | ScriptCtxOut (PlutusScript PlutusScriptV1,Value, Hash ScriptData)  deriving (Show)
 
+newtype TxCtxCollateral = TxInCollateral TxIn deriving (Show)
+
 -- select a utxo and add change to it.
 data TxCtxChange = TxCtxChangeUnset | TxCtxChange TxCtxOutput | TxCtxChangeAddr (AddressInEra AlonzoEra) deriving (Show)
 -- Context Builder for test transaction
@@ -49,7 +51,8 @@ data TxOperationBuilder=TxOperationBuilder{
     ctxChange:: TxCtxChange,
     ctxInputs:: [TxCtxInput], -- inputs in this transaction
     ctxOutputs::[TxCtxOutput], -- outputs in this transaction
-    ctxSignatures :: [SigningKey PaymentKey] -- public key signatures in this transaction
+    ctxSignatures :: [SigningKey PaymentKey], -- public key signatures in this transaction
+    ctxCollaterals :: [TxCtxCollateral]  -- collateral for the transaction
   } deriving(Show)
 
 
@@ -61,21 +64,23 @@ instance Semigroup TxOperationBuilder where
             _  -> ctxChange ctx2 ,
     ctxInputs=ctxInputs ctx1 ++ ctxInputs ctx2,
     ctxOutputs=ctxOutputs ctx1 ++ ctxOutputs ctx2,
-    ctxSignatures=ctxSignatures ctx1 ++ctxSignatures ctx2
+    ctxSignatures=ctxSignatures ctx1 ++ctxSignatures ctx2,
+    ctxCollaterals= ctxCollaterals ctx1 ++ ctxCollaterals ctx2 
   }
 
 txUseForChange  operation = if null (ctxOutputs operation)
-  then TxOperationBuilder (ctxChange operation) [] [] []
-  else TxOperationBuilder (TxCtxChange $ head $ ctxOutputs operation) [] [] []
+  then TxOperationBuilder (ctxChange operation) [] [] [] []
+  else TxOperationBuilder (TxCtxChange $ head $ ctxOutputs operation) [] [] [] []
 
 instance Monoid TxOperationBuilder where
-  mempty = TxOperationBuilder TxCtxChangeUnset [] [] []
+  mempty = TxOperationBuilder TxCtxChangeUnset [] [] [] []
 -- mkTxWithWallet :: SigningKey PaymentKey -> TxOperationBuilder -> Ledger.Tx
 
-ctxInput v =  TxOperationBuilder TxCtxChangeUnset [v] [] []
-ctxOutput v = TxOperationBuilder TxCtxChangeUnset [] [v] []
+ctxInput v =  TxOperationBuilder TxCtxChangeUnset [v] [] [] []
+ctxOutput v = TxOperationBuilder TxCtxChangeUnset [] [v] [] []
 ctxSignature :: SigningKey PaymentKey -> TxOperationBuilder
-ctxSignature v = TxOperationBuilder TxCtxChangeUnset [] [] [v]
+ctxSignature v = TxOperationBuilder TxCtxChangeUnset [] [] [v] []
+ctxCollateral v = TxOperationBuilder TxCtxChangeUnset [] [] [] [v]
 -- In this transaction, pay some value to the wallet.
 -- It will be included in the tx_out of this transaction
 txPayTo:: AddressInEra AlonzoEra ->Value ->TxOperationBuilder
@@ -122,6 +127,9 @@ txRedeemUtxo utxo script _data _redeemer = ctxInput $ ScriptUtxoCtxTxIn (script,
 txAddSignature :: SigningKey PaymentKey -> TxOperationBuilder
 txAddSignature = ctxSignature
 
+txAddCollateral :: TxIn -> TxOperationBuilder
+txAddCollateral v =  ctxCollateral (TxInCollateral v)
+
 -- Redeem from Script Address.
 txRedeemUtxoWithValidator :: (ToData a2, ToData a3) =>
   UTxO AlonzoEra
@@ -146,23 +154,26 @@ mkTxWithChange :: IsNetworkCtx v =>v ->TxOperationBuilder
   -> AddressInEra AlonzoEra
   ->  AddressInEra AlonzoEra
   -> IO TxResult
-mkTxWithChange networkCtx (TxOperationBuilder change input output signature ) payerAddrInEra changeAddrInEra   = do
+mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPcollaterals ) payerAddrInEra changeAddrInEra   = do
   (NetworkContext conn  pParam) <- toNetworkContext networkCtx
   walletAddr <-unMaybe (SomeError "unexpected error converting address to another type") (deserialiseAddress AsAddressAny (serialiseAddress  payerAddrInEra))
-  UTxO walletUtxos <- queryUtxos conn walletAddr
+  UTxO allWalletUtxos <- queryUtxos conn walletAddr
   mappedOutput <- mapM (toOuotput (networkCtxNetwork networkCtx)) output
   (operationUtxos,_txins) <- resolveAndSumIns conn input
   let operationUtoSum=foldMap txOutValue (Map.elems operationUtxos)
   if not hasScriptInput
-  then executeMkBalancedBody pParam  (UTxO walletUtxos) (mkBody  _txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum changeAddrInEra signatureCount
-
+  then executeMkBalancedBody pParam  (UTxO allWalletUtxos) (mkBody  _txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum changeAddrInEra signatureCount
   else (do
     (FullNetworkContext _  _ systemStart eraHistory ) <- toFullNetworkContext networkCtx
-    let possibleCollaterals= Map.filter isOnlyAdaTxOut walletUtxos
-    if null possibleCollaterals then throw (SomeError "BuildTx: No utxo usable as collateral") else pure ()
-    let (myCollateral,_)= head $ Map.toList possibleCollaterals
-    let txInsCollateral=TxInsCollateral CollateralInAlonzoEra  [myCollateral ]
-
+    (collaterals,walletUtxos) <- if null oPcollaterals 
+        then do 
+          let possibleCollaterals= Map.filter isOnlyAdaTxOut allWalletUtxos
+          if null possibleCollaterals then throw (SomeError "BuildTx: No utxo usable as collateral") else pure ()
+          pure  ([head $ Map.keys  possibleCollaterals],allWalletUtxos)
+        else do 
+          let collateralSet = Set.fromList mappedOpCollateral
+          pure (mappedOpCollateral,Map.filterWithKey (\k _ -> k `notElem` collateralSet)allWalletUtxos)
+    let txInsCollateral=TxInsCollateral CollateralInAlonzoEra   collaterals
     let bodyRevsion0 =   mkBody _txins mappedOutput txInsCollateral pParam
     _result<-case
         mkBalancedBody
@@ -245,6 +256,7 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature ) pa
           resolved=concat $ snd all
           unresolved=fst all
           vs=map toInput inputs
+    mappedOpCollateral  =   map (\(TxInCollateral _in) -> _in) oPcollaterals
     txOutValue (TxOut _ v _) = case v of
       TxOutAdaOnly oasie lo -> lovelaceToValue lo
       TxOutValue masie va -> va

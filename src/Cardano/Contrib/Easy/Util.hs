@@ -38,6 +38,7 @@ import qualified Data.Text.Encoding as TSE
 import Cardano.Contrib.Easy.Parsers
 import qualified Data.Map as Map
 import Data.Char (toLower)
+import Data.Set (Set)
 
 localNodeConnInfo :: NetworkId -> FilePath   -> LocalNodeConnectInfo CardanoMode
 localNodeConnInfo = LocalNodeConnectInfo (CardanoModeParams (EpochSlots 21600))
@@ -126,6 +127,18 @@ queryUtxos conn addr=do
   utxoQuery qfilter= QueryInEra AlonzoEraInCardanoMode
                     $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo (QueryUTxO (QueryUTxOByAddress (Set.fromList qfilter)) )
 
+resolveTxins :: LocalNodeConnectInfo CardanoMode -> Set TxIn -> IO (UTxO AlonzoEra)
+resolveTxins conn ins= do 
+  a <- queryNodeLocalState conn Nothing (utxoQuery ins)
+  case a of 
+    Left af -> throw $SomeError $ show af
+    Right e -> case e of
+      Left em -> throw $ SomeError $ show em
+      Right uto -> return uto
+
+    where
+      utxoQuery qfilter = QueryInEra  AlonzoEraInCardanoMode
+        $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo (QueryUTxO  $ QueryUTxOByTxIn qfilter )
 
 getDefaultConnection :: String -> NetworkId ->  IO (LocalNodeConnectInfo CardanoMode)
 getDefaultConnection networkName networkId= do
