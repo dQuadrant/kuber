@@ -234,7 +234,7 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
                                     (
                                         txIn
                                       , BuildTxWith $  ScriptWitness ScriptWitnessForSpending
-                                          $ PlutusScriptWitness  slie psv ps sd sd' (ExecutionUnits {executionSteps=1794494645, executionMemory=5334093})
+                                          $ PlutusScriptWitness  slie psv ps sd sd' exUnits
                                     )
                                     }
         transformIn (txIn,wit) exUnit= (txIn  ,case BuildTxWith $ KeyWitness KeyWitnessForSpending of {
@@ -301,7 +301,7 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
                             (ScriptDatumForTxIn _data) -- script data
                             redeemer -- script redeemer
                             exUnits
-    defaultExunits=ExecutionUnits {executionSteps=1794494645, executionMemory=5334093}
+    defaultExunits=ExecutionUnits {executionSteps=194494645 + 553337, executionMemory=5334093}
     isOnlyAdaTxOut (TxOut a v d) = case v of
                                         -- only ada then it's ok
                                         TxOutAdaOnly oasie lo -> True
