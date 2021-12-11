@@ -15,7 +15,7 @@ import System.Directory (doesFileExist)
 import Cardano.Contrib.Easy.Error
 import Plutus.V1.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName))
 import System.FilePath (joinPath)
-import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress))
+import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr)
 import qualified Cardano.Ledger.Alonzo.Tx as LedgerBody
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(SubmitSuccess, SubmitFail))
 import Data.Text.Conversions (convertText, Base16 (unBase16), FromText (fromText), ToText (toText))
@@ -30,7 +30,7 @@ import qualified Cardano.Ledger.Alonzo.Rules.Utxo as Alonzo
 import Plutus.V1.Ledger.Value (AssetClass(AssetClass))
 import Data.String (fromString)
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
-import Shelley.Spec.Ledger.API (Credential(ScriptHashObj, KeyHashObj), KeyHash (KeyHash))
+import Shelley.Spec.Ledger.API (Credential(ScriptHashObj, KeyHashObj), KeyHash (KeyHash), StakeReference (StakeRefNull))
 import Codec.Serialise (serialise)
 import Cardano.Api.Byron (Address(ByronAddress))
 import qualified Data.Aeson as JSON
@@ -114,6 +114,11 @@ addrInEraToPkh a = case a of { AddressInEra atie ad -> case ad of
     unHex ::  ToText a => a -> Maybe  ByteString
     unHex v = convertText (toText v) <&> unBase16
 
+unstakeAddr :: AddressInEra AlonzoEra -> AddressInEra AlonzoEra
+unstakeAddr a = case a of { AddressInEra atie ad -> case ad of
+                                      ByronAddress ad' ->a
+                                      ShelleyAddress net cre sr ->  shelleyAddressInEra $ ShelleyAddress net cre StakeRefNull }
+
 queryUtxos :: LocalNodeConnectInfo CardanoMode-> AddressAny -> IO (UTxO AlonzoEra)
 queryUtxos conn addr=do
   a <-queryNodeLocalState conn Nothing $ utxoQuery [addr]
@@ -128,9 +133,9 @@ queryUtxos conn addr=do
                     $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo (QueryUTxO (QueryUTxOByAddress (Set.fromList qfilter)) )
 
 resolveTxins :: LocalNodeConnectInfo CardanoMode -> Set TxIn -> IO (UTxO AlonzoEra)
-resolveTxins conn ins= do 
+resolveTxins conn ins= do
   a <- queryNodeLocalState conn Nothing (utxoQuery ins)
-  case a of 
+  case a of
     Left af -> throw $SomeError $ show af
     Right e -> case e of
       Left em -> throw $ SomeError $ show em
@@ -190,11 +195,20 @@ queryEraHistory conn=do
 
 getWorkPath :: [FilePath] -> IO  FilePath
 getWorkPath paths= do
+  f <- getWorkPathFunc
+  pure $ f paths
+
+getWorkPathFunc :: IO( [FilePath] -> FilePath )
+getWorkPathFunc = do
   eitherHome <-try $ getEnv "HOME"
-  case eitherHome of
-    Left (e::IOError) -> throw $ SomeError "Can't get Home directory"
-    Right home -> do
-      pure $ joinPath  $  [home , ".cardano"] ++ paths
+  eitherCardanoHome <- try $ getEnv "CARDANO_HOME"
+  case eitherCardanoHome of
+    Left (e::IOError) ->   case eitherHome of
+        Left (e::IOError) -> throw $ SomeError "Can't get Home directory. Missing   HOME and CARDANO_HOME"
+        Right home -> pure $ f [home,".cardano"]
+    Right home ->  pure $ f  [home]
+    where
+      f a b = joinPath $ a ++ b
 
 dataToScriptData :: (ToData a1) => a1 -> ScriptData
 dataToScriptData sData =  fromPlutusData $ toData sData
@@ -240,10 +254,10 @@ calculateTxoutMinLovelace txout pParams=do
   Just $ Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo  txout) * costPerWord
 
 calculateTxoutMinLovelaceFunc :: ProtocolParameters  -> Maybe ( TxOut AlonzoEra -> Lovelace)
-calculateTxoutMinLovelaceFunc pParams = do 
+calculateTxoutMinLovelaceFunc pParams = do
   Lovelace costPerWord <- protocolParamUTxOCostPerWord pParams
   pure $ f costPerWord
-  where 
+  where
     f cpw txout =Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo  txout) * cpw
 
 toPlutusAssetClass :: AssetId -> AssetClass
