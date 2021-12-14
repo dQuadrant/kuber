@@ -218,15 +218,20 @@ signAndSubmitTxBody :: LocalNodeConnectInfo CardanoMode
 signAndSubmitTxBody conn txBody skeys= do
       let (ins,outs)=case txBody of { ShelleyTxBody sbe (LedgerBody.TxBody ins outs _ _ _ _ _ _ _ _ _ _ _ ) scs tbsd m_ad tsv -> (ins,outs) }
           tx = makeSignedTransaction (map toWitness skeys) txBody -- witness and txBody
+      executeSubmitTx conn tx
+      pure tx
+  where
+    toWitness skey = makeShelleyKeyWitness txBody (WitnessPaymentKey skey)
+
+executeSubmitTx :: LocalNodeConnectInfo CardanoMode -> Tx AlonzoEra -> IO ()
+executeSubmitTx conn  tx= do 
       res <-submitTxToNodeLocal conn $  TxInMode tx AlonzoEraInCardanoMode
       case res of
-        SubmitSuccess ->  pure tx
+        SubmitSuccess ->  pure ()
         SubmitFail reason ->
           case reason of
             TxValidationErrorInMode err _eraInMode ->  throw$ SomeError $ "SubmitTx: " ++ show  err
             TxValidationEraMismatch mismatchErr -> throw $ SomeError $ "SubmitTx: " ++ show  mismatchErr
-  where
-    toWitness skey = makeShelleyKeyWitness txBody (WitnessPaymentKey skey)
 
 queryTxins :: LocalNodeConnectInfo CardanoMode-> [TxIn] -> IO (UTxO AlonzoEra)
 queryTxins conn txin=do
