@@ -7,13 +7,12 @@ where
 import Cardano.Api
 import Data.ByteString (ByteString,readFile)
 import qualified Cardano.Api.Shelley as Shelley
-import Ledger (PubKeyHash (PubKeyHash), AssetClass)
 import qualified Data.Set as Set
 import Control.Exception (try, throw)
 import System.Environment (getEnv)
 import System.Directory (doesFileExist)
 import Cardano.Contrib.Easy.Error
-import Plutus.V1.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName))
+import Plutus.V1.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), PubKeyHash (PubKeyHash))
 import System.FilePath (joinPath)
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr)
 import qualified Cardano.Ledger.Alonzo.Tx as LedgerBody
@@ -253,17 +252,17 @@ nullValue v = not $ any (\(aid,Quantity q) -> q>0) (valueToList v)
 positiveValue :: Value -> Bool
 positiveValue v = not $ any (\(aid,Quantity q) -> q<0) (valueToList v)
 
-calculateTxoutMinLovelace :: TxOut AlonzoEra -> ProtocolParameters -> Maybe Lovelace
+calculateTxoutMinLovelace :: TxOut CtxUTxO  AlonzoEra -> ProtocolParameters -> Maybe Lovelace
 calculateTxoutMinLovelace txout pParams=do
   Lovelace costPerWord <- protocolParamUTxOCostPerWord pParams
   Just $ Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo  txout) * costPerWord
 
-calculateTxoutMinLovelaceFunc :: ProtocolParameters  -> Maybe ( TxOut AlonzoEra -> Lovelace)
+calculateTxoutMinLovelaceFunc :: ProtocolParameters  -> Maybe ( TxOut CtxTx   AlonzoEra -> Lovelace)
 calculateTxoutMinLovelaceFunc pParams = do
   Lovelace costPerWord <- protocolParamUTxOCostPerWord pParams
   pure $ f costPerWord
   where
-    f cpw txout =Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo  txout) * cpw
+    f cpw txout =Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo  $  toCtxUTxOTxOut txout) * cpw
 
 toPlutusAssetClass :: AssetId -> AssetClass
 toPlutusAssetClass (AssetId (PolicyId hash) (AssetName name)) = AssetClass (CurrencySymbol $ toBuiltin $ serialiseToRawBytes hash , TokenName $ toBuiltin name)

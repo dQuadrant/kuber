@@ -49,6 +49,5 @@ library
     , cardano-slotting
     , shelley-spec-ledger
     , plutus-ledger-api
-    , plutus-ledger
     , plutus-tx
     , ouroboros-network

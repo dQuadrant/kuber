@@ -12,7 +12,6 @@ where
 import Cardano.Api
 import Cardano.Api.Shelley
 import Cardano.Contrib.Easy.Error
-import Ledger (PubKeyHash)
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
 import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
@@ -23,16 +22,15 @@ import Control.Exception
 import Data.Either
 import Cardano.Contrib.Easy.Util
 import Data.Functor ((<&>))
-import qualified Ledger as Plutus
 import qualified Data.ByteString.Short as SBS
 import qualified Data.ByteString.Lazy as LBS
-import Ledger.Scripts (Validator)
 import Codec.Serialise (serialise)
 import Cardano.Contrib.Easy.Context
 import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes)
 import Data.List (intercalate)
 import qualified Data.Foldable as Foldable
+import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript)
 
 data TxCtxInput  = UtxoCtxIn (UTxO AlonzoEra) | TxInCtxIn TxIn | ScriptCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,TxIn) | ScriptUtxoCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,UTxO AlonzoEra)deriving (Show)
 data TxCtxOutput =
@@ -112,7 +110,7 @@ txPayToValidator validator _data v = ctxOutput $  ScriptCtxOut (PlutusScriptSeri
   where
     serialisedScript :: SBS.ShortByteString
     serialisedScript = SBS.toShort . LBS.toStrict $ serialise script
-    script  = Plutus.unValidatorScript validator
+    script  = unValidatorScript validator
 
 -- Redeem from Script Address.
 txRedeem:: (ToData _data,ToData redeemer)=>TxIn -> PlutusScript PlutusScriptV1 ->_data-> redeemer -> TxOperationBuilder
@@ -139,11 +137,11 @@ txRedeemUtxoWithValidator utxo validator _data _redeemer =
   where
     serialisedScript :: SBS.ShortByteString
     serialisedScript = SBS.toShort . LBS.toStrict $ serialise script
-    script  = Plutus.unValidatorScript validator
+    script  = unValidatorScript validator
 
 data TxResult=TxResult {
    txResultFee :: Lovelace ,
-   txResultIns::[(TxIn, Cardano.Api.Shelley.TxOut AlonzoEra)],
+   txResultIns::[(TxIn, Cardano.Api.Shelley.TxOut CtxUTxO  AlonzoEra)],
    txResultBodyCotent::TxBodyContent BuildTx AlonzoEra,
    txResultBody:: TxBody AlonzoEra
 }
@@ -269,11 +267,11 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
 
     toOuotput network (outCtx :: TxCtxOutput) =  do
       case outCtx of
-        AddrCtxOut (addr,value) -> pure $ TxOut addr (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumHashNone
+        AddrCtxOut (addr,value) -> pure $ TxOut addr (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumNone
         ScriptCtxOut (script,value,dataHash) -> pure $ TxOut (makeShelleyAddressInEra network (PaymentCredentialByScript  $  hashScript   (PlutusScript PlutusScriptV1   script)) NoStakeAddress) (TxOutValue MultiAssetInAlonzoEra  value ) (TxOutDatumHash ScriptDataInAlonzoEra dataHash)
         PkhCtxOut (pkh,value)-> case pkhToMaybeAddr network pkh of
           Nothing -> throw $ SomeError "PubKeyHash couldn't be converted to address"
-          Just aie -> pure $ TxOut aie (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumHashNone
+          Just aie -> pure $ TxOut aie (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumNone
     mkBody ins outs collateral pParam =
           (TxBodyContent {
             txIns=ins ,
@@ -286,7 +284,6 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
             txValidityRange=(TxValidityNoLowerBound,TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra),
             txMetadata=TxMetadataNone ,
             txAuxScripts=TxAuxScriptsNone,
-            txExtraScriptData=BuildTxWith TxExtraScriptDataNone ,
             txExtraKeyWits=TxExtraKeyWitnessesNone,
             txProtocolParams=BuildTxWith (Just  pParam),
             txWithdrawals=TxWithdrawalsNone,
@@ -408,12 +405,12 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
       existingLove = case  selectAsset (snd  matched) AdaAssetId   of
         Quantity n -> n
       --minimun Lovelace required in the change utxo
-      minLove = case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumHashNone of
+      minLove = case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumNone of
           Lovelace l -> l
       -- extra lovelace in this txout over the txoutMinLovelace
       extraLove txout = selectLove - minLoveInThisTxout
           where
-            minLoveInThisTxout=case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra $ val <>change) TxOutDatumHashNone of
+            minLoveInThisTxout=case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra $ val <>change) TxOutDatumNone of
                 Lovelace l -> l
             val= txOutValueToValue $ txOutValue txout
             selectLove = case selectAsset val AdaAssetId of { Quantity n -> n }
@@ -423,7 +420,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
       existingLove = case  selectAsset change AdaAssetId   of
         Quantity n -> n
       --minimun Lovelace required in the change utxo
-      minLove = case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumHashNone of
+      minLove = case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumNone of
           Lovelace l -> l
 
 
@@ -483,13 +480,12 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
             txInsCollateral=txInsCollateral txbody,
             txOuts=  if nullValue change
                   then initialOuts
-                  else initialOuts ++ [ TxOut  walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumHashNone]  ,
+                  else initialOuts ++ [ TxOut  walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumNone]  ,
             txFee=TxFeeExplicit TxFeesExplicitInAlonzoEra  fee,
             -- txValidityRange=(TxValidityNoLowerBound,TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra),
             txValidityRange = txValidityRange txbody,
             txMetadata=txMetadata txbody ,
             txAuxScripts=txAuxScripts txbody,
-            txExtraScriptData=txExtraScriptData txbody ,
             txExtraKeyWits=txExtraKeyWits txbody,
             txProtocolParams= txProtocolParams   txbody,
             txWithdrawals=txWithdrawals txbody,
