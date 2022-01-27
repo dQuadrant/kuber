@@ -46,8 +46,9 @@ library
     , text-conversions
     , cardano-api
     , cardano-ledger-alonzo
+    , cardano-ledger-shelley
     , cardano-slotting
-    , shelley-spec-ledger
+--    , shelley-spec-ledger
     , plutus-ledger-api
     , plutus-tx
     , ouroboros-network

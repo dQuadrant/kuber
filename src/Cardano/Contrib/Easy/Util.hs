@@ -29,7 +29,7 @@ import qualified Cardano.Ledger.Alonzo.Rules.Utxo as Alonzo
 import Plutus.V1.Ledger.Value (AssetClass(AssetClass))
 import Data.String (fromString)
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
-import Shelley.Spec.Ledger.API (Credential(ScriptHashObj, KeyHashObj), KeyHash (KeyHash), StakeReference (StakeRefNull))
+-- import Shelley.Spec.Ledger.API (Credential(ScriptHashObj, KeyHashObj), KeyHash (KeyHash), StakeReference (StakeRefNull))
 import Codec.Serialise (serialise)
 import Cardano.Api.Byron (Address(ByronAddress))
 import qualified Data.Aeson as JSON
@@ -38,6 +38,7 @@ import Cardano.Contrib.Easy.Parsers
 import qualified Data.Map as Map
 import Data.Char (toLower)
 import Data.Set (Set)
+import Cardano.Ledger.Shelley.API (Credential(ScriptHashObj, KeyHashObj), KeyHash (KeyHash), StakeReference (StakeRefNull))
 
 localNodeConnInfo :: NetworkId -> FilePath   -> LocalNodeConnectInfo CardanoMode
 localNodeConnInfo = LocalNodeConnectInfo (CardanoModeParams (EpochSlots 21600))
