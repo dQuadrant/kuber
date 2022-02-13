@@ -50,7 +50,8 @@ data TxOperationBuilder=TxOperationBuilder{
     ctxInputs:: [TxCtxInput], -- inputs in this transaction
     ctxOutputs::[TxCtxOutput], -- outputs in this transaction
     ctxSignatures :: [SigningKey PaymentKey], -- public key signatures in this transaction
-    ctxCollaterals :: [TxCtxCollateral]  -- collateral for the transaction
+    ctxCollaterals :: [TxCtxCollateral],  -- collateral for the transaction
+    ctxTxValidityTimeRange :: (Integer,Integer)
   } deriving(Show)
 
 
@@ -63,7 +64,12 @@ instance Semigroup TxOperationBuilder where
     ctxInputs=ctxInputs ctx1 ++ ctxInputs ctx2,
     ctxOutputs=ctxOutputs ctx1 ++ ctxOutputs ctx2,
     ctxSignatures=ctxSignatures ctx1 ++ctxSignatures ctx2,
-    ctxCollaterals= ctxCollaterals ctx1 ++ ctxCollaterals ctx2 
+    ctxCollaterals= ctxCollaterals ctx1 ++ ctxCollaterals ctx2,
+    ctxTxValidityTimeRange = 
+      case ctxTxValidityTimeRange ctx2 of  
+        (sndStart, sndEnd) ->    case ctxTxValidityTimeRange ctx1 of 
+                               (0, e) -> (sndStart,max e sndEnd)
+                               (s,e) -> (if sndStart ==0 then s else min s sndStart, max e sndEnd)
   }
 
 txUseForChange  operation = if null (ctxOutputs operation)
@@ -71,14 +77,25 @@ txUseForChange  operation = if null (ctxOutputs operation)
   else TxOperationBuilder (TxCtxChange $ head $ ctxOutputs operation) [] [] [] []
 
 instance Monoid TxOperationBuilder where
-  mempty = TxOperationBuilder TxCtxChangeUnset [] [] [] []
+  mempty = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (0,0)
 -- mkTxWithWallet :: SigningKey PaymentKey -> TxOperationBuilder -> Ledger.Tx
 
-ctxInput v =  TxOperationBuilder TxCtxChangeUnset [v] [] [] []
-ctxOutput v = TxOperationBuilder TxCtxChangeUnset [] [v] [] []
+ 
+ctxInput v =  TxOperationBuilder TxCtxChangeUnset [v] [] [] [] (0,0)
+ctxOutput v = TxOperationBuilder TxCtxChangeUnset [] [v] [] [] (0,0)
 ctxSignature :: SigningKey PaymentKey -> TxOperationBuilder
-ctxSignature v = TxOperationBuilder TxCtxChangeUnset [] [] [v] []
-ctxCollateral v = TxOperationBuilder TxCtxChangeUnset [] [] [] [v]
+ctxSignature v = TxOperationBuilder TxCtxChangeUnset [] [] [v] [] (0,0)
+ctxCollateral v = TxOperationBuilder TxCtxChangeUnset [] [] [] [v] (0,0)
+
+-- txValidFromSlot start = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (start,0)
+-- txValidUntilmSlot end = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (0,end)
+-- txValidSlotRange start end = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (start,end)
+
+txValidPosixTimeRange start end = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (start,end)
+txValidFromPosixTime start = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (start,0)
+txValidUntilPosixTime end = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (0,end)
+
+
 -- In this transaction, pay some value to the wallet.
 -- It will be included in the tx_out of this transaction
 txPayTo:: AddressInEra AlonzoEra ->Value ->TxOperationBuilder
@@ -152,8 +169,9 @@ mkTxWithChange :: IsNetworkCtx v =>v ->TxOperationBuilder
   -> AddressInEra AlonzoEra
   ->  AddressInEra AlonzoEra
   -> IO TxResult
-mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPcollaterals ) payerAddrInEra changeAddrInEra   = do
+mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPcollaterals  (validityStart,validityEnd)) payerAddrInEra changeAddrInEra   = do
   (NetworkContext conn  pParam) <- toNetworkContext networkCtx
+  let network = networkCtxNetwork networkCtx
   walletAddr <-unMaybe (SomeError "unexpected error converting address to another type") (deserialiseAddress AsAddressAny (serialiseAddress  payerAddrInEra))
   UTxO allWalletUtxos <- queryUtxos conn walletAddr
   mappedOutput <- mapM (toOuotput (networkCtxNetwork networkCtx)) output
@@ -187,18 +205,20 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
           (LedgerBody.TxBody ins _ outs _ _ _ _ _ _ _ _ _ _) scs tbsd m_ad tsv
           -> (map fromShelleyTxIn  $ Set.toList ins,outs)
     }
-    let eExunits= evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
-    case eExunits of
-      Left tvie ->do 
-          putStrLn  "[WARNING] :: exUnit calculation failed. Using default"  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
-          pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0
-      Right mp ->do 
-        case applyTxInExecutionUnits _txins (txIns balancedRevisionContent0) orderedIns mp of
-          Left se -> do 
-            putStrLn $ "[WARNING] :: exUnit application failed. Using default :" ++ show se  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
-            pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0
-          Right modifiedIns -> do 
-            executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum changeAddrInEra signatureCount)
+    pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0)
+
+    -- let eExunits= evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
+    -- case eExunits of
+    --   Left tvie ->do 
+    --       putStrLn  "[WARNING] :: exUnit calculation failed. Using default"  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
+    --       pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0
+    --   Right mp ->do 
+    --     case applyTxInExecutionUnits _txins (txIns balancedRevisionContent0) orderedIns mp of
+    --       Left se -> do 
+    --         putStrLn $ "[WARNING] :: exUnit application failed. Using default :" ++ show se  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
+    --         pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0
+    --       Right modifiedIns -> do 
+    --         executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum changeAddrInEra signatureCount)
 
   where
     signatureCount = fromIntegral $ length signature + 1
@@ -232,7 +252,7 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
                                     (
                                         txIn
                                       , BuildTxWith $  ScriptWitness ScriptWitnessForSpending
-                                          $ PlutusScriptWitness  slie psv ps sd sd' exUnits
+                                          $ PlutusScriptWitness  slie psv ps sd sd' defaultExunits
                                     )
                                     }
         transformIn (txIn,wit) exUnit= (txIn  ,case BuildTxWith $ KeyWitness KeyWitnessForSpending of {
@@ -281,7 +301,14 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
             -- txValidityRange = (
             --     TxValidityLowerBound ValidityLowerBoundInAlonzoEra 0
             --     , TxValidityUpperBound ValidityUpperBoundInAlonzoEra 6969),
-            txValidityRange=(TxValidityNoLowerBound,TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra),
+            txValidityRange= if validityStart == 0 
+                              then  if  validityEnd == 0
+                                      then  (TxValidityNoLowerBound,TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra )
+                                      else (TxValidityNoLowerBound , TxValidityUpperBound  ValidityUpperBoundInAlonzoEra $toSlot validityEnd)
+                              else  if validityEnd == 0
+                                      then (TxValidityLowerBound ValidityLowerBoundInAlonzoEra  $ toSlot validityStart,TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra )
+                                      else (TxValidityLowerBound  ValidityLowerBoundInAlonzoEra $ toSlot validityStart,TxValidityUpperBound ValidityUpperBoundInAlonzoEra $ toSlot validityEnd)
+              ,
             txMetadata=TxMetadataNone ,
             txAuxScripts=TxAuxScriptsNone,
             txExtraKeyWits=TxExtraKeyWitnessesNone,
@@ -298,7 +325,7 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
                             (ScriptDatumForTxIn _data) -- script data
                             redeemer -- script redeemer
                             exUnits
-    defaultExunits=ExecutionUnits {executionSteps=194494645 + 553337, executionMemory=5334093}
+    defaultExunits=ExecutionUnits {executionSteps= 3000000000, executionMemory=7000000}
     isOnlyAdaTxOut (TxOut a v d) = case v of
                                         -- only ada then it's ok
                                         TxOutAdaOnly oasie lo -> True
@@ -311,6 +338,13 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
       case  x  of
        Left tbe -> throw $ SomeError $ "First Balance :" ++ show tbe
        Right res -> pure res
+
+    toSlot tStamp= case networkCtxNetwork networkCtx of
+      Mainnet -> SlotNo $ fromIntegral $  mainnetSlot tStamp
+      Testnet nm -> SlotNo $ fromIntegral $ testnetSlot tStamp
+    testnetSlot timestamp= ((timestamp -1607199617000) `div` 1000 )+ 12830401 -- using epoch 100 as refrence
+    mainnetSlot timestamp = ((timestamp -1596491091000 ) `div` 1000 )+ 4924800 -- using epoch 209 as reference
+
 
 mkBalancedBody :: ProtocolParameters
   -> UTxO AlonzoEra

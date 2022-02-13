@@ -39,6 +39,8 @@ library
     , containers
     , bytestring
     , serialise
+    , cborg
+    , cardano-binary
     , text
     , filepath
     , directory
