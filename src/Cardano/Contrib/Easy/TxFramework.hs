@@ -205,6 +205,7 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
           (LedgerBody.TxBody ins _ outs _ _ _ _ _ _ _ _ _ _) scs tbsd m_ad tsv
           -> (map fromShelleyTxIn  $ Set.toList ins,outs)
     }
+    
     pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0)
 
     -- let eExunits= evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
@@ -325,12 +326,12 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
                             (ScriptDatumForTxIn _data) -- script data
                             redeemer -- script redeemer
                             exUnits
-    defaultExunits=ExecutionUnits {executionSteps= 3000000000, executionMemory=7000000}
+    defaultExunits=ExecutionUnits {executionSteps= 6000000000, executionMemory=14000000}
     isOnlyAdaTxOut (TxOut a v d) = case v of
                                         -- only ada then it's ok
-                                        TxOutAdaOnly oasie lo -> True
+                                        TxOutAdaOnly oasie (Lovelace lo) -> lo>=2500000
                                         -- make sure that it has only one asset and that one is ada asset.
-                                        TxOutValue masie va -> length vals == 1 && snd(head vals) > 0
+                                        TxOutValue masie va -> length vals == 1 && snd(head vals) >= 2500000
                                               where
                                                 vals=valueToList  va
     unWrapBalance f = do
@@ -344,7 +345,6 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
       Testnet nm -> SlotNo $ fromIntegral $ testnetSlot tStamp
     testnetSlot timestamp= ((timestamp -1607199617000) `div` 1000 )+ 12830401 -- using epoch 100 as refrence
     mainnetSlot timestamp = ((timestamp -1596491091000 ) `div` 1000 )+ 4924800 -- using epoch 209 as reference
-
 
 mkBalancedBody :: ProtocolParameters
   -> UTxO AlonzoEra
