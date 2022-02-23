@@ -55,7 +55,6 @@ data TxOperationBuilder=TxOperationBuilder{
   } deriving(Show)
 
 
-
 instance Semigroup TxOperationBuilder where
   (<>) ctx1 ctx2=TxOperationBuilder{
           ctxChange= case ctxChange ctx2 of
@@ -65,9 +64,9 @@ instance Semigroup TxOperationBuilder where
     ctxOutputs=ctxOutputs ctx1 ++ ctxOutputs ctx2,
     ctxSignatures=ctxSignatures ctx1 ++ctxSignatures ctx2,
     ctxCollaterals= ctxCollaterals ctx1 ++ ctxCollaterals ctx2,
-    ctxTxValidityTimeRange = 
-      case ctxTxValidityTimeRange ctx2 of  
-        (sndStart, sndEnd) ->    case ctxTxValidityTimeRange ctx1 of 
+    ctxTxValidityTimeRange =
+      case ctxTxValidityTimeRange ctx2 of
+        (sndStart, sndEnd) ->    case ctxTxValidityTimeRange ctx1 of
                                (0, e) -> (sndStart,max e sndEnd)
                                (s,e) -> (if sndStart ==0 then s else min s sndStart, max e sndEnd)
   }
@@ -80,16 +79,12 @@ instance Monoid TxOperationBuilder where
   mempty = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (0,0)
 -- mkTxWithWallet :: SigningKey PaymentKey -> TxOperationBuilder -> Ledger.Tx
 
- 
+
 ctxInput v =  TxOperationBuilder TxCtxChangeUnset [v] [] [] [] (0,0)
 ctxOutput v = TxOperationBuilder TxCtxChangeUnset [] [v] [] [] (0,0)
 ctxSignature :: SigningKey PaymentKey -> TxOperationBuilder
 ctxSignature v = TxOperationBuilder TxCtxChangeUnset [] [] [v] [] (0,0)
 ctxCollateral v = TxOperationBuilder TxCtxChangeUnset [] [] [] [v] (0,0)
-
--- txValidFromSlot start = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (start,0)
--- txValidUntilmSlot end = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (0,end)
--- txValidSlotRange start end = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (start,end)
 
 txValidPosixTimeRange start end = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (start,end)
 txValidFromPosixTime start = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (start,0)
@@ -161,7 +156,7 @@ data TxResult=TxResult {
    txResultIns::[(TxIn, Cardano.Api.Shelley.TxOut CtxUTxO  AlonzoEra)],
    txResultBodyCotent::TxBodyContent BuildTx AlonzoEra,
    txResultBody:: TxBody AlonzoEra
-}
+} deriving (Show)
 
 mkTx ctx builder walletAddr =mkTxWithChange ctx builder walletAddr walletAddr
 
@@ -181,12 +176,12 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
   then executeMkBalancedBody pParam  (UTxO allWalletUtxos) (mkBody  _txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum changeAddrInEra signatureCount
   else (do
     (FullNetworkContext _  _ systemStart eraHistory ) <- toFullNetworkContext networkCtx
-    (collaterals,walletUtxos) <- if null oPcollaterals 
-        then do 
+    (collaterals,walletUtxos) <- if null oPcollaterals
+        then do
           let possibleCollaterals= Map.filter isOnlyAdaTxOut allWalletUtxos
           if null possibleCollaterals then throw (SomeError "BuildTx: No utxo usable as collateral") else pure ()
           pure  ([head $ Map.keys  possibleCollaterals],allWalletUtxos)
-        else do 
+        else do
           let collateralSet = Set.fromList mappedOpCollateral
           pure (mappedOpCollateral,Map.filterWithKey (\k _ -> k `notElem` collateralSet)allWalletUtxos)
     let txInsCollateral=TxInsCollateral CollateralInAlonzoEra   collaterals
@@ -205,7 +200,6 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
           (LedgerBody.TxBody ins _ outs _ _ _ _ _ _ _ _ _ _) scs tbsd m_ad tsv
           -> (map fromShelleyTxIn  $ Set.toList ins,outs)
     }
-    
     pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0)
 
     -- let eExunits= evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
@@ -228,7 +222,7 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
                               ScriptUtxoCtxTxIn x0 -> True
                               _ -> False )  input
     applyTxInExecutionUnits ::
-         [(TxIn,BuildTxWith  BuildTx (Witness WitCtxTxIn AlonzoEra))] 
+         [(TxIn,BuildTxWith  BuildTx (Witness WitCtxTxIn AlonzoEra))]
       -> [(TxIn,BuildTxWith  BuildTx (Witness WitCtxTxIn AlonzoEra))]
       -> [TxIn]
       -> Map ScriptWitnessIndex (Either ScriptExecutionError ExecutionUnits)
@@ -302,7 +296,7 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
             -- txValidityRange = (
             --     TxValidityLowerBound ValidityLowerBoundInAlonzoEra 0
             --     , TxValidityUpperBound ValidityUpperBoundInAlonzoEra 6969),
-            txValidityRange= if validityStart == 0 
+            txValidityRange= if validityStart == 0
                               then  if  validityEnd == 0
                                       then  (TxValidityNoLowerBound,TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra )
                                       else (TxValidityNoLowerBound , TxValidityUpperBound  ValidityUpperBoundInAlonzoEra $toSlot validityEnd)
@@ -366,6 +360,11 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
           (inputs1,change1) =minimize txouts  $ startingChange txouts sanitizedOutputs startingFee
           txIns1=map utxoToTxBodyIn inputs1
           bodyContent1=modifiedBody sanitizedOutputs (map utxoToTxBodyIn inputs1) change1 startingFee
+      if not (positiveValue change1) 
+        then 
+          error $ "Insufficient balance : missing " ++ show change1
+        else
+          pure ()
       txBody1 <- unEither $ case makeTransactionBody bodyContent1 of
         Left tbe -> Left $ SomeError $ show tbe
         Right tb -> Right  tb
@@ -384,13 +383,18 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
         else do
           txbody2 <- makeTransactionBody bodyContent2
           let fee2=evaluateTransactionFee pParams txbody2 signatureCount 0
-              modifiedChange2= change2 <> negLovelace fee2 <> lovelaceToValue fee1
+              modifiedChange2 = change2 <> negLovelace fee2 <> lovelaceToValue fee1
           if fee2 == fee1
             then Right  (TxResult fee2 inputs2 bodyContent2 txbody2)
             else do
-              let body3=modifiedBody sanitizedOutputs txIns2 modifiedChange2 fee2
-              txBody3 <- makeTransactionBody body3
-              Right (TxResult fee2 inputs2 body3 txBody3)
+              if positiveValue modifiedChange2 
+                then (do
+                  let body3=modifiedBody sanitizedOutputs txIns2 modifiedChange2 fee2
+                  txBody3 <- makeTransactionBody body3
+                  Right (TxResult fee2 inputs2 body3 txBody3)) 
+                else (do
+                   error $ "Insufficient balance : missing " ++ show modifiedChange2)
+
 
   where
   performBalance sanitizedOuts  change fee= do
