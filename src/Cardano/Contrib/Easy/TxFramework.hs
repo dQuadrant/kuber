@@ -28,7 +28,7 @@ import Codec.Serialise (serialise)
 import Cardano.Contrib.Easy.Context
 import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes)
-import Data.List (intercalate)
+import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
 import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript)
 
@@ -168,22 +168,24 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
   (NetworkContext conn  pParam) <- toNetworkContext networkCtx
   let network = networkCtxNetwork networkCtx
   walletAddr <-unMaybe (SomeError "unexpected error converting address to another type") (deserialiseAddress AsAddressAny (serialiseAddress  payerAddrInEra))
-  UTxO allWalletUtxos <- queryUtxos conn walletAddr
+  UTxO _allWalletUtxos <- queryUtxos conn walletAddr
   mappedOutput <- mapM (toOuotput (networkCtxNetwork networkCtx)) output
   (operationUtxos,_txins) <- resolveAndSumIns conn input
   let operationUtoSum=foldMap txOutValue (Map.elems operationUtxos)
+  let unUnsedWalletUtos = Map.filterWithKey (\k  a -> k `Map.notMember` operationUtxos) _allWalletUtxos
+
   if not hasScriptInput
-  then executeMkBalancedBody pParam  (UTxO allWalletUtxos) (mkBody  _txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum changeAddrInEra signatureCount
+  then executeMkBalancedBody pParam  (UTxO unUnsedWalletUtos) (mkBody  _txins mappedOutput TxInsCollateralNone  pParam)  operationUtoSum changeAddrInEra signatureCount
   else (do
     (FullNetworkContext _  _ systemStart eraHistory ) <- toFullNetworkContext networkCtx
     (collaterals,walletUtxos) <- if null oPcollaterals
         then do
-          let possibleCollaterals= Map.filter isOnlyAdaTxOut allWalletUtxos
+          let possibleCollaterals= Map.filter isOnlyAdaTxOut _allWalletUtxos
           if null possibleCollaterals then throw (SomeError "BuildTx: No utxo usable as collateral") else pure ()
-          pure  ([head $ Map.keys  possibleCollaterals],allWalletUtxos)
+          pure  ([head $ Map.keys  possibleCollaterals],unUnsedWalletUtos)
         else do
           let collateralSet = Set.fromList mappedOpCollateral
-          pure (mappedOpCollateral,Map.filterWithKey (\k _ -> k `notElem` collateralSet)allWalletUtxos)
+          pure (mappedOpCollateral,Map.filterWithKey (\k _ -> k `notElem` collateralSet) unUnsedWalletUtos)
     let txInsCollateral=TxInsCollateral CollateralInAlonzoEra   collaterals
     let bodyRevsion0 =   mkBody _txins mappedOutput txInsCollateral pParam
     _result<-case
@@ -360,8 +362,9 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
           (inputs1,change1) =minimize txouts  $ startingChange txouts sanitizedOutputs startingFee
           txIns1=map utxoToTxBodyIn inputs1
           bodyContent1=modifiedBody sanitizedOutputs (map utxoToTxBodyIn inputs1) change1 startingFee
-      if not (positiveValue change1) 
-        then 
+    --  error $ show $ map (txOutValueToValue  . txOutValue .snd) txouts
+      if not (positiveValue change1)
+        then
           error $ "Insufficient balance : missing " ++ show change1
         else
           pure ()
@@ -387,11 +390,11 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
           if fee2 == fee1
             then Right  (TxResult fee2 inputs2 bodyContent2 txbody2)
             else do
-              if positiveValue modifiedChange2 
+              if positiveValue modifiedChange2
                 then (do
                   let body3=modifiedBody sanitizedOutputs txIns2 modifiedChange2 fee2
                   txBody3 <- makeTransactionBody body3
-                  Right (TxResult fee2 inputs2 body3 txBody3)) 
+                  Right (TxResult fee2 inputs2 body3 txBody3))
                 else (do
                    error $ "Insufficient balance : missing " ++ show modifiedChange2)
 
@@ -414,10 +417,28 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
 
   negLovelace v=negateValue $ lovelaceToValue v
 
-  txouts=  Map.toList utxoMap
+  txouts :: [(TxIn,TxOut CtxUTxO AlonzoEra )]
+  txouts = sortBy sortingFunc ( Map.toList utxoMap)
+
+  -- sort the txouts based on following condition
+  -- - the ones with multiple assets comes first
+  -- - then the ones with lower lovelace amount come
+  -- - then the ones with higher lovelace amount come
+  sortingFunc :: (TxIn,TxOut CtxUTxO AlonzoEra) -> (TxIn,TxOut CtxUTxO AlonzoEra)-> Ordering
+  sortingFunc (_,TxOut _ (TxOutAdaOnly _ v1) _) (_, TxOut _ (TxOutAdaOnly _ v2)  _) = v1 `compare` v2
+  sortingFunc (_,TxOut _ (TxOutAdaOnly _ (Lovelace v))  _) (_, TxOut _ (TxOutValue _ v2) _) = LT 
+  sortingFunc (_,TxOut _ (TxOutValue _ v1) _) (_, TxOut _ (TxOutAdaOnly _ v2) _) =  GT
+  sortingFunc (_,TxOut _ (TxOutValue _ v1) _) (_, TxOut _ (TxOutValue _ v2) _) =  let l1= length ( valueToList v1)
+                                                                                      l2= length (valueToList v2) in
+                                                                                  if l1==l2
+                                                                                    then selectAsset v1 AdaAssetId `compare` selectAsset v2  AdaAssetId
+                                                                                    else l2 `compare` l1
+
+
   utxosWithWitness (txin,txout) = (txin, BuildTxWith  $ KeyWitness KeyWitnessForSpending)
 
 
+  -- from the utxos, try to remove utxos that can be removed while keeping the change positive or zero if possible
   minimize utxos remainingChange= case utxos of
     []     -> ([] ,remainingChange)
     (txIn,txOut):subUtxos -> if val `valueLte` remainingChange
@@ -427,6 +448,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
             val = txOutValueToValue $ txOutValue  txOut
             newChange= remainingChange <> negateValue val
 
+   -- consider change while minimizing i.e. make sure that the change has the minLovelace value.
   minimizeConsideringChange f available change=if existingLove < minLove
     then
        (case Foldable.find (\(tin,utxo) -> extraLove utxo > (minLove- existingLove)) unmatched of
@@ -477,7 +499,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
   -- so it should be a +ve value, otherwise it means we don't have sufficient balance to fulfill the transaction 
   startingChange available outputs  fee=
         negateValue (foldMap (txOutValueToValue  . txOutValue ) outputs)  --already existing outputs
-    <>  (if  null (txIns txbody) then mempty else inputSum) -- already existing inputs
+    <>   inputSum -- already existing inputs
     <>  Foldable.foldMap (txOutValueToValue  . txOutValue . snd) available -- sum of all the available utxos
     <>  negateValue (lovelaceToValue fee)
   utxoToTxOut (UTxO map)=Map.toList map
@@ -490,6 +512,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
 
   txOutValue (TxOut _ v _) = v
 
+  -- modify the outputs to make sure that the min ada is included in them if it only contains asset.
   modifiedOuts calculator = map (includeMin calculator) (txOuts  txbody)
   includeMin calculator txOut= do case txOut of {TxOut addr v hash-> case v of
                                      TxOutAdaOnly oasie lo ->  txOut
