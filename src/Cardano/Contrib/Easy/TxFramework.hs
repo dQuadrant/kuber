@@ -26,17 +26,21 @@ import qualified Data.ByteString.Short as SBS
 import qualified Data.ByteString.Lazy as LBS
 import Codec.Serialise (serialise)
 import Cardano.Contrib.Easy.Context
+    ( FullNetworkContext(FullNetworkContext),
+      NetworkContext(NetworkContext),
+      IsNetworkCtx(toFullNetworkContext, toNetworkContext,
+                   networkCtxNetwork) )
 import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes)
 import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
 import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript)
 
-data TxCtxInput  = UtxoCtxIn (UTxO AlonzoEra) | TxInCtxIn TxIn | ScriptCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,TxIn) | ScriptUtxoCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,UTxO AlonzoEra)deriving (Show)
+data TxCtxInput  = UtxoCtxIn (UTxO AlonzoEra) | TxInCtxIn TxIn | ScriptCtxTxIn(PlutusScript PlutusScriptV2,ScriptData,ScriptData,TxIn) | ScriptUtxoCtxTxIn(PlutusScript PlutusScriptV2,ScriptData,ScriptData,UTxO AlonzoEra)deriving (Show)
 data TxCtxOutput =
     AddrCtxOut (AddressInEra AlonzoEra,Value)
   | PkhCtxOut (PubKeyHash,Value)
-  | ScriptCtxOut (PlutusScript PlutusScriptV1,Value, Hash ScriptData)  deriving (Show)
+  | ScriptCtxOut (PlutusScript PlutusScriptV2,Value, Hash ScriptData)  deriving (Show)
 
 newtype TxCtxCollateral = TxInCollateral TxIn deriving (Show)
 
@@ -111,7 +115,7 @@ txPayLovelaceTo w v=txPayTo w (lovelaceToValue $quantityToLovelace $ Quantity v)
 -- Lock value and data in a script.
 -- It's a script that we depend on. but we are not testing it.
 -- So, the validator of this script will not be executed.
-txPayToScript:: ToData _data=>PlutusScript PlutusScriptV1 -> _data -> Value->TxOperationBuilder
+txPayToScript:: ToData _data=>PlutusScript PlutusScriptV2 -> _data -> Value->TxOperationBuilder
 txPayToScript script _data v = ctxOutput $ ScriptCtxOut (script,v,hashScriptData  $ dataToScriptData   _data)
 
 -- Lock value and data in a script.
@@ -125,13 +129,13 @@ txPayToValidator validator _data v = ctxOutput $  ScriptCtxOut (PlutusScriptSeri
     script  = unValidatorScript validator
 
 -- Redeem from Script Address.
-txRedeem:: (ToData _data,ToData redeemer)=>TxIn -> PlutusScript PlutusScriptV1 ->_data-> redeemer -> TxOperationBuilder
+txRedeem:: (ToData _data,ToData redeemer)=>TxIn -> PlutusScript PlutusScriptV2 ->_data-> redeemer -> TxOperationBuilder
 txRedeem txin script _data _redeemer = ctxInput $ ScriptCtxTxIn (script,dataToScriptData _data,dataToScriptData _redeemer,txin)
 
 -- Redeem from Script Address.
 txRedeemUtxo :: (ToData a2, ToData a3) =>
   UTxO AlonzoEra
-  -> PlutusScript PlutusScriptV1 -> a2 -> a3 -> TxOperationBuilder
+  -> PlutusScript PlutusScriptV2 -> a2 -> a3 -> TxOperationBuilder
 txRedeemUtxo utxo script _data _redeemer = ctxInput $ ScriptUtxoCtxTxIn (script,dataToScriptData _data,dataToScriptData _redeemer,utxo)
 
 txAddSignature :: SigningKey PaymentKey -> TxOperationBuilder
@@ -285,7 +289,7 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
     toOuotput network (outCtx :: TxCtxOutput) =  do
       case outCtx of
         AddrCtxOut (addr,value) -> pure $ TxOut addr (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumNone
-        ScriptCtxOut (script,value,dataHash) -> pure $ TxOut (makeShelleyAddressInEra network (PaymentCredentialByScript  $  hashScript   (PlutusScript PlutusScriptV1   script)) NoStakeAddress) (TxOutValue MultiAssetInAlonzoEra  value ) (TxOutDatumHash ScriptDataInAlonzoEra dataHash)
+        ScriptCtxOut (script,value,dataHash) -> pure $ TxOut (makeShelleyAddressInEra network (PaymentCredentialByScript  $  hashScript   (PlutusScript PlutusScriptV2   script)) NoStakeAddress) (TxOutValue MultiAssetInAlonzoEra  value ) (TxOutDatumHash ScriptDataInAlonzoEra dataHash)
         PkhCtxOut (pkh,value)-> case pkhToMaybeAddr network pkh of
           Nothing -> throw $ SomeError "PubKeyHash couldn't be converted to address"
           Just aie -> pure $ TxOut aie (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumNone
@@ -316,8 +320,8 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
             txMintValue=TxMintNone,
             txScriptValidity=TxScriptValidityNone
           })
-    plutusWitness script _data redeemer exUnits = PlutusScriptWitness PlutusScriptV1InAlonzo
-                            PlutusScriptV1
+    plutusWitness script _data redeemer exUnits = PlutusScriptWitness PlutusScriptV2InAlonzo
+                            PlutusScriptV2
                             script
                             (ScriptDatumForTxIn _data) -- script data
                             redeemer -- script redeemer
