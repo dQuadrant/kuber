@@ -1,110 +1,198 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NumericUnderscores #-}
-module Cardano.Contrib.Easy.Parsers
+{-# LANGUAGE OverloadedStrings #-}
 
-where
+module Cardano.Contrib.Easy.Parsers where
 
-import qualified Data.Text as T
+import Cardano.Api
+import Cardano.Contrib.Easy.Error (SomeError (SomeError))
+import Control.Exception (SomeException, catch, throw)
 import qualified Data.Aeson as Aeson
-import Cardano.Api (TextEnvelope(TextEnvelope), AssetId (AssetId, AdaAssetId), ScriptDataJsonError (ScriptDataJsonSchemaError, ScriptDataRangeError), ScriptData, scriptDataFromJson, ScriptDataJsonSchema (ScriptDataJsonDetailedSchema), deserialiseFromRawBytesHex, AsType (AsPolicyId, AsAssetName, AsSigningKey, AsPaymentKey), SerialiseAsRawBytes (deserialiseFromRawBytes), SerialiseAsCBOR (deserialiseFromCBOR), deserialiseFromBech32, Value, Quantity (Quantity), valueFromList, SigningKey, PaymentKey)
-import qualified Data.Text.Encoding as TSE
-import Data.Text (Text)
 import Data.ByteString.Lazy (fromStrict)
-import Data.Text.Encoding (encodeUtf8)
-import Data.Text.Conversions (convertText, Base16 (unBase16))
+import Data.Char (isDigit, isSeparator)
 import Data.Functor ((<&>))
-import Data.Char (isSeparator, isDigit)
-import Control.Exception (catch, SomeException)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Text.Conversions (Base16 (unBase16), convertText)
+import Data.Text.Encoding (encodeUtf8)
+import qualified Data.Text.Encoding as TSE
+import GHC.IO.Exception (IOErrorType (UserError), IOException (IOError))
 import Text.Read (readMaybe)
-import GHC.IO.Exception (IOException(IOError), IOErrorType (UserError))
-import Data.Aeson.Types (Parser)
+
 parseSignKey txt
   | T.null txt = fail "Empty value for SignKey"
-  | T.head txt /='{' =
+  | T.head txt /= '{' =
     case deserialiseFromBech32 (AsSigningKey AsPaymentKey) txt of
-        Left ide -> case  convertText txt <&> unBase16 of
-          Nothing -> fail "SignKey is neither Bench32 nor Hex encoded"
-          Just bs -> case deserialiseFromCBOR (AsSigningKey AsPaymentKey) bs of
-            Left de -> fail "SignKey is neither Bench32 nor CBOR encoded"
-            Right sk' -> pure sk'
-        Right sk -> pure sk
-  | otherwise = case Aeson.eitherDecode  (  fromStrict $ encodeUtf8 txt) of
-              Right (TextEnvelope _ _ cborHex)->case deserialiseFromCBOR (AsSigningKey AsPaymentKey) cborHex of
-                      Left de -> fail "TextEnvelope doesn't contain cborHex for signKey"
-                      Right sk' -> pure sk'
-              Left err -> fail err
+      Left ide -> case convertText txt <&> unBase16 of
+        Nothing -> fail "SignKey is neither Bench32 nor Hex encoded"
+        Just bs -> case deserialiseFromCBOR (AsSigningKey AsPaymentKey) bs of
+          Left de -> fail "SignKey is neither Bench32 nor CBOR encoded"
+          Right sk' -> pure sk'
+      Right sk -> pure sk
+  | otherwise = case Aeson.eitherDecode (fromStrict $ encodeUtf8 txt) of
+    Right (TextEnvelope _ _ cborHex) -> case deserialiseFromCBOR (AsSigningKey AsPaymentKey) cborHex of
+      Left de -> fail "TextEnvelope doesn't contain cborHex for signKey"
+      Right sk' -> pure sk'
+    Left err -> fail err
 
 parseAssetId :: MonadFail m => T.Text -> T.Text -> m AssetId
-parseAssetId policyText nameText= do
-    if T.null  policyText
-          then if T.null nameText
-                then pure  AdaAssetId
-                else fail "Policy Id is for Ada but tokenName provided"
-          else do
-            let policyId=   deserialiseFromRawBytesHex AsPolicyId  $ encodeUtf8 policyText
-            let assetName=  deserialiseFromRawBytes AsAssetName $  encodeUtf8 nameText
-            case policyId of
-              Nothing -> fail "ParseError: invalid policyId value"
-              Just pi -> case assetName of
-                Nothing -> fail "ParseError: invalid tokenName"
-                Just an -> pure $ AssetId pi an
+parseAssetId policyText nameText = do
+  if T.null policyText
+    then
+      if T.null nameText
+        then pure AdaAssetId
+        else fail "Policy Id is for Ada but tokenName provided"
+    else do
+      let policyId = deserialiseFromRawBytesHex AsPolicyId $ encodeUtf8 policyText
+      let assetName = deserialiseFromRawBytes AsAssetName $ encodeUtf8 nameText
+      case policyId of
+        Nothing -> fail "ParseError: invalid policyId value"
+        Just pi -> case assetName of
+          Nothing -> fail "ParseError: invalid tokenName"
+          Just an -> pure $ AssetId pi an
 
-parseAssetIdText :: MonadFail m => T.Text  -> m AssetId
+parseAssetIdText :: MonadFail m => T.Text -> m AssetId
 parseAssetIdText assetText = case T.split (== '.') assetText of
   [policy, tokenName] -> parseAssetId policy tokenName
-  _                   ->  if T.null assetText || (T.toLower assetText == "lovelace")
-                          then pure AdaAssetId
-                          else failure
+  _ ->
+    if T.null assetText || (T.toLower assetText == "lovelace")
+      then pure AdaAssetId
+      else failure
   where
-    failure= fail "ParseError : Cannot construct AssetId from text. Expected format :`policyHex.tokenName`"
+    failure = fail "ParseError : Cannot construct AssetId from text. Expected format :`policyHex.tokenName`"
 
-
-parseValueText ::  Text -> IO Value
-parseValueText valueTxt=
-  mapM parseAssetNQuantity (T.split (=='+')  $ T.strip  valueTxt)
-   <&> valueFromList
-
+parseValueText :: Text -> IO Value
+parseValueText valueTxt =
+  mapM parseAssetNQuantity (T.split (== '+') $ T.strip valueTxt)
+    <&> valueFromList
 
 parseAssetNQuantity :: MonadFail f => Text -> f (AssetId, Quantity)
-parseAssetNQuantity textStr=do
-    let (amountTxt,assetTxt)= performBreak
-        assetTxtStripped= T.strip assetTxt
-    case readMaybe (T.unpack amountTxt) of
-      Just iAmount -> do
-         case   parseAssetIdText assetTxtStripped  of
-           Just asset -> pure (asset,Quantity iAmount)
-           _ -> convertAdaOrLovelace
-                  assetTxtStripped  iAmount  (fail $ "Invalid AssetId in value `"++T.unpack textStr ++"`")
-      _ ->  if T.null assetTxtStripped
-            then  case parseAssetIdText amountTxt of
-                Just asset -> pure (asset,Quantity 1)
-                _ -> do
-                  let (newAmountTxt,postfix) =T.span isDigit amountTxt
-                  case readMaybe (T.unpack newAmountTxt) of
-                    Just iAmount -> convertAdaOrLovelace postfix iAmount parseFail
-                    _     -> parseFail
-            else
-              parseFail
+parseAssetNQuantity textStr = do
+  let (amountTxt, assetTxt) = performBreak
+      assetTxtStripped = T.strip assetTxt
+  case readMaybe (T.unpack amountTxt) of
+    Just iAmount -> do
+      case parseAssetIdText assetTxtStripped of
+        Just asset -> pure (asset, Quantity iAmount)
+        _ ->
+          convertAdaOrLovelace
+            assetTxtStripped
+            iAmount
+            (fail $ "Invalid AssetId in value `" ++ T.unpack textStr ++ "`")
+    _ ->
+      if T.null assetTxtStripped
+        then case parseAssetIdText amountTxt of
+          Just asset -> pure (asset, Quantity 1)
+          _ -> do
+            let (newAmountTxt, postfix) = T.span isDigit amountTxt
+            case readMaybe (T.unpack newAmountTxt) of
+              Just iAmount -> convertAdaOrLovelace postfix iAmount parseFail
+              _ -> parseFail
+        else parseFail
   where
-  convertAdaOrLovelace str iAmount  _otherwise=  case T.unpack  (T.toLower  str) of
-                              "ada"     -> lovelaceAmount (iAmount * 1_000_000)
-                              "a"       -> lovelaceAmount (iAmount * 1_000_000)
-                              "l"       -> lovelaceAmount iAmount
-                              "lovelace"-> lovelaceAmount iAmount
-                              _         -> _otherwise
-  lovelaceAmount v= pure (AdaAssetId, Quantity v)
-  parseFail =fail $ "Value parse failed : invalid value token `" ++ T.unpack textStr ++ "`"
-  performBreak = T.break   isSeparator (T.stripStart  textStr)
-
+    convertAdaOrLovelace str iAmount _otherwise = case T.unpack (T.toLower str) of
+      "ada" -> lovelaceAmount (iAmount * 1_000_000)
+      "a" -> lovelaceAmount (iAmount * 1_000_000)
+      "l" -> lovelaceAmount iAmount
+      "lovelace" -> lovelaceAmount iAmount
+      _ -> _otherwise
+    lovelaceAmount v = pure (AdaAssetId, Quantity v)
+    parseFail = fail $ "Value parse failed : invalid value token `" ++ T.unpack textStr ++ "`"
+    performBreak = T.break isSeparator (T.stripStart textStr)
 
 parseScriptData :: MonadFail m => Text -> m ScriptData
-parseScriptData jsonText=do
+parseScriptData jsonText = do
   case decodeJson of
     Nothing -> fail "Invalid Json for script data"
-    Just v -> case scriptDataFromJson ScriptDataJsonDetailedSchema  v of
+    Just v -> case scriptDataFromJson ScriptDataJsonDetailedSchema v of
       Left sdje -> case sdje of
-        ScriptDataJsonSchemaError va sdjse -> fail $  "Wrong schema" ++ show sdjse
-        ScriptDataRangeError va sdre -> fail $  "Invalid data " ++ show sdre
-      Right sd -> pure  sd
+        ScriptDataJsonSchemaError va sdjse -> fail $ "Wrong schema" ++ show sdjse
+        ScriptDataRangeError va sdre -> fail $ "Invalid data " ++ show sdre
+      Right sd -> pure sd
   where
-    decodeJson=Aeson.decode $ fromStrict  $ TSE.encodeUtf8 jsonText
+    decodeJson = Aeson.decode $ fromStrict $ TSE.encodeUtf8 jsonText
+
+parseAnyScript :: MonadFail m => Text -> m ScriptInAnyLang
+parseAnyScript jsonText =
+  case deserialiseFromJSON AsTextEnvelope (encodeUtf8 jsonText) of
+    Left _ ->
+      case deserialiseFromJSON (AsSimpleScript AsSimpleScriptV2) (encodeUtf8 jsonText) of
+        Left err -> fail "Error while decoding simple script"
+        Right script -> pure $ toMinimumSimpleScriptVersion script
+    Right te ->
+      case deserialiseFromTextEnvelopeAnyOf textEnvTypes te of
+        Left err -> fail "Error while decoding script text envelope"
+        Right script -> pure script
+  where
+    textEnvTypes :: [FromSomeType HasTextEnvelope ScriptInAnyLang]
+    textEnvTypes =
+      [ FromSomeType
+          (AsScript AsSimpleScriptV1)
+          (ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV1)),
+        FromSomeType
+          (AsScript AsSimpleScriptV2)
+          (ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV2)),
+        FromSomeType
+          (AsScript AsPlutusScriptV1)
+          (ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1)),
+        FromSomeType
+          (AsScript AsPlutusScriptV2)
+          (ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2))
+      ]
+
+    toMinimumSimpleScriptVersion ::
+      SimpleScript SimpleScriptV2 ->
+      ScriptInAnyLang
+    toMinimumSimpleScriptVersion s =
+      case adjustSimpleScriptVersion SimpleScriptV1 s of
+        Nothing ->
+          ScriptInAnyLang
+            (SimpleScriptLanguage SimpleScriptV2)
+            (SimpleScript SimpleScriptV2 s)
+        Just s' ->
+          ScriptInAnyLang
+            (SimpleScriptLanguage SimpleScriptV1)
+            (SimpleScript SimpleScriptV1 s')
+
+createScriptWitness ::
+  MonadFail m =>
+  ScriptInAnyLang ->
+  ScriptDatum witCtx ->
+  ScriptData ->
+  ExecutionUnits ->
+  m (ScriptWitness witCtx AlonzoEra)
+createScriptWitness anyScript datum redeemer exUnits = do
+  ScriptInEra langInEra script' <- validateScriptSupportedInEra' AlonzoEra anyScript
+  case script' of
+    PlutusScript version pscript ->
+      pure $
+        PlutusScriptWitness
+          langInEra
+          version
+          pscript
+          datum
+          redeemer
+          exUnits
+    SimpleScript version sscript -> pure $ SimpleScriptWitness langInEra version sscript
+
+createTxInScriptWitness ::
+  MonadFail m =>
+  ScriptInAnyLang ->
+  ScriptData ->
+  ScriptData ->
+  ExecutionUnits ->
+  m (ScriptWitness WitCtxTxIn AlonzoEra)
+createTxInScriptWitness anyScript datum = createScriptWitness anyScript (ScriptDatumForTxIn datum)
+
+createMintingScriptWitness ::
+  MonadFail m =>
+  ScriptInAnyLang ->
+  ScriptData ->
+  ExecutionUnits ->
+  m (ScriptWitness WitCtxMint AlonzoEra)
+createMintingScriptWitness anyScript = createScriptWitness anyScript NoScriptDatumForMint
+
+validateScriptSupportedInEra' :: MonadFail m => CardanoEra era -> ScriptInAnyLang -> m (ScriptInEra era)
+validateScriptSupportedInEra' era script@(ScriptInAnyLang lang _) =
+  case toScriptInEra era script of
+    Nothing -> throw $ SomeError "Error this script not supported."
+    Just script' -> pure script'
