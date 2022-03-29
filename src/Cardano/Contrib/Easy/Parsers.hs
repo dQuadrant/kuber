@@ -6,7 +6,7 @@ where
 
 import qualified Data.Text as T
 import qualified Data.Aeson as Aeson
-import Cardano.Api (TextEnvelope(TextEnvelope), AssetId (AssetId, AdaAssetId), ScriptDataJsonError (ScriptDataJsonSchemaError, ScriptDataRangeError), ScriptData, scriptDataFromJson, ScriptDataJsonSchema (ScriptDataJsonDetailedSchema), deserialiseFromRawBytesHex, AsType (AsPolicyId, AsAssetName, AsSigningKey, AsPaymentKey), SerialiseAsRawBytes (deserialiseFromRawBytes), SerialiseAsCBOR (deserialiseFromCBOR), deserialiseFromBech32, Value, Quantity (Quantity), valueFromList)
+import Cardano.Api (TextEnvelope(TextEnvelope), AssetId (AssetId, AdaAssetId), ScriptDataJsonError (ScriptDataJsonSchemaError, ScriptDataRangeError), ScriptData, scriptDataFromJson, ScriptDataJsonSchema (ScriptDataJsonDetailedSchema), deserialiseFromRawBytesHex, AsType (AsPolicyId, AsAssetName, AsSigningKey, AsPaymentKey), SerialiseAsRawBytes (deserialiseFromRawBytes), SerialiseAsCBOR (deserialiseFromCBOR), deserialiseFromBech32, Value, Quantity (Quantity), valueFromList, SigningKey, PaymentKey)
 import qualified Data.Text.Encoding as TSE
 import Data.Text (Text)
 import Data.ByteString.Lazy (fromStrict)
@@ -17,6 +17,7 @@ import Data.Char (isSeparator, isDigit)
 import Control.Exception (catch, SomeException)
 import Text.Read (readMaybe)
 import GHC.IO.Exception (IOException(IOError), IOErrorType (UserError))
+import Data.Aeson.Types (Parser)
 parseSignKey txt
   | T.null txt = fail "Empty value for SignKey"
   | T.head txt /='{' =

@@ -54,3 +54,16 @@ library
     , plutus-ledger-api
     , plutus-tx
     , ouroboros-network
+
+
+executable  app
+  main-is:  Main.hs
+  hs-source-dirs: app
+  other-modules:
+    Cardano.Contrib.Easy.Spec
+  build-depends:
+      base -any
+    , easy-cardano -any
+    , cardano-api
+    , plutus-ledger-api
+    

@@ -36,7 +36,14 @@ import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
 import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript)
 
-data TxCtxInput  = UtxoCtxIn (UTxO AlonzoEra) | TxInCtxIn TxIn | ScriptCtxTxIn(PlutusScript PlutusScriptV2,ScriptData,ScriptData,TxIn) | ScriptUtxoCtxTxIn(PlutusScript PlutusScriptV2,ScriptData,ScriptData,UTxO AlonzoEra)deriving (Show)
+data TxScript = PlutusScript (PlutusScript PlutusScriptV1)
+                | SimpleScript (SimpleScript SimpleScriptV2)
+
+                
+data TxCtxInput  =  UtxoCtxIn (UTxO AlonzoEra)
+                  | TxInCtxIn TxIn
+                  | ScriptCtxTxIn(TxScript,ScriptData,ScriptData,TxIn)
+                  | ScriptUtxoCtxTxIn(PlutusScript PlutusScriptV2,ScriptData,ScriptData,UTxO AlonzoEra)deriving (Show)
 data TxCtxOutput =
     AddrCtxOut (AddressInEra AlonzoEra,Value)
   | PkhCtxOut (PubKeyHash,Value)
@@ -44,18 +51,25 @@ data TxCtxOutput =
 
 newtype TxCtxCollateral = TxInCollateral TxIn deriving (Show)
 
+
+data MintingScripts =
+          PlutusMintingScript (PlutusScript PlutusScriptV2)
+        | SimpleMintingScript SimpleScriptV2
+
 -- select a utxo and add change to it.
 data TxCtxChange = TxCtxChangeUnset | TxCtxChange TxCtxOutput | TxCtxChangeAddr (AddressInEra AlonzoEra) deriving (Show)
 -- Context Builder for test transaction
 -- You will not use this directly, instead use builder functions
 -- to compose this structure.
 data TxOperationBuilder=TxOperationBuilder{
+    ctxMintingScripts :: [MintingScripts],
     ctxChange:: TxCtxChange,
     ctxInputs:: [TxCtxInput], -- inputs in this transaction
     ctxOutputs::[TxCtxOutput], -- outputs in this transaction
-    ctxSignatures :: [SigningKey PaymentKey], -- public key signatures in this transaction
     ctxCollaterals :: [TxCtxCollateral],  -- collateral for the transaction
-    ctxTxValidityTimeRange :: (Integer,Integer)
+    ctxTxValidityTimeRange :: (Integer,Integer),
+    ctxTxMint :: (Value),
+    ctxSignBy :: [AddressInEra AlonzoEra ]
   } deriving(Show)
 
 
@@ -66,6 +80,7 @@ instance Semigroup TxOperationBuilder where
             _  -> ctxChange ctx2 ,
     ctxInputs=ctxInputs ctx1 ++ ctxInputs ctx2,
     ctxOutputs=ctxOutputs ctx1 ++ ctxOutputs ctx2,
+    ctxCollaterals
     ctxSignatures=ctxSignatures ctx1 ++ctxSignatures ctx2,
     ctxCollaterals= ctxCollaterals ctx1 ++ ctxCollaterals ctx2,
     ctxTxValidityTimeRange =
@@ -430,7 +445,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
   -- - then the ones with higher lovelace amount come
   sortingFunc :: (TxIn,TxOut CtxUTxO AlonzoEra) -> (TxIn,TxOut CtxUTxO AlonzoEra)-> Ordering
   sortingFunc (_,TxOut _ (TxOutAdaOnly _ v1) _) (_, TxOut _ (TxOutAdaOnly _ v2)  _) = v1 `compare` v2
-  sortingFunc (_,TxOut _ (TxOutAdaOnly _ (Lovelace v))  _) (_, TxOut _ (TxOutValue _ v2) _) = LT 
+  sortingFunc (_,TxOut _ (TxOutAdaOnly _ (Lovelace v))  _) (_, TxOut _ (TxOutValue _ v2) _) = LT
   sortingFunc (_,TxOut _ (TxOutValue _ v1) _) (_, TxOut _ (TxOutAdaOnly _ v2) _) =  GT
   sortingFunc (_,TxOut _ (TxOutValue _ v1) _) (_, TxOut _ (TxOutValue _ v2) _) =  let l1= length ( valueToList v1)
                                                                                       l2= length (valueToList v2) in
