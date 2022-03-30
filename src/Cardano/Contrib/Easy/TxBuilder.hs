@@ -32,7 +32,7 @@ import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
 import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, TxOut)
 
--- mktx 
+-- mktx
 newtype TxMintingScript = TxMintintScript ScriptInAnyLang deriving(Show)
 newtype TxValidatorScript = TxValidatorScript ScriptInAnyLang deriving (Show)
 
@@ -55,22 +55,24 @@ data TxOutput = TxOutput {
   deductFee :: Bool
 } deriving (Show)
 
-data TxCollateral =  TxCollateralTxin TxIn 
+data TxCollateral =  TxCollateralTxin TxIn
                   |  TxCollateralUtxo (UTxO AlonzoEra)
     deriving (Show)
 
-data TxSignature =  TxExtraSignature Integer   
+data TxSignature =  TxExtraSignature Integer
                   | TxSignatureAddr (AddressInEra AlonzoEra)
-                  | TxSignaturePkh PubKeyHash 
+                  | TxSignaturePkh PubKeyHash
     deriving (Show)
 
 
-data TxChangeAddr = TxChangeAddrUnset 
+data TxChangeAddr = TxChangeAddrUnset
                   | TxChangeAddr (AddressInEra AlonzoEra)
    deriving (Show)
 
 data TxInputSelection = TxSelectableAddresses [AddressInEra AlonzoEra]
-                  | TxSelectableUtxos  (UTxO AlonzoEra) deriving(Show)
+                  | TxSelectableUtxos  (UTxO AlonzoEra)
+                    | TxSelectableTxIn [TxIn]
+                  deriving(Show)
 
 data TxBuilder=TxBuilder{
     txSelections :: [TxInputSelection],
@@ -96,25 +98,25 @@ instance Semigroup TxBuilder where
     txOutputs = txOutputs txb1 ++ txOutputs txb2,
     txMintingScripts = txMintingScripts txb1 ++ txMintingScripts txb2 ,
     txCollaterals  = txCollaterals txb1 ++ txCollaterals txb2,  -- collateral for the transaction
-    txValidityStart = case txValidityStart txb1 of 
-          Just v1 -> case txValidityStart txb2 of 
+    txValidityStart = case txValidityStart txb1 of
+          Just v1 -> case txValidityStart txb2 of
             Just v2 -> Just $ min v1 v2
             Nothing -> Just v1
           Nothing -> txValidityStart txb2,
-    txValidityEnd = case txValidityEnd txb1 of 
-      Just v1 -> case txValidityEnd txb2 of 
+    txValidityEnd = case txValidityEnd txb1 of
+      Just v1 -> case txValidityEnd txb2 of
         Just v2 -> Just $ max v1 v2
         _ -> Just v1
       _ -> txValidityEnd txb2,
     _txMint = _txMint txb2 <> _txMint txb2,
     txSignatures = txSignatures txb1 ++ txSignatures txb2,
-    txFee  = case txFee txb1 of 
-      Just f -> case txFee txb2 of 
+    txFee  = case txFee txb1 of
+      Just f -> case txFee txb2 of
         Just f2 -> Just $ max f f2
         _ -> Just f
       Nothing -> txFee txb2,
-    txDefaultChangeAddr = case txDefaultChangeAddr txb1 of 
-      Just addr -> Just addr 
+    txDefaultChangeAddr = case txDefaultChangeAddr txb1 of
+      Just addr -> Just addr
       _ -> txDefaultChangeAddr txb2
   }
 
@@ -125,7 +127,7 @@ data TxContext = TxContext {
 }
 
 ctxSelection v = TxBuilder  [v] [] [] [] [] Nothing Nothing (valueFromList []) [] Nothing Nothing
- 
+
 ctxInput v = TxBuilder  [] [v] [] [] [] Nothing Nothing (valueFromList []) [] Nothing Nothing
 
 ctxOutput v =  TxBuilder  [] [] [v] [] [] Nothing Nothing (valueFromList []) [] Nothing Nothing

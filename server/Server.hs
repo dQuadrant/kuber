@@ -9,7 +9,7 @@ module Server where
 
 import Cardano.Api
 import Cardano.Api.Shelley (AlonzoEra)
-import Cardano.Contrib.Easy.Context
+-- import Cardano.Contrib.Easy.Context
 import Cardano.Contrib.Easy.Error (SomeError (SomeError))
 import Cardano.Contrib.Easy.Models
 import Cardano.Contrib.Easy.Util (executeSubmitTx)
@@ -43,21 +43,24 @@ import Network.Wai.Middleware.Servant.Errors (HasErrorBody (..), errorMw)
 import Servant
 import Servant.Exception (Exception (..), Throws, ToServantErr (..), mapException)
 import Servant.Exception.Server
+import Cardano.Contrib.Easy.TxBuilder (TxBuilder)
 
 type HttpAPI =
   Throws SomeError
     :> (
+        "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder  :> Post '[JSON] String
+
          -- General endpoints
-         "api" :> "v1" :> "addresses" :> Capture "address" String :> "balance" :> Get '[JSON] BalanceResponse
-           :<|> "api" :> "v1" :> "tx" :> "submit":>ReqBody '[JSON] SubmitTxModal :> Post '[JSON] TxResponse
-           :<|> "api" :> "v1" :> "tx" :> "pay" :> ReqBody '[JSON] PayToModel  :> Post '[JSON] String
+        --  "api" :> "v1" :> "addresses" :> Capture "address" String :> "balance" :> Get '[JSON] BalanceResponse
+        --    :<|> "api" :> "v1" :> "tx" :> "submit":>ReqBody '[JSON] SubmitTxModal :> Post '[JSON] TxResponse
+        --    :<|> "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder  :> Post '[JSON] String
        )
 
-server :: NetworkContext -> Server HttpAPI
-server ctx =
-  errorGuard (getBalance ctx)
-    :<|> errorGuard (submitTx ctx)
-    :<|> errorGuard (payToTx ctx)
+server :: Server HttpAPI
+server =
+  errorGuard txBuilder
+    -- :<|> errorGuard (submitTx ctx)
+    -- :<|> errorGuard (txBuilder ctx)
   where
     errorGuard f v = liftIO $ do
       errorHandler $ f v
@@ -81,8 +84,12 @@ server ctx =
 proxyAPI :: Proxy HttpAPI
 proxyAPI = Proxy
 
-app :: NetworkContext -> Application
-app ctx = serve proxyAPI $ server ctx
+-- app :: NetworkContext -> Application
+-- app ctx = serve proxyAPI $ server ctx
+
+app :: Application
+app = serve proxyAPI server
+
 
 instance ToJSON SomeError where
   toJSON (SomeError e) = object [T.pack "message" .= "SomeError", T.pack "message" .= e]
