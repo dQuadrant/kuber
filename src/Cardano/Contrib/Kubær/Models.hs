@@ -15,7 +15,7 @@ module Cardano.Contrib.Kubær.Models where
 import Cardano.Api
 import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData)
 import Cardano.Binary (ToCBOR (toCBOR), decodeFull, fromCBOR)
-import Cardano.Contrib.Easy.Util (toHexString)
+import Cardano.Contrib.Kubær.Util (toHexString)
 import Cardano.Ledger.Alonzo.Data (Data)
 import Cardano.Ledger.Alonzo.Tx (TxBody (txfee))
 import Codec.CBOR.Write (toLazyByteString)

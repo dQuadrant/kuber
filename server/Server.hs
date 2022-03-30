@@ -9,10 +9,10 @@ module Server where
 
 import Cardano.Api
 import Cardano.Api.Shelley (AlonzoEra)
--- import Cardano.Contrib.Easy.Context
-import Cardano.Contrib.Easy.Error (SomeError (SomeError))
-import Cardano.Contrib.Easy.Models
-import Cardano.Contrib.Easy.Util (executeSubmitTx)
+import Cardano.Contrib.Kubær.Error (ErrorType (..), FrameworkError (..))
+import Cardano.Contrib.Kubær.Models
+import Cardano.Contrib.Kubær.TxBuilder (TxBuilder)
+import Cardano.Contrib.Kubær.Util (executeSubmitTx)
 import Control.Exception
   ( Exception,
     IOException,
@@ -43,25 +43,23 @@ import Network.Wai.Middleware.Servant.Errors (HasErrorBody (..), errorMw)
 import Servant
 import Servant.Exception (Exception (..), Throws, ToServantErr (..), mapException)
 import Servant.Exception.Server
-import Cardano.Contrib.Easy.TxBuilder (TxBuilder)
 
 type HttpAPI =
-  Throws SomeError
-    :> (
-        "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder  :> Post '[JSON] String
-
-         -- General endpoints
-        --  "api" :> "v1" :> "addresses" :> Capture "address" String :> "balance" :> Get '[JSON] BalanceResponse
-        --    :<|> "api" :> "v1" :> "tx" :> "submit":>ReqBody '[JSON] SubmitTxModal :> Post '[JSON] TxResponse
-        --    :<|> "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder  :> Post '[JSON] String
+  Throws FrameworkError
+    :> ( "api" :> "v1" :> "tx" :> ReqBody '[JSON] PayToModel :> Post '[JSON] String
+    -- General endpoints
+    --  "api" :> "v1" :> "addresses" :> Capture "address" String :> "balance" :> Get '[JSON] BalanceResponse
+    --    :<|> "api" :> "v1" :> "tx" :> "submit":>ReqBody '[JSON] SubmitTxModal :> Post '[JSON] TxResponse
+    --    :<|> "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder  :> Post '[JSON] String
        )
 
 server :: Server HttpAPI
 server =
   errorGuard txBuilder
+  where
     -- :<|> errorGuard (submitTx ctx)
     -- :<|> errorGuard (txBuilder ctx)
-  where
+
     errorGuard f v = liftIO $ do
       errorHandler $ f v
 
@@ -74,9 +72,9 @@ server =
               print e
               throwIO myerr
               where
-                myerr :: SomeError
-                myerr = SomeError (show e)
-            Just s@(SomeError msg) -> do
+                myerr :: FrameworkError
+                myerr = FrameworkError ParserError (show e)
+            Just s@(FrameworkError _ msg) -> do
               putStrLn msg
               throwIO s
         Right v -> pure v
@@ -90,12 +88,8 @@ proxyAPI = Proxy
 app :: Application
 app = serve proxyAPI server
 
+instance ToServantErr FrameworkError where
+  status (FrameworkError _ _) = status400
 
-instance ToJSON SomeError where
-  toJSON (SomeError e) = object [T.pack "message" .= "SomeError", T.pack "message" .= e]
-
-instance ToServantErr SomeError where
-  status (SomeError _) = status400
-
-instance MimeRender PlainText SomeError where
+instance MimeRender PlainText FrameworkError where
   mimeRender ct = mimeRender ct . show

@@ -1,20 +1,21 @@
 module Core where
 
-import Cardano.Api
+-- import Cardano.Api
 -- import Cardano.Contrib.Easy.Context
-import Cardano.Contrib.Easy.Error
-import Cardano.Contrib.Easy.Models
-  ( BalanceResponse (BalanceResponse),
-    PayToModel (PayToModel),
-    SubmitTxModal (SubmitTxModal),
-    TxResponse (TxResponse),
-  )
-import Cardano.Contrib.Easy.Parsers (parseValueText)
--- import Cardano.Contrib.Easy.TxFramework (TxResult (TxResult), mkTx, txPayTo)
-import Cardano.Contrib.Easy.Util (executeSubmitTx, queryUtxos)
-import Control.Exception (throw)
-import qualified Data.Text as T
-import Cardano.Contrib.Easy.TxBuilder (TxBuilder)
+-- import Cardano.Contrib.Kubær.Error
+-- import Cardano.Contrib.Kubær.Models
+--   ( BalanceResponse (BalanceResponse),
+--     PayToModel (PayToModel),
+--     SubmitTxModal (SubmitTxModal),
+--     TxResponse (TxResponse),
+--   )
+-- import Cardano.Contrib.Kubær.Parsers (parseValueText)
+-- -- import Cardano.Contrib.Easy.TxFramework (TxResult (TxResult), mkTx, txPayTo)
+-- import Cardano.Contrib.Kubær.Util (executeSubmitTx, queryUtxos)
+-- import Control.Exception (throw)
+-- import qualified Data.Text as T
+import Cardano.Contrib.Kubær.TxBuilder (TxBuilder)
+import Cardano.Contrib.Kubær.Models (PayToModel)
 
 -- getBalance :: (IsNetworkCtx v) => v -> String -> IO BalanceResponse
 -- getBalance ctx addrStr = do
@@ -67,6 +68,6 @@ import Cardano.Contrib.Easy.TxBuilder (TxBuilder)
 --   pure $ "ok" ++ show txRes
 
 
-txBuilder :: TxBuilder -> IO String
+txBuilder :: PayToModel -> IO String
 txBuilder txBuilder = do
   pure $ show txBuilder

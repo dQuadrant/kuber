@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Cardano.Contrib.Kubær.Util
 where
 
@@ -17,7 +18,7 @@ import System.FilePath (joinPath)
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr)
 import qualified Cardano.Ledger.Alonzo.Tx as LedgerBody
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(SubmitSuccess, SubmitFail))
-import Data.Text.Conversions (convertText, Base16 (unBase16), FromText (fromText), ToText (toText))
+import Data.Text.Conversions (convertText, Base16 (unBase16, Base16), FromText (fromText), ToText (toText))
 import Data.Functor ((<&>))
 
 import qualified Data.Text as T
@@ -298,3 +299,7 @@ validateScriptSupportedInEra' era script@(ScriptInAnyLang lang _) =
   case toScriptInEra era script of
     Nothing -> fail $ show lang ++ " not supported in " ++ show era ++ " era"
     Just script' -> pure script'
+
+
+toHexString :: (FromText a1, ToText (Base16 a2)) => a2 -> a1
+toHexString bs = fromText $  toText (Base16 bs )
