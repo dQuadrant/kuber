@@ -5,13 +5,13 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE DoAndIfThenElse #-}
 
-module Cardano.Contrib.Easy.TxBuilder
+module Cardano.Contrib.Kubær.TxBuilder
 where
 
 
 import Cardano.Api hiding(txFee)
 import Cardano.Api.Shelley hiding (txFee)
-import Cardano.Contrib.Easy.Error
+import Cardano.Contrib.Kubær.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
 import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
@@ -20,7 +20,7 @@ import qualified Data.Set as Set
 import Data.Map (Map)
 import Control.Exception
 import Data.Either
-import Cardano.Contrib.Easy.Util
+import Cardano.Contrib.Kubær.Util
 import Data.Functor ((<&>))
 import qualified Data.ByteString.Short as SBS
 import qualified Data.ByteString.Lazy as LBS
@@ -37,9 +37,9 @@ newtype TxMintingScript = TxMintintScript ScriptInAnyLang deriving(Show)
 newtype TxValidatorScript = TxValidatorScript ScriptInAnyLang deriving (Show)
 
 data TxInputResolved_ = TxInputUtxo (UTxO AlonzoEra)
-              | TxInputScriptUtxo TxValidatorScript ScriptData ScriptData (UTxO AlonzoEra) deriving (Show)
+              | TxInputScriptUtxo TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) (UTxO AlonzoEra) deriving (Show)
 data TxInputUnResolved_ = TxInputTxin TxIn
-              | TxInputScriptTxin TxValidatorScript ScriptData ScriptData TxIn deriving (Show)
+              | TxInputScriptTxin TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) TxIn deriving (Show)
 
 data TxInput  = TxInputResolved TxInputResolved_ | TxInputUnResolved TxInputUnResolved_ deriving (Show)
 
@@ -168,11 +168,11 @@ txConsumeUtxo tin v =txConsumeUtxos $ UTxO $ Map.singleton tin  v
 
 -- Redeem from Script Address.
 txRedeemTxin:: TxIn -> ScriptInAnyLang ->ScriptData -> ScriptData  -> TxBuilder
-txRedeemTxin txin script _data _redeemer = ctxInput $ TxInputUnResolved $ TxInputScriptTxin  (TxValidatorScript $ script)  _data  _redeemer txin
+txRedeemTxin txin script _data _redeemer = ctxInput $ TxInputUnResolved $ TxInputScriptTxin  (TxValidatorScript $ script)  _data  _redeemer  Nothing txin 
 
 -- Redeem from Script Address.
 txRedeemUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> ScriptInAnyLang  -> ScriptData  -> ScriptData -> TxBuilder
-txRedeemUtxo txin txout script _data _redeemer = ctxInput $ TxInputResolved $ TxInputScriptUtxo  (TxValidatorScript $ script)  _data  _redeemer $ UTxO $ Map.singleton txin  txout
+txRedeemUtxo txin txout script _data _redeemer = ctxInput $ TxInputResolved $ TxInputScriptUtxo  (TxValidatorScript $ script)  _data  _redeemer  Nothing $ UTxO $ Map.singleton txin  txout
 
 txPayerAddresses :: [AddressInEra AlonzoEra] -> TxBuilder
 txPayerAddresses v = ctxSelection $ TxSelectableAddresses  v

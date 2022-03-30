@@ -1,10 +1,10 @@
-module Cardano.Contrib.Easy.ChainInfo
+module Cardano.Contrib.Kubær.ChainInfo
 where
 
 import Cardano.Api
 import Cardano.Api.Shelley
 import Cardano.Slotting.Time
-import Cardano.Contrib.Easy.Util
+import Cardano.Contrib.Kubær.Util
     ( getDefaultConnection,
       queryProtocolParam,
       querySystemStart,
@@ -51,11 +51,11 @@ instance ChainInfo ChainInfoWithProtocolParams where
   getConnectInfo (ChainInfoWithProtocolParams conn  _)= conn 
 
 data  DetailedChainInfo=DetailedChainInfo  {
-      fctxCostPerWord ::  Integer,
-      fctxConn :: LocalNodeConnectInfo CardanoMode,
-      fctxProtocolParameters:: ProtocolParameters,
-      fctxSystemStart :: SystemStart,
-      fctxEraHistory :: EraHistory CardanoMode
+      dciCostPerWord ::  Integer,
+      dciConn :: LocalNodeConnectInfo CardanoMode,
+      dciProtocolParams:: ProtocolParameters,
+      dciSystemStart :: SystemStart,
+      dciEraHistory :: EraHistory CardanoMode
     }
 
 instance ChainInfo DetailedChainInfo where

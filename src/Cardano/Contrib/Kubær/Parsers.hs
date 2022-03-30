@@ -1,10 +1,10 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Cardano.Contrib.Easy.Parsers where
+module Cardano.Contrib.Kubær.Parsers where
 
 import Cardano.Api
-import Cardano.Contrib.Easy.Error (SomeError (SomeError))
+import Cardano.Contrib.Kubær.Error
 import Control.Exception (SomeException, catch, throw)
 import qualified Data.Aeson as Aeson
 import Data.ByteString.Lazy (fromStrict)
@@ -18,6 +18,7 @@ import qualified Data.Text.Encoding as TSE
 import GHC.IO.Exception (IOErrorType (UserError), IOException (IOError))
 import Text.Read (readMaybe)
 
+parseSignKey :: MonadFail m => Text -> m (SigningKey PaymentKey)
 parseSignKey txt
   | T.null txt = fail "Empty value for SignKey"
   | T.head txt /= '{' =
@@ -152,47 +153,3 @@ parseAnyScript jsonText =
           ScriptInAnyLang
             (SimpleScriptLanguage SimpleScriptV1)
             (SimpleScript SimpleScriptV1 s')
-
-createScriptWitness ::
-  MonadFail m =>
-  ScriptInAnyLang ->
-  ScriptDatum witCtx ->
-  ScriptData ->
-  ExecutionUnits ->
-  m (ScriptWitness witCtx AlonzoEra)
-createScriptWitness anyScript datum redeemer exUnits = do
-  ScriptInEra langInEra script' <- validateScriptSupportedInEra' AlonzoEra anyScript
-  case script' of
-    PlutusScript version pscript ->
-      pure $
-        PlutusScriptWitness
-          langInEra
-          version
-          pscript
-          datum
-          redeemer
-          exUnits
-    SimpleScript version sscript -> pure $ SimpleScriptWitness langInEra version sscript
-
-createTxInScriptWitness ::
-  MonadFail m =>
-  ScriptInAnyLang ->
-  ScriptData ->
-  ScriptData ->
-  ExecutionUnits ->
-  m (ScriptWitness WitCtxTxIn AlonzoEra)
-createTxInScriptWitness anyScript datum = createScriptWitness anyScript (ScriptDatumForTxIn datum)
-
-createMintingScriptWitness ::
-  MonadFail m =>
-  ScriptInAnyLang ->
-  ScriptData ->
-  ExecutionUnits ->
-  m (ScriptWitness WitCtxMint AlonzoEra)
-createMintingScriptWitness anyScript = createScriptWitness anyScript NoScriptDatumForMint
-
-validateScriptSupportedInEra' :: MonadFail m => CardanoEra era -> ScriptInAnyLang -> m (ScriptInEra era)
-validateScriptSupportedInEra' era script@(ScriptInAnyLang lang _) =
-  case toScriptInEra era script of
-    Nothing -> throw $ SomeError "Error this script not supported."
-    Just script' -> pure script'

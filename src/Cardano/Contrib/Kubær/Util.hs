@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-module Cardano.Contrib.Easy.Util
+module Cardano.Contrib.Kubær.Util
 where
 
 import Cardano.Api
@@ -11,7 +11,7 @@ import qualified Data.Set as Set
 import Control.Exception (try, throw)
 import System.Environment (getEnv)
 import System.Directory (doesFileExist)
-import Cardano.Contrib.Easy.Error
+import Cardano.Contrib.Kubær.Error
 import Plutus.V1.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), PubKeyHash (PubKeyHash))
 import System.FilePath (joinPath)
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr)
@@ -34,7 +34,7 @@ import Codec.Serialise (serialise)
 import Cardano.Api.Byron (Address(ByronAddress))
 import qualified Data.Aeson as JSON
 import qualified Data.Text.Encoding as TSE
-import Cardano.Contrib.Easy.Parsers
+import Cardano.Contrib.Kubær.Parsers
 import qualified Data.Map as Map
 import Data.Char (toLower)
 import Data.Set (Set)
@@ -123,9 +123,9 @@ queryUtxos :: LocalNodeConnectInfo CardanoMode-> AddressAny -> IO (UTxO AlonzoEr
 queryUtxos conn addr=do
   a <-queryNodeLocalState conn Nothing $ utxoQuery [addr]
   case a of
-    Left af -> throw $ SomeError $ show af
+    Left af -> error $ show af
     Right e -> case e of
-      Left em -> throw $ SomeError $ show em
+      Left em -> error $ show em
       Right uto -> return uto
 
   where
@@ -136,9 +136,9 @@ resolveTxins :: LocalNodeConnectInfo CardanoMode -> Set TxIn -> IO (UTxO AlonzoE
 resolveTxins conn ins= do
   a <- queryNodeLocalState conn Nothing (utxoQuery ins)
   case a of
-    Left af -> throw $SomeError $ show af
+    Left af -> error $ show af
     Right e -> case e of
-      Left em -> throw $ SomeError $ show em
+      Left em -> error $ show em
       Right uto -> return uto
 
     where
@@ -152,7 +152,7 @@ getDefaultConnection networkName networkId= do
     Left (e::IOError) -> do
           defaultSockPath<- getWorkPath ( if null networkName then ["node.socket"] else [networkName,"node.socket"])
           exists<-doesFileExist defaultSockPath
-          if exists then return defaultSockPath else throw (SomeError $ "Socket File is Missing: "++defaultSockPath ++"\n\tSet environment variable CARDANO_NODE_SOCKET_PATH  to use different path")
+          if exists then return defaultSockPath else  (error $ "Socket File is Missing: "++defaultSockPath ++"\n\tSet environment variable CARDANO_NODE_SOCKET_PATH  to use different path")
     Right s -> pure s
   pure (localNodeConnInfo networkId socketPath )
 
@@ -175,22 +175,22 @@ queryProtocolParam conn=do
             QueryInEra AlonzoEraInCardanoMode
                   $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo QueryProtocolParameters
   case paramQueryResult of
-    Left af -> throw $ SomeError  "QueryProtocolParam: Acquire Failure"
+    Left af -> error  "QueryProtocolParam: Acquire Failure"
     Right e -> case e of
-      Left em -> throw $ SomeError "QueryrotocolParam: Missmatched Era"
+      Left em -> error "QueryrotocolParam: Missmatched Era"
       Right pp -> return pp
 
 querySystemStart conn=do
   result<-queryNodeLocalState conn Nothing QuerySystemStart
   case result of
-    Left af -> throw $ SomeError "Acquire Failure"
+    Left af -> error "Acquire Failure"
     Right ss -> pure ss
 
 queryEraHistory :: LocalNodeConnectInfo CardanoMode -> IO (EraHistory CardanoMode)
 queryEraHistory conn=do
   result <- queryNodeLocalState conn Nothing (QueryEraHistory CardanoModeIsMultiEra)
   case result of
-    Left af -> throw $ SomeError "Acquire Failure"
+    Left af -> error "Acquire Failure"
     Right eh -> pure eh
 
 getWorkPath :: [FilePath] -> IO  FilePath
@@ -204,7 +204,7 @@ getWorkPathFunc = do
   eitherCardanoHome <- try $ getEnv "CARDANO_HOME"
   case eitherCardanoHome of
     Left (e::IOError) ->   case eitherHome of
-        Left (e::IOError) -> throw $ SomeError "Can't get Home directory. Missing   HOME and CARDANO_HOME"
+        Left (e::IOError) -> error "Can't get Home directory. Missing   HOME and CARDANO_HOME"
         Right home -> pure $ f [home,".cardano"]
     Right home ->  pure $ f  [home]
     where
@@ -230,16 +230,16 @@ executeSubmitTx conn  tx= do
         SubmitSuccess ->  pure ()
         SubmitFail reason ->
           case reason of
-            TxValidationErrorInMode err _eraInMode ->  throw$ SomeError $ "SubmitTx: " ++ show  err
-            TxValidationEraMismatch mismatchErr -> throw $ SomeError $ "SubmitTx: " ++ show  mismatchErr
+            TxValidationErrorInMode err _eraInMode ->  error $ "SubmitTx: " ++ show  err
+            TxValidationEraMismatch mismatchErr -> error $ "SubmitTx: " ++ show  mismatchErr
 
 queryTxins :: LocalNodeConnectInfo CardanoMode-> [TxIn] -> IO (UTxO AlonzoEra)
 queryTxins conn txin=do
   a <-queryNodeLocalState conn Nothing $ utxoQuery txin
   case a of
-    Left af -> throw $ SomeError $ show af
+    Left af -> error $ show af
     Right e -> case e of
-      Left em -> throw $ SomeError $ show em
+      Left em -> error $ show em
       Right uto -> return uto
 
   where
@@ -275,3 +275,26 @@ utxoValueSum (UTxO uMap)= foldMap toValue $ Map.elems uMap
   where
     toValue (TxOut _ val _)= case val of
       TxOutValue masie va -> va
+
+
+createTxInScriptWitness ::MonadFail m => ScriptInAnyLang -> ScriptData -> ScriptData -> ExecutionUnits -> m (ScriptWitness WitCtxTxIn AlonzoEra)
+createTxInScriptWitness anyScript datum redeemer exUnits = do
+  ScriptInEra langInEra script' <- validateScriptSupportedInEra' AlonzoEra anyScript
+  case script' of
+    PlutusScript version pscript ->
+      pure $ PlutusScriptWitness langInEra version pscript (ScriptDatumForTxIn  datum) redeemer exUnits
+    SimpleScript version sscript ->fail "Simple Script used in Txin"
+
+createMintingScriptWitness ::MonadFail m => ScriptInAnyLang ->ScriptData ->ExecutionUnits -> m (ScriptWitness WitCtxMint AlonzoEra)
+createMintingScriptWitness anyScript redeemer exUnits = do
+  ScriptInEra langInEra script' <- validateScriptSupportedInEra' AlonzoEra anyScript
+  case script' of
+    PlutusScript version pscript ->
+      pure $ PlutusScriptWitness langInEra version pscript NoScriptDatumForMint redeemer exUnits
+    SimpleScript version sscript -> pure $ SimpleScriptWitness langInEra version sscript
+
+validateScriptSupportedInEra' :: MonadFail m => CardanoEra era -> ScriptInAnyLang -> m (ScriptInEra era)
+validateScriptSupportedInEra' era script@(ScriptInAnyLang lang _) =
+  case toScriptInEra era script of
+    Nothing -> fail $ show lang ++ " not supported in " ++ show era ++ " era"
+    Just script' -> pure script'

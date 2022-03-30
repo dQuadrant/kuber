@@ -23,12 +23,12 @@ maintainer:         Sudip Bhattarai
 library
   exposed-modules:
 
-    Cardano.Contrib.Easy.Util
-    Cardano.Contrib.Easy.Api
-    Cardano.Contrib.Easy.ChainInfo
-    Cardano.Contrib.Easy.Error
-    Cardano.Contrib.Easy.TxFramework
-    Cardano.Contrib.Easy.Parsers
+    Cardano.Contrib.Kubær.Util
+    Cardano.Contrib.Kubær.Api
+    Cardano.Contrib.Kubær.ChainInfo
+    Cardano.Contrib.Kubær.Error
+    Cardano.Contrib.Kubær.TxFramework
+    Cardano.Contrib.Kubær.Parsers
   other-modules:
 
 
