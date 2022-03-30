@@ -10,7 +10,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-module Cardano.Contrib.Easy.Models where
+module Cardano.Contrib.Kubær.Models where
 
 import Cardano.Api
 import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData)

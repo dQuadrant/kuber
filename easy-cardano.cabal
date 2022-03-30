@@ -27,6 +27,8 @@ library
     Cardano.Contrib.Kubær.Api
     Cardano.Contrib.Kubær.ChainInfo
     Cardano.Contrib.Kubær.Error
+    Cardano.Contrib.Kubær.Models
+    Cardano.Contrib.Kubær.TxBuilder
     Cardano.Contrib.Kubær.TxFramework
     Cardano.Contrib.Kubær.Parsers
   other-modules:
