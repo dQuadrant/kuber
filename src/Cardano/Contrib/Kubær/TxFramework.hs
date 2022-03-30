@@ -30,6 +30,7 @@ import Cardano.Contrib.Kubær.TxBuilder
 import Cardano.Contrib.Kubær.ChainInfo (DetailedChainInfo (DetailedChainInfo), ChainInfo (getNetworkId))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 
+type IsChangeUsed = Bool
 
 mkTx:: DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either String (TxBody AlonzoEra)
 mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO availableUtxo) (TxBuilder selections inputs outputs mintingScripts collaterals validityStart validityEnd mintValue extraSignatures explicitFee defaultChangeAddr ) = do
@@ -57,6 +58,13 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
     --         executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum changeAddrInEra signatureCount)
 
   where
+    createOutputs network outpts  change fee = map (toOutput network fee change) outputs
+    toOutput network fee change (TxOutput outcontent addChange addFee) = case outcontent of
+      TxOutAddress aie va -> TxOut aie (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumNone)
+      TxOutScriptAddress aie va ha -> TxOut aie (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumHash ScriptDataInAlonzoEra ha)
+      TxOutPkh pkh va -> error "die"
+      TxOutScript tvs va ha -> error "die"
+
     resolveInputs :: MonadFail m => TxInput -> m  TxInputResolved_
     resolveInputs v = case v of
       TxInputResolved tir -> pure tir
@@ -66,15 +74,15 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
         doLookup tin = case Map.lookup tin availableUtxo of
           Nothing -> fail "Missing utxo"
           Just to ->pure $ UTxO $ Map.singleton  tin  to
-    mapInputs  exlookup is=do   
+    mapInputs  exlookup is=do
           tuples<- mapM (toInput exlookup) is
           pure $ Map.fromList $ concat tuples
-    toInput :: MonadFail m => Map TxIn ExecutionUnits -> TxInputResolved_-> m [(TxIn,Either 
+    toInput :: MonadFail m => Map TxIn ExecutionUnits -> TxInputResolved_-> m [(TxIn,Either
                                                                         (BuildTxWith BuildTx (Witness WitCtxTxIn era))
                                                                         (Maybe ExecutionUnits,BuildTxWith BuildTx (ScriptWitness WitCtxTxIn AlonzoEra)))]
     toInput exUnitLookup ( inCtx ::TxInputResolved_)= case inCtx of
       TxInputUtxo (UTxO txin) ->  pure $ map (\(_in,val) -> (_in,Left $ BuildTxWith $ KeyWitness KeyWitnessForSpending) )  $ Map.toList txin
-      TxInputScriptUtxo (TxValidatorScript s) d r mExunit (UTxO txin) ->mapM (\(_in,val) -> do 
+      TxInputScriptUtxo (TxValidatorScript s) d r mExunit (UTxO txin) ->mapM (\(_in,val) -> do
                                                                 witness <-  createTxInScriptWitness s d r (getExUnit _in mExunit)
                                                                 pure (_in,Right (mExunit,BuildTxWith witness )) ) $ Map.toList txin
       where
@@ -118,7 +126,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
 
     -- toOuotput network (outCtx :: TxCtxOutput) =  do
     --   case outCtx of
-    --     AddrCtxOut (addr,value) -> pure $ TxOut addr (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumNone
+    --     AddrCtxOut (addr,value) -> 
     --     ScriptCtxOut (script,value,dataHash) -> pure $ TxOut (makeShelleyAddressInEra network (PaymentCredentialByScript  $  hashScript   (PlutusScript PlutusScriptV2   script)) NoStakeAddress) (TxOutValue MultiAssetInAlonzoEra  value ) (TxOutDatumHash ScriptDataInAlonzoEra dataHash)
     --     PkhCtxOut (pkh,value)-> case pkhToMaybeAddr network pkh of
     --       Nothing -> throw $ SomeError "PubKeyHash couldn't be converted to address"
