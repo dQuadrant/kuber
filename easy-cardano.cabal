@@ -25,7 +25,7 @@ library
 
     Cardano.Contrib.Easy.Util
     Cardano.Contrib.Easy.Api
-    Cardano.Contrib.Easy.Context
+    Cardano.Contrib.Easy.ChainInfo
     Cardano.Contrib.Easy.Error
     Cardano.Contrib.Easy.TxFramework
     Cardano.Contrib.Easy.Parsers
