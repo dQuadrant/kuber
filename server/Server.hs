@@ -43,10 +43,11 @@ import Network.Wai.Middleware.Servant.Errors (HasErrorBody (..), errorMw)
 import Servant
 import Servant.Exception (Exception (..), Throws, ToServantErr (..), mapException)
 import Servant.Exception.Server
+import Cardano.Contrib.Kubær.TxBuilder (TxBuilder)
 
 type HttpAPI =
   Throws FrameworkError
-    :> ( "api" :> "v1" :> "tx" :> ReqBody '[JSON] PayToModel :> Post '[JSON] String
+    :> ( "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] String
     -- General endpoints
     --  "api" :> "v1" :> "addresses" :> Capture "address" String :> "balance" :> Get '[JSON] BalanceResponse
     --    :<|> "api" :> "v1" :> "tx" :> "submit":>ReqBody '[JSON] SubmitTxModal :> Post '[JSON] TxResponse

@@ -1,73 +1,34 @@
 module Core where
 
--- import Cardano.Api
--- import Cardano.Contrib.Easy.Context
--- import Cardano.Contrib.Kubær.Error
--- import Cardano.Contrib.Kubær.Models
---   ( BalanceResponse (BalanceResponse),
---     PayToModel (PayToModel),
---     SubmitTxModal (SubmitTxModal),
---     TxResponse (TxResponse),
---   )
--- import Cardano.Contrib.Kubær.Parsers (parseValueText)
--- -- import Cardano.Contrib.Easy.TxFramework (TxResult (TxResult), mkTx, txPayTo)
--- import Cardano.Contrib.Kubær.Util (executeSubmitTx, queryUtxos)
--- import Control.Exception (throw)
--- import qualified Data.Text as T
+import qualified Data.Text as T
 import Cardano.Contrib.Kubær.TxBuilder (TxBuilder)
-import Cardano.Contrib.Kubær.Models (PayToModel)
+import qualified Data.Aeson as A
+import Data.Text.Lazy.Encoding    as TL
+import Data.Text.Lazy             as TL
+import Cardano.Contrib.Kubær.Models (BalanceResponse (BalanceResponse), TxResponse (TxResponse), SubmitTxModal (SubmitTxModal))
+import Cardano.Contrib.Kubær.ChainInfo (ChainConnectInfo, ChainInfo (getConnectInfo))
+import Cardano.Contrib.Kubær.Util (queryUtxos, executeSubmitTx)
+import Cardano.Api
+import Control.Exception (throw)
+import Cardano.Contrib.Kubær.Error (FrameworkError(FrameworkError), ErrorType (ParserError))
 
--- getBalance :: (IsNetworkCtx v) => v -> String -> IO BalanceResponse
--- getBalance ctx addrStr = do
---   addr <- case deserialiseAddress AsAddressAny $ T.pack addrStr of
---     Nothing -> throw $ SomeError "Invalid address"
---     Just aany -> pure aany
+getBalance :: ChainConnectInfo -> String -> IO BalanceResponse
+getBalance ctx addrStr = do
+  addr <- case deserialiseAddress AsAddressAny $ T.pack addrStr of
+    Nothing -> throw $ FrameworkError  ParserError  "Invalid address"
+    Just aany -> pure aany
+  utxos <- queryUtxos (getConnectInfo ctx) addr
+  pure $ BalanceResponse utxos
 
---   utxos <- queryUtxos (networkCtxConn ctx) addr
+submitTx :: ChainConnectInfo -> SubmitTxModal -> IO TxResponse
+submitTx ctx (SubmitTxModal tx mWitness) = do
+  let tx' = case mWitness of
+        Nothing -> tx
+        Just kw -> makeSignedTransaction (kw : getTxWitnesses tx) txbody
+      txbody = getTxBody tx
+  executeSubmitTx (getConnectInfo ctx) tx'
+  pure $ TxResponse tx' []
 
---   pure $ BalanceResponse utxos
-
--- submitTx :: IsNetworkCtx v => v -> SubmitTxModal -> IO TxResponse
--- submitTx ctx (SubmitTxModal tx mWitness) = do
---   let tx' = case mWitness of
---         Nothing -> tx
---         Just kw -> makeSignedTransaction (kw : getTxWitnesses tx) txbody
---       txbody = getTxBody tx
---   executeSubmitTx (networkCtxConn ctx) tx'
---   pure $ TxResponse tx' []
-
--- buildTx :: IsNetworkCtx v => v -> String -> String -> IO TxResponse
--- buildTx ctx addrStr amountStr = do
---   addr <- case deserialiseAddress AsAddressAny $ T.pack addrStr of
---     Nothing -> throw $ SomeError "Invalid address"
---     Just aany -> pure aany
-
---   amount <- case readMaybe amountStr of
---     Nothing -> throw $ SomeError "Invalid amount"
---     Just a -> pure a
-
---   let tx = makeTransaction [makeTxIn (OutPoint (TxId "") 0) maxBound]
---         [makeTxOut addr amount]
---   pure $ TxResponse tx []
-
--- txBuilder :: IsNetworkCtx v => v -> PayToModel -> IO String
--- txBuilder ctx (PayToModel receiver sender value) = do
---   senderAddr <- case deserialiseAddress (AsAddressInEra AsAlonzoEra) (T.pack sender) of
---     Just addr -> pure addr
---     Nothing -> fail "Invalid receiver address"
-
---   receiverAddr <- case deserialiseAddress (AsAddressInEra AsAlonzoEra) (T.pack receiver) of
---     Just addr -> pure addr
---     Nothing -> fail "Invalid receiver address"
-
---   val <- parseValueText $ T.pack value
-
---   let txOperation = txPayTo receiverAddr val
---   TxResult _ _ _ txbody <- mkTx ctx txOperation senderAddr
---   let txRes = TxResponse (makeSignedTransaction [] txbody) []
---   pure $ "ok" ++ show txRes
-
-
-txBuilder :: PayToModel -> IO String
+txBuilder :: TxBuilder -> IO String
 txBuilder txBuilder = do
-  pure $ show txBuilder
+  pure $ TL.unpack $ TL.decodeUtf8 $ A.encode txBuilder
