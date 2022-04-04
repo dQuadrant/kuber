@@ -17,6 +17,7 @@ import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.Encoding as TSE
 import GHC.IO.Exception (IOErrorType (UserError), IOException (IOError))
 import Text.Read (readMaybe)
+import Data.ByteString (ByteString)
 
 parseSignKey :: MonadFail m => Text -> m (SigningKey PaymentKey)
 parseSignKey txt
@@ -61,10 +62,14 @@ parseAssetIdText assetText = case T.split (== '.') assetText of
   where
     failure = fail "ParseError : Cannot construct AssetId from text. Expected format :`policyHex.tokenName`"
 
-parseValueText :: Text -> IO Value
+parseValueText :: MonadFail f => Text -> f Value
 parseValueText valueTxt =
   mapM parseAssetNQuantity (T.split (== '+') $ T.strip valueTxt)
     <&> valueFromList
+
+parseValueToAsset :: MonadFail f => Text -> f [(AssetId, Quantity)]
+parseValueToAsset valueTxt =
+  mapM parseAssetNQuantity (T.split (== '+') $ T.strip valueTxt)
 
 parseAssetNQuantity :: MonadFail f => Text -> f (AssetId, Quantity)
 parseAssetNQuantity textStr = do
@@ -112,11 +117,11 @@ parseScriptData jsonText = do
   where
     decodeJson = Aeson.decode $ fromStrict $ TSE.encodeUtf8 jsonText
 
-parseAnyScript :: MonadFail m => Text -> m ScriptInAnyLang
+parseAnyScript :: MonadFail m => ByteString -> m ScriptInAnyLang
 parseAnyScript jsonText =
-  case deserialiseFromJSON AsTextEnvelope (encodeUtf8 jsonText) of
+  case deserialiseFromJSON AsTextEnvelope  jsonText of
     Left _ ->
-      case deserialiseFromJSON (AsSimpleScript AsSimpleScriptV2) (encodeUtf8 jsonText) of
+      case deserialiseFromJSON (AsSimpleScript AsSimpleScriptV2) jsonText of
         Left err -> fail "Error while decoding simple script"
         Right script -> pure $ toMinimumSimpleScriptVersion script
     Right te ->
@@ -153,3 +158,8 @@ parseAnyScript jsonText =
           ScriptInAnyLang
             (SimpleScriptLanguage SimpleScriptV1)
             (SimpleScript SimpleScriptV1 s')
+
+parseAddress :: MonadFail m => Text -> m (AddressInEra AlonzoEra)
+parseAddress addrText = case deserialiseAddress (AsAddressInEra AsAlonzoEra) addrText of
+  Nothing -> fail $ "Invalid address string: " ++ T.unpack addrText
+  Just aie -> pure aie
