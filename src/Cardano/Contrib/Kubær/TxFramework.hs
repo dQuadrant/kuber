@@ -50,13 +50,14 @@ txBuilderToTxBody dcInfo builder = do
   addrUtxos <- queryIfNotEmpty addrs (queryUtxos  conn addrs) (Right $ UTxO  Map.empty)
   case addrUtxos of 
     Left fe -> pure $ Left fe
-    Right uto -> do 
-      let missingTxins= Set.difference txins (Map.keysSet uto)
-      vals <- if null missingTxins then error "something" else error "nothing"
-      fail "dad"
-  let selections=3
-  fail "sad"
-
+    Right (UTxO  uto) -> do 
+      let missingTxins= Set.difference txins ( Map.keysSet  uto )
+      vals <- queryIfNotEmpty missingTxins (resolveTxins conn missingTxins) (Right $ UTxO  Map.empty)
+      case addrUtxos of 
+        Left fe -> pure $ Left fe
+        Right (UTxO uto') ->do
+          res<- mkTx dcInfo (UTxO $ Map.union uto uto') builder
+          pure $ pure res
   where
     
     queryIfNotEmpty v f v' = if null  v then pure v' else f
@@ -70,6 +71,7 @@ txBuilderToTxBody dcInfo builder = do
 
 merge :: Map TxIn (TxOut CtxUTxO AlonzoEra) -> Map TxIn (TxOut CtxUTxO AlonzoEra) -> Map TxIn (TxOut CtxUTxO AlonzoEra)
 merge = error "not implemented"
+
 mkTx:: MonadFail m => DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> m (TxBody AlonzoEra)
 mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs mintingScripts collaterals validityStart validityEnd mintValue extraSignatures explicitFee defaultChangeAddr ) = do
   let network = getNetworkId  dCinfo
