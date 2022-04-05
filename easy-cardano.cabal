@@ -60,32 +60,6 @@ library
     , cborg
     , vector
 
-
-
-
-executable test
-  main-is:  Main.hs
-  hs-source-dirs: test
-  build-depends:
-      base >= 4.9 && <5
-    , containers
-    , bytestring
-    , serialise
-    , text
-    , filepath
-    , directory
-    , aeson
-    , text-conversions
-    , cardano-api
-    , cardano-ledger-alonzo
-    , cardano-ledger-shelley
-    , cardano-slotting
-    , plutus-ledger-api
-    , plutus-tx
-    , ouroboros-network
-    , easy-cardano
-
-
 executable server
   main-is:  Main.hs
   hs-source-dirs: server
@@ -121,15 +95,3 @@ executable server
     , cborg
     , http-types
     , cardano-binary
-
-
-executable  app
-  main-is:  Main.hs
-  hs-source-dirs: app
-  other-modules:
-    Cardano.Contrib.Easy.Spec
-  build-depends:
-      base -any
-    , easy-cardano -any
-    , cardano-api
-    , plutus-ledger-api
