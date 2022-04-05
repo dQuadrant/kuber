@@ -216,7 +216,7 @@ instance FromJSON TxBuilder where
       <*> v .:? "validityStart"
       <*> v .:? "validityEnd"
       <*> parseMintValue
-      <*> (v .: "signatures" .!= [])
+      <*> (v .:? "signatures" .!= [])
       <*> v .:? "fee"
       <*> (v .:? "defaultChangeAddr" <&> fmap unAddressModal)
 
