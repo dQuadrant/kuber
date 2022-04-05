@@ -7,7 +7,7 @@ import Data.Text.Lazy.Encoding    as TL
 import Data.Text.Lazy             as TL
 import Cardano.Contrib.Kubær.Models (BalanceResponse (BalanceResponse), TxResponse (TxResponse), SubmitTxModal (SubmitTxModal))
 import Cardano.Contrib.Kubær.ChainInfo (ChainConnectInfo, ChainInfo (getConnectInfo), DetailedChainInfo)
-import Cardano.Contrib.Kubær.Util (queryUtxos, executeSubmitTx, addressInEraToAddressAny)
+import Cardano.Contrib.Kubær.Util (queryUtxos, executeSubmitTx)
 import Cardano.Api
 import Control.Exception (throw)
 import Cardano.Contrib.Kubær.Error (FrameworkError(FrameworkError), ErrorType (ParserError))
@@ -20,7 +20,7 @@ getBalance ctx addrStr = do
   addr <- case deserialiseAddress AsAddressAny $ T.pack addrStr of
     Nothing -> throw $ FrameworkError  ParserError  "Invalid address"
     Just aany -> pure aany
-  eUtxos <- queryUtxos (getConnectInfo ctx) $ Set.singleton   addr
+  eUtxos <- queryUtxos (getConnectInfo ctx) $ Set.singleton addr
   case eUtxos of 
     Left fe -> throw fe
     Right utxos -> pure $ BalanceResponse  utxos
