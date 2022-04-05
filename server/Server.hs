@@ -44,19 +44,20 @@ import Servant
 import Servant.Exception (Exception (..), Throws, ToServantErr (..), mapException)
 import Servant.Exception.Server
 import Cardano.Contrib.Kubær.TxBuilder (TxBuilder)
+import Cardano.Contrib.Kubær.ChainInfo (DetailedChainInfo(DetailedChainInfo))
 
 type HttpAPI =
   Throws FrameworkError
-    :> ( "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] String
+    :> ( "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (Tx AlonzoEra )
     -- General endpoints
     --  "api" :> "v1" :> "addresses" :> Capture "address" String :> "balance" :> Get '[JSON] BalanceResponse
     --    :<|> "api" :> "v1" :> "tx" :> "submit":>ReqBody '[JSON] SubmitTxModal :> Post '[JSON] TxResponse
     --    :<|> "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder  :> Post '[JSON] String
        )
 
-server :: Server HttpAPI
-server =
-  errorGuard txBuilder
+server :: DetailedChainInfo -> Server HttpAPI
+server dcInfo =
+  errorGuard $ txBuilder dcInfo
   where
     -- :<|> errorGuard (submitTx ctx)
     -- :<|> errorGuard (txBuilder ctx)
@@ -86,8 +87,8 @@ proxyAPI = Proxy
 -- app :: NetworkContext -> Application
 -- app ctx = serve proxyAPI $ server ctx
 
-app :: Application
-app = serve proxyAPI server
+app :: DetailedChainInfo ->  Application
+app dcinfo = serve proxyAPI $ server dcinfo
 
 instance ToServantErr FrameworkError where
   status (FrameworkError _ _) = status400

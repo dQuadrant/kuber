@@ -6,19 +6,24 @@ import qualified Data.Aeson as A
 import Data.Text.Lazy.Encoding    as TL
 import Data.Text.Lazy             as TL
 import Cardano.Contrib.Kubær.Models (BalanceResponse (BalanceResponse), TxResponse (TxResponse), SubmitTxModal (SubmitTxModal))
-import Cardano.Contrib.Kubær.ChainInfo (ChainConnectInfo, ChainInfo (getConnectInfo))
-import Cardano.Contrib.Kubær.Util (queryUtxos, executeSubmitTx)
+import Cardano.Contrib.Kubær.ChainInfo (ChainConnectInfo, ChainInfo (getConnectInfo), DetailedChainInfo)
+import Cardano.Contrib.Kubær.Util (queryUtxos, executeSubmitTx, addressInEraToAddressAny)
 import Cardano.Api
 import Control.Exception (throw)
 import Cardano.Contrib.Kubær.Error (FrameworkError(FrameworkError), ErrorType (ParserError))
+import qualified Data.Set as Set
+import System.Exit (die)
+import Cardano.Contrib.Kubær.TxFramework (txBuilderToTxBody)
 
 getBalance :: ChainConnectInfo -> String -> IO BalanceResponse
 getBalance ctx addrStr = do
   addr <- case deserialiseAddress AsAddressAny $ T.pack addrStr of
     Nothing -> throw $ FrameworkError  ParserError  "Invalid address"
     Just aany -> pure aany
-  utxos <- queryUtxos (getConnectInfo ctx) addr
-  pure $ BalanceResponse utxos
+  eUtxos <- queryUtxos (getConnectInfo ctx) $ Set.singleton   addr
+  case eUtxos of 
+    Left fe -> throw fe
+    Right utxos -> pure $ BalanceResponse  utxos
 
 submitTx :: ChainConnectInfo -> SubmitTxModal -> IO TxResponse
 submitTx ctx (SubmitTxModal tx mWitness) = do
@@ -29,6 +34,9 @@ submitTx ctx (SubmitTxModal tx mWitness) = do
   executeSubmitTx (getConnectInfo ctx) tx'
   pure $ TxResponse tx' []
 
-txBuilder :: TxBuilder -> IO String
-txBuilder txBuilder = do
-  pure $ TL.unpack $ TL.decodeUtf8 $ A.encode txBuilder
+txBuilder :: DetailedChainInfo  ->  TxBuilder -> IO (Tx AlonzoEra )
+txBuilder dcinfo txBuilder = do
+  v<-txBuilderToTxBody dcinfo txBuilder
+  case v of 
+    Left fe -> throw fe
+    Right tb -> pure $ makeSignedTransaction [] tb
