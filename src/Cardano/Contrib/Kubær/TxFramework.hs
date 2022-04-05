@@ -95,7 +95,8 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
       -> m (TxBody AlonzoEra, Lovelace)
     computeBody fixedInputs fixedInputSum availableInputs fixedOutputs fee  = do
       let
-        (extraUtxos,change) = selectUtxos availableInputs (fixedInputSum <> negateValue (fixedOutputSum<> if feeUsed then mempty else lovelaceToValue fee ))
+        (extraUtxos,change) = selectUtxos availableInputs (fixedInputSum <> negateValue (fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee ))
+        _hasFeeUtxo = any (\(a,b,c)->a) fixedOutputs
         (feeUsed,changeUsed,outputs) = updateOutputs  fee change fixedOutputs
         bodyContent = mkBodyContent  fixedInputs extraUtxos outputs [] fee
       case makeTransactionBody bodyContent of
@@ -146,13 +147,12 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
         (feeUsed2,changeUsed2,others) = updateOutput feeUsed changeUsed network (Lovelace fee) change outs
         in   (feeUsed  || feeUsed2 , changeUsed || changeUsed2, result : others )
       where
-        transformOut changeUsed feeUsed (addFee,addChange,TxOut aie (TxOutValue _ va) ha)=  (feeUsed,changeUsed,TxOut aie (TxOutValue MultiAssetInAlonzoEra modifiedVal) ha)
+        transformOut changeUsed feeUsed (addFee,addChange,TxOut aie (TxOutValue _ va) ha)=  (feeUsed'',changeUsed'',TxOut aie (TxOutValue MultiAssetInAlonzoEra modifiedVal) ha)
           where
-            (feeUsed,changeUsed,modifiedVal) = includeFeeNChange va
-            includeFeeNChange va = let  (feeUsed,feeIncluded) = includeFee va
-                                        (changeUsed, changeIncluded) = includeChange feeIncluded
-                                    in
-                                      (feeUsed,changeUsed,changeIncluded)
+            (feeUsed'',changeUsed'',modifiedVal) = includeFeeNChange va
+            includeFeeNChange va = let  (feeUsed',feeIncluded) = includeFee va
+                                        (changeUsed', changeIncluded) = includeChange feeIncluded
+                                    in (feeUsed',changeUsed',changeIncluded)
             includeFee val
               | feeUsed = (True, val)
               | addFee = (True, valueFromList [(AdaAssetId ,Quantity (- fee))] <> val)
