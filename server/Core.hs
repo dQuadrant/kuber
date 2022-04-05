@@ -32,11 +32,11 @@ submitTx ctx (SubmitTxModal tx mWitness) = do
         Just kw -> makeSignedTransaction (kw : getTxWitnesses tx) txbody
       txbody = getTxBody tx
   executeSubmitTx (getConnectInfo ctx) tx'
-  pure $ TxResponse tx' []
+  pure $ TxResponse tx'
 
-txBuilder :: DetailedChainInfo  ->  TxBuilder -> IO (Tx AlonzoEra )
+txBuilder :: DetailedChainInfo  ->  TxBuilder -> IO TxResponse
 txBuilder dcinfo txBuilder = do
   v<-txBuilderToTxBody dcinfo txBuilder
   case v of 
     Left fe -> throw fe
-    Right tb -> pure $ makeSignedTransaction [] tb
+    Right tb -> pure $ TxResponse $ makeSignedTransaction [] tb

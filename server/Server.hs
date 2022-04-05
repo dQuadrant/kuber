@@ -48,7 +48,7 @@ import Cardano.Contrib.Kubær.ChainInfo (DetailedChainInfo(DetailedChainInfo))
 
 type HttpAPI =
   Throws FrameworkError
-    :> ( "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (Tx AlonzoEra )
+    :> ( "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
     -- General endpoints
     --  "api" :> "v1" :> "addresses" :> Capture "address" String :> "balance" :> Get '[JSON] BalanceResponse
     --    :<|> "api" :> "v1" :> "tx" :> "submit":>ReqBody '[JSON] SubmitTxModal :> Post '[JSON] TxResponse

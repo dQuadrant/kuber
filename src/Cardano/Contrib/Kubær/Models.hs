@@ -112,16 +112,14 @@ instance FromJSON TxModal where
   parseJSON _ = fail "Expected Tx cbor hex string"
 
 data TxResponse = TxResponse
-  { txRaw :: Tx AlonzoEra,
-    datums :: [ScriptData]
+  { txRaw :: Tx AlonzoEra
   }
   deriving (Generic, Show)
 
 instance ToJSON TxResponse where
-  toJSON (TxResponse tx datums) =
+  toJSON (TxResponse tx) =
     object
       [ "tx" .= txHex,
-        "datums" .= object (map datumPair datums),
         "txHash" .= getTxId (getTxBody tx),
         "fee" .= case getTxBody tx of
           ShelleyTxBody sbe tb scs tbsd m_ad tsv -> txfee tb
@@ -129,20 +127,6 @@ instance ToJSON TxResponse where
     where
       txHex :: Text
       txHex = toHexString $ serialiseToCBOR tx
-
-      datumPair d = datumHashHexString d .= datumHexString d
-
-      datumHashHexString :: ScriptData -> Text
-      datumHashHexString sd = T.pack $ tail $ init $ show $ hashScriptData sd
-
-      datumHexString :: ScriptData -> Text
-      datumHexString _data =
-        T.decodeUtf8 $ toStrict $ encode $ scriptDataToJson ScriptDataJsonDetailedSchema _data
-
-      dataToBytes :: Data AlonzoEra -> LBS.ByteString
-      dataToBytes d = toLazyByteString $ toCBOR d
-      toLedger :: ScriptData -> Data AlonzoEra
-      toLedger = toAlonzoData
 
 instance FromJSON AddressModal where
   parseJSON (String s)=  case deserialiseAddress (AsAddressInEra AsAlonzoEra) s of
@@ -152,3 +136,5 @@ instance FromJSON AddressModal where
 
 instance ToJSON AddressModal where
   toJSON (AddressModal addr)= String $ serialiseAddress  addr
+
+
