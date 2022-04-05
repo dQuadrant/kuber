@@ -70,8 +70,9 @@ data TxChangeAddr = TxChangeAddrUnset
    deriving (Show)
 
 data TxInputSelection = TxSelectableAddresses [AddressInEra AlonzoEra]
-                  | TxSelectableUtxos  (UTxO AlonzoEra) deriving(Show)
-
+                  | TxSelectableUtxos  (UTxO AlonzoEra) 
+                  | TxSelectableTxIn [TxIn] deriving(Show)
+                  
 data TxBuilder=TxBuilder{
     txSelections :: [TxInputSelection],
     txInputs:: [TxInput],

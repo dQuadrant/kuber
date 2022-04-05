@@ -12,14 +12,17 @@ import Data.Aeson (object, ToJSON (toJSON), KeyValue ((.=)))
 data ErrorType =    ConnectionError
                   | BalancingError
                   | InsufficientInput 
+                  | EraMisMatch
+                  | NodeQueryError
                   | ParserError deriving Show
 
 
 
 data FrameworkError =  FrameworkError{
-  feType:: ErrorType,
-  feMessage :: String
-} 
+                    feType:: ErrorType,
+                    feMessage :: String
+                  } 
+        | FrameworkErrors [FrameworkError]
 
 instance Show FrameworkError where
   show  (FrameworkError t m)= "FrameworkError: "++show t ++ ": "++show m

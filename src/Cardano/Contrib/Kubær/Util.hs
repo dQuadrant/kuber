@@ -13,7 +13,7 @@ import Control.Exception (try, throw)
 import System.Environment (getEnv)
 import System.Directory (doesFileExist)
 import Cardano.Contrib.Kubær.Error
-import Plutus.V1.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), PubKeyHash (PubKeyHash))
+import Plutus.V1.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), PubKeyHash (PubKeyHash), Address)
 import System.FilePath (joinPath)
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr)
 import qualified Cardano.Ledger.Alonzo.Tx as LedgerBody
@@ -75,6 +75,8 @@ skeyToAddrInEra skey network=makeShelleyAddressInEra network   credential NoStak
   where
     credential=PaymentCredentialByKey  $ verificationKeyHash   $ getVerificationKey  skey
 
+addressInEraToAddressAny :: AddressInEra era -> AddressAny
+addressInEraToAddressAny addr = case addr of { AddressInEra atie ad -> toAddressAny ad } 
 
 
 sKeyToPkh:: SigningKey PaymentKey -> PubKeyHash
@@ -120,31 +122,27 @@ unstakeAddr a = case a of { AddressInEra atie ad -> case ad of
                                       ByronAddress ad' ->a
                                       ShelleyAddress net cre sr ->  shelleyAddressInEra $ ShelleyAddress net cre StakeRefNull }
 
-queryUtxos :: LocalNodeConnectInfo CardanoMode-> AddressAny -> IO (UTxO AlonzoEra)
-queryUtxos conn addr=do
-  a <-queryNodeLocalState conn Nothing $ utxoQuery [addr]
+performQuery :: LocalNodeConnectInfo CardanoMode -> QueryInShelleyBasedEra AlonzoEra b -> IO (Either FrameworkError b)
+performQuery conn q= 
+  do
+  a <-queryNodeLocalState conn Nothing  qFilter 
   case a of
-    Left af -> error $ show af
+    Left af -> pure $ Left $ FrameworkError NodeQueryError (show af)
     Right e -> case e of
-      Left em -> error $ show em
-      Right uto -> return uto
+      Left em -> pure  $ Left $ FrameworkError EraMisMatch  (show em)
+      Right uto -> pure $ Right  uto
 
   where
-  utxoQuery qfilter= QueryInEra AlonzoEraInCardanoMode
-                    $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo (QueryUTxO (QueryUTxOByAddress (Set.fromList qfilter)) )
+  qFilter = QueryInEra AlonzoEraInCardanoMode
+                    $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo q 
 
-resolveTxins :: LocalNodeConnectInfo CardanoMode -> Set TxIn -> IO (UTxO AlonzoEra)
-resolveTxins conn ins= do
-  a <- queryNodeLocalState conn Nothing (utxoQuery ins)
-  case a of
-    Left af -> error $ show af
-    Right e -> case e of
-      Left em -> error $ show em
-      Right uto -> return uto
 
-    where
-      utxoQuery qfilter = QueryInEra  AlonzoEraInCardanoMode
-        $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo (QueryUTxO  $ QueryUTxOByTxIn qfilter )
+queryUtxos :: LocalNodeConnectInfo CardanoMode-> Set AddressAny -> IO (Either FrameworkError  (UTxO AlonzoEra))
+queryUtxos conn addr= performQuery conn (QueryUTxO (QueryUTxOByAddress  addr))
+
+resolveTxins :: LocalNodeConnectInfo CardanoMode -> Set TxIn -> IO (Either FrameworkError (UTxO AlonzoEra))
+resolveTxins conn ins= performQuery conn (QueryUTxO ( QueryUTxOByTxIn ins)) 
+
 
 getDefaultConnection :: String -> NetworkId ->  IO (LocalNodeConnectInfo CardanoMode)
 getDefaultConnection networkName networkId= do

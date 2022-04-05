@@ -2,6 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE GADTs #-}
 module Cardano.Contrib.Kubær.TxFramework where
 
 
@@ -25,45 +26,152 @@ import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes, fromMaybe)
 import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
-import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript)
+import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript )
 import Cardano.Contrib.Kubær.TxBuilder
-import Cardano.Contrib.Kubær.ChainInfo (DetailedChainInfo (DetailedChainInfo), ChainInfo (getNetworkId))
+import Cardano.Contrib.Kubær.ChainInfo (DetailedChainInfo (DetailedChainInfo, dciConn), ChainInfo (getNetworkId))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
+import Cardano.Api.Crypto.Ed25519Bip32 (xPrvFromBytes)
 
-type IsChangeUsed = Bool
+type IsChangeUsed   = Bool
+type  ParsedInput   = Either (Witness WitCtxTxIn AlonzoEra,TxOut CtxUTxO AlonzoEra) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn AlonzoEra,TxOut CtxUTxO  AlonzoEra)
+type  ParsedOutput  = (Bool,Bool,TxOut CtxTx AlonzoEra)
 
-mkTx:: DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either String (TxBody AlonzoEra)
-mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO availableUtxo) (TxBuilder selections inputs outputs mintingScripts collaterals validityStart validityEnd mintValue extraSignatures explicitFee defaultChangeAddr ) = do
-  let network = getNetworkId  dCinfo
-  -- walletAddr <-unMaybe (SomeError "unexpected error converting address to another type") (deserialiseAddress AsAddressAny (serialiseAddress  payerAddrInEra))
-  -- UTxO _allWalletUtxos <- queryUtxos conn walletAddr
-  -- mappedOutput <- mapM (toOuotput (networkCtxNetwork networkCtx)) output
-  -- (operationUtxos,_txins) <- resolveAndSumIns conn input
-  -- let operationUtoSum=foldMap txOutValue (Map.elems operationUtxos)
-  -- let unUnsedWalletUtos = Map.filterWithKey (\k  a -> k `Map.notMember` operationUtxos) _allWalletUtxos
+v :: DetailedChainInfo
+  -> UTxO AlonzoEra
+  -> TxBuilder
+  -> Maybe (TxBody AlonzoEra)
+v= mkTx
 
-  error " fail"
 
-    -- let eExunits= evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
-    -- case eExunits of
-    --   Left tvie ->do 
-    --       putStrLn  "[WARNING] :: exUnit calculation failed. Using default"  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
-    --       pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0
-    --   Right mp ->do 
-    --     case applyTxInExecutionUnits _txins (txIns balancedRevisionContent0) orderedIns mp of
-    --       Left se -> do 
-    --         putStrLn $ "[WARNING] :: exUnit application failed. Using default :" ++ show se  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
-    --         pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0
-    --       Right modifiedIns -> do 
-    --         executeMkBalancedBody pParam (UTxO walletUtxos)  (mkBody  modifiedIns mappedOutput txInsCollateral pParam)  operationUtoSum changeAddrInEra signatureCount)
+
+txBuilderToTxBody:: DetailedChainInfo  -> TxBuilder  -> IO (Either FrameworkError  (TxBody AlonzoEra ))
+txBuilderToTxBody dcInfo builder = do 
+  let (addrs,txins,utxo) = mergeSelections
+  addrUtxos <- queryIfNotEmpty addrs (queryUtxos  conn addrs) (Right $ UTxO  Map.empty)
+  case addrUtxos of 
+    Left fe -> pure $ Left fe
+    Right uto -> do 
+      let missingTxins= Set.difference txins (Map.keysSet uto)
+      vals <- if null missingTxins then error "something" else error "nothing"
+      fail "dad"
+  let selections=3
+  fail "sad"
 
   where
-    createOutputs network outpts  change fee = map (toOutput network fee change) outputs
-    toOutput network fee change (TxOutput outcontent addChange addFee) = case outcontent of
-      TxOutAddress aie va -> TxOut aie (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumNone)
-      TxOutScriptAddress aie va ha -> TxOut aie (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumHash ScriptDataInAlonzoEra ha)
-      TxOutPkh pkh va -> error "die"
-      TxOutScript tvs va ha -> error "die"
+    
+    queryIfNotEmpty v f v' = if null  v then pure v' else f
+    conn=dciConn dcInfo
+    mergeSelections=foldl mergeSelection (Set.empty,Set.empty ,Map.empty ) (txSelections builder)
+    mergeSelection :: ( Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))  -> TxInputSelection  -> (Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra)) 
+    mergeSelection (a,i,u) sel = case sel of
+        TxSelectableAddresses aies -> (Set.union a  (Set.fromList $ map addressInEraToAddressAny aies),i,u)
+        TxSelectableUtxos (UTxO uto) -> (a,i,merge uto u)
+        TxSelectableTxIn tis -> (a,Set.union i (Set.fromList tis),u)
+
+merge :: Map TxIn (TxOut CtxUTxO AlonzoEra) -> Map TxIn (TxOut CtxUTxO AlonzoEra) -> Map TxIn (TxOut CtxUTxO AlonzoEra)
+merge = error "not implemented"
+mkTx:: MonadFail m => DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> m (TxBody AlonzoEra)
+mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs mintingScripts collaterals validityStart validityEnd mintValue extraSignatures explicitFee defaultChangeAddr ) = do
+  let network = getNetworkId  dCinfo
+  fixedInputs <- mapM resolveInputs _inputs >>= usedInputs Map.empty
+  fixedOutputs <- mapM parseOutputs _outputs
+
+  let fixedInputSum =  usedInputSum fixedInputs
+      fee= Lovelace 100_000
+      availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.member tin fixedInputs) availableUtxo
+      calculator= computeBody fixedInputs fixedInputSum availableInputs fixedOutputs
+  (newBody,fee2) <-  calculator  fee
+  (newbody,fee3) <- calculator fee2
+  if fee2 /= fee3  then fail "panic sad" else pure  ()
+  pure newbody
+  where
+    computeBody :: MonadFail m => Map TxIn ParsedInput
+      -> Value
+      -> [(TxIn, TxOut CtxUTxO AlonzoEra)]
+      -> [ParsedOutput]
+      -> Lovelace
+      -> m (TxBody AlonzoEra, Lovelace)
+    computeBody fixedInputs fixedInputSum availableInputs fixedOutputs fee  = do
+      let
+        (extraUtxos,change) = selectUtxos availableInputs (fixedInputSum <> negateValue (fixedOutputSum<> if feeUsed then mempty else lovelaceToValue fee ))
+        (feeUsed,changeUsed,outputs) = updateOutputs  fee change fixedOutputs
+        bodyContent = mkBodyContent  fixedInputs extraUtxos outputs [] fee
+      case makeTransactionBody bodyContent of
+          Left tbe -> fail "sad"
+          Right tb -> pure (tb,evaluateTransactionFee pParam tb 1 0)
+
+    getTxin :: Map TxIn ParsedInput -> [(TxIn,TxOut CtxUTxO AlonzoEra )]-> [(TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra ))]
+    getTxin v  v2 = map ( uncurry totxIn)  (Map.toList v) ++ map toPubKeyTxin v2
+
+    toPubKeyTxin :: (TxIn,a) -> (TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra ))
+    toPubKeyTxin (v1,v2) =(v1,BuildTxWith $ KeyWitness KeyWitnessForSpending )
+
+    totxIn :: TxIn ->  ParsedInput -> (TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra ))
+    totxIn  i  parsedInput = case parsedInput of
+      Left (a,b) -> (i,BuildTxWith a)
+      Right (e,a,b) -> (i,BuildTxWith  ( ScriptWitness ScriptWitnessForSpending a )  )
+    mkBodyContent fixedInputs extraUtxos outs collateral  fee =
+      (TxBodyContent {
+        txIns= getTxin fixedInputs extraUtxos ,
+        txInsCollateral= if null collateral then TxInsCollateralNone  else TxInsCollateral CollateralInAlonzoEra collateral,
+        txOuts=outs,
+        Cardano.Api.Shelley.txFee=TxFeeExplicit TxFeesExplicitInAlonzoEra  fee,
+        txValidityRange= (txLowerBound,txUpperBound),
+        txMetadata=TxMetadataNone ,
+        txAuxScripts=TxAuxScriptsNone,
+        txExtraKeyWits=TxExtraKeyWitnessesNone,
+        txProtocolParams=BuildTxWith (Just  pParam),
+        txWithdrawals=TxWithdrawalsNone,
+        txCertificates=TxCertificatesNone,
+        txUpdateProposal=TxUpdateProposalNone,
+        txMintValue=TxMintNone,
+        txScriptValidity=TxScriptValidityNone
+          })
+    fixedOutputSum = foldMap txOutputVal _outputs
+      where
+      txOutputVal :: TxOutput -> Value
+      txOutputVal o = case o of { TxOutput toc b b' -> case toc of
+                                    TxOutAddress aie va -> va
+                                    TxOutScriptAddress aie va ha -> va
+                                    TxOutPkh pkh va -> va
+                                    TxOutScript tvs va ha -> va  }
+    zeroValue = valueFromList []
+    updateOutputs  fee change outputs' = updateOutput False False (getNetworkId  dCinfo) fee change outputs'
+    updateOutput :: Bool -> Bool -> NetworkId -> Lovelace -> Value -> [ParsedOutput] ->  (Bool,Bool,[TxOut CtxTx AlonzoEra])
+    updateOutput _ _ _ _ _ []  =  (False,False,[])
+    updateOutput _fUsed _cUsed network (Lovelace fee) change (txOutput:outs) =let
+        (feeUsed,changeUsed,result) = transformOut _fUsed _cUsed txOutput
+        (feeUsed2,changeUsed2,others) = updateOutput feeUsed changeUsed network (Lovelace fee) change outs
+        in   (feeUsed  || feeUsed2 , changeUsed || changeUsed2, result : others )
+      where
+        transformOut changeUsed feeUsed (addFee,addChange,TxOut aie (TxOutValue _ va) ha)=  (feeUsed,changeUsed,TxOut aie (TxOutValue MultiAssetInAlonzoEra modifiedVal) ha)
+          where
+            (feeUsed,changeUsed,modifiedVal) = includeFeeNChange va
+            includeFeeNChange va = let  (feeUsed,feeIncluded) = includeFee va
+                                        (changeUsed, changeIncluded) = includeChange feeIncluded
+                                    in
+                                      (feeUsed,changeUsed,changeIncluded)
+            includeFee val
+              | feeUsed = (True, val)
+              | addFee = (True, valueFromList [(AdaAssetId ,Quantity (- fee))] <> val)
+              | otherwise = (False,val)
+
+            includeChange val
+              | changeUsed = (True,val)
+              | addChange = (True,change<> val)
+              | otherwise = (False,val)
+        transformOut _ _ _ = error "UnExpected condition"
+
+
+    parseOutputs :: MonadFail m => TxOutput -> m ParsedOutput
+    parseOutputs  output = case output of { TxOutput toc b b' -> case toc of
+                                              TxOutAddress aie va -> pure  (b,b',TxOut aie  (TxOutValue MultiAssetInAlonzoEra va ) TxOutDatumNone )
+                                              TxOutScriptAddress aie va ha -> pure (b,b',TxOut aie (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumHash ScriptDataInAlonzoEra ha ))
+                                              TxOutPkh pkh va -> case pkhToMaybeAddr (getNetworkId  dCinfo) pkh of
+                                                      Nothing -> fail $ "Cannot convert PubKeyHash to Address : "++ show pkh
+                                                      Just aie ->  pure  (b,b',TxOut aie  (TxOutValue MultiAssetInAlonzoEra va ) TxOutDatumNone )
+                                              TxOutScript tvs va ha -> fail "Not Implemented : Calculation of script address from the script binary is not supported"  }
+
 
     resolveInputs :: MonadFail m => TxInput -> m  TxInputResolved_
     resolveInputs v = case v of
@@ -77,87 +185,64 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
     mapInputs  exlookup is=do
           tuples<- mapM (toInput exlookup) is
           pure $ Map.fromList $ concat tuples
-    toInput :: MonadFail m => Map TxIn ExecutionUnits -> TxInputResolved_-> m [(TxIn,Either
-                                                                        (BuildTxWith BuildTx (Witness WitCtxTxIn era))
-                                                                        (Maybe ExecutionUnits,BuildTxWith BuildTx (ScriptWitness WitCtxTxIn AlonzoEra)))]
-    toInput exUnitLookup ( inCtx ::TxInputResolved_)= case inCtx of
-      TxInputUtxo (UTxO txin) ->  pure $ map (\(_in,val) -> (_in,Left $ BuildTxWith $ KeyWitness KeyWitnessForSpending) )  $ Map.toList txin
+    toInput :: MonadFail m => Map TxIn ExecutionUnits -> TxInputResolved_-> m [(TxIn,ParsedInput)]
+    toInput exUnitLookup inCtx = case inCtx of
+      TxInputUtxo (UTxO txin) ->  pure $ map (\(_in,val) -> (_in,Left (  KeyWitness KeyWitnessForSpending, val) ))  $ Map.toList txin
       TxInputScriptUtxo (TxValidatorScript s) d r mExunit (UTxO txin) ->mapM (\(_in,val) -> do
                                                                 witness <-  createTxInScriptWitness s d r (getExUnit _in mExunit)
-                                                                pure (_in,Right (mExunit,BuildTxWith witness )) ) $ Map.toList txin
+                                                                pure (_in,Right (mExunit, witness,val )) ) $ Map.toList txin
       where
 
         getExUnit tin ex =case  ex of
           Just ex -> ex
           Nothing -> fromMaybe defaultExunits (Map.lookup tin exUnitLookup)
 
-    --  UtxoCtxIn (UTxO mp) -> Right $  map (\item-> (item,(fst item,BuildTxWith $ KeyWitness KeyWitnessForSpending)))   (Map.toList mp)
-    --   TxInCtxIn ti -> Left (ti,BuildTxWith $ KeyWitness KeyWitnessForSpending)
-    --   ScriptCtxTxIn (script,_data,_redeemer,txin) -> Left (txin,BuildTxWith $  ScriptWitness ScriptWitnessForSpending $ plutusWitness script _data _redeemer defaultExunits)
-    --   ScriptUtxoCtxTxIn (script, _data,_redeemer,UTxO mp) -> Right $ map (\item-> (item,(fst  item,BuildTxWith $  ScriptWitness ScriptWitnessForSpending $ plutusWitness script _data _redeemer defaultExunits)))  (Map.toList mp)
+    usedInputs :: MonadFail m => Map TxIn ExecutionUnits -> [TxInputResolved_] -> m (Map TxIn ParsedInput)
+    usedInputs exUnitLookup resolvedInputs = do
+      vs<- mapM (toInput exUnitLookup) resolvedInputs
+      pure $ Map.fromList $ concat vs
+    usedInputSum :: Map TxIn ParsedInput -> Value
+    usedInputSum mp =
+      let parsedInputs= Map.elems mp
+          inputValue v = case v of
+            Left (_,TxOut  _ v _) -> txOutValueToValue v
+            Right (_,_,TxOut  _ v _) -> txOutValueToValue v
 
-    -- signatureCount = fromIntegral $ length signature + 1
-    -- hasScriptInput = any (\case
-    --                           ScriptCtxTxIn x0 -> True
-    --                           ScriptUtxoCtxTxIn x0 -> True
-    --                           _ -> False )  input
+      in foldMap inputValue $ Map.elems mp
 
-    -- unEitherExecutionUnit e= case e of
-    --   Left e -> throw $  SomeError  $ "EvaluateExecutionUnits: " ++ show e
-    --   Right v -> pure v
-    -- resolveAndSumIns conn inputs = if null unresolved
-    --   then pure (Map.fromList $ map  fst  resolved,map snd resolved)
-    --   else do
-    --     (UTxO utos) <-queryTxins conn (map fst unresolved )
-    --     if length utos /= length unresolved then throw (SomeError "QueryUtxoValue: Requested utxos not found") else pure ()
-    --     let fixedTxins=map snd resolved ++ unresolved
-    --     let usedUtxos=  Map.union  utos  (Map.fromList $map fst resolved)
-    --     pure (usedUtxos,fixedTxins)
-    --     where
-    --       all= partitionEithers vs
-    --       resolved=concat $ snd all
-    --       unresolved=fst all
-    --       vs=map toInput inputs
-    -- mappedOpCollateral  =   map (\(TxInCollateral _in) -> _in) oPcollaterals
-    -- txOutValue (TxOut _ v _) = case v of
-    --   TxOutAdaOnly oasie lo -> lovelaceToValue lo
-    --   TxOutValue masie va -> va
+    sortUtxos :: UTxO AlonzoEra ->  [(TxIn,TxOut CtxUTxO AlonzoEra )]
+    sortUtxos  ( UTxO utxoMap) = sortBy sortingFunc ( Map.toList utxoMap)
+        where
+        -- sort the txouts based on following condition
+        -- - the ones with multiple assets comes first
+        -- - then the ones with lower lovelace amount come
+        -- - then the ones with higher lovelace amount come
+        sortingFunc :: (TxIn,TxOut CtxUTxO AlonzoEra) -> (TxIn,TxOut CtxUTxO AlonzoEra)-> Ordering
+        sortingFunc (_,TxOut _ (TxOutAdaOnly _ v1) _) (_, TxOut _ (TxOutAdaOnly _ v2)  _) = v1 `compare` v2
+        sortingFunc (_,TxOut _ (TxOutAdaOnly _ (Lovelace v))  _) (_, TxOut _ (TxOutValue _ v2) _) = LT
+        sortingFunc (_,TxOut _ (TxOutValue _ v1) _) (_, TxOut _ (TxOutAdaOnly _ v2) _) =  GT
+        sortingFunc (_,TxOut _ (TxOutValue _ v1) _) (_, TxOut _ (TxOutValue _ v2) _) =  let l1= length ( valueToList v1)
+                                                                                            l2= length (valueToList v2) in
+                                                                                        if l1==l2
+                                                                                        then selectAsset v1 AdaAssetId `compare` selectAsset v2  AdaAssetId
+                                                                                        else l2 `compare` l1
 
+    -- from the utxos, try to remove utxos that can be removed while keeping the change positive or zero if possible
+    selectUtxos utxos remainingChange= case utxos of
+      []     -> ([] ,remainingChange)
+      (txIn,txOut@(TxOut _ txOutVal _)):subUtxos -> if val `valueLte` remainingChange
+              then selectUtxos subUtxos newChange -- remove the current txOut from the list
+              else (case selectUtxos subUtxos remainingChange of { (tos, va) -> ((txIn,txOut) :tos,va) }) -- include txOut in result
+            where
+              val = txOutValueToValue txOutVal
+              newChange= remainingChange <> negateValue val
 
-    -- toOuotput network (outCtx :: TxCtxOutput) =  do
-    --   case outCtx of
-    --     AddrCtxOut (addr,value) -> 
-    --     ScriptCtxOut (script,value,dataHash) -> pure $ TxOut (makeShelleyAddressInEra network (PaymentCredentialByScript  $  hashScript   (PlutusScript PlutusScriptV2   script)) NoStakeAddress) (TxOutValue MultiAssetInAlonzoEra  value ) (TxOutDatumHash ScriptDataInAlonzoEra dataHash)
-    --     PkhCtxOut (pkh,value)-> case pkhToMaybeAddr network pkh of
-    --       Nothing -> throw $ SomeError "PubKeyHash couldn't be converted to address"
-    --       Just aie -> pure $ TxOut aie (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumNone
-    -- mkBody ins outs collateral pParam =
-    --       (TxBodyContent {
-    --         txIns=ins ,
-    --         txInsCollateral=collateral,
-    --         txOuts=outs,
-    --         txFee=TxFeeExplicit TxFeesExplicitInAlonzoEra $ Lovelace 1000000,
-    --         -- txValidityRange = (
-    --         --     TxValidityLowerBound ValidityLowerBoundInAlonzoEra 0
-    --         --     , TxValidityUpperBound ValidityUpperBoundInAlonzoEra 6969),
-    --         txValidityRange= if validityStart == 0
-    --                           then  if  validityEnd == 0
-    --                                   then  (TxValidityNoLowerBound,TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra )
-    --                                   else (TxValidityNoLowerBound , TxValidityUpperBound  ValidityUpperBoundInAlonzoEra $toSlot validityEnd)
-    --                           else  if validityEnd == 0
-    --                                   then (TxValidityLowerBound ValidityLowerBoundInAlonzoEra  $ toSlot validityStart,TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra )
-    --                                   else (TxValidityLowerBound  ValidityLowerBoundInAlonzoEra $ toSlot validityStart,TxValidityUpperBound ValidityUpperBoundInAlonzoEra $ toSlot validityEnd)
-    --           ,
-    --         txMetadata=TxMetadataNone ,
-    --         txAuxScripts=TxAuxScriptsNone,
-    --         txExtraKeyWits=TxExtraKeyWitnessesNone,
-    --         txProtocolParams=BuildTxWith (Just  pParam),
-    --         txWithdrawals=TxWithdrawalsNone,
-    --         txCertificates=TxCertificatesNone,
-    --         txUpdateProposal=TxUpdateProposalNone,
-    --         txMintValue=TxMintNone,
-    --         txScriptValidity=TxScriptValidityNone
-    --       })
+    txLowerBound = case validityStart of
+                                Nothing -> TxValidityNoLowerBound
+                                Just v -> TxValidityLowerBound ValidityLowerBoundInAlonzoEra   (toSlot v)
+    txUpperBound = case validityEnd of
+      Nothing -> TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra
+      Just n -> TxValidityUpperBound ValidityUpperBoundInAlonzoEra (toSlot n)
     plutusWitness script _data redeemer exUnits = PlutusScriptWitness PlutusScriptV2InAlonzo
                             PlutusScriptV2
                             script
@@ -178,11 +263,11 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
       --  Left tbe -> throw $ SomeError $ "First Balance :" ++ show tbe
       --  Right res -> pure res
 
-    -- toSlot tStamp= case networkCtxNetwork networkCtx of
-    --   Mainnet -> SlotNo $ fromIntegral $  mainnetSlot tStamp
-    --   Testnet nm -> SlotNo $ fromIntegral $ testnetSlot tStamp
-    -- testnetSlot timestamp= ((timestamp -1607199617000) `div` 1000 )+ 12830401 -- using epoch 100 as refrence
-    -- mainnetSlot timestamp = ((timestamp -1596491091000 ) `div` 1000 )+ 4924800 -- using epoch 209 as reference
+    toSlot tStamp= case getNetworkId  dCinfo of
+      Mainnet -> SlotNo $ fromIntegral $  mainnetSlot tStamp
+      Testnet nm -> SlotNo $ fromIntegral $ testnetSlot tStamp
+    testnetSlot timestamp= ((timestamp -1607199617000) `div` 1000 )+ 12830401 -- using epoch 100 as refrence
+    mainnetSlot timestamp = ((timestamp -1596491091000 ) `div` 1000 )+ 4924800 -- using epoch 209 as reference
 
 -- mkBalancedBody :: ProtocolParameters
 --   -> UTxO AlonzoEra
@@ -259,63 +344,8 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
 
 --   negLovelace v=negateValue $ lovelaceToValue v
 
---   txouts :: [(TxIn,TxOut CtxUTxO AlonzoEra )]
---   txouts = sortBy sortingFunc ( Map.toList utxoMap)
-
---   -- sort the txouts based on following condition
---   -- - the ones with multiple assets comes first
---   -- - then the ones with lower lovelace amount come
---   -- - then the ones with higher lovelace amount come
---   sortingFunc :: (TxIn,TxOut CtxUTxO AlonzoEra) -> (TxIn,TxOut CtxUTxO AlonzoEra)-> Ordering
---   sortingFunc (_,TxOut _ (TxOutAdaOnly _ v1) _) (_, TxOut _ (TxOutAdaOnly _ v2)  _) = v1 `compare` v2
---   sortingFunc (_,TxOut _ (TxOutAdaOnly _ (Lovelace v))  _) (_, TxOut _ (TxOutValue _ v2) _) = LT 
---   sortingFunc (_,TxOut _ (TxOutValue _ v1) _) (_, TxOut _ (TxOutAdaOnly _ v2) _) =  GT
---   sortingFunc (_,TxOut _ (TxOutValue _ v1) _) (_, TxOut _ (TxOutValue _ v2) _) =  let l1= length ( valueToList v1)
---                                                                                       l2= length (valueToList v2) in
---                                                                                   if l1==l2
---                                                                                     then selectAsset v1 AdaAssetId `compare` selectAsset v2  AdaAssetId
---                                                                                     else l2 `compare` l1
-
-
 --   utxosWithWitness (txin,txout) = (txin, BuildTxWith  $ KeyWitness KeyWitnessForSpending)
 
-
---   -- from the utxos, try to remove utxos that can be removed while keeping the change positive or zero if possible
---   minimize utxos remainingChange= case utxos of
---     []     -> ([] ,remainingChange)
---     (txIn,txOut):subUtxos -> if val `valueLte` remainingChange
---             then minimize subUtxos newChange -- remove the current txOut from the list
---             else (case minimize subUtxos remainingChange of { (tos, va) -> ((txIn,txOut) :tos,va) }) -- include txOut in result
---           where
---             val = txOutValueToValue $ txOutValue  txOut
---             newChange= remainingChange <> negateValue val
-
---    -- consider change while minimizing i.e. make sure that the change has the minLovelace value.
---   minimizeConsideringChange f available change=if existingLove < minLove
---     then
---        (case Foldable.find (\(tin,utxo) -> extraLove utxo > (minLove- existingLove)) unmatched of
---          Just val -> (fst matched ++ [val],snd matched <> txOutValueToValue ( txOutValue $ snd val ))
---          Nothing -> matched
---        )
---     else
---       matched
---     where
---       matched=minimize available change
---       unmatched = Map.toList $ Map.filterWithKey  (\k _ -> k `notElem` matchedSet)  utxoMap
---       matchedSet=Set.fromList $ map fst $  fst matched
---       --Current Lovelace amount in the change utxo
---       existingLove = case  selectAsset (snd  matched) AdaAssetId   of
---         Quantity n -> n
---       --minimun Lovelace required in the change utxo
---       minLove = case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumNone of
---           Lovelace l -> l
---       -- extra lovelace in this txout over the txoutMinLovelace
---       extraLove txout = selectLove - minLoveInThisTxout
---           where
---             minLoveInThisTxout=case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra $ val <>change) TxOutDatumNone of
---                 Lovelace l -> l
---             val= txOutValueToValue $ txOutValue txout
---             selectLove = case selectAsset val AdaAssetId of { Quantity n -> n }
 
 --   isProperChange f change = existingLove >  minLove
 --     where
@@ -371,12 +401,6 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
 
 --   modifiedBody initialOuts txins change fee= content
 --     where
---       reorderInputs :: [(TxIn, a)] -> [(TxIn,a)]
---       reorderInputs txIns = map ((\key-> (key,forceJust $ Map.lookup key  mapped)) . fromShelleyTxIn) ordered
---         where
---           ordered=   Set.toList $  Set.fromList (map (toShelleyTxIn . fst) txIns)
---           mapped= Map.fromList txIns
---           forceJust (Just a) = a
 
 --       content=(TxBodyContent  {
 --             txIns= reorderInputs$ txins ++ txIns txbody,
