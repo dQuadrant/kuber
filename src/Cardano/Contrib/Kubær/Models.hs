@@ -144,29 +144,11 @@ instance ToJSON TxResponse where
       toLedger :: ScriptData -> Data AlonzoEra
       toLedger = toAlonzoData
 
-data TxModel = TxModel
-  { outputs :: [String]
-  }
-  deriving (Generic, Show)
+instance FromJSON AddressModal where
+  parseJSON (String s)=  case deserialiseAddress (AsAddressInEra AsAlonzoEra) s of
+      Nothing -> fail "Invalid address string. Couldn't be parsed as valid address for alonzo era"
+      Just aie -> pure $ AddressModal aie
+  parseJSON _ = fail "Expected Address to be String"
 
-instance FromJSON TxModel where
-  parseJSON (Object o) =
-    do
-      TxModel
-      <$> (o .: "outputs")
-  parseJSON _ = fail "Expected TxModel Object"
-
-data PayToModel = PayToModel
-  { sender :: String,
-    receiver :: String,
-    value :: String
-  }
-  deriving (Generic, Show)
-
-instance FromJSON PayToModel where
-  parseJSON (Object o) =
-    PayToModel
-      <$> (o .: "sender")
-      <*> (o .: "receiver")
-      <*> (o .: "value")
-  parseJSON _ = fail "Expected TxModel Object"
+instance ToJSON AddressModal where
+  toJSON (AddressModal addr)= String $ serialiseAddress  addr

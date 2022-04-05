@@ -58,6 +58,7 @@ library
     , ouroboros-network
     , cardano-binary
     , cborg
+    , vector
 
 
 
