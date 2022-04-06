@@ -23,7 +23,7 @@ import qualified Data.ByteString.Short as SBS
 import qualified Data.ByteString.Lazy as LBS
 import Codec.Serialise (serialise)
 import Data.Set (Set)
-import Data.Maybe (mapMaybe, catMaybes, fromMaybe)
+import Data.Maybe (mapMaybe, catMaybes, fromMaybe, maybeToList)
 import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
 import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript )
@@ -31,6 +31,8 @@ import Cardano.Contrib.Kubær.TxBuilder
 import Cardano.Contrib.Kubær.ChainInfo (DetailedChainInfo (DetailedChainInfo, dciConn), ChainInfo (getNetworkId))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Cardano.Api.Crypto.Ed25519Bip32 (xPrvFromBytes)
+import Debug.Trace (trace, traceM)
+import qualified Data.Aeson as A
 
 type IsChangeUsed   = Bool
 type  ParsedInput   = Either (Witness WitCtxTxIn AlonzoEra,TxOut CtxUTxO AlonzoEra) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn AlonzoEra,TxOut CtxUTxO  AlonzoEra)
@@ -45,25 +47,25 @@ v= mkTx
 
 
 txBuilderToTxBody:: DetailedChainInfo  -> TxBuilder  -> IO (Either FrameworkError  (TxBody AlonzoEra ))
-txBuilderToTxBody dcInfo builder = do 
+txBuilderToTxBody dcInfo builder = do
   let (addrs,txins,utxo) = mergeSelections
   addrUtxos <- queryIfNotEmpty addrs (queryUtxos  conn addrs) (Right $ UTxO  Map.empty)
-  case addrUtxos of 
+  case addrUtxos of
     Left fe -> pure $ Left fe
-    Right (UTxO  uto) -> do 
+    Right (UTxO  uto) -> do
       let missingTxins= Set.difference txins ( Map.keysSet  uto )
       vals <- queryIfNotEmpty missingTxins (resolveTxins conn missingTxins) (Right $ UTxO  Map.empty)
-      case addrUtxos of 
+      case vals of
         Left fe -> pure $ Left fe
         Right (UTxO uto') ->do
           res<- mkTx dcInfo (UTxO $ Map.union uto uto') builder
           pure $ pure res
   where
-    
+
     queryIfNotEmpty v f v' = if null  v then pure v' else f
     conn=dciConn dcInfo
     mergeSelections=foldl mergeSelection (Set.empty,Set.empty ,Map.empty ) (txSelections builder)
-    mergeSelection :: ( Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))  -> TxInputSelection  -> (Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra)) 
+    mergeSelection :: ( Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))  -> TxInputSelection  -> (Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))
     mergeSelection (a,i,u) sel = case sel of
         TxSelectableAddresses aies -> (Set.union a  (Set.fromList $ map addressInEraToAddressAny aies),i,u)
         TxSelectableUtxos (UTxO uto) -> (a,i,merge uto u)
@@ -73,14 +75,14 @@ merge :: Map TxIn (TxOut CtxUTxO AlonzoEra) -> Map TxIn (TxOut CtxUTxO AlonzoEra
 merge = error "not implemented"
 
 mkTx:: MonadFail m => DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> m (TxBody AlonzoEra)
-mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs mintingScripts collaterals validityStart validityEnd mintValue extraSignatures explicitFee defaultChangeAddr ) = do
+mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs mintingScripts collaterals validityStart validityEnd mintValue extraSignatures explicitFee mChangeAddr ) = do
   let network = getNetworkId  dCinfo
   fixedInputs <- mapM resolveInputs _inputs >>= usedInputs Map.empty
   fixedOutputs <- mapM parseOutputs _outputs
 
   let fixedInputSum =  usedInputSum fixedInputs
       fee= Lovelace 100_000
-      availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.member tin fixedInputs) availableUtxo
+      availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin fixedInputs) availableUtxo
       calculator= computeBody fixedInputs fixedInputSum availableInputs fixedOutputs
   (newBody,fee2) <-  calculator  fee
   (newbody,fee3) <- calculator fee2
@@ -95,14 +97,34 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
       -> m (TxBody AlonzoEra, Lovelace)
     computeBody fixedInputs fixedInputSum availableInputs fixedOutputs fee  = do
       let
-        (extraUtxos,change) = selectUtxos availableInputs (fixedInputSum <> negateValue (fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee ))
+        startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee )
+        (extraUtxos,change) = selectUtxos availableInputs startingChange
         _hasFeeUtxo = any (\(a,b,c)->a) fixedOutputs
         (feeUsed,changeUsed,outputs) = updateOutputs  fee change fixedOutputs
-        bodyContent = mkBodyContent  fixedInputs extraUtxos outputs [] fee
-      case makeTransactionBody bodyContent of
-          Left tbe -> fail "sad"
+        bodyContent allOutputs = mkBodyContent  fixedInputs extraUtxos allOutputs [] fee
+      bc <- if changeUsed 
+              then pure $ bodyContent outputs
+              else do
+                changeaddr <-  monadFailChangeAddr
+                pure $ bodyContent (outputs++ [TxOut changeaddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumNone])
+      case makeTransactionBody bc of
+          Left tbe -> fail $ "sad" ++ show tbe
           Right tb -> pure (tb,evaluateTransactionFee pParam tb 1 0)
 
+      where
+        monadFailChangeAddr= case mChangeAddr of
+          Nothing ->  if null usableAddresses
+                        then fail "no change address"
+                        else pure $ head usableAddresses
+
+          Just aie -> pure aie
+        usableAddresses :: [AddressInEra AlonzoEra]
+        usableAddresses=concat $ mapMaybe findInput selections
+        findInput :: TxInputSelection ->Maybe [AddressInEra AlonzoEra]
+        findInput v= case v of
+          TxSelectableAddresses aies -> Just aies
+          TxSelectableUtxos uto -> Nothing
+          TxSelectableTxIn tis -> Nothing
     getTxin :: Map TxIn ParsedInput -> [(TxIn,TxOut CtxUTxO AlonzoEra )]-> [(TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra ))]
     getTxin v  v2 = map ( uncurry totxIn)  (Map.toList v) ++ map toPubKeyTxin v2
 
@@ -230,11 +252,12 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
                                                                                         else l2 `compare` l1
 
     -- from the utxos, try to remove utxos that can be removed while keeping the change positive or zero if possible
-    selectUtxos utxos remainingChange= case utxos of
+    selectUtxos u c = minimizeUtxos u (c <> utxoListSum u)
+    minimizeUtxos utxos remainingChange= case utxos of
       []     -> ([] ,remainingChange)
       (txIn,txOut@(TxOut _ txOutVal _)):subUtxos -> if val `valueLte` remainingChange
-              then selectUtxos subUtxos newChange -- remove the current txOut from the list
-              else (case selectUtxos subUtxos remainingChange of { (tos, va) -> ((txIn,txOut) :tos,va) }) -- include txOut in result
+              then   minimizeUtxos subUtxos newChange -- remove the current txOut from the list
+              else (case minimizeUtxos subUtxos remainingChange of { (tos, va) -> ((txIn,txOut) :tos,va) }) -- include txOut in result
             where
               val = txOutValueToValue txOutVal
               newChange= remainingChange <> negateValue val

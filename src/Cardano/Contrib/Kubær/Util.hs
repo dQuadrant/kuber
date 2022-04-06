@@ -40,6 +40,7 @@ import qualified Data.Map as Map
 import Data.Char (toLower)
 import Data.Set (Set)
 import Cardano.Ledger.Shelley.API (Credential(ScriptHashObj, KeyHashObj), KeyHash (KeyHash), StakeReference (StakeRefNull))
+import Data.Map (Map)
 
 localNodeConnInfo :: NetworkId -> FilePath   -> LocalNodeConnectInfo CardanoMode
 localNodeConnInfo = LocalNodeConnectInfo (CardanoModeParams (EpochSlots 21600))
@@ -76,7 +77,7 @@ skeyToAddrInEra skey network=makeShelleyAddressInEra network   credential NoStak
     credential=PaymentCredentialByKey  $ verificationKeyHash   $ getVerificationKey  skey
 
 addressInEraToAddressAny :: AddressInEra era -> AddressAny
-addressInEraToAddressAny addr = case addr of { AddressInEra atie ad -> toAddressAny ad } 
+addressInEraToAddressAny addr = case addr of { AddressInEra atie ad -> toAddressAny ad }
 
 
 sKeyToPkh:: SigningKey PaymentKey -> PubKeyHash
@@ -123,9 +124,9 @@ unstakeAddr a = case a of { AddressInEra atie ad -> case ad of
                                       ShelleyAddress net cre sr ->  shelleyAddressInEra $ ShelleyAddress net cre StakeRefNull }
 
 performQuery :: LocalNodeConnectInfo CardanoMode -> QueryInShelleyBasedEra AlonzoEra b -> IO (Either FrameworkError b)
-performQuery conn q= 
+performQuery conn q=
   do
-  a <-queryNodeLocalState conn Nothing  qFilter 
+  a <-queryNodeLocalState conn Nothing  qFilter
   case a of
     Left af -> pure $ Left $ FrameworkError NodeQueryError (show af)
     Right e -> case e of
@@ -134,14 +135,14 @@ performQuery conn q=
 
   where
   qFilter = QueryInEra AlonzoEraInCardanoMode
-                    $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo q 
+                    $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo q
 
 
 queryUtxos :: LocalNodeConnectInfo CardanoMode-> Set AddressAny -> IO (Either FrameworkError  (UTxO AlonzoEra))
 queryUtxos conn addr= performQuery conn (QueryUTxO (QueryUTxOByAddress  addr))
 
 resolveTxins :: LocalNodeConnectInfo CardanoMode -> Set TxIn -> IO (Either FrameworkError (UTxO AlonzoEra))
-resolveTxins conn ins= performQuery conn (QueryUTxO ( QueryUTxOByTxIn ins)) 
+resolveTxins conn ins= performQuery conn (QueryUTxO ( QueryUTxOByTxIn ins))
 
 
 getDefaultConnection :: String -> NetworkId ->  IO (LocalNodeConnectInfo CardanoMode)
@@ -223,7 +224,7 @@ signAndSubmitTxBody conn txBody skeys= do
     toWitness skey = makeShelleyKeyWitness txBody (WitnessPaymentKey skey)
 
 executeSubmitTx :: LocalNodeConnectInfo CardanoMode -> Tx AlonzoEra -> IO ()
-executeSubmitTx conn  tx= do 
+executeSubmitTx conn  tx= do
       res <-submitTxToNodeLocal conn $  TxInMode tx AlonzoEraInCardanoMode
       case res of
         SubmitSuccess ->  pure ()
@@ -269,11 +270,20 @@ toPlutusAssetClass (AssetId (PolicyId hash) (AssetName name)) = AssetClass (Curr
 toPlutusAssetClass AdaAssetId  =AssetClass (CurrencySymbol $ fromString "", TokenName $ fromString "")
 
 
-utxoValueSum :: UTxO AlonzoEra  -> Value
-utxoValueSum (UTxO uMap)= foldMap toValue $ Map.elems uMap
+txoutListSum :: [TxOut ctx era ] -> Value
+txoutListSum = foldMap toValue
   where
     toValue (TxOut _ val _)= case val of
       TxOutValue masie va -> va
+
+utxoListSum :: [(a, TxOut ctx era)] -> Value
+utxoListSum l = txoutListSum (map snd l)
+
+utxoMapSum :: Map a (TxOut ctx era) -> Value
+utxoMapSum x = txoutListSum  $ Map.elems x
+
+utxoSum :: UTxO AlonzoEra  -> Value
+utxoSum (UTxO uMap)= utxoMapSum uMap
 
 
 createTxInScriptWitness ::MonadFail m => ScriptInAnyLang -> ScriptData -> ScriptData -> ExecutionUnits -> m (ScriptWitness WitCtxTxIn AlonzoEra)
