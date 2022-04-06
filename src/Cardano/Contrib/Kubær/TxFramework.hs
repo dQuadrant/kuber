@@ -38,11 +38,6 @@ type IsChangeUsed   = Bool
 type  ParsedInput   = Either (Witness WitCtxTxIn AlonzoEra,TxOut CtxUTxO AlonzoEra) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn AlonzoEra,TxOut CtxUTxO  AlonzoEra)
 type  ParsedOutput  = (Bool,Bool,TxOut CtxTx AlonzoEra)
 
-v :: DetailedChainInfo
-  -> UTxO AlonzoEra
-  -> TxBuilder
-  -> Maybe (TxBody AlonzoEra)
-v= mkTx
 
 
 
@@ -58,8 +53,7 @@ txBuilderToTxBody dcInfo builder = do
       case vals of
         Left fe -> pure $ Left fe
         Right (UTxO uto') ->do
-          res<- mkTx dcInfo (UTxO $ Map.union uto uto') builder
-          pure $ pure res
+          pure $ mkTx dcInfo (UTxO $ Map.union uto uto') builder
   where
 
     queryIfNotEmpty v f v' = if null  v then pure v' else f
@@ -74,7 +68,7 @@ txBuilderToTxBody dcInfo builder = do
 merge :: Map TxIn (TxOut CtxUTxO AlonzoEra) -> Map TxIn (TxOut CtxUTxO AlonzoEra) -> Map TxIn (TxOut CtxUTxO AlonzoEra)
 merge = error "not implemented"
 
-mkTx:: MonadFail m => DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> m (TxBody AlonzoEra)
+mkTx::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (TxBody AlonzoEra)
 mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs mintingScripts collaterals validityStart validityEnd mintValue extraSignatures explicitFee mChangeAddr ) = do
   let network = getNetworkId  dCinfo
   fixedInputs <- mapM resolveInputs _inputs >>= usedInputs Map.empty
@@ -86,15 +80,15 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
       calculator= computeBody fixedInputs fixedInputSum availableInputs fixedOutputs
   (newBody,fee2) <-  calculator  fee
   (newbody,fee3) <- calculator fee2
-  if fee2 /= fee3  then fail "panic sad" else pure  ()
+  if fee2 /= fee3  then Left $ FrameworkError LibraryError "Transaction not balanced even in 3rd iteration" else pure  ()
   pure newbody
   where
-    computeBody :: MonadFail m => Map TxIn ParsedInput
+    computeBody ::  Map TxIn ParsedInput
       -> Value
       -> [(TxIn, TxOut CtxUTxO AlonzoEra)]
       -> [ParsedOutput]
       -> Lovelace
-      -> m (TxBody AlonzoEra, Lovelace)
+      -> Either FrameworkError  (TxBody AlonzoEra, Lovelace)
     computeBody fixedInputs fixedInputSum availableInputs fixedOutputs fee  = do
       let
         startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee )
@@ -108,13 +102,13 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
                 changeaddr <-  monadFailChangeAddr
                 pure $ bodyContent (outputs++ [TxOut changeaddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumNone])
       case makeTransactionBody bc of
-          Left tbe -> fail $ "sad" ++ show tbe
+          Left tbe ->Left  $ FrameworkError  LibraryError  (show tbe)
           Right tb -> pure (tb,evaluateTransactionFee pParam tb 1 0)
 
       where
         monadFailChangeAddr= case mChangeAddr of
           Nothing ->  if null usableAddresses
-                        then fail "no change address"
+                        then Left $ FrameworkError BalancingError "no change address"
                         else pure $ head usableAddresses
 
           Just aie -> pure aie
@@ -187,29 +181,29 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
         transformOut _ _ _ = error "UnExpected condition"
 
 
-    parseOutputs :: MonadFail m => TxOutput -> m ParsedOutput
+    parseOutputs ::  TxOutput -> Either FrameworkError   ParsedOutput
     parseOutputs  output = case output of { TxOutput toc b b' -> case toc of
                                               TxOutAddress aie va -> pure  (b,b',TxOut aie  (TxOutValue MultiAssetInAlonzoEra va ) TxOutDatumNone )
                                               TxOutScriptAddress aie va ha -> pure (b,b',TxOut aie (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumHash ScriptDataInAlonzoEra ha ))
                                               TxOutPkh pkh va -> case pkhToMaybeAddr (getNetworkId  dCinfo) pkh of
-                                                      Nothing -> fail $ "Cannot convert PubKeyHash to Address : "++ show pkh
+                                                      Nothing -> Left  $ FrameworkError ParserError  ("Cannot convert PubKeyHash to Address : "++ show pkh)
                                                       Just aie ->  pure  (b,b',TxOut aie  (TxOutValue MultiAssetInAlonzoEra va ) TxOutDatumNone )
-                                              TxOutScript tvs va ha -> fail "Not Implemented : Calculation of script address from the script binary is not supported"  }
+                                              TxOutScript tvs va ha -> Left  $ FrameworkError ParserError "Not Implemented : Calculation of script address from the script binary is not supported"  }
 
 
-    resolveInputs :: MonadFail m => TxInput -> m  TxInputResolved_
+    resolveInputs ::  TxInput -> Either FrameworkError    TxInputResolved_
     resolveInputs v = case v of
       TxInputResolved tir -> pure tir
       TxInputUnResolved (TxInputTxin txin) ->  doLookup txin <&> TxInputUtxo
       TxInputUnResolved (TxInputScriptTxin s d r exunit txin) -> doLookup txin <&>  TxInputScriptUtxo s d r exunit
       where
         doLookup tin = case Map.lookup tin availableUtxo of
-          Nothing -> fail "Missing utxo"
+          Nothing -> Left $ FrameworkError LibraryError  "Input Utxo missing in utxo map"
           Just to ->pure $ UTxO $ Map.singleton  tin  to
     mapInputs  exlookup is=do
           tuples<- mapM (toInput exlookup) is
           pure $ Map.fromList $ concat tuples
-    toInput :: MonadFail m => Map TxIn ExecutionUnits -> TxInputResolved_-> m [(TxIn,ParsedInput)]
+    toInput ::  Map TxIn ExecutionUnits -> TxInputResolved_-> Either FrameworkError   [(TxIn,ParsedInput)]
     toInput exUnitLookup inCtx = case inCtx of
       TxInputUtxo (UTxO txin) ->  pure $ map (\(_in,val) -> (_in,Left (  KeyWitness KeyWitnessForSpending, val) ))  $ Map.toList txin
       TxInputScriptUtxo (TxValidatorScript s) d r mExunit (UTxO txin) ->mapM (\(_in,val) -> do
@@ -221,7 +215,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
           Just ex -> ex
           Nothing -> fromMaybe defaultExunits (Map.lookup tin exUnitLookup)
 
-    usedInputs :: MonadFail m => Map TxIn ExecutionUnits -> [TxInputResolved_] -> m (Map TxIn ParsedInput)
+    usedInputs ::  Map TxIn ExecutionUnits -> [TxInputResolved_] -> Either FrameworkError  (Map TxIn ParsedInput)
     usedInputs exUnitLookup resolvedInputs = do
       vs<- mapM (toInput exUnitLookup) resolvedInputs
       pure $ Map.fromList $ concat vs

@@ -8,13 +8,16 @@ import GHC.Exception.Type (Exception)
 import Control.Exception (throw)
 import Cardano.Api (ToJSON)
 import Data.Aeson (object, ToJSON (toJSON), KeyValue ((.=)))
+import Cardano.Api
 
 data ErrorType =    ConnectionError
                   | BalancingError
                   | InsufficientInput 
                   | EraMisMatch
                   | NodeQueryError
-                  | ParserError deriving Show
+                  | LibraryError
+                  | ParserError
+                  | WrongScriptType deriving Show
 
 
 
