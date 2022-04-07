@@ -188,26 +188,20 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
         transformOut _ _ _ = error "UnExpected condition"
 
 
-    parseOutputs :: MonadFail m => NetworkId -> TxOutput -> m ParsedOutput
+    parseOutputs ::  NetworkId -> TxOutput -> Either FrameworkError   ParsedOutput
     parseOutputs  networkId output = case output of { TxOutput toc b b' -> case toc of
-    parseOutputs ::  TxOutput -> Either FrameworkError   ParsedOutput
-    parseOutputs  output = case output of { TxOutput toc b b' -> case toc of
                                               TxOutAddress aie va -> pure  (b,b',TxOut aie  (TxOutValue MultiAssetInAlonzoEra va ) TxOutDatumNone )
                                               TxOutScriptAddress aie va ha -> pure (b,b',TxOut aie (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumHash ScriptDataInAlonzoEra ha ))
                                               TxOutPkh pkh va -> case pkhToMaybeAddr (getNetworkId  dCinfo) pkh of
                                                       Nothing -> Left  $ FrameworkError ParserError  ("Cannot convert PubKeyHash to Address : "++ show pkh)
                                                       Just aie ->  pure  (b,b',TxOut aie  (TxOutValue MultiAssetInAlonzoEra va ) TxOutDatumNone )
-                                              TxOutScript tvs va ha -> Left  $ FrameworkError ParserError "Not Implemented : Calculation of script address from the script binary is not supported"  }
-
-
-    resolveInputs ::  TxInput -> Either FrameworkError    TxInputResolved_
                                               TxOutScript (TxValidatorScript (ScriptInAnyLang lang script)) va ha ->
                                                 let payCred = PaymentCredentialByScript (hashScript script)
                                                     addr = makeShelleyAddress networkId payCred NoStakeAddress
                                                     addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraAlonzo) addr
                                                 in pure (b,b',TxOut addrInEra (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumHash ScriptDataInAlonzoEra ha ))}
 
-    resolveInputs :: MonadFail m => TxInput -> m  TxInputResolved_
+    resolveInputs ::  TxInput -> Either FrameworkError    TxInputResolved_
     resolveInputs v = case v of
       TxInputResolved tir -> pure tir
       TxInputUnResolved (TxInputTxin txin) ->  doLookup txin <&> TxInputUtxo
