@@ -3,6 +3,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeApplications #-}
 module Cardano.Contrib.Kubær.TxFramework where
 
 
@@ -43,7 +44,8 @@ type  ParsedOutput  = (Bool,Bool,TxOut CtxTx AlonzoEra)
 
 txBuilderToTxBody:: DetailedChainInfo  -> TxBuilder  -> IO (Either FrameworkError  (TxBody AlonzoEra ))
 txBuilderToTxBody dcInfo builder = do
-  let (addrs,txins,utxo) = mergeSelections
+  let (selectionAddrs,txins,utxo) = mergeSelections
+      addrs=  Set.union selectionAddrs (Set.fromList $ mapMaybe getInputAddresses (txInputs builder))
   addrUtxos <- queryIfNotEmpty addrs (queryUtxos  conn addrs) (Right $ UTxO  Map.empty)
   case addrUtxos of
     Left fe -> pure $ Left fe
@@ -59,6 +61,11 @@ txBuilderToTxBody dcInfo builder = do
     queryIfNotEmpty v f v' = if null  v then pure v' else f
     conn=dciConn dcInfo
     mergeSelections=foldl mergeSelection (Set.empty,Set.empty ,Map.empty ) (txSelections builder)
+    getInputAddresses :: TxInput -> Maybe AddressAny
+    getInputAddresses x = case x of
+      TxInputResolved tir -> Nothing
+      TxInputUnResolved (TxInputAddr aie) -> Just $ addressInEraToAddressAny aie
+      _ -> Nothing
     mergeSelection :: ( Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))  -> TxInputSelection  -> (Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))
     mergeSelection (a,i,u) sel = case sel of
         TxSelectableAddresses aies -> (Set.union a  (Set.fromList $ map addressInEraToAddressAny aies),i,u)
@@ -72,9 +79,9 @@ mkTx::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkErr
 mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs mintingScripts collaterals validityStart validityEnd mintValue extraSignatures explicitFee mChangeAddr ) = do
   let network = getNetworkId  dCinfo
   fixedInputs <- mapM resolveInputs _inputs >>= usedInputs Map.empty
-  fixedOutputs <- mapM parseOutputs _outputs
+  fixedOutputs <- mapM (parseOutputs network) _outputs
 
-  let fixedInputSum =  usedInputSum fixedInputs
+  let fixedInputSum =  usedInputSum fixedInputs <> mintValue
       fee= Lovelace 100_000
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin fixedInputs) availableUtxo
       calculator= computeBody fixedInputs fixedInputSum availableInputs fixedOutputs
@@ -181,6 +188,8 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
         transformOut _ _ _ = error "UnExpected condition"
 
 
+    parseOutputs :: MonadFail m => NetworkId -> TxOutput -> m ParsedOutput
+    parseOutputs  networkId output = case output of { TxOutput toc b b' -> case toc of
     parseOutputs ::  TxOutput -> Either FrameworkError   ParsedOutput
     parseOutputs  output = case output of { TxOutput toc b b' -> case toc of
                                               TxOutAddress aie va -> pure  (b,b',TxOut aie  (TxOutValue MultiAssetInAlonzoEra va ) TxOutDatumNone )
@@ -192,11 +201,21 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
 
 
     resolveInputs ::  TxInput -> Either FrameworkError    TxInputResolved_
+                                              TxOutScript (TxValidatorScript (ScriptInAnyLang lang script)) va ha ->
+                                                let payCred = PaymentCredentialByScript (hashScript script)
+                                                    addr = makeShelleyAddress networkId payCred NoStakeAddress
+                                                    addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraAlonzo) addr
+                                                in pure (b,b',TxOut addrInEra (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumHash ScriptDataInAlonzoEra ha ))}
+
+    resolveInputs :: MonadFail m => TxInput -> m  TxInputResolved_
     resolveInputs v = case v of
       TxInputResolved tir -> pure tir
       TxInputUnResolved (TxInputTxin txin) ->  doLookup txin <&> TxInputUtxo
+      TxInputUnResolved (TxInputAddr addr) ->   filterAddrUtxo addr <&> TxInputUtxo
       TxInputUnResolved (TxInputScriptTxin s d r exunit txin) -> doLookup txin <&>  TxInputScriptUtxo s d r exunit
       where
+        filterAddrUtxo addr =pure $ UTxO $ Map.filter (ofAddress addr) availableUtxo
+        ofAddress addr (TxOut a _ _)= addr == a
         doLookup tin = case Map.lookup tin availableUtxo of
           Nothing -> Left $ FrameworkError LibraryError  "Input Utxo missing in utxo map"
           Just to ->pure $ UTxO $ Map.singleton  tin  to
