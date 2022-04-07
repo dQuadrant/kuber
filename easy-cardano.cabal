@@ -85,7 +85,7 @@ executable server
     , plutus-tx
     , ouroboros-network
     , easy-cardano
-       , servant
+    , servant
     , servant-server
     , servant-errors
     , servant-exceptions
