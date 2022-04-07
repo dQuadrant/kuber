@@ -46,6 +46,7 @@ import Data.ByteString            as B
 import Data.ByteString.Lazy       as BL
 import Data.Text.Lazy.Encoding    as TL
 import Data.Text.Lazy             as TL
+import Debug.Trace (trace, traceM)
 
 -- mktx 
 data TxMintingScript = TxSimpleScript ScriptInAnyLang
@@ -57,6 +58,7 @@ newtype TxValidatorScript = TxValidatorScript ScriptInAnyLang deriving (Show)
 data TxInputResolved_ = TxInputUtxo (UTxO AlonzoEra)
               | TxInputScriptUtxo TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) (UTxO AlonzoEra) deriving (Show)
 data TxInputUnResolved_ = TxInputTxin TxIn
+              | TxInputAddr (AddressInEra AlonzoEra)
               | TxInputScriptTxin TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) TxIn deriving (Show)
 
 data TxInput  = TxInputResolved TxInputResolved_ | TxInputUnResolved TxInputUnResolved_ deriving (Show)
@@ -218,7 +220,7 @@ instance FromJSON TxBuilder where
       <*> parseMintValue
       <*> (v .:? "signatures" .!= [])
       <*> v .:? "fee"
-      <*> (v .:? "defaultChangeAddr" <&> fmap unAddressModal)
+      <*> (v .:? "changeAddress" <&> fmap unAddressModal)
 
       where
         parseMintValue :: Parser Value
@@ -284,6 +286,7 @@ instance ToJSON TxInputUnResolved_ where
       , "exUnits" .= _exUnits
       , "txin" .= _txin
       ]
+  toJSON (TxInputAddr _addr) = toJSON _addr
 
 instance ToJSON TxValidatorScript where
   toJSON (TxValidatorScript script) = A.String $ T.pack $ show script
@@ -382,6 +385,12 @@ instance FromJSON TxInput where
         pure $ TxInputUnResolved $ TxInputScriptTxin (TxValidatorScript script) datum redeemer exUnits txIn
 
   parseJSON v@(A.String s) = do
+    if "addr" `T.isPrefixOf` s
+    then do
+      case deserialiseAddress (AsAddressInEra AsAlonzoEra) s of
+        Nothing -> fail $ "Invalid address string: " ++ T.unpack s
+        Just aie -> pure $ TxInputUnResolved $ TxInputAddr aie
+    else do
     txIn <- parseUtxo v
     pure $ TxInputUnResolved $ TxInputTxin txIn
 
@@ -397,8 +406,11 @@ instance FromJSON TxOutput where
     addChange' <- v .:? "addChange" .!= False
     deductFee' <- v .:? "deductFee" .!= False
 
-    addressText <- v .: "address"
-    address <- parseAddress addressText
+    addressTextM <- v .:? "address"
+    addressM <- case addressTextM of 
+      Nothing -> pure Nothing
+      Just addrText -> pure $ parseAddress addrText
+
 
     valueText <- v .: "value"
     value <- parseValueText valueText
@@ -411,23 +423,24 @@ instance FromJSON TxOutput where
         pure $ Just script
 
     datumHashM <- parseData
-    txOutputContent <- case (datumHashM, scriptAnyM) of
+    txOutputContent <- case (datumHashM, scriptAnyM, addressM) of
       -- If there is no datum hash and no script then use address as script address
-      (Nothing, Nothing) -> pure $ TxOutAddress address value
+      (Nothing, Nothing, Just address) -> pure $ TxOutAddress address value
       -- If there is datum hash but no script then use address as script address
-      (Just datumHash, Nothing) -> pure $ TxOutScriptAddress address value datumHash
+      (Just datumHash, Nothing, Just address) -> pure $ TxOutScriptAddress address value datumHash
       -- If there is no datum hash but there is script then it is not supported
-      (Nothing, Just scriptAny) -> fail "TxOutput must have a data or dataHash if it has a script"
+      (Nothing, Just scriptAny,_) -> fail "TxOutput must have a data or dataHash if it has a script"
       -- If there is datum hash and script then use script and datahash
-      (Just datumHash, Just scriptAny) -> pure $ TxOutScript (TxValidatorScript scriptAny) value datumHash
+      (Just datumHash, Just scriptAny, Nothing) -> pure $ TxOutScript (TxValidatorScript scriptAny) value datumHash
+      (_,_,_) -> fail "Unsupported output object format it must be address, value, optional datumhash for scriptaddress or script, value, datumHash"
 
     pure $ TxOutput txOutputContent addChange' deductFee'
 
     where
       parseData :: Parser (Maybe (Hash ScriptData))
       parseData = do
-        datumTextM <- v .:? "dataHash"
-        case datumTextM of
+        dataHashM <- v .:? "dataHash"
+        case dataHashM of
           Nothing -> do
             dataTextM <- v .:? "data"
             case dataTextM of
@@ -435,7 +448,7 @@ instance FromJSON TxOutput where
               Just dataText -> do
                 datum <- parseScriptData dataText
                 pure $ Just $ hashScriptData datum
-          Just datumText -> case deserialiseFromRawBytes (AsHash AsScriptData) datumText of
+          Just dataHash -> case deserialiseFromRawBytes (AsHash AsScriptData) dataHash of
             Nothing -> pure Nothing
             Just dh -> pure $ Just dh
 
