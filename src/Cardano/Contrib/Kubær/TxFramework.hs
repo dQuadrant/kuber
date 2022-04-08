@@ -82,32 +82,38 @@ merge = error "not implemented"
 mkTx::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (TxBody AlonzoEra)
 mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr ) = do
   let network = getNetworkId  dCinfo
-  fixedInputs <- mapM resolveInputs _inputs >>= usedInputs Map.empty
+  resolvedInputs <- mapM resolveInputs _inputs
+  fixedInputs <- usedInputs Map.empty (Right defaultExunits) resolvedInputs
   fixedOutputs <- mapM (parseOutputs network) _outputs
+  collaterals <- if hasScriptInput 
+                  then  (case collaterals of 
+                    Nothing ->  Left $ FrameworkError BalancingError "No utxo available for collateral"
+                    Just tis -> pure tis
+
+                    )
+                  else pure []
   let mintValue = foldMap (\(TxMintData _ _ value)->value) mintData
       witnessProvidedMap = Map.fromList $ map (\(TxMintData policyId sw _)->(policyId,sw)) mintData
       txMintValue' = TxMintValue MultiAssetInAlonzoEra mintValue $ BuildTxWith witnessProvidedMap
-
-  let
       fixedInputSum =  usedInputSum fixedInputs <> mintValue
       fee= Lovelace 100_000
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin fixedInputs) availableUtxo
-      calculator= computeBody fixedInputs fixedInputSum availableInputs fixedOutputs txMintValue'
-  (newBody2,fee2) <-  calculator  fee
-  if  not hasScriptInput
+      calculator= computeBody fixedInputs fixedInputSum availableInputs collaterals fixedOutputs txMintValue'
+  (txBody1,fee1) <-  calculator  fee
+  if  not requiresExUnitCalculation
     then  ( do
-      (newBody3,fee3) <- calculator fee2
-      if fee2 /= fee3  then Left $ FrameworkError LibraryError "Transaction not balanced even in 3rd iteration" else pure  ()
-      pure newBody3
+      (body2,fee2) <- calculator fee1
+      if fee1 /= 2  then Left $ FrameworkError LibraryError "Transaction not balanced even in 3rd iteration" else pure  ()
+      pure body2
     )
     else (do
-      exUnits <- createExUnitMap dCinfo ( UTxO availableUtxo) newBody2
-      error "sad"
-      )
-
-
-
+      exUnits <- createExUnitMap dCinfo ( UTxO availableUtxo) txBody1
+      Left $ FrameworkError FeatureNotSupported "Automatic calculation of ex units is not supported"
+    )
+    
   where
+    applyExUnits ::  (TxIn,ParsedInput) -> ()
+    applyExUnits _ = ()
     mapPolicyIdAndWitness :: TxMintData -> (PolicyId, ScriptWitness WitCtxMint AlonzoEra)
     mapPolicyIdAndWitness (TxMintData pId sw _)= (pId, sw)
 
@@ -115,6 +121,12 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
       TxInputResolved TxInputScriptUtxo {} -> True
       TxInputUnResolved TxInputScriptTxin {} -> True
       _ -> False ) _inputs
+
+    requiresExUnitCalculation = any (\case
+      TxInputResolved (TxInputScriptUtxo _ _ _ Nothing _)-> True
+      TxInputUnResolved (TxInputScriptTxin _ _ _ Nothing _ ) -> True
+      _ -> False ) _inputs
+
     createExUnitMap ::
           DetailedChainInfo
       -> UTxO AlonzoEra
@@ -180,17 +192,18 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
     computeBody ::  Map TxIn ParsedInput
       -> Value
       -> [(TxIn, TxOut CtxUTxO AlonzoEra)]
+      -> [TxIn]
       -> [ParsedOutput]
       -> TxMintValue BuildTx AlonzoEra
       -> Lovelace
       -> Either FrameworkError  (TxBody AlonzoEra, Lovelace)
-    computeBody fixedInputs fixedInputSum availableInputs fixedOutputs txMintValue' fee = do
+    computeBody fixedInputs fixedInputSum availableInputs collaterals fixedOutputs txMintValue' fee = do
       let
         startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee )
         (extraUtxos,change) = selectUtxos availableInputs startingChange
         _hasFeeUtxo = any (\(a,b,c)->a) fixedOutputs
         (feeUsed,changeUsed,outputs) = updateOutputs  fee change fixedOutputs
-        bodyContent allOutputs = mkBodyContent fixedInputs extraUtxos allOutputs [] txMintValue' fee
+        bodyContent allOutputs = mkBodyContent fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
       bc <- if changeUsed
               then pure $ bodyContent outputs
               else do
@@ -301,11 +314,11 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
         doLookup tin = case Map.lookup tin availableUtxo of
           Nothing -> Left $ FrameworkError LibraryError  "Input Utxo missing in utxo map"
           Just to ->pure $ UTxO $ Map.singleton  tin  to
-    mapInputs  exlookup is=do
-          tuples<- mapM (toInput exlookup) is
+    mapInputs  exlookup onMissing is=do
+          tuples<- mapM (toInput exlookup onMissing) is
           pure $ Map.fromList $ concat tuples
-    toInput ::  Map TxIn (Either ScriptExecutionError ExecutionUnits) -> TxInputResolved_-> Either FrameworkError   [(TxIn,ParsedInput)]
-    toInput exUnitLookup inCtx = case inCtx of
+    toInput ::  Map TxIn (Either ScriptExecutionError ExecutionUnits)  -> Either FrameworkError ExecutionUnits-> TxInputResolved_  -> Either FrameworkError   [(TxIn,ParsedInput)]
+    toInput exUnitLookup onMissing inCtx = case inCtx of
       TxInputUtxo (UTxO txin) ->  pure $ map (\(_in,val) -> (_in,Left (  KeyWitness KeyWitnessForSpending, val) ))  $ Map.toList txin
       TxInputScriptUtxo (TxValidatorScript s) d r mExunit (UTxO txin) ->mapM (\(_in,val) -> do
                                                                 exUnit <- getExUnit _in mExunit
@@ -316,14 +329,14 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
         getExUnit tin ex =case  ex of
           Just ex -> Right ex
           Nothing -> case Map.lookup tin exUnitLookup of
-            Nothing -> Right defaultExunits
+            Nothing -> onMissing
             Just e -> case e of
               Left see -> Left $ FrameworkError BalancingError (show see)
               Right eu -> Right eu
 
-    usedInputs ::  Map TxIn (Either ScriptExecutionError ExecutionUnits) -> [TxInputResolved_] -> Either FrameworkError  (Map TxIn ParsedInput)
-    usedInputs exUnitLookup resolvedInputs = do
-      vs<- mapM (toInput exUnitLookup) resolvedInputs
+    usedInputs ::  Map TxIn (Either ScriptExecutionError ExecutionUnits) -> Either FrameworkError ExecutionUnits ->   [TxInputResolved_] -> Either FrameworkError  (Map TxIn ParsedInput)
+    usedInputs exUnitLookup onMissing resolvedInputs = do
+      vs<- mapM (toInput exUnitLookup onMissing) resolvedInputs
       pure $ Map.fromList $ concat vs
     usedInputSum :: Map TxIn ParsedInput -> Value
     usedInputSum mp =
