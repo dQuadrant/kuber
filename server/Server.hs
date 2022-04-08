@@ -49,12 +49,16 @@ import qualified Data.String as String
 
 type TransactionAPI =
   Throws FrameworkError
-    :> ( "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
+    :> ( 
+      "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse ) :<|>
+      "api" :> "v1" :> "tx" :> "test" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
+
        )
 
 server :: DetailedChainInfo -> Server TransactionAPI
 server dcInfo =
-  errorGuard $ txBuilder dcInfo
+  errorGuard (txBuilder dcInfo)
+  :<|> errorGuard (testTx dcInfo)
   where
 
     errorGuard f v = liftIO $ do
