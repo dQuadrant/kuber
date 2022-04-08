@@ -83,13 +83,24 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin fixedInputs) availableUtxo
       calculator= computeBody fixedInputs fixedInputSum availableInputs fixedOutputs
   (newBody2,fee2) <-  calculator  fee
-  (newBody3,fee3) <- calculator fee2
-  exUnitMap <- createExUnitMap  dCinfo ( UTxO availableUtxo)  newBody  
-  if fee2 /= fee3  then Left $ FrameworkError LibraryError "Transaction not balanced even in 3rd iteration" else pure  ()
+  if  not hasScriptInput 
+    then  ( do 
+      (newBody3,fee3) <- calculator fee2
+      if fee2 /= fee3  then Left $ FrameworkError LibraryError "Transaction not balanced even in 3rd iteration" else pure  ()
+      pure newBody3
+    )
+    else (do
+      exUnits <- createExUnitMap dCinfo ( UTxO availableUtxo) newBody2
+      error "sad"
+      )
 
-  pure newBody
+
+
   where
-    hasScriptInput = any $(\x -> case x of )
+    hasScriptInput = any (\case
+      TxInputResolved TxInputScriptUtxo {} -> True
+      TxInputUnResolved TxInputScriptTxin {} -> True
+      _ -> False ) _inputs
     createExUnitMap ::
           DetailedChainInfo
       -> UTxO AlonzoEra
