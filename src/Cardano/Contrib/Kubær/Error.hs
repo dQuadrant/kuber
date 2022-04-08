@@ -17,6 +17,9 @@ data ErrorType =    ConnectionError
                   | NodeQueryError
                   | LibraryError
                   | ParserError
+                  | PlutusScriptEror
+                  | ExUnitCalculationError
+                  | FeatureNotSupported
                   | WrongScriptType deriving Show
 
 
