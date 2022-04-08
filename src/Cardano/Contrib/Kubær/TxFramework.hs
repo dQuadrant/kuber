@@ -34,6 +34,7 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Cardano.Api.Crypto.Ed25519Bip32 (xPrvFromBytes)
 import Debug.Trace (trace, traceM)
 import qualified Data.Aeson as A
+import qualified Data.Map.Strict as StrictMap
 
 type IsChangeUsed   = Bool
 type  ParsedInput   = Either (Witness WitCtxTxIn AlonzoEra,TxOut CtxUTxO AlonzoEra) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn AlonzoEra,TxOut CtxUTxO  AlonzoEra)
@@ -76,33 +77,40 @@ merge :: Map TxIn (TxOut CtxUTxO AlonzoEra) -> Map TxIn (TxOut CtxUTxO AlonzoEra
 merge = error "not implemented"
 
 mkTx::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (TxBody AlonzoEra)
-mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs mintingScripts collaterals validityStart validityEnd mintValue extraSignatures explicitFee mChangeAddr ) = do
+mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr ) = do
   let network = getNetworkId  dCinfo
   fixedInputs <- mapM resolveInputs _inputs >>= usedInputs Map.empty
   fixedOutputs <- mapM (parseOutputs network) _outputs
+  let mintValue = foldMap (\(TxMintData _ _ value)->value) mintData
+      witnessProvidedMap = Map.fromList $ map (\(TxMintData policyId sw _)->(policyId,sw)) mintData
+      txMintValue' = TxMintValue MultiAssetInAlonzoEra mintValue $ BuildTxWith witnessProvidedMap
 
   let fixedInputSum =  usedInputSum fixedInputs <> mintValue
       fee= Lovelace 100_000
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin fixedInputs) availableUtxo
-      calculator= computeBody fixedInputs fixedInputSum availableInputs fixedOutputs
+      calculator= computeBody fixedInputs fixedInputSum availableInputs fixedOutputs txMintValue'
   (newBody,fee2) <-  calculator  fee
   (newbody,fee3) <- calculator fee2
   if fee2 /= fee3  then Left $ FrameworkError LibraryError "Transaction not balanced even in 3rd iteration" else pure  ()
   pure newbody
   where
+    mapPolicyIdAndWitness :: TxMintData -> (PolicyId, ScriptWitness WitCtxMint AlonzoEra)
+    mapPolicyIdAndWitness (TxMintData pId sw _)= (pId, sw)
+
     computeBody ::  Map TxIn ParsedInput
       -> Value
       -> [(TxIn, TxOut CtxUTxO AlonzoEra)]
       -> [ParsedOutput]
+      -> TxMintValue BuildTx AlonzoEra
       -> Lovelace
       -> Either FrameworkError  (TxBody AlonzoEra, Lovelace)
-    computeBody fixedInputs fixedInputSum availableInputs fixedOutputs fee  = do
+    computeBody fixedInputs fixedInputSum availableInputs fixedOutputs txMintValue' fee = do
       let
         startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee )
         (extraUtxos,change) = selectUtxos availableInputs startingChange
         _hasFeeUtxo = any (\(a,b,c)->a) fixedOutputs
         (feeUsed,changeUsed,outputs) = updateOutputs  fee change fixedOutputs
-        bodyContent allOutputs = mkBodyContent  fixedInputs extraUtxos allOutputs [] fee
+        bodyContent allOutputs = mkBodyContent fixedInputs extraUtxos allOutputs [] txMintValue' fee
       bc <- if changeUsed 
               then pure $ bodyContent outputs
               else do
@@ -136,7 +144,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
     totxIn  i  parsedInput = case parsedInput of
       Left (a,b) -> (i,BuildTxWith a)
       Right (e,a,b) -> (i,BuildTxWith  ( ScriptWitness ScriptWitnessForSpending a )  )
-    mkBodyContent fixedInputs extraUtxos outs collateral  fee =
+    mkBodyContent fixedInputs extraUtxos outs collateral  txMintValue' fee =
       (TxBodyContent {
         txIns= getTxin fixedInputs extraUtxos ,
         txInsCollateral= if null collateral then TxInsCollateralNone  else TxInsCollateral CollateralInAlonzoEra collateral,
@@ -150,7 +158,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHisotry ) (UTxO a
         txWithdrawals=TxWithdrawalsNone,
         txCertificates=TxCertificatesNone,
         txUpdateProposal=TxUpdateProposalNone,
-        txMintValue=TxMintNone,
+        txMintValue=txMintValue',
         txScriptValidity=TxScriptValidityNone
           })
     fixedOutputSum = foldMap txOutputVal _outputs
