@@ -59,6 +59,7 @@ library
     , cardano-binary
     , cborg
     , vector
+    , unordered-containers
 
 executable server
   main-is:  Main.hs
