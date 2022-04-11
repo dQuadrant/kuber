@@ -3,6 +3,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TupleSections #-}
 module Cardano.Contrib.Kubær.TxFramework where
 
@@ -36,6 +37,7 @@ import Debug.Trace (trace, traceM)
 import qualified Data.Aeson as A
 import Cardano.Ledger.Shelley.UTxO (txins)
 import GHC.Num (wordToInteger)
+import qualified Data.Map.Strict as StrictMap
 
 type IsChangeUsed   = Bool
 type  ParsedInput   = Either (Witness WitCtxTxIn AlonzoEra,TxOut CtxUTxO AlonzoEra) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn AlonzoEra,TxOut CtxUTxO  AlonzoEra)
@@ -46,7 +48,8 @@ type  ParsedOutput  = (Bool,Bool,TxOut CtxTx AlonzoEra)
 
 txBuilderToTxBody:: DetailedChainInfo  -> TxBuilder  -> IO (Either FrameworkError  (TxBody AlonzoEra ))
 txBuilderToTxBody dcInfo builder = do
-  let (addrs,txins,utxo) = mergeSelections
+  let (selectionAddrs,txins,utxo) = mergeSelections
+      addrs=  Set.union selectionAddrs (Set.fromList $ mapMaybe getInputAddresses (txInputs builder))
   addrUtxos <- queryIfNotEmpty addrs (queryUtxos  conn addrs) (Right $ UTxO  Map.empty)
   case addrUtxos of
     Left fe -> pure $ Left fe
@@ -62,6 +65,11 @@ txBuilderToTxBody dcInfo builder = do
     queryIfNotEmpty v f v' = if null  v then pure v' else f
     conn=dciConn dcInfo
     mergeSelections=foldl mergeSelection (Set.empty,Set.empty ,Map.empty ) (txSelections builder)
+    getInputAddresses :: TxInput -> Maybe AddressAny
+    getInputAddresses x = case x of
+      TxInputResolved tir -> Nothing
+      TxInputUnResolved (TxInputAddr aie) -> Just $ addressInEraToAddressAny aie
+      _ -> Nothing
     mergeSelection :: ( Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))  -> TxInputSelection  -> (Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))
     mergeSelection (a,i,u) sel = case sel of
         TxSelectableAddresses aies -> (Set.union a  (Set.fromList $ map addressInEraToAddressAny aies),i,u)
@@ -72,42 +80,61 @@ merge :: Map TxIn (TxOut CtxUTxO AlonzoEra) -> Map TxIn (TxOut CtxUTxO AlonzoEra
 merge = error "not implemented"
 
 mkTx::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (TxBody AlonzoEra)
-mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs mintingScripts _collaterals validityStart validityEnd mintValue extraSignatures explicitFee mChangeAddr ) = do
+mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr ) = do
   let network = getNetworkId  dCinfo
-  fixedInputs <- mapM resolveInputs _inputs 
-  fixedOutputs <- mapM parseOutputs _outputs
-  inputs1 <- usedInputs fixedInputs  Map.empty
+  resolvedInputs <- mapM resolveInputs _inputs
+  fixedInputs <- usedInputs Map.empty (Right defaultExunits) resolvedInputs
+  fixedOutputs <- mapM (parseOutputs network) _outputs
+  collaterals <- if hasScriptInput
+                  then  (case collaterals of
+                    Nothing ->  Left $ FrameworkError BalancingError "No utxo available for collateral"
+                    Just tis -> pure tis
 
-  let
-      fixedInputSum =  usedInputSum inputs1
-      startingFee= Lovelace 100_000
-      availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin inputs1) availableUtxo
-      calculator= computeBody  fixedInputSum availableInputs fixedOutputs
-  (txBody1,fee1) <-  calculator inputs1 startingFee
-  if  not hasScriptInput 
-    then  ( do 
-      (txbody2,fee2) <- calculator inputs1 fee1
-      if fee1 /= fee2  then Left $ FrameworkError LibraryError "Transaction not balanced even in 3rd iteration" else pure  ()
-      pure txbody2
+                    )
+                  else pure []
+  let mintValue = foldMap (\(TxMintData _ _ value)->value) mintData
+      witnessProvidedMap = Map.fromList $ map (\(TxMintData policyId sw _)->(policyId,sw)) mintData
+      txMintValue' = TxMintValue MultiAssetInAlonzoEra mintValue $ BuildTxWith witnessProvidedMap
+      fixedInputSum =  usedInputSum fixedInputs <> mintValue
+      fee= Lovelace 100_000
+      availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin fixedInputs) availableUtxo
+      calculator= computeBody  fixedInputSum availableInputs collaterals fixedOutputs 
+  (txBody1,fee1) <-  calculator  fixedInputs txMintValue'  fee
+  if  not requiresExUnitCalculation
+    then  ( do
+      (body2,fee2) <- calculator fixedInputs txMintValue' fee1
+      if fee1 /= 2  then Left $ FrameworkError LibraryError "Transaction not balanced even in 3rd iteration" else pure  ()
+      pure body2
     )
     else (
-          let evaluateBodyWithExunits body fee= do 
+          let evaluateBodyWithExunits body fee= do
                         exUnits <- createExUnitMap dCinfo ( UTxO availableUtxo) body
-                        inputs' <- usedInputs  fixedInputs ( Map.map Right exUnits )
-                        calculator inputs'  fee
-          in do 
+                        inputs' <- usedInputs  (Map.map Right exUnits ) (Right defaultExunits)  resolvedInputs  
+                        calculator inputs' txMintValue' fee
+          in do
             (txBody2,fee2) <- evaluateBodyWithExunits txBody1 fee1
             (txBody3,fee3) <- evaluateBodyWithExunits  txBody2 fee2
-            if fee3==fee2 
+            if fee3== 
               then pure txBody3
               else evaluateBodyWithExunits txBody3 fee3 <&> fst
       )
 
   where
+    applyExUnits ::  (TxIn,ParsedInput) -> ()
+    applyExUnits _ = ()
+    mapPolicyIdAndWitness :: TxMintData -> (PolicyId, ScriptWitness WitCtxMint AlonzoEra)
+    mapPolicyIdAndWitness (TxMintData pId sw _)= (pId, sw)
+
     hasScriptInput = any (\case
       TxInputResolved TxInputScriptUtxo {} -> True
       TxInputUnResolved TxInputScriptTxin {} -> True
       _ -> False ) _inputs
+
+    requiresExUnitCalculation = any (\case
+      TxInputResolved (TxInputScriptUtxo _ _ _ Nothing _)-> True
+      TxInputUnResolved (TxInputScriptTxin _ _ _ Nothing _ ) -> True
+      _ -> False ) _inputs
+
     createExUnitMap ::
           DetailedChainInfo
       -> UTxO AlonzoEra
@@ -172,17 +199,19 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
     isJust _ = False
     computeBody ::  Value
       -> [(TxIn, TxOut CtxUTxO AlonzoEra)]
+      -> [TxIn]
       -> [ParsedOutput]
       -> Map TxIn ParsedInput
+      -> TxMintValue BuildTx AlonzoEra
       -> Lovelace
       -> Either FrameworkError  (TxBody AlonzoEra, Lovelace)
-    computeBody fixedInputSum availableInputs fixedOutputs fixedInputs fee  = do
+    computeBody fixedInputSum availableInputs collaterals fixedOutputs fixedInputs txMintValue' fee = do
       let
         startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee )
         (extraUtxos,change) = selectUtxos availableInputs startingChange
         _hasFeeUtxo = any (\(a,b,c)->a) fixedOutputs
         (feeUsed,changeUsed,outputs) = updateOutputs  fee change fixedOutputs
-        bodyContent allOutputs = mkBodyContent  fixedInputs extraUtxos allOutputs [] fee
+        bodyContent allOutputs = mkBodyContent fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
       bc <- if changeUsed
               then pure $ bodyContent outputs
               else do
@@ -216,7 +245,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
     totxIn  i  parsedInput = case parsedInput of
       Left (a,b) -> (i,BuildTxWith a)
       Right (e,a,b) -> (i,BuildTxWith  ( ScriptWitness ScriptWitnessForSpending a )  )
-    mkBodyContent fixedInputs extraUtxos outs collateral  fee =
+    mkBodyContent fixedInputs extraUtxos outs collateral  txMintValue' fee =
       (TxBodyContent {
         txIns= getTxin fixedInputs extraUtxos ,
         txInsCollateral= if null collateral then TxInsCollateralNone  else TxInsCollateral CollateralInAlonzoEra collateral,
@@ -230,7 +259,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
         txWithdrawals=TxWithdrawalsNone,
         txCertificates=TxCertificatesNone,
         txUpdateProposal=TxUpdateProposalNone,
-        txMintValue=TxMintNone,
+        txMintValue=txMintValue',
         txScriptValidity=TxScriptValidityNone
           })
     fixedOutputSum = foldMap txOutputVal _outputs
@@ -268,30 +297,36 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
         transformOut _ _ _ = error "UnExpected condition"
 
 
-    parseOutputs ::  TxOutput -> Either FrameworkError   ParsedOutput
-    parseOutputs  output = case output of { TxOutput toc b b' -> case toc of
+    parseOutputs ::  NetworkId -> TxOutput -> Either FrameworkError   ParsedOutput
+    parseOutputs  networkId output = case output of { TxOutput toc b b' -> case toc of
                                               TxOutAddress aie va -> pure  (b,b',TxOut aie  (TxOutValue MultiAssetInAlonzoEra va ) TxOutDatumNone )
                                               TxOutScriptAddress aie va ha -> pure (b,b',TxOut aie (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumHash ScriptDataInAlonzoEra ha ))
                                               TxOutPkh pkh va -> case pkhToMaybeAddr (getNetworkId  dCinfo) pkh of
                                                       Nothing -> Left  $ FrameworkError ParserError  ("Cannot convert PubKeyHash to Address : "++ show pkh)
                                                       Just aie ->  pure  (b,b',TxOut aie  (TxOutValue MultiAssetInAlonzoEra va ) TxOutDatumNone )
-                                              TxOutScript tvs va ha -> Left  $ FrameworkError ParserError "Not Implemented : Calculation of script address from the script binary is not supported"  }
-
+                                              TxOutScript (TxValidatorScript (ScriptInAnyLang lang script)) va ha ->
+                                                let payCred = PaymentCredentialByScript (hashScript script)
+                                                    addr = makeShelleyAddress networkId payCred NoStakeAddress
+                                                    addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraAlonzo) addr
+                                                in pure (b,b',TxOut addrInEra (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumHash ScriptDataInAlonzoEra ha ))}
 
     resolveInputs ::  TxInput -> Either FrameworkError    TxInputResolved_
     resolveInputs v = case v of
       TxInputResolved tir -> pure tir
       TxInputUnResolved (TxInputTxin txin) ->  doLookup txin <&> TxInputUtxo
+      TxInputUnResolved (TxInputAddr addr) ->   filterAddrUtxo addr <&> TxInputUtxo
       TxInputUnResolved (TxInputScriptTxin s d r exunit txin) -> doLookup txin <&>  TxInputScriptUtxo s d r exunit
       where
+        filterAddrUtxo addr =pure $ UTxO $ Map.filter (ofAddress addr) availableUtxo
+        ofAddress addr (TxOut a _ _)= addr == a
         doLookup tin = case Map.lookup tin availableUtxo of
           Nothing -> Left $ FrameworkError LibraryError  "Input Utxo missing in utxo map"
           Just to ->pure $ UTxO $ Map.singleton  tin  to
-    mapInputs  exlookup is=do
-          tuples<- mapM (toInput exlookup) is
+    mapInputs  exlookup onMissing is=do
+          tuples<- mapM (toInput exlookup onMissing) is
           pure $ Map.fromList $ concat tuples
-    toInput ::  Map TxIn (Either ScriptExecutionError ExecutionUnits) -> TxInputResolved_-> Either FrameworkError   [(TxIn,ParsedInput)]
-    toInput exUnitLookup inCtx = case inCtx of
+    toInput ::  Map TxIn (Either ScriptExecutionError ExecutionUnits)  -> Either FrameworkError ExecutionUnits-> TxInputResolved_  -> Either FrameworkError   [(TxIn,ParsedInput)]
+    toInput exUnitLookup onMissing inCtx = case inCtx of
       TxInputUtxo (UTxO txin) ->  pure $ map (\(_in,val) -> (_in,Left (  KeyWitness KeyWitnessForSpending, val) ))  $ Map.toList txin
       TxInputScriptUtxo (TxValidatorScript s) d r mExunit (UTxO txin) ->mapM (\(_in,val) -> do
                                                                 exUnit <- getExUnit _in mExunit
@@ -302,14 +337,14 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
         getExUnit tin ex =case  ex of
           Just ex -> Right ex
           Nothing -> case Map.lookup tin exUnitLookup of
-            Nothing -> Right defaultExunits
+            Nothing -> onMissing
             Just e -> case e of
               Left see -> Left $ FrameworkError BalancingError (show see)
               Right eu -> Right eu
 
-    usedInputs ::  [TxInputResolved_] -> Map TxIn (Either ScriptExecutionError ExecutionUnits) -> Either FrameworkError  (Map TxIn ParsedInput)
-    usedInputs resolvedInputs exUnitLookup = do
-      vs<- mapM (toInput exUnitLookup) resolvedInputs
+    usedInputs ::  Map TxIn (Either ScriptExecutionError ExecutionUnits) -> Either FrameworkError ExecutionUnits ->   [TxInputResolved_] -> Either FrameworkError  (Map TxIn ParsedInput)
+    usedInputs exUnitLookup onMissing resolvedInputs = do
+      vs<- mapM (toInput exUnitLookup onMissing) resolvedInputs
       pure $ Map.fromList $ concat vs
     usedInputSum :: Map TxIn ParsedInput -> Value
     usedInputSum mp =

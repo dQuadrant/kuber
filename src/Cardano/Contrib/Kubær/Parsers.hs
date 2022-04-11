@@ -18,6 +18,8 @@ import qualified Data.Text.Encoding as TSE
 import GHC.IO.Exception (IOErrorType (UserError), IOException (IOError))
 import Text.Read (readMaybe)
 import Data.ByteString (ByteString)
+import Debug.Trace (traceM)
+import qualified Data.Aeson as A
 
 parseSignKey :: MonadFail m => Text -> m (SigningKey PaymentKey)
 parseSignKey txt
@@ -109,7 +111,7 @@ parseScriptData :: MonadFail m => Text -> m ScriptData
 parseScriptData jsonText = do
   case decodeJson of
     Nothing -> fail "Invalid Json for script data"
-    Just v -> case scriptDataFromJson ScriptDataJsonDetailedSchema v of
+    Just v -> case scriptDataFromJson ScriptDataJsonNoSchema v of
       Left sdje -> case sdje of
         ScriptDataJsonSchemaError va sdjse -> fail $ "Wrong schema" ++ show sdjse
         ScriptDataRangeError va sdre -> fail $ "Invalid data " ++ show sdre
@@ -119,10 +121,13 @@ parseScriptData jsonText = do
 
 parseAnyScript :: MonadFail m => ByteString -> m ScriptInAnyLang
 parseAnyScript jsonText =
-  case deserialiseFromJSON AsTextEnvelope  jsonText of
+  case deserialiseFromJSON AsTextEnvelope jsonText of
     Left _ ->
       case deserialiseFromJSON (AsSimpleScript AsSimpleScriptV2) jsonText of
-        Left err -> fail "Error while decoding simple script"
+        Left err -> do
+          case deserialiseFromCBOR (AsScript AsPlutusScriptV1) jsonText of
+            Left de -> fail "Cannot parse the script hex as script"
+            Right sc -> pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1) sc
         Right script -> pure $ toMinimumSimpleScriptVersion script
     Right te ->
       case deserialiseFromTextEnvelopeAnyOf textEnvTypes te of

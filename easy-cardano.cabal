@@ -59,6 +59,7 @@ library
     , cardano-binary
     , cborg
     , vector
+    , unordered-containers
 
 executable server
   main-is:  Main.hs
@@ -85,7 +86,7 @@ executable server
     , plutus-tx
     , ouroboros-network
     , easy-cardano
-       , servant
+    , servant
     , servant-server
     , servant-errors
     , servant-exceptions

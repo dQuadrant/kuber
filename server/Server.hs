@@ -45,22 +45,21 @@ import Servant.Exception (Exception (..), Throws, ToServantErr (..), mapExceptio
 import Servant.Exception.Server
 import Cardano.Contrib.Kubær.TxBuilder (TxBuilder)
 import Cardano.Contrib.Kubær.ChainInfo (DetailedChainInfo(DetailedChainInfo))
+import qualified Data.String as String
 
-type HttpAPI =
+type TransactionAPI =
   Throws FrameworkError
-    :> ( "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
-    -- General endpoints
-    --  "api" :> "v1" :> "addresses" :> Capture "address" String :> "balance" :> Get '[JSON] BalanceResponse
-    --    :<|> "api" :> "v1" :> "tx" :> "submit":>ReqBody '[JSON] SubmitTxModal :> Post '[JSON] TxResponse
-    --    :<|> "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder  :> Post '[JSON] String
+    :> ( 
+      "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse ) :<|>
+      "api" :> "v1" :> "tx" :> "test" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
+
        )
 
-server :: DetailedChainInfo -> Server HttpAPI
+server :: DetailedChainInfo -> Server TransactionAPI
 server dcInfo =
-  errorGuard $ txBuilder dcInfo
+  errorGuard (txBuilder dcInfo)
+  :<|> errorGuard (testTx dcInfo)
   where
-    -- :<|> errorGuard (submitTx ctx)
-    -- :<|> errorGuard (txBuilder ctx)
 
     errorGuard f v = liftIO $ do
       errorHandler $ f v
@@ -79,9 +78,12 @@ server dcInfo =
             Just s@(FrameworkError _ msg) -> do
               putStrLn msg
               throwIO s
+            Just s@(FrameworkErrors errs) -> do
+              putStrLn $ String.fromString (intercalate "\n" (map (\(FrameworkError _ feMessage)->feMessage) errs))
+              throwIO s
         Right v -> pure v
 
-proxyAPI :: Proxy HttpAPI
+proxyAPI :: Proxy TransactionAPI
 proxyAPI = Proxy
 
 -- app :: NetworkContext -> Application
@@ -92,6 +94,7 @@ app dcinfo = serve proxyAPI $ server dcinfo
 
 instance ToServantErr FrameworkError where
   status (FrameworkError _ _) = status400
+  status (FrameworkErrors _) = status400
 
 instance MimeRender PlainText FrameworkError where
   mimeRender ct = mimeRender ct . show
