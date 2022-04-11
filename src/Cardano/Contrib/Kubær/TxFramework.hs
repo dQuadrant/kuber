@@ -38,6 +38,7 @@ import qualified Data.Aeson as A
 import Cardano.Ledger.Shelley.UTxO (txins)
 import GHC.Num (wordToInteger)
 import qualified Data.Map.Strict as StrictMap
+import qualified Debug.Trace as Debug
 
 type IsChangeUsed   = Bool
 type  ParsedInput   = Either (Witness WitCtxTxIn AlonzoEra,TxOut CtxUTxO AlonzoEra) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn AlonzoEra,TxOut CtxUTxO  AlonzoEra)
@@ -48,17 +49,26 @@ type  ParsedOutput  = (Bool,Bool,TxOut CtxTx AlonzoEra)
 
 txBuilderToTxBody:: DetailedChainInfo  -> TxBuilder  -> IO (Either FrameworkError  (TxBody AlonzoEra ))
 txBuilderToTxBody dcInfo builder = do
-  let (selectionAddrs,txins,utxo) = mergeSelections
+  let (selectionAddrs,sel_txins,sel_utxo) = mergeSelections
+      (input_txins,input_utxo) = mergeInputs
+      (txins,utxo) = ( sel_txins  <> input_txins, sel_utxo <> input_utxo)
       addrs=  Set.union selectionAddrs (Set.fromList $ mapMaybe getInputAddresses (txInputs builder))
   addrUtxos <- queryIfNotEmpty addrs (queryUtxos  conn addrs) (Right $ UTxO  Map.empty)
+  Debug.traceIO $ "Addr Utxos :" ++  show addrUtxos
   case addrUtxos of
     Left fe -> pure $ Left fe
     Right (UTxO  uto) -> do
+      Debug.traceIO $ "Addr txins : " ++ show uto
       let missingTxins= Set.difference txins ( Map.keysSet  uto )
+      Debug.traceIO $ "Initial Unresolved Utxos:" ++ show txins
+      Debug.traceIO $ "Missing utos :" ++ show missingTxins
+
+      Debug.traceIO $ "querying txins : " ++ show missingTxins
       vals <- queryIfNotEmpty missingTxins (resolveTxins conn missingTxins) (Right $ UTxO  Map.empty)
       case vals of
         Left fe -> pure $ Left fe
         Right (UTxO uto') ->do
+          Debug.traceIO $ "Response for txins  query : " ++ show uto' 
           pure $ mkTx dcInfo (UTxO $ Map.union uto uto') builder
   where
 
@@ -70,6 +80,16 @@ txBuilderToTxBody dcInfo builder = do
       TxInputResolved tir -> Nothing
       TxInputUnResolved (TxInputAddr aie) -> Just $ addressInEraToAddressAny aie
       _ -> Nothing
+    mergeInputs = foldl  getInputTxins  (Set.empty,Map.empty) (txInputs  builder)
+    getInputTxins :: (Set TxIn,Map TxIn (TxOut CtxUTxO AlonzoEra)) -> TxInput -> (Set TxIn,Map TxIn (TxOut CtxUTxO AlonzoEra))
+    getInputTxins v@(ins,utxo) input = case input of
+      TxInputResolved tir -> case tir of
+        TxInputUtxo (UTxO uto) -> (ins,merge utxo uto)
+        TxInputScriptUtxo tvs sd sd' m_eu uto -> v
+      TxInputUnResolved tiur -> case tiur of   
+        TxInputTxin ti -> (Set.insert ti ins,utxo)
+        TxInputAddr aie -> v
+        TxInputScriptTxin tvs sd sd' m_eu ti -> (Set.insert ti ins, utxo)
     mergeSelection :: ( Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))  -> TxInputSelection  -> (Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))
     mergeSelection (a,i,u) sel = case sel of
         TxSelectableAddresses aies -> (Set.union a  (Set.fromList $ map addressInEraToAddressAny aies),i,u)
@@ -103,7 +123,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
   if  not requiresExUnitCalculation
     then  ( do
       (body2,fee2) <- calculator fixedInputs txMintValue' fee1
-      if fee1 /= 2  then Left $ FrameworkError LibraryError "Transaction not balanced even in 3rd iteration" else pure  ()
+      if fee1 /= fee2  then Left $ FrameworkError LibraryError "Transaction not balanced even in 3rd iteration" else pure  ()
       pure body2
     )
     else (
@@ -114,7 +134,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
           in do
             (txBody2,fee2) <- evaluateBodyWithExunits txBody1 fee1
             (txBody3,fee3) <- evaluateBodyWithExunits  txBody2 fee2
-            if fee3== 
+            if fee3==fee2
               then pure txBody3
               else evaluateBodyWithExunits txBody3 fee3 <&> fst
       )

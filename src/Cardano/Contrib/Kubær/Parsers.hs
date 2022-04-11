@@ -20,6 +20,8 @@ import Text.Read (readMaybe)
 import Data.ByteString (ByteString)
 import Debug.Trace (traceM)
 import qualified Data.Aeson as A
+import qualified Data.Aeson.Types as Aeson
+import qualified Data.HashMap.Internal.Strict as H
 
 parseSignKey :: MonadFail m => Text -> m (SigningKey PaymentKey)
 parseSignKey txt
@@ -119,6 +121,7 @@ parseScriptData jsonText = do
   where
     decodeJson = Aeson.decode $ fromStrict $ TSE.encodeUtf8 jsonText
 
+
 parseAnyScript :: MonadFail m => ByteString -> m ScriptInAnyLang
 parseAnyScript jsonText =
   case deserialiseFromJSON AsTextEnvelope jsonText of
@@ -168,3 +171,16 @@ parseAddress :: MonadFail m => Text -> m (AddressInEra AlonzoEra)
 parseAddress addrText = case deserialiseAddress (AsAddressInEra AsAlonzoEra) addrText of
   Nothing -> fail $ "Invalid address string: " ++ T.unpack addrText
   Just aie -> pure aie
+
+
+scriptDataParser v key = case H.lookup key v of
+  Nothing -> fail $"missing key \"" ++ T.unpack key ++ "\" if type ScriptData in json object"
+  Just v -> doParsing v
+  where
+    doParsing (Aeson.String v) =  parseScriptData  v
+    doParsing (Aeson.Object o )=case scriptDataFromJson ScriptDataJsonDetailedSchema  (Aeson.Object o) of
+       Left sdje -> case sdje of
+        ScriptDataJsonSchemaError va sdjse -> fail $  "Wrong schema" ++ show sdjse
+        ScriptDataRangeError va sdre -> fail $  "Invalid data " ++ show sdre
+       Right sd -> pure  sd
+    doParsing _  = fail "Script data Must be either string or object"

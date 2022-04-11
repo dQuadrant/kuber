@@ -29,7 +29,7 @@ instance ChainInfo ChainConnectInfo where
         systemStart <-querySystemStart conn
         protocolPrams <-queryProtocolParam conn
         Lovelace costPerWord <-case protocolParamUTxOCostPerWord protocolPrams of
-          Nothing -> fail "error here"
+          Nothing -> fail "Missing Cost per bytes of Transaction in protocol Parameters"
           Just lo -> pure lo
         pure  $ DetailedChainInfo costPerWord conn  protocolPrams  systemStart eHistory
   getConnectInfo (ChainConnectInfo conn )= conn 
@@ -45,7 +45,7 @@ instance ChainInfo ChainInfoWithProtocolParams where
         eHistory <-queryEraHistory conn
         systemStart <-querySystemStart conn
         Lovelace costPerWord <-case protocolParamUTxOCostPerWord pParams of
-          Nothing -> fail "error here"
+          Nothing -> fail "Missing Cost per bytes of transaction in protocol paremeters"
           Just lo -> pure lo
         pure  $ DetailedChainInfo costPerWord conn   pParams  systemStart eHistory
   getConnectInfo (ChainInfoWithProtocolParams conn  _)= conn 

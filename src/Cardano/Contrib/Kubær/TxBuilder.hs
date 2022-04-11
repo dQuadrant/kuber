@@ -36,7 +36,7 @@ import Data.Aeson.Types (FromJSON(parseJSON), (.:), Parser)
 import qualified Data.Aeson as A
 import qualified Data.Text as T
 import Cardano.Contrib.Kubær.Models (parseUtxo, unAddressModal)
-import Cardano.Contrib.Kubær.Parsers (parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId)
+import Cardano.Contrib.Kubær.Parsers (parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON))
 import qualified Data.Aeson as A.Object
@@ -49,6 +49,7 @@ import Data.Text.Lazy             as TL
 import Debug.Trace (trace, traceM)
 import qualified Data.HashMap.Strict as HM
 import Data.String (IsString(fromString))
+import qualified Debug.Trace as Debug
 
 -- mktx 
 data TxMintingScript = TxSimpleScript ScriptInAnyLang
@@ -463,16 +464,13 @@ instance FromJSON TxInput where
   parseJSON (A.Object v) = do
     utxo <- v .: "utxo"
     txIn <- parseUtxo utxo
-
-    scriptJson <- v .:? "script"
-    case scriptJson of
+    mScript :: (Maybe A.Value) <- v .:? "script"
+    case mScript of
       Nothing ->  pure $ TxInputUnResolved $ TxInputTxin txIn
       Just scriptJson -> do
-        script <- parseAnyScript scriptJson
-        datumText <- v .: "datum"
-        datum <- parseScriptData datumText
-        redeemerText <- v .: "redeemer"
-        redeemer <- parseScriptData redeemerText
+        script <- parseAnyScript $ B.concat $ BL.toChunks $ A.encode scriptJson
+        datum <- v  `scriptDataParser` "datum"
+        redeemer <- v `scriptDataParser` "redeemer"
         exUnits <- v .:? "executionUnits"
         pure $ TxInputUnResolved $ TxInputScriptTxin (TxValidatorScript script) datum redeemer exUnits txIn
 
