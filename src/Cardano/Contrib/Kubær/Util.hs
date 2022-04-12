@@ -265,6 +265,10 @@ calculateTxoutMinLovelaceFunc pParams = do
   where
     f cpw txout =Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo  $  toCtxUTxOTxOut txout) * cpw
 
+calculateTxoutMinLovelaceWithcpw :: Lovelace -> TxOut CtxTx AlonzoEra -> Lovelace  
+calculateTxoutMinLovelaceWithcpw (Lovelace cpw) txout = Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo  $  toCtxUTxOTxOut txout) * cpw
+
+
 toPlutusAssetClass :: AssetId -> AssetClass
 toPlutusAssetClass (AssetId (PolicyId hash) (AssetName name)) = AssetClass (CurrencySymbol $ toBuiltin $ serialiseToRawBytes hash , TokenName $ toBuiltin name)
 toPlutusAssetClass AdaAssetId  =AssetClass (CurrencySymbol $ fromString "", TokenName $ fromString "")

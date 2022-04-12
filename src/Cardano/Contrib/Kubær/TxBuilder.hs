@@ -10,8 +10,8 @@ module Cardano.Contrib.Kubær.TxBuilder
 where
 
 
-import Cardano.Api hiding(txFee)
-import Cardano.Api.Shelley hiding (txFee)
+import Cardano.Api hiding(txMetadata, txFee)
+import Cardano.Api.Shelley hiding (txMetadata, txFee)
 import Cardano.Contrib.Kubær.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
@@ -50,6 +50,8 @@ import Debug.Trace (trace, traceM)
 import qualified Data.HashMap.Strict as HM
 import Data.String (IsString(fromString))
 import qualified Debug.Trace as Debug
+import qualified Data.Aeson as Aeson
+import Data.Word (Word64)
 
 -- mktx 
 data TxMintingScript = TxSimpleScript ScriptInAnyLang
@@ -109,11 +111,12 @@ data TxBuilder=TxBuilder{
     txMintData :: [TxMintData],
     txSignatures :: [TxSignature],
     txFee :: Maybe Integer,
-    txDefaultChangeAddr :: Maybe (AddressInEra AlonzoEra)
+    txDefaultChangeAddr :: Maybe (AddressInEra AlonzoEra),
+    txMetadata :: Map Word64 Aeson.Value
   } deriving (Show)
 
 instance Monoid TxBuilder where
-  mempty = TxBuilder  [] [] [] [] Nothing Nothing [] [] Nothing Nothing
+  mempty = TxBuilder  [] [] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
 
 instance Semigroup TxBuilder where
   (<>)  txb1 txb2 =TxBuilder{
@@ -140,7 +143,8 @@ instance Semigroup TxBuilder where
       Nothing -> txFee txb2,
     txDefaultChangeAddr = case txDefaultChangeAddr txb1 of
       Just addr -> Just addr
-      _ -> txDefaultChangeAddr txb2
+      _ -> txDefaultChangeAddr txb2,
+    txMetadata = txMetadata txb1 <> txMetadata txb2
   }
 
 
@@ -149,22 +153,22 @@ data TxContext = TxContext {
   ctxBuiler :: [TxBuilder]
 }
 
-txSelection v = TxBuilder  [v] [] [] [] Nothing Nothing [] [] Nothing Nothing
+txSelection v = TxBuilder  [v] [] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
 
-txInput v = TxBuilder  [] [v] [] [] Nothing Nothing [] [] Nothing Nothing
+txInput v = TxBuilder  [] [v] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
 
-txOutput v =  TxBuilder  [] [] [v] [] Nothing Nothing [] [] Nothing Nothing
+txOutput v =  TxBuilder  [] [] [v] [] Nothing Nothing [] [] Nothing Nothing Map.empty
 
-txCollateral v =  TxBuilder  [] [] [] [v] Nothing Nothing [] [] Nothing Nothing
+txCollateral v =  TxBuilder  [] [] [] [v] Nothing Nothing [] [] Nothing Nothing Map.empty
 
-txValidPosixTimeRange start end = TxBuilder  [] [] [] [] (Just start) (Just end) [] [] Nothing Nothing
+txValidPosixTimeRange start end = TxBuilder  [] [] [] [] (Just start) (Just end) [] [] Nothing Nothing Map.empty
 
 txValidFromPosixTime :: Integer -> TxBuilder
-txValidFromPosixTime start =  TxBuilder  [] [] [] [] (Just start) Nothing [] [] Nothing Nothing
+txValidFromPosixTime start =  TxBuilder  [] [] [] [] (Just start) Nothing [] [] Nothing Nothing Map.empty
 
-txValidUntilPosixTime end =  TxBuilder  [] [] [] [] Nothing (Just end) [] [] Nothing Nothing
+txValidUntilPosixTime end =  TxBuilder  [] [] [] [] Nothing (Just end) [] [] Nothing Nothing Map.empty
 
-txMint md= TxBuilder  [] [] [] [] Nothing Nothing md [] Nothing Nothing
+txMint md= TxBuilder  [] [] [] [] Nothing Nothing md [] Nothing Nothing Map.empty
 
 -- payment contexts
 
@@ -224,6 +228,7 @@ instance FromJSON TxBuilder where
       <*> (v .:? "signatures" .!= [])
       <*> v .:? "fee"
       <*> (v .:? "changeAddress" <&> fmap unAddressModal)
+      <*> (v.:? "metadata" .!= Map.empty)
   parseJSON _ = fail "TxBuilder must be an object"
 
 instance FromJSON TxMintData where
@@ -336,7 +341,7 @@ instance FromJSON TxMintData where
 
 
 instance ToJSON TxBuilder where
-  toJSON (TxBuilder selections inputs outputs collaterals validityStart validityEnd mintData signatures fee defaultChangeAddr) =
+  toJSON (TxBuilder selections inputs outputs collaterals validityStart validityEnd mintData signatures fee defaultChangeAddr metadata) =
     A.object
       [ "selections" .= selections
       , "inputs" .= inputs
@@ -348,6 +353,7 @@ instance ToJSON TxBuilder where
       , "signatures" .= signatures
       , "fee" .= fee
       , "defaultChangeAddr" .= defaultChangeAddr
+      , "metadata" .= metadata
       ]
 
 instance ToJSON TxMintData where

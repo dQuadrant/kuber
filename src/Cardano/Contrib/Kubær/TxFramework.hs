@@ -26,7 +26,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Codec.Serialise (serialise)
 import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes, fromMaybe, maybeToList)
-import Data.List (intercalate, sortBy, minimumBy)
+import Data.List (intercalate, sortBy, minimumBy, find)
 import qualified Data.Foldable as Foldable
 import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript)
 import Cardano.Contrib.Kubær.TxBuilder
@@ -39,6 +39,8 @@ import Cardano.Ledger.Shelley.UTxO (txins)
 import GHC.Num (wordToInteger)
 import qualified Data.Map.Strict as StrictMap
 import qualified Debug.Trace as Debug
+import Data.Aeson (ToJSON(toJSON))
+import qualified Data.Text as T
 
 type IsChangeUsed   = Bool
 type  ParsedInput   = Either (Witness WitCtxTxIn AlonzoEra,TxOut CtxUTxO AlonzoEra) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn AlonzoEra,TxOut CtxUTxO  AlonzoEra)
@@ -68,7 +70,7 @@ txBuilderToTxBody dcInfo builder = do
       case vals of
         Left fe -> pure $ Left fe
         Right (UTxO uto') ->do
-          Debug.traceIO $ "Response for txins  query : " ++ show uto' 
+          Debug.traceIO $ "Response for txins  query : " ++ show uto'
           pure $ mkTx dcInfo (UTxO $ Map.union uto uto') builder
   where
 
@@ -86,7 +88,7 @@ txBuilderToTxBody dcInfo builder = do
       TxInputResolved tir -> case tir of
         TxInputUtxo (UTxO uto) -> (ins,merge utxo uto)
         TxInputScriptUtxo tvs sd sd' m_eu uto -> v
-      TxInputUnResolved tiur -> case tiur of   
+      TxInputUnResolved tiur -> case tiur of
         TxInputTxin ti -> (Set.insert ti ins,utxo)
         TxInputAddr aie -> v
         TxInputScriptTxin tvs sd sd' m_eu ti -> (Set.insert ti ins, utxo)
@@ -100,8 +102,15 @@ merge :: Map TxIn (TxOut CtxUTxO AlonzoEra) -> Map TxIn (TxOut CtxUTxO AlonzoEra
 merge = error "not implemented"
 
 mkTx::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (TxBody AlonzoEra)
-mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr ) = do
+mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata ) = do
   let network = getNetworkId  dCinfo
+  meta<- if null metadata
+          then  Right TxMetadataNone
+          else  do
+            case metadataFromJson TxMetadataJsonNoSchema (toJSON metadata) of
+              Left tmje -> Left $ FrameworkError BadMetadata  (show tmje)
+              Right tm -> Right $ TxMetadataInEra  TxMetadataInAlonzoEra tm
+
   resolvedInputs <- mapM resolveInputs _inputs
   fixedInputs <- usedInputs Map.empty (Right defaultExunits) resolvedInputs
   fixedOutputs <- mapM (parseOutputs network) _outputs
@@ -118,7 +127,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
       fixedInputSum =  usedInputSum fixedInputs <> mintValue
       fee= Lovelace 100_000
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin fixedInputs) availableUtxo
-      calculator= computeBody  fixedInputSum availableInputs collaterals fixedOutputs 
+      calculator= computeBody meta (Lovelace cpw)  fixedInputSum availableInputs collaterals fixedOutputs
   (txBody1,fee1) <-  calculator  fixedInputs txMintValue'  fee
   if  not requiresExUnitCalculation
     then  ( do
@@ -129,7 +138,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
     else (
           let evaluateBodyWithExunits body fee= do
                         exUnits <- createExUnitMap dCinfo ( UTxO availableUtxo) body
-                        inputs' <- usedInputs  (Map.map Right exUnits ) (Right defaultExunits)  resolvedInputs  
+                        inputs' <- usedInputs  (Map.map Right exUnits ) (Right defaultExunits)  resolvedInputs
                         calculator inputs' txMintValue' fee
           in do
             (txBody2,fee2) <- evaluateBodyWithExunits txBody1 fee1
@@ -140,8 +149,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
       )
 
   where
-    applyExUnits ::  (TxIn,ParsedInput) -> ()
-    applyExUnits _ = ()
+
     mapPolicyIdAndWitness :: TxMintData -> (PolicyId, ScriptWitness WitCtxMint AlonzoEra)
     mapPolicyIdAndWitness (TxMintData pId sw _)= (pId, sw)
 
@@ -178,7 +186,10 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
         unEitherExUnits :: (ExecutionUnits -> b) ->  Either ScriptExecutionError ExecutionUnits ->  Either FrameworkError  b
         unEitherExUnits f v= case v of
           Right e -> Right $ f e
-          Left e -> Left (FrameworkError ExUnitCalculationError (show e))
+          Left e -> case e of 
+            ScriptErrorEvaluationFailed ee txts -> Left (FrameworkError PlutusScriptError  (T.unpack $ T.intercalate (T.pack ", ") txts ))
+            _  -> Left (FrameworkError ExUnitCalculationError (show e))
+
 
         transformIn (txIn,wit) exUnit= (txIn  ,case BuildTxWith $ KeyWitness KeyWitnessForSpending of {
           BuildTxWith wit' -> wit } )
@@ -217,21 +228,20 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
         TxCollateralUtxo (UTxO mp) -> accum ++ Map.keys mp
     isJust (Just x)  = True
     isJust _ = False
-    computeBody ::  Value
-      -> [(TxIn, TxOut CtxUTxO AlonzoEra)]
-      -> [TxIn]
-      -> [ParsedOutput]
-      -> Map TxIn ParsedInput
-      -> TxMintValue BuildTx AlonzoEra
-      -> Lovelace
-      -> Either FrameworkError  (TxBody AlonzoEra, Lovelace)
-    computeBody fixedInputSum availableInputs collaterals fixedOutputs fixedInputs txMintValue' fee = do
+
+    computeBody meta cpw fixedInputSum availableInputs collaterals fixedOutputs fixedInputs txMintValue' fee = do
+      changeTxOut <-case findChange fixedOutputs of
+        Nothing -> do
+          changeaddr <- monadFailChangeAddr
+          pure (TxOut changeaddr  ( TxOutValue MultiAssetInAlonzoEra  (valueFromList [(AdaAssetId ,0)])) TxOutDatumNone)
+        Just to -> pure to
       let
         startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee )
-        (extraUtxos,change) = selectUtxos availableInputs startingChange
+
+        (extraUtxos,change) = selectUtxosConsideringChange (calculateTxoutMinLovelaceWithcpw cpw) changeTxOut availableInputs startingChange
         _hasFeeUtxo = any (\(a,b,c)->a) fixedOutputs
         (feeUsed,changeUsed,outputs) = updateOutputs  fee change fixedOutputs
-        bodyContent allOutputs = mkBodyContent fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
+        bodyContent allOutputs = mkBodyContent meta fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
       bc <- if changeUsed
               then pure $ bodyContent outputs
               else do
@@ -265,14 +275,14 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
     totxIn  i  parsedInput = case parsedInput of
       Left (a,b) -> (i,BuildTxWith a)
       Right (e,a,b) -> (i,BuildTxWith  ( ScriptWitness ScriptWitnessForSpending a )  )
-    mkBodyContent fixedInputs extraUtxos outs collateral  txMintValue' fee =
+    mkBodyContent meta fixedInputs extraUtxos outs collateral  txMintValue' fee =
       (TxBodyContent {
         txIns= getTxin fixedInputs extraUtxos ,
         txInsCollateral= if null collateral then TxInsCollateralNone  else TxInsCollateral CollateralInAlonzoEra collateral,
         txOuts=outs,
         Cardano.Api.Shelley.txFee=TxFeeExplicit TxFeesExplicitInAlonzoEra  fee,
         txValidityRange= (txLowerBound,txUpperBound),
-        txMetadata=TxMetadataNone ,
+        Cardano.Api.Shelley.txMetadata=meta  ,
         txAuxScripts=TxAuxScriptsNone,
         txExtraKeyWits=TxExtraKeyWitnessesNone,
         txProtocolParams=BuildTxWith (Just  pParam),
@@ -291,6 +301,8 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
                                     TxOutPkh pkh va -> va
                                     TxOutScript tvs va ha -> va  }
     zeroValue = valueFromList []
+    findChange :: [ParsedOutput] -> Maybe (TxOut CtxTx AlonzoEra )
+    findChange ous =   find (\(_,c,v) -> c ) ous <&> (\(_,_,v)-> v)
     updateOutputs  fee change outputs' = updateOutput False False (getNetworkId  dCinfo) fee change outputs'
     updateOutput :: Bool -> Bool -> NetworkId -> Lovelace -> Value -> [ParsedOutput] ->  (Bool,Bool,[TxOut CtxTx AlonzoEra])
     updateOutput _ _ _ _ _ []  =  (False,False,[])
@@ -403,6 +415,38 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
               val = txOutValueToValue txOutVal
               newChange= remainingChange <> negateValue val
 
+     -- consider change while minimizing i.e. make sure that the change has the minLovelace value.
+    selectUtxosConsideringChange f txout  u c  = minimizeConsideringChange txout f u (c <> utxoListSum u)
+    minimizeConsideringChange txout f available change=if existingLove < minLove
+      then
+        (case Foldable.find (\(tin,utxo) -> extraLove utxo > (minLove- existingLove)) unmatched of
+          Just val -> (fst matched ++ [val],snd matched <> txOutValue_ (snd val))
+          Nothing -> matched
+        )
+      else
+        matched
+      where
+        matched=minimizeUtxos available change
+        unmatched = filter   (\(k,_) -> k `notElem` matchedSet)   available
+        matchedSet=Set.fromList $ map fst $  fst matched
+        --Current Lovelace amount in the change utxo
+        existingLove = case  selectAsset (snd  matched) AdaAssetId <> selectAsset  (txOutValue_ txout)  AdaAssetId   of
+          Quantity n -> n
+        --minimun Lovelace required in the change utxo
+        minLove = case  f $ txoutWithChange (change <> valueFromList [(AdaAssetId,2_000_000_000)]) of
+            Lovelace l -> l
+        -- extra lovelace in this txout over the txoutMinLovelace
+        extraLove utxo  = selectLove - minLoveInThisTxout
+            where
+              minLoveInThisTxout=case  f $ txoutWithChange val of
+                  Lovelace l -> l
+              val= txOutValue_ utxo
+              selectLove = case selectAsset val AdaAssetId of { Quantity n -> n }
+        txoutWithChange c = case txout of { TxOut addr v md-> case v of
+                                              TxOutAdaOnly oasie lo -> TxOut addr (TxOutValue MultiAssetInAlonzoEra (lovelaceToValue lo <> c)) md
+                                              TxOutValue masie va -> TxOut addr (TxOutValue MultiAssetInAlonzoEra (va <> c)) md }
+
+        txOutValue_ txout= case txout of { TxOut aie tov tod -> txOutValueToValue tov }
     txLowerBound = case validityStart of
                                 Nothing -> TxValidityNoLowerBound
                                 Just v -> TxValidityLowerBound ValidityLowerBoundInAlonzoEra   (toSlot v)
