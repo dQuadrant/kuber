@@ -61,12 +61,13 @@ library
     , vector
     , unordered-containers
 
-executable server
+executable kuber
   main-is:  Main.hs
   hs-source-dirs: server
   other-modules:
     Core
     Server
+    MediaType
 
   build-depends:
       base >= 4.9 && <5
@@ -95,4 +96,8 @@ executable server
     , warp
     , cborg
     , http-types
+    , http-media
+    , wai-cors
     , cardano-binary
+    , cardano-ledger-core
+

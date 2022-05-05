@@ -37,5 +37,6 @@ instance Show FrameworkError where
 instance ToJSON FrameworkError where
   toJSON (FrameworkError t m) = object ["type" .= show t, "message" .= m]
 
-instance Exception FrameworkError where
+instance Exception FrameworkError 
+
 

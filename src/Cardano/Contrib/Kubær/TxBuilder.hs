@@ -52,6 +52,7 @@ import Data.String (IsString(fromString))
 import qualified Debug.Trace as Debug
 import qualified Data.Aeson as Aeson
 import Data.Word (Word64)
+import qualified Data.HashMap.Internal.Strict as H
 
 -- mktx 
 data TxMintingScript = TxSimpleScript ScriptInAnyLang
@@ -207,6 +208,7 @@ txRedeemUtxo txin txout script _data _redeemer = txInput $ TxInputResolved $ TxI
 txPayerAddresses :: [AddressInEra AlonzoEra] -> TxBuilder
 txPayerAddresses v = txSelection $ TxSelectableAddresses  v
 
+txPayerAddress :: AddressInEra AlonzoEra -> TxBuilder
 txPayerAddress v = txPayerAddresses [v]
 
 txAvailableUtxos :: UTxO AlonzoEra -> TxBuilder
@@ -250,8 +252,8 @@ instance FromJSON TxMintData where
         Nothing -> fail $ "Invalid script data string: " ++ T.unpack s
         Just sData -> pure $ TxPlutusScript scriptAny sData exUnitsM
       Just _ -> fail "TxMintingScript redeemer must be a string"
-   
-    scriptWitnessE <- case mintScript of 
+
+    scriptWitnessE <- case mintScript of
       TxSimpleScript sial -> pure $ createSimpleMintingWitness sial
       TxPlutusScript sAny sd eM -> do
       exUnits <- case eM of
@@ -267,8 +269,8 @@ instance FromJSON TxMintData where
     case mintAmountJson of
       A.Object o -> do
         let amountList = HM.toList o
-        
-        mintValue <- mapM (mapToValue policyId) amountList 
+
+        mintValue <- mapM (mapToValue policyId) amountList
 
         traceM $ show o
         pure $ TxMintData policyId sw (valueFromList mintValue)
@@ -287,7 +289,7 @@ instance FromJSON TxMintData where
 
 
       getPolicyIdFromScriptWitness :: ScriptWitness WitCtxMint  AlonzoEra  -> PolicyId
-      getPolicyIdFromScriptWitness witness = 
+      getPolicyIdFromScriptWitness witness =
           case scriptWitnessScript witness of
             ScriptInEra _ script -> scriptPolicyId script
 
@@ -359,7 +361,7 @@ instance ToJSON TxBuilder where
 instance ToJSON TxMintData where
   toJSON (TxMintData policyId mintScript mintValue) =
     A.object
-      [ 
+      [
       "policyId" .= policyId
       ,"script" .= show mintScript
       , "amount" .= mintValue
@@ -533,21 +535,20 @@ instance FromJSON TxOutput where
     pure $ TxOutput txOutputContent addChange' deductFee'
 
     where
+
       parseData :: Parser (Maybe (Hash ScriptData))
       parseData = do
-        dataHashM <- v .:? "dataHash"
+        dataHashM <- v .:? "datumHash"
         case dataHashM of
-          Nothing -> do
-            dataTextM <- v .:? "data"
-            case dataTextM of
-              Nothing -> pure Nothing
-              Just dataText -> do
-                datum <- parseScriptData dataText
-                pure $ Just $ hashScriptData datum
-          Just dataHash -> case deserialiseFromRawBytes (AsHash AsScriptData) dataHash of
-            Nothing -> pure Nothing
-            Just dh -> pure $ Just dh
-
+          Just dataHash -> do
+              case deserialiseFromRawBytes (AsHash AsScriptData) dataHash of
+                  Nothing -> pure  Nothing
+                  Just dh -> pure $ Just dh
+          Nothing -> case H.lookup "datum" v of 
+              Just _  -> do
+                    val <- v `scriptDataParser` "datum"
+                    pure   $ Just $ hashScriptData  val
+              Nothing -> pure  Nothing            
 
 
   parseJSON _ = fail "TxOutput must be an object"

@@ -41,6 +41,9 @@ import qualified Data.Map.Strict as StrictMap
 import qualified Debug.Trace as Debug
 import Data.Aeson (ToJSON(toJSON))
 import qualified Data.Text as T
+import Cardano.Contrib.Kubær.Error (ErrorType(PlutusScriptError))
+import Data.Text.Conversions (convertText)
+import Prettyprinter.Extras (pretty)
 
 type IsChangeUsed   = Bool
 type  ParsedInput   = Either (Witness WitCtxTxIn AlonzoEra,TxOut CtxUTxO AlonzoEra) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn AlonzoEra,TxOut CtxUTxO  AlonzoEra)
@@ -54,7 +57,7 @@ txBuilderToTxBody dcInfo builder = do
   let (selectionAddrs,sel_txins,sel_utxo) = mergeSelections
       (input_txins,input_utxo) = mergeInputs
       (txins,utxo) = ( sel_txins  <> input_txins, sel_utxo <> input_utxo)
-      addrs=  Set.union selectionAddrs (Set.fromList $ mapMaybe getInputAddresses (txInputs builder))
+      addrs=   selectionAddrs  <> Set.fromList (mapMaybe getInputAddresses (txInputs builder))
   addrUtxos <- queryIfNotEmpty addrs (queryUtxos  conn addrs) (Right $ UTxO  Map.empty)
   Debug.traceIO $ "Addr Utxos :" ++  show addrUtxos
   case addrUtxos of
@@ -71,7 +74,7 @@ txBuilderToTxBody dcInfo builder = do
         Left fe -> pure $ Left fe
         Right (UTxO uto') ->do
           Debug.traceIO $ "Response for txins  query : " ++ show uto'
-          pure $ mkTx dcInfo (UTxO $ Map.union uto uto') builder
+          pure $ mkTx dcInfo (UTxO $ uto <> uto') builder
   where
 
     queryIfNotEmpty v f v' = if null  v then pure v' else f
@@ -141,11 +144,17 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
                         inputs' <- usedInputs  (Map.map Right exUnits ) (Right defaultExunits)  resolvedInputs
                         calculator inputs' txMintValue' fee
           in do
-            (txBody2,fee2) <- evaluateBodyWithExunits txBody1 fee1
+            (txBody2,fee2) <- evaluateBodyWithExunits  txBody1 fee1
+            traceM $ "\ntxbody4 \n" ++ show  (makeSignedTransaction [] txBody2)
             (txBody3,fee3) <- evaluateBodyWithExunits  txBody2 fee2
-            if fee3==fee2
-              then pure txBody3
-              else evaluateBodyWithExunits txBody3 fee3 <&> fst
+            traceM $ "\ntxbody4 \n" ++ show  (makeSignedTransaction [] txBody3)
+            (txBody4,fee4) <- evaluateBodyWithExunits  txBody3 fee3
+            traceM $ "\ntxbody4 \n" ++ show  (makeSignedTransaction [] txBody4)
+
+
+            if fee4==fee3
+              then pure txBody4
+              else evaluateBodyWithExunits txBody4 fee4 <&> fst
       )
 
   where
@@ -239,9 +248,11 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
         startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee )
 
         (extraUtxos,change) = selectUtxosConsideringChange (calculateTxoutMinLovelaceWithcpw cpw) changeTxOut availableInputs startingChange
+        missingAssets= filterNegativeQuantity change
         _hasFeeUtxo = any (\(a,b,c)->a) fixedOutputs
         (feeUsed,changeUsed,outputs) = updateOutputs  fee change fixedOutputs
         bodyContent allOutputs = mkBodyContent meta fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
+      if null missingAssets then pure () else Left (FrameworkError InsufficientInput (show $ negateValue $ valueFromList missingAssets))
       bc <- if changeUsed
               then pure $ bodyContent outputs
               else do
@@ -471,8 +482,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
       -- x <- f
       -- case  x  of
       --  Left tbe -> throw $ SomeError $ "First Balance :" ++ show tbe
-      --  Right res -> pure res
-
+      --  Right res -> pure res 
     toSlot tStamp= case getNetworkId  dCinfo of
       Mainnet -> SlotNo $ fromIntegral $  mainnetSlot tStamp
       Testnet nm -> SlotNo $ fromIntegral $ testnetSlot tStamp
@@ -643,6 +653,8 @@ valueLte _v1 _v2= not $ any (\(aid,Quantity q) -> q > lookup aid) (valueToList _
     --   [ValueNestedBundleAda v , ValueNestedBundle policy assetMap] ->LovelaceToValue v
     --   [ValueNestedBundle policy assetMap]
 
+filterNegativeQuantity :: Value -> [(AssetId,Quantity)]
+filterNegativeQuantity  v = filter (\(_, v) -> v < 0 ) $ valueToList v
 
 
 
