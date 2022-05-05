@@ -1,5 +1,5 @@
 cabal-version:      2.4
-name:               easy-cardano
+name:               kubær
 version:            0.1.0.0
 
 -- A short (one-line) description of the package.
@@ -86,7 +86,7 @@ executable kuber
     , plutus-ledger-api
     , plutus-tx
     , ouroboros-network
-    , easy-cardano
+    , kubær
     , servant
     , servant-server
     , servant-errors
