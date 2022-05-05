@@ -44,6 +44,17 @@ import qualified Data.Text as T
 import Cardano.Contrib.Kubær.Error (ErrorType(PlutusScriptError))
 import Data.Text.Conversions (convertText)
 import Prettyprinter.Extras (pretty)
+import Data.Word (Word64)
+import Foreign.Storable (sizeOf)
+import qualified Data.Vector as Vector
+import qualified Data.HashMap.Strict as HashMap
+import qualified Data.Char as C
+import qualified Data.ByteString.Char8 as BS8
+import qualified Data.Text.Encoding as T
+import qualified Data.ByteString.Builder as Builder
+import Data.ByteString.Builder (charUtf8)
+import qualified Data.ByteString.Builder as BSL
+import Data.Int (Int64)
 
 type IsChangeUsed   = Bool
 type  ParsedInput   = Either (Witness WitCtxTxIn AlonzoEra,TxOut CtxUTxO AlonzoEra) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn AlonzoEra,TxOut CtxUTxO  AlonzoEra)
@@ -107,13 +118,14 @@ merge = error "not implemented"
 mkTx::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (TxBody AlonzoEra)
 mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata ) = do
   let network = getNetworkId  dCinfo
+  Debug.traceM $ BS8.unpack $  prettyPrintJSON   metadata
+  Debug.traceM $ BS8.unpack $  prettyPrintJSON  $ morphMetadata metadata
   meta<- if null metadata
           then  Right TxMetadataNone
           else  do
-            case metadataFromJson TxMetadataJsonNoSchema (toJSON metadata) of
+            case metadataFromJson TxMetadataJsonNoSchema (toJSON $ morphMetadata metadata) of
               Left tmje -> Left $ FrameworkError BadMetadata  (show tmje)
               Right tm -> Right $ TxMetadataInEra  TxMetadataInAlonzoEra tm
-
   resolvedInputs <- mapM resolveInputs _inputs
   fixedInputs <- usedInputs Map.empty (Right defaultExunits) resolvedInputs
   fixedOutputs <- mapM (parseOutputs network) _outputs
@@ -159,6 +171,49 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
 
   where
 
+    morphMetadata :: Map Word64 A.Value -> Map Word64 A.Value
+    morphMetadata  mp = Map.map morphValue mp
+      where
+        morphValue :: A.Value -> A.Value
+        morphValue  val = case val of
+          A.Object hm ->  A.Object $ HashMap.map morphValue hm
+          A.Array vec ->A.Array (Vector.map  morphValue vec )
+          A.String txt -> let txtList = stringToList Vector.empty txt in if length txtList <2 then A.String txt  else A.Array  txtList
+          _ -> val
+
+        -- Given a vecotr of Strings and Text, split the text into chunks of 64 bytes and append it into the vector as aeson String value. 
+        stringToList :: Vector.Vector A.Value ->  T.Text -> Vector.Vector A.Value
+        stringToList accum  txt = let
+          splitted=splitString 0 T.empty txt
+          (prefix,remaining) = splitted -- Debug.trace ("splitString " ++ show txt ++ " : " ++ show splitted ) splitted
+          in if T.null txt then accum
+             else stringToList (Vector.snoc accum (A.String prefix)) remaining
+
+        -- given prefix string and it's length, take characters from txt until prefix has size almost <=64 chars
+        splitString:: Int64 -> T.Text -> T.Text -> (T.Text,T.Text)
+        splitString size prefix txt =  let
+            tHead= T.head txt
+            tHeadBS = LBS.length $  BSL.toLazyByteString   $ charUtf8 tHead
+            newSize= size + tHeadBS
+            in  --Debug.trace ("Size of (" ++ (T.unpack prefix ) ++"," ++ if T.null txt then ""  else [tHead] ++  ") : " ++ show (size,newSize)) $ 
+              if T.null txt  then (prefix,txt) else
+                  ( if  newSize > 64 
+                      then ( if  C.isSpace tHead  then (prefix,txt) 
+                              else case splitOnLastSpace prefix of
+                                    (txt', Nothing ) -> (prefix,txt)
+                                    (txtPre,Just txtEnd) -> (txtPre,  T.concat [txtEnd,txt] )
+                            )
+                      else   splitString newSize (  T.snoc  prefix tHead) (T.tail txt)
+                  )
+        -- given text try to find the last space and split it . Also make sure that the split is not too big :D
+        splitOnLastSpace :: T.Text -> (T.Text,Maybe T.Text)
+        splitOnLastSpace txt = let
+            end = T.takeWhileEnd  (not . C.isSpace) txt
+            stripCount =  T.length end
+            in if stripCount <=20  then (T.dropEnd stripCount  txt, Just end)
+                else  (txt, Nothing)
+
+
     mapPolicyIdAndWitness :: TxMintData -> (PolicyId, ScriptWitness WitCtxMint AlonzoEra)
     mapPolicyIdAndWitness (TxMintData pId sw _)= (pId, sw)
 
@@ -195,7 +250,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
         unEitherExUnits :: (ExecutionUnits -> b) ->  Either ScriptExecutionError ExecutionUnits ->  Either FrameworkError  b
         unEitherExUnits f v= case v of
           Right e -> Right $ f e
-          Left e -> case e of 
+          Left e -> case e of
             ScriptErrorEvaluationFailed ee txts -> Left (FrameworkError PlutusScriptError  (T.unpack $ T.intercalate (T.pack ", ") txts ))
             _  -> Left (FrameworkError ExUnitCalculationError (show e))
 
@@ -665,5 +720,3 @@ filterNegativeQuantity  v = filter (\(_, v) -> v < 0 ) $ valueToList v
 -- gatherInfo cInfo  txBuilder@TxBuilder{txSelections, txInputs} = do 
 --   error "sad"
 --   where
-
-
