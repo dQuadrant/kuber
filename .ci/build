@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+set -eo pipefail;
+
+EXECUTABLE="./.docker/build"
+
+WORKDIR=$(pwd)
+DIST_NEWSTYLE_DIR="${WORKDIR}/dist-newstyle/build/docker/dist-newstyle/"
+CABAL_CACHE_DIR="${WORKDIR}/dist-newstyle/build/docker/cabal-cache/"
+CHROOT_DIR="${WORKDIR}/dist-newstyle/build/docker/chroot-env/"
+
+mkdir -p $DIST_NEWSTYLE_DIR; mkdir -p $CABAL_CACHE_DIR ; mkdir -p $CHROOT_DIR
+function echo-usage() {
+  echo "  Usage $EXECUTABLE [-t tagname]*"
+  echo "    Examples:"
+  echo "      Set up                   -->  $EXECUTABLE cabal update"
+  echo "      Build an image           -->  $EXECUTABLE"
+  echo "      Build with specific tag  -->  $EXECUTABLE -t inputoutput/cardano-db-sync:local"
+  echo "      Clean up caches          -->  $EXECUTABLE clean"
+}
+
+
+if [ ! -f ./cabal.project ] 
+then
+  echo "    Missing cabal.project file current directory";
+  echo;echo-usage
+  exit 1
+fi
+
+## print help
+if  grep -qE '^--h'  <<< "$*"  ||   grep -qE "^-h" -  <<< "$*"
+then
+  echo-usage
+  exit 1;
+fi
+
+## clean command for freeing up the caches used for build
+if ( grep -qE 'clean' <<< "$*")
+then
+  for dir in "$HOME/.cabal-docker" "./dist-newstyle-docker"  "./chroot-env"
+  do 
+    echo "  Removing  $dir";
+    rm -rf $dir;
+  done;
+  exit;
+fi
+
+function showCommand() {
+  echo "+ $*"
+  "$@"
+}
+
+
+## Build the build image. It contains cabal, ghc and libsodium
+showCommand docker build -t cardano-buildimage -f ./.ci/build.Dockerfile  "$(dirname $0)"
+
+## execute a command inside the build image
+function execute-isolated() {
+  echo "+ execute-isolated $*"
+  docker run -i -u"$(id -u):$(id -g)" \
+  -v $CABAL_CACHE_DIR:$HOME/.cabal \
+	-v $DIST_NEWSTYLE_DIR:$WORKDIR/dist-newstyle/ \
+  -v $CHROOT_DIR:/chroot-env/ \
+  -v $WORKDIR:$WORKDIR \
+  -e OVERRIDE_CHROOT_DIR=/chroot-env \
+	-e HOME=$HOME \
+	--entrypoint /bin/bash \
+	--workdir $WORKDIR \
+	cardano-buildimage -c  "$*"
+}
+
+if [[ "$1" == cabal* ]] ; then
+    execute-isolated "$@" # execute the cabal command
+else
+    ## default build
+    execute-isolated 'cabal build exe:kuber && bash -e ./.ci/copy-libraries.sh'
+
+    ## build  final docker image. by determining the git revision or passing the arguments to docker command.
+    
+    if [ $# -gt 0 ]
+    then
+      showCommand docker build --build-arg  OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/ -f ./.ci/Dockerfile  "$@" .
+    elif git describe --tags | grep  -qE '^[0-9]+(\.[0-9]+)*$'
+    then
+      showCommand docker build --build-arg  OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/  -f ./.ci/Dockerfile  -t "sireto/kuber:$(git describe --tags)" .
+    else
+      showCommand docker build --build-arg  OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/  -f ./.ci/Dockerfile -t "sireto/kuber:$(git rev-parse HEAD)" .
+    fi
+fi
+
+
+
