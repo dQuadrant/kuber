@@ -56,7 +56,7 @@ function getVersion(){
 }
 
 #Get the library dependencies
-copyExecutable "$(findExecutable artano-cardano-proxy)"
+copyExecutable "$(findExecutable kuber)"
 copyExecutable /bin/bash
 copyExecutable /bin/ls
 copyExecutable /bin/sh
