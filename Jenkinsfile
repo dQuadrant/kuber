@@ -10,16 +10,16 @@ pipeline {
         DEPLOYMENT_IMAGE_NAME = 'kuber/api'
 
         //From develop branch: deployment details for develop
-        DEPLOYMENT_DEVELOP_CLOUD = 'tcp://173.249.55.123:2376'
+        DEPLOYMENT_DEVELOP_CLOUD = 'cnftregistry.io:2376'
         DEPLOYMENT_DEVELOP_SERVICE = 'kuber-dev_api'
 
         // From master branch:deployment details for staging
 
-        DEPLOYMENT_STAGING_CLOUD = 'tcp://cnftregistry.io:2376'
+        DEPLOYMENT_STAGING_CLOUD = 'cnftregistry.io:2376'
         DEPLOYMENT_STAGING_SERVICE = 'kuber-staging_api'
 
         //When tag is pushed: deployment details for release
-        DEPLOYMENT_RELEASE_CLOUD = 'artano.io:2376'
+        DEPLOYMENT_RELEASE_CLOUD = 'cnftregistry.io:2376'
         DEPLOYMENT_RELEASE_SERVICE = 'kuber_api'
 
 
@@ -40,30 +40,17 @@ pipeline {
                 expression { env.COMPUTED_DOCKER_TAG != null }
             }
             steps {
-                gitlabCommitStatus(name: "Build Docker Image") {
                     script {
                         sh 'printenv'
 
                         docker.withRegistry("https://${DEPLOYMENT_REGISTRY}", "${DEPLOYMENT_REGISTRY}") {
-                            if( "${env.DEPLOYMENT_ENVIRONMENT}" == "production"){
-                                     def image = docker.build("${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${env.COMPUTED_DOCKER_TAG}"),
-                                
-                                image.push()
-                                image.push(env.COMPUTED_DOCKER_TAG_COMMON)
-                                buildName "${DEPLOYMENT_IMAGE_NAME}:${env.COMPUTED_DOCKER_TAG}"
-                                
-                            }
-                            else{
-
-                                def image = docker.build("${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${env.COMPUTED_DOCKER_TAG}")                                )
-                                image.push()
-                                image.push(env.COMPUTED_DOCKER_TAG_COMMON)
-                                buildName "${DEPLOYMENT_IMAGE_NAME}:${env.COMPUTED_DOCKER_TAG}"
+                                sh "./.ci/build  -t ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${env.COMPUTED_DOCKER_TAG} -t ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${env.COMPUTED_DOCKER_TAG_COMMON} "
+                                sh "docker push ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${env.COMPUTED_DOCKER_TAG}"
+                                sh "docker push ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${env.COMPUTED_DOCKER_TAG_COMMON}"               
                             }
 
                         }
                     }
-                }
             }
         }
 
@@ -74,7 +61,6 @@ pipeline {
                 }
             }
             steps {
-                gitlabCommitStatus(name: "Deploy") {
                     script {
                           docker.withServer("${DEPLOYMENT_CLOUD}") {
                               docker.withRegistry("https://${DEPLOYMENT_REGISTRY}", "${DEPLOYMENT_REGISTRY}") {
@@ -82,13 +68,11 @@ pipeline {
                               }
                           }
                     }
-                }
             }
         }
     }
     post {
         unsuccessful {
-            updateGitlabCommitStatus name: 'Jenkins', state: 'failed'
             step([$class                  : 'Mailer',
                   notifyEveryUnstableBuild: true,
                   recipients              : [emailextrecipients([[$class: 'CulpritsRecipientProvider'], [$class: 'RequesterRecipientProvider']])].join(' ')])
