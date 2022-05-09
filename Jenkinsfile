@@ -49,8 +49,8 @@ pipeline {
                                 sh "docker push ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${env.COMPUTED_DOCKER_TAG_COMMON}"               
                             }
 
-                        }
                     }
+                    
             }
         }
 
