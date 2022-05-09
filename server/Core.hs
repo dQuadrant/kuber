@@ -3,19 +3,19 @@
 module Core where
 
 import qualified Data.Text as T
-import Cardano.Contrib.Kubær.TxBuilder (TxBuilder)
+import Cardano.Contrib.Kuber.TxBuilder (TxBuilder)
 import qualified Data.Aeson as A
 import Data.Text.Lazy.Encoding    as TL
 import qualified Data.Text.Lazy             as TL
-import Cardano.Contrib.Kubær.Models (BalanceResponse (BalanceResponse), TxResponse (TxResponse), SubmitTxModal (SubmitTxModal), TxModal (TxModal))
-import Cardano.Contrib.Kubær.ChainInfo (ChainConnectInfo, ChainInfo (getConnectInfo), DetailedChainInfo (DetailedChainInfo))
-import Cardano.Contrib.Kubær.Util (queryUtxos, executeSubmitTx, readSignKey, queryTxins, resolveTxins)
+import Cardano.Contrib.Kuber.Models (BalanceResponse (BalanceResponse), TxResponse (TxResponse), SubmitTxModal (SubmitTxModal), TxModal (TxModal))
+import Cardano.Contrib.Kuber.ChainInfo (ChainConnectInfo, ChainInfo (getConnectInfo), DetailedChainInfo (DetailedChainInfo))
+import Cardano.Contrib.Kuber.Util (queryUtxos, executeSubmitTx, readSignKey, queryTxins, resolveTxins)
 import Cardano.Api
 import Control.Exception (throw, try)
-import Cardano.Contrib.Kubær.Error (FrameworkError(FrameworkError), ErrorType (ParserError, LibraryError, ExUnitCalculationError))
+import Cardano.Contrib.Kuber.Error (FrameworkError(FrameworkError), ErrorType (ParserError, LibraryError, ExUnitCalculationError))
 import qualified Data.Set as Set
 import System.Exit (die)
-import Cardano.Contrib.Kubær.TxFramework (txBuilderToTxBody)
+import Cardano.Contrib.Kuber.TxFramework (txBuilderToTxBody)
 import System.Environment (getEnv)
 import System.FilePath (joinPath)
 import Cardano.Ledger.Alonzo.Scripts (ExUnits(ExUnits))

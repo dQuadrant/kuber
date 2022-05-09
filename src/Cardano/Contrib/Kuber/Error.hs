@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings  #-}
-module Cardano.Contrib.Kubær.Error
+module Cardano.Contrib.Kuber.Error
 where
     
 import Data.String (IsString)

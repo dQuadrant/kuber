@@ -5,12 +5,14 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TupleSections #-}
-module Cardano.Contrib.Kubær.TxFramework where
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use lambda-case" #-}
+module Cardano.Contrib.Kuber.TxFramework where
 
 
-import Cardano.Api
-import Cardano.Api.Shelley
-import Cardano.Contrib.Kubær.Error
+import Cardano.Api hiding ( PaymentCredential)
+import Cardano.Api.Shelley hiding (PaymentCredential)
+import Cardano.Contrib.Kuber.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
 import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
@@ -19,7 +21,7 @@ import qualified Data.Set as Set
 import Data.Map (Map)
 import Control.Exception
 import Data.Either
-import Cardano.Contrib.Kubær.Util
+import Cardano.Contrib.Kuber.Util
 import Data.Functor ((<&>))
 import qualified Data.ByteString.Short as SBS
 import qualified Data.ByteString.Lazy as LBS
@@ -29,8 +31,8 @@ import Data.Maybe (mapMaybe, catMaybes, fromMaybe, maybeToList)
 import Data.List (intercalate, sortBy, minimumBy, find)
 import qualified Data.Foldable as Foldable
 import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript)
-import Cardano.Contrib.Kubær.TxBuilder
-import Cardano.Contrib.Kubær.ChainInfo (DetailedChainInfo (DetailedChainInfo, dciConn), ChainInfo (getNetworkId))
+import Cardano.Contrib.Kuber.TxBuilder
+import Cardano.Contrib.Kuber.ChainInfo (DetailedChainInfo (DetailedChainInfo, dciConn), ChainInfo (getNetworkId))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Cardano.Api.Crypto.Ed25519Bip32 (xPrvFromBytes)
 import Debug.Trace (trace, traceM)
@@ -41,7 +43,7 @@ import qualified Data.Map.Strict as StrictMap
 import qualified Debug.Trace as Debug
 import Data.Aeson (ToJSON(toJSON))
 import qualified Data.Text as T
-import Cardano.Contrib.Kubær.Error (ErrorType(PlutusScriptError))
+import Cardano.Contrib.Kuber.Error (ErrorType(PlutusScriptError))
 import Data.Text.Conversions (convertText)
 import Prettyprinter.Extras (pretty)
 import Data.Word (Word64)
@@ -55,6 +57,12 @@ import qualified Data.ByteString.Builder as Builder
 import Data.ByteString.Builder (charUtf8)
 import qualified Data.ByteString.Builder as BSL
 import Data.Int (Int64)
+import Cardano.Api.Byron (Address(ByronAddress))
+import Cardano.Ledger.Shelley.API (Credential(KeyHashObj), KeyHash (KeyHash))
+import Cardano.Ledger.DescribeEras (StandardCrypto)
+import Data.ByteString (ByteString)
+import Cardano.Binary (ToCBOR(toCBOR))
+import qualified Cardano.Binary as Cborg
 
 type IsChangeUsed   = Bool
 type  ParsedInput   = Either (Witness WitCtxTxIn AlonzoEra,TxOut CtxUTxO AlonzoEra) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn AlonzoEra,TxOut CtxUTxO  AlonzoEra)
@@ -67,24 +75,18 @@ txBuilderToTxBody:: DetailedChainInfo  -> TxBuilder  -> IO (Either FrameworkErro
 txBuilderToTxBody dcInfo builder = do
   let (selectionAddrs,sel_txins,sel_utxo) = mergeSelections
       (input_txins,input_utxo) = mergeInputs
-      (txins,utxo) = ( sel_txins  <> input_txins, sel_utxo <> input_utxo)
+      (txins,utxo) = ( sel_txins  <> input_txins <> collateralins, sel_utxo <> input_utxo <> collateralUtxo)
+      (collateralins,collateralUtxo) = mergeColaterals
       addrs=   selectionAddrs  <> Set.fromList (mapMaybe getInputAddresses (txInputs builder))
   addrUtxos <- queryIfNotEmpty addrs (queryUtxos  conn addrs) (Right $ UTxO  Map.empty)
-  Debug.traceIO $ "Addr Utxos :" ++  show addrUtxos
   case addrUtxos of
     Left fe -> pure $ Left fe
     Right (UTxO  uto) -> do
-      Debug.traceIO $ "Addr txins : " ++ show uto
       let missingTxins= Set.difference txins ( Map.keysSet  uto )
-      Debug.traceIO $ "Initial Unresolved Utxos:" ++ show txins
-      Debug.traceIO $ "Missing utos :" ++ show missingTxins
-
-      Debug.traceIO $ "querying txins : " ++ show missingTxins
       vals <- queryIfNotEmpty missingTxins (resolveTxins conn missingTxins) (Right $ UTxO  Map.empty)
       case vals of
         Left fe -> pure $ Left fe
         Right (UTxO uto') ->do
-          Debug.traceIO $ "Response for txins  query : " ++ show uto'
           pure $ mkTx dcInfo (UTxO $ uto <> uto') builder
   where
 
@@ -106,6 +108,12 @@ txBuilderToTxBody dcInfo builder = do
         TxInputTxin ti -> (Set.insert ti ins,utxo)
         TxInputAddr aie -> v
         TxInputScriptTxin tvs sd sd' m_eu ti -> (Set.insert ti ins, utxo)
+
+    mergeColaterals :: (Set TxIn,Map TxIn (TxOut CtxUTxO AlonzoEra) )
+    mergeColaterals  =foldl (\(s,m) collateral -> case collateral of
+                    TxCollateralTxin ti -> (Set.insert ti s,m)
+                    TxCollateralUtxo (UTxO uto) -> (s,uto <> m) ) (mempty,mempty) (txCollaterals builder)
+
     mergeSelection :: ( Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))  -> TxInputSelection  -> (Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))
     mergeSelection (a,i,u) sel = case sel of
         TxSelectableAddresses aies -> (Set.union a  (Set.fromList $ map addressInEraToAddressAny aies),i,u)
@@ -119,7 +127,6 @@ mkTx::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkErr
 mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata ) = do
   let network = getNetworkId  dCinfo
   Debug.traceM $ BS8.unpack $  prettyPrintJSON   metadata
-  Debug.traceM $ BS8.unpack $  prettyPrintJSON  $ morphMetadata metadata
   meta<- if null metadata
           then  Right TxMetadataNone
           else  do
@@ -142,7 +149,13 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
       fixedInputSum =  usedInputSum fixedInputs <> mintValue
       fee= Lovelace 100_000
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin fixedInputs) availableUtxo
-      calculator= computeBody meta (Lovelace cpw)  fixedInputSum availableInputs collaterals fixedOutputs
+      calculator= computeBody meta (Lovelace cpw) compulsarySignatories  fixedInputSum availableInputs (map fst collaterals) fixedOutputs
+      colalteralSignatories = Set.fromList ( map snd collaterals)
+      compulsarySignatories = foldl (\acc x -> case x of
+                          Left (_,TxOut a _ _) -> case addrInEraToPkh a of
+                                                    Nothing -> acc
+                                                    Just pkh -> Set.insert pkh acc
+                          Right _ -> acc ) colalteralSignatories   $ Map.elems  fixedInputs
   (txBody1,fee1) <-  calculator  fixedInputs txMintValue'  fee
   if  not requiresExUnitCalculation
     then  ( do
@@ -157,12 +170,8 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
                         calculator inputs' txMintValue' fee
           in do
             (txBody2,fee2) <- evaluateBodyWithExunits  txBody1 fee1
-            traceM $ "\ntxbody4 \n" ++ show  (makeSignedTransaction [] txBody2)
             (txBody3,fee3) <- evaluateBodyWithExunits  txBody2 fee2
-            traceM $ "\ntxbody4 \n" ++ show  (makeSignedTransaction [] txBody3)
             (txBody4,fee4) <- evaluateBodyWithExunits  txBody3 fee3
-            traceM $ "\ntxbody4 \n" ++ show  (makeSignedTransaction [] txBody4)
-
 
             if fee4==fee3
               then pure txBody4
@@ -197,8 +206,8 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
             newSize= size + tHeadBS
             in  --Debug.trace ("Size of (" ++ (T.unpack prefix ) ++"," ++ if T.null txt then ""  else [tHead] ++  ") : " ++ show (size,newSize)) $ 
               if T.null txt  then (prefix,txt) else
-                  ( if  newSize > 64 
-                      then ( if  C.isSpace tHead  then (prefix,txt) 
+                  ( if  newSize > 64
+                      then ( if  C.isSpace tHead  then (prefix,txt)
                               else case splitOnLastSpace prefix of
                                     (txt', Nothing ) -> (prefix,txt)
                                     (txtPre,Just txtEnd) -> (txtPre,  T.concat [txtEnd,txt] )
@@ -262,51 +271,66 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
     --   Left e -> throw $  SomeError  $ "EvaluateExecutionUnits: " ++ show e
     --   Right v -> pure v
 
-    collaterals ::   Maybe [TxIn]
+    collaterals ::   Maybe [(TxIn,PubKeyHash )]
     collaterals   = case foldl getCollaterals [] _collaterals of
                           [] -> case mapMaybe canBeCollateral $ Map.toList availableUtxo of
                             [] -> Nothing
-                            v -> Just [ fst $ minimumBy sortingFunc v]
+                            v -> let  (tin,pkh,_) =minimumBy sortingFunc v in Just [(tin,pkh)]
                           v-> Just v
         where
-        canBeCollateral v@(ti, to@(TxOut _ val mDatumHash)) = case mDatumHash of
+        canBeCollateral :: (TxIn  , TxOut ctx AlonzoEra) -> Maybe (TxIn, PubKeyHash, Integer)
+        canBeCollateral v@(ti, to@(TxOut addr val mDatumHash)) = case mDatumHash of
                               TxOutDatumNone -> case val of
-                                TxOutAdaOnly _ (Lovelace v) -> Just (ti,v)
+                                TxOutAdaOnly _ (Lovelace v) ->  addrInEraToPkh addr >>= (\pkh -> Just (ti,pkh,v))
                                 TxOutValue _ va ->  let _list = valueToList va
                                                     in if length _list == 1
-                                                        then Just ( ti,case snd $ head _list of { Quantity n -> n } )
+                                                        then  case addrInEraToPkh addr of
+                                                                Nothing -> Nothing
+                                                                Just pkh -> Just ( ti,pkh,case snd $ head _list of { Quantity n -> n } )
                                                         else Nothing
                               _ -> Nothing
         filterCollateral = mapMaybe  canBeCollateral $ Map.toList availableUtxo
 
         -- sort based on following conditions => Utxos having >4ada come eariler and the lesser ones come later.
-        sortingFunc :: (TxIn,Integer) -> (TxIn,Integer)-> Ordering
-        sortingFunc (_,v1) (_,v2)
+        sortingFunc :: (TxIn,a,Integer) -> (TxIn,a,Integer)-> Ordering
+        sortingFunc (_,_,v1) (_,_,v2)
           | v1 < 4 = if v2 < 4 then  v2 `compare` v1 else GT
           | v2 < 4 = LT
           | otherwise = v1 `compare` v2
 
 
     getCollaterals  accum  x = case x  of
-        TxCollateralTxin txin -> accum++[txin]
-        TxCollateralUtxo (UTxO mp) -> accum ++ Map.keys mp
+        TxCollateralTxin txin -> accum++ (case Map.lookup txin availableUtxo of
+          Nothing -> error "Collateral input missing in utxo map"
+          Just (TxOut a v dh) -> case addrInEraToPkh a of
+                                    Just pkh ->  (txin,pkh) : accum
+                                    Nothing -> error "Invalid address type utxo in collateral"
+                                   )
+        TxCollateralUtxo (UTxO mp) ->  accum ++ map (\(tin,TxOut a v dh) -> case addrInEraToPkh a of
+                                                                                 Just pkh -> (tin,pkh)
+                                                                                 Nothing -> error "invalid address type utxo in collateral"
+                      ) (Map.toList  mp)
     isJust (Just x)  = True
     isJust _ = False
 
-    computeBody meta cpw fixedInputSum availableInputs collaterals fixedOutputs fixedInputs txMintValue' fee = do
+    computeBody meta cpw signatories fixedInputSum availableInputs collaterals fixedOutputs fixedInputs txMintValue' fee = do
       changeTxOut <-case findChange fixedOutputs of
         Nothing -> do
           changeaddr <- monadFailChangeAddr
           pure (TxOut changeaddr  ( TxOutValue MultiAssetInAlonzoEra  (valueFromList [(AdaAssetId ,0)])) TxOutDatumNone)
         Just to -> pure to
+      (extraUtxos,change) <- selectUtxosConsideringChange (calculateTxoutMinLovelaceWithcpw cpw) changeTxOut availableInputs startingChange
       let
-        startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee )
-
-        (extraUtxos,change) = selectUtxosConsideringChange (calculateTxoutMinLovelaceWithcpw cpw) changeTxOut availableInputs startingChange
+        maxChange = utxoListSum availableInputs <> startingChange
+        missing = filterNegativeQuantity maxChange
         missingAssets= filterNegativeQuantity change
-        _hasFeeUtxo = any (\(a,b,c)->a) fixedOutputs
         (feeUsed,changeUsed,outputs) = updateOutputs  fee change fixedOutputs
         bodyContent allOutputs = mkBodyContent meta fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
+        requiredSignatories = foldl (\acc (_,TxOut a _ _) -> fromMaybe acc (addrInEraToPkh a <&> flip Set.insert acc)) signatories  extraUtxos
+        signatureCount=fromIntegral $ length requiredSignatories
+      Debug.traceM $ "Initial :" ++ show signatories 
+      Debug.traceM $ "Final signatories :" ++ show requiredSignatories
+
       if null missingAssets then pure () else Left (FrameworkError InsufficientInput (show $ negateValue $ valueFromList missingAssets))
       bc <- if changeUsed
               then pure $ bodyContent outputs
@@ -315,9 +339,13 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
                 pure $ bodyContent (outputs++ [TxOut changeaddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumNone])
       case makeTransactionBody bc of
           Left tbe ->Left  $ FrameworkError  LibraryError  (show tbe)
-          Right tb -> pure (tb,evaluateTransactionFee pParam tb 1 0)
+          Right tb -> pure (tb,evaluateTransactionFee pParam tb signatureCount 0)
 
       where
+        startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee )
+        _hasFeeUtxo = any (\(a,b,c)->a) fixedOutputs
+
+
         monadFailChangeAddr= case mChangeAddr of
           Nothing ->  if null usableAddresses
                         then Left $ FrameworkError BalancingError "no change address"
@@ -483,16 +511,21 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
 
      -- consider change while minimizing i.e. make sure that the change has the minLovelace value.
     selectUtxosConsideringChange f txout  u c  = minimizeConsideringChange txout f u (c <> utxoListSum u)
-    minimizeConsideringChange txout f available change=if existingLove < minLove
-      then
-        (case Foldable.find (\(tin,utxo) -> extraLove utxo > (minLove- existingLove)) unmatched of
-          Just val -> (fst matched ++ [val],snd matched <> txOutValue_ (snd val))
-          Nothing -> matched
-        )
-      else
-        matched
+    minimizeConsideringChange txout f available change= case filterNegativeQuantity change of 
+      [] -> do
+           if existingLove < minLove
+              then
+                (case Foldable.find (\(tin,utxo) -> extraLove utxo > (minLove- existingLove)) unmatched of
+                  Just val -> Right (fst matched ++ [val],snd matched <> txOutValue_ (snd val))
+                  Nothing -> Right matched
+                )
+              else
+                Right matched
+      missing -> do 
+        Left  $ FrameworkError  InsufficientInput $ "Missing Balance :" ++ show ( map (\(a,b)-> (a,-b)) missing)
+
       where
-        matched=minimizeUtxos available change
+        matched@(utxos,newChange)=minimizeUtxos available change
         unmatched = filter   (\(k,_) -> k `notElem` matchedSet)   available
         matchedSet=Set.fromList $ map fst $  fst matched
         --Current Lovelace amount in the change utxo

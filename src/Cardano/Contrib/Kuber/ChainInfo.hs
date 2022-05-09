@@ -1,10 +1,10 @@
-module Cardano.Contrib.Kubær.ChainInfo
+module Cardano.Contrib.Kuber.ChainInfo
 where
 
 import Cardano.Api
 import Cardano.Api.Shelley
 import Cardano.Slotting.Time
-import Cardano.Contrib.Kubær.Util
+import Cardano.Contrib.Kuber.Util
     ( getDefaultConnection,
       queryProtocolParam,
       querySystemStart,

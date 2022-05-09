@@ -1,10 +1,10 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Cardano.Contrib.Kubær.Parsers where
+module Cardano.Contrib.Kuber.Parsers where
 
 import Cardano.Api
-import Cardano.Contrib.Kubær.Error
+import Cardano.Contrib.Kuber.Error
 import Control.Exception (SomeException, catch, throw)
 import qualified Data.Aeson as Aeson
 import Data.ByteString.Lazy (fromStrict)

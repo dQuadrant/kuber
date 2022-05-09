@@ -10,12 +10,12 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-module Cardano.Contrib.Kubær.Models where
+module Cardano.Contrib.Kuber.Models where
 
 import Cardano.Api
 import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData)
 import Cardano.Binary (ToCBOR (toCBOR), decodeFull, fromCBOR)
-import Cardano.Contrib.Kubær.Util (toHexString)
+import Cardano.Contrib.Kuber.Util (toHexString)
 import Cardano.Ledger.Alonzo.Data (Data)
 import Cardano.Ledger.Alonzo.Tx (TxBody (txfee))
 import Codec.CBOR.Write (toLazyByteString)
@@ -58,7 +58,16 @@ unUtxoIdModal (UtxoIdModal x) = x
 
 parseUtxo :: Data.Aeson.Types.Value -> Parser TxIn
 parseUtxo (Object o) = do
-  txid <- o .: "hash"
+  txid' <- o .:? "hash"
+  txid'' <- o .:? "txid"
+  txid''' <- o.:? "txId"
+  txid <-case txid' of
+    Nothing -> case txid'' of 
+        Nothing -> case txid''' of 
+          Nothing -> o.: "txId"
+          Just ti -> pure ti
+        Just txid -> pure txid
+    Just txid -> pure txid 
   index <- o .: "index"
   pure $ TxIn txid index
 parseUtxo (String v) =

@@ -6,13 +6,13 @@
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Cardano.Contrib.Kubær.TxBuilder
+module Cardano.Contrib.Kuber.TxBuilder
 where
 
 
 import Cardano.Api hiding(txMetadata, txFee)
 import Cardano.Api.Shelley hiding (txMetadata, txFee)
-import Cardano.Contrib.Kubær.Error
+import Cardano.Contrib.Kuber.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
 import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
@@ -21,7 +21,7 @@ import qualified Data.Set as Set
 import Data.Map (Map)
 import Control.Exception
 import Data.Either
-import Cardano.Contrib.Kubær.Util
+import Cardano.Contrib.Kuber.Util
 import Data.Functor ((<&>))
 import qualified Data.ByteString.Short as SBS
 import qualified Data.ByteString.Lazy as LBS
@@ -35,8 +35,8 @@ import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unVa
 import Data.Aeson.Types (FromJSON(parseJSON), (.:), Parser)
 import qualified Data.Aeson as A
 import qualified Data.Text as T
-import Cardano.Contrib.Kubær.Models (parseUtxo, unAddressModal)
-import Cardano.Contrib.Kubær.Parsers (parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser)
+import Cardano.Contrib.Kuber.Models (parseUtxo, unAddressModal)
+import Cardano.Contrib.Kuber.Parsers (parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON))
 import qualified Data.Aeson as A.Object
@@ -256,10 +256,10 @@ instance FromJSON TxMintData where
     scriptWitnessE <- case mintScript of
       TxSimpleScript sial -> pure $ createSimpleMintingWitness sial
       TxPlutusScript sAny sd eM -> do
-      exUnits <- case eM of
-        Nothing -> pure $ ExecutionUnits 700000000 700000000
-        Just eu -> pure eu
-      pure $ createPlutusMintingWitness sAny sd exUnits
+        exUnits <- case eM of
+          Nothing -> pure $ ExecutionUnits 700000000 700000000
+          Just eu -> pure eu
+        pure $ createPlutusMintingWitness sAny sd exUnits
 
     (sw,policyId) <- case scriptWitnessE of
       Left fe -> throw fe
@@ -461,9 +461,14 @@ instance FromJSON TxInputSelection where
         case deserialiseAddress (AsAddressInEra AsAlonzoEra) s of
           Nothing -> fail $ "Invalid address string: " ++ T.unpack s
           Just aie -> pure $ TxSelectableAddresses [aie]
-      else do
-        txIn <- parseUtxo v
-        pure $ TxSelectableTxIn [txIn]
+      else (case T.find (== '#') s of
+        Nothing -> case deserialiseFromRawBytesHex (AsAddressInEra AsAlonzoEra) (T.encodeUtf8 s) of
+                          Nothing -> fail  "Invalid inputSelection String. It must be either address or transactionInput"
+                          Just addr -> pure $ TxSelectableAddresses [addr]
+        Just c -> do
+          txIn <- parseUtxo v
+          pure $ TxSelectableTxIn [txIn])
+
   parseJSON v = do
     txIn <- parseUtxo v
     pure $ TxSelectableTxIn [txIn]
@@ -489,8 +494,8 @@ instance FromJSON TxInput where
         Nothing -> fail $ "Invalid address string: " ++ T.unpack s
         Just aie -> pure $ TxInputUnResolved $ TxInputAddr aie
     else do
-    txIn <- parseUtxo v
-    pure $ TxInputUnResolved $ TxInputTxin txIn
+      txIn <- parseUtxo v
+      pure $ TxInputUnResolved $ TxInputTxin txIn
 
   parseJSON _ = fail "TxInput must be an object or string"
 
@@ -507,11 +512,13 @@ instance FromJSON TxOutput where
     addressTextM <- v .:? "address"
     addressM <- case addressTextM of
       Nothing -> pure Nothing
-      Just addrText -> pure $ parseAddress addrText
-
-
-    valueText <- v .: "value"
-    value <- parseValueText valueText
+      Just addrText -> parseAddress addrText <&> Just
+    Debug.traceM $ "Address :" ++ show addressM
+    valueText :: A.Value <- v .: "value"
+    value <- case valueText of
+      A.String txt ->  parseValueText txt
+      A.Number sci -> pure $ valueFromList [(AdaAssetId, Quantity $ round  sci)]
+      _ -> fail "Expected string or number"
 
     scriptM <- v .:? "script"
     scriptAnyM <- case scriptM of
@@ -544,11 +551,11 @@ instance FromJSON TxOutput where
               case deserialiseFromRawBytes (AsHash AsScriptData) dataHash of
                   Nothing -> pure  Nothing
                   Just dh -> pure $ Just dh
-          Nothing -> case H.lookup "datum" v of 
+          Nothing -> case H.lookup "datum" v of
               Just _  -> do
                     val <- v `scriptDataParser` "datum"
                     pure   $ Just $ hashScriptData  val
-              Nothing -> pure  Nothing            
+              Nothing -> pure  Nothing
 
 
   parseJSON _ = fail "TxOutput must be an object"

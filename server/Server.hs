@@ -10,10 +10,10 @@ module Server where
 
 import Cardano.Api
 import Cardano.Api.Shelley (AlonzoEra)
-import Cardano.Contrib.Kubær.Error (ErrorType (..), FrameworkError (..))
-import Cardano.Contrib.Kubær.Models
-import Cardano.Contrib.Kubær.TxBuilder (TxBuilder)
-import Cardano.Contrib.Kubær.Util (executeSubmitTx)
+import Cardano.Contrib.Kuber.Error (ErrorType (..), FrameworkError (..))
+import Cardano.Contrib.Kuber.Models
+import Cardano.Contrib.Kuber.TxBuilder (TxBuilder)
+import Cardano.Contrib.Kuber.Util (executeSubmitTx)
 import Control.Exception
   ( Exception,
     IOException,
@@ -43,8 +43,8 @@ import Network.Wai.Middleware.Servant.Errors (HasErrorBody (..), errorMw)
 import Servant
 import Servant.Exception (Exception (..), Throws, ToServantErr (..), mapException)
 import Servant.Exception.Server
-import Cardano.Contrib.Kubær.TxBuilder (TxBuilder)
-import Cardano.Contrib.Kubær.ChainInfo (DetailedChainInfo(DetailedChainInfo))
+import Cardano.Contrib.Kuber.TxBuilder (TxBuilder)
+import Cardano.Contrib.Kuber.ChainInfo (DetailedChainInfo(DetailedChainInfo))
 import qualified Data.String as String
 
 import qualified Servant.API.ContentTypes as ContentTypes

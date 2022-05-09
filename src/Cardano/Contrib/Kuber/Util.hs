@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# LANGUAGE FlexibleContexts #-}
-module Cardano.Contrib.Kubær.Util
+module Cardano.Contrib.Kuber.Util
 where
 
 import Cardano.Api
@@ -12,7 +12,7 @@ import qualified Data.Set as Set
 import Control.Exception (try, throw)
 import System.Environment (getEnv)
 import System.Directory (doesFileExist)
-import Cardano.Contrib.Kubær.Error
+import Cardano.Contrib.Kuber.Error
 import Plutus.V1.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), PubKeyHash (PubKeyHash), Address)
 import System.FilePath (joinPath)
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr)
@@ -35,12 +35,16 @@ import Codec.Serialise (serialise)
 import Cardano.Api.Byron (Address(ByronAddress))
 import qualified Data.Aeson as JSON
 import qualified Data.Text.Encoding as TSE
-import Cardano.Contrib.Kubær.Parsers
+import Cardano.Contrib.Kuber.Parsers
 import qualified Data.Map as Map
 import Data.Char (toLower)
 import Data.Set (Set)
 import Cardano.Ledger.Shelley.API (Credential(ScriptHashObj, KeyHashObj), KeyHash (KeyHash), StakeReference (StakeRefNull))
 import Data.Map (Map)
+import qualified Codec.CBOR.Write as Cborg
+import qualified Codec.CBOR.Encoding as Cborg
+import qualified Cardano.Binary as Cborg
+import qualified Data.ByteString as BS
 
 localNodeConnInfo :: NetworkId -> FilePath   -> LocalNodeConnectInfo CardanoMode
 localNodeConnInfo = LocalNodeConnectInfo (CardanoModeParams (EpochSlots 21600))
@@ -99,7 +103,7 @@ addrToMaybePkh (ShelleyAddress net cre sr) = do
   where
     hash= case cre of
       ScriptHashObj _ ->Nothing
-      KeyHashObj kh -> case kh of { KeyHash ha -> unHex $ init $ tail$ show  ha }
+      KeyHashObj kh -> pure ( Cborg.serialize' kh)
 
     unHex ::  ToText a => a -> Maybe  ByteString
     unHex v = convertText (toText v) <&> unBase16
@@ -107,13 +111,9 @@ addrToMaybePkh (ShelleyAddress net cre sr) = do
 addrInEraToPkh :: MonadFail m =>AddressInEra AlonzoEra -> m PubKeyHash
 addrInEraToPkh a = case a of { AddressInEra atie ad -> case ad of
                                       ByronAddress ad' -> fail "Byron address is not supported"
-                                      ShelleyAddress net cre sr -> case cre of
-                                        ScriptHashObj sh -> fail "Expected PublicKey address got Script Address"
-                                        KeyHashObj kh -> case kh of { KeyHash ha -> case unHex $ init $ tail $ show ha of
-                                                                        Nothing -> fail "Unexpected"
-                                                                        Just bs -> pure $ PubKeyHash (toBuiltin bs)
-                                                                    }
-                                        }
+                                      a@(ShelleyAddress net cre sr) -> case addrToMaybePkh a of
+                                        Nothing -> fail "Expected PublicKey address got Script Address"
+                                        Just pkh -> pure pkh }
     where
     unHex ::  ToText a => a -> Maybe  ByteString
     unHex v = convertText (toText v) <&> unBase16
