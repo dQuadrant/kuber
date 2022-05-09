@@ -42,7 +42,7 @@ pipeline {
             steps {
                     script {
                         sh 'printenv'
-
+                        'sh ./.ci/build cabal update'
                         docker.withRegistry("https://${DEPLOYMENT_REGISTRY}", "${DEPLOYMENT_REGISTRY}") {
                                 sh "./.ci/build  -t ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${env.COMPUTED_DOCKER_TAG} -t ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${env.COMPUTED_DOCKER_TAG_COMMON} "
                                 sh "docker push ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${env.COMPUTED_DOCKER_TAG}"
