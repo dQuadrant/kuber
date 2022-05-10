@@ -28,5 +28,6 @@ LABEL "co.elastic.logs/enable"="false" \
         "support"="sudip@sireto.io"
 COPY --from=layer1  / /
 WORKDIR /app
+EXPOSE 8081
 ENTRYPOINT  bash -e /docker-entrypoint.sh
 
