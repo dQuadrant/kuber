@@ -15,7 +15,7 @@ import System.Directory (doesFileExist)
 import Cardano.Contrib.Kuber.Error
 import Plutus.V1.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), PubKeyHash (PubKeyHash), Address)
 import System.FilePath (joinPath)
-import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr)
+import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr, fromShelleyPaymentCredential)
 import qualified Cardano.Ledger.Alonzo.Tx as LedgerBody
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(SubmitSuccess, SubmitFail))
 import Data.Text.Conversions (convertText, Base16 (unBase16, Base16), FromText (fromText), ToText (toText))
@@ -88,6 +88,14 @@ sKeyToPkh:: SigningKey PaymentKey -> PubKeyHash
 sKeyToPkh skey= PubKeyHash (toBuiltin  $  serialiseToRawBytes  vkh)
   where
     vkh=verificationKeyHash   $ getVerificationKey  skey
+
+addressInEraToPaymentKeyHash :: AddressInEra AlonzoEra -> Maybe (Hash PaymentKey)
+addressInEraToPaymentKeyHash a = case a of { AddressInEra atie ad -> case ad of
+                                               ByronAddress ad' -> Nothing
+                                               ShelleyAddress net cre sr -> case fromShelleyPaymentCredential cre of
+                                                 PaymentCredentialByKey ha -> Just ha
+                                                 PaymentCredentialByScript sh -> Nothing
+                                    }
 
 pkhToMaybeAddr:: NetworkId -> PubKeyHash -> Maybe (AddressInEra  AlonzoEra)
 pkhToMaybeAddr network (PubKeyHash pkh) =do

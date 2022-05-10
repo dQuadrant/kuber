@@ -30,7 +30,7 @@ import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes, fromMaybe, maybeToList)
 import Data.List (intercalate, sortBy, minimumBy, find)
 import qualified Data.Foldable as Foldable
-import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript)
+import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, fromBuiltin)
 import Cardano.Contrib.Kuber.TxBuilder
 import Cardano.Contrib.Kuber.ChainInfo (DetailedChainInfo (DetailedChainInfo, dciConn), ChainInfo (getNetworkId))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
@@ -102,7 +102,7 @@ txBuilderToTxBody dcInfo builder = do
     getInputTxins :: (Set TxIn,Map TxIn (TxOut CtxUTxO AlonzoEra)) -> TxInput -> (Set TxIn,Map TxIn (TxOut CtxUTxO AlonzoEra))
     getInputTxins v@(ins,utxo) input = case input of
       TxInputResolved tir -> case tir of
-        TxInputUtxo (UTxO uto) -> (ins,merge utxo uto)
+        TxInputUtxo (UTxO uto) -> (ins, utxo <> uto)
         TxInputScriptUtxo tvs sd sd' m_eu uto -> v
       TxInputUnResolved tiur -> case tiur of
         TxInputTxin ti -> (Set.insert ti ins,utxo)
@@ -117,11 +117,9 @@ txBuilderToTxBody dcInfo builder = do
     mergeSelection :: ( Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))  -> TxInputSelection  -> (Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO AlonzoEra))
     mergeSelection (a,i,u) sel = case sel of
         TxSelectableAddresses aies -> (Set.union a  (Set.fromList $ map addressInEraToAddressAny aies),i,u)
-        TxSelectableUtxos (UTxO uto) -> (a,i,merge uto u)
+        TxSelectableUtxos (UTxO uto) -> (a,i, uto <> u)
         TxSelectableTxIn tis -> (a,Set.union i (Set.fromList tis),u)
 
-merge :: Map TxIn (TxOut CtxUTxO AlonzoEra) -> Map TxIn (TxOut CtxUTxO AlonzoEra) -> Map TxIn (TxOut CtxUTxO AlonzoEra)
-merge = error "not implemented"
 
 mkTx::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (TxBody AlonzoEra)
 mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata ) = do
@@ -155,7 +153,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
                           Left (_,TxOut a _ _) -> case addrInEraToPkh a of
                                                     Nothing -> acc
                                                     Just pkh -> Set.insert pkh acc
-                          Right _ -> acc ) colalteralSignatories   $ Map.elems  fixedInputs
+                          Right _ -> acc ) (appendExtraSignatures extraSignatures colalteralSignatories)   $ Map.elems  fixedInputs
   (txBody1,fee1) <-  calculator  fixedInputs txMintValue'  fee
   if  not requiresExUnitCalculation
     then  ( do
@@ -270,6 +268,13 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
     -- unEitherExecutionUnit e= case e of
     --   Left e -> throw $  SomeError  $ "EvaluateExecutionUnits: " ++ show e
     --   Right v -> pure v
+    appendExtraSignatures :: [TxSignature] -> Set PubKeyHash -> Set PubKeyHash
+    appendExtraSignatures signatures _set = foldl (\set item -> case item of
+      TxExtraSignature n -> set
+      TxSignatureAddr aie -> case addrInEraToPkh  aie of
+                              Just pkh -> Set.insert pkh set
+                              Nothing -> set
+      TxSignaturePkh pkh -> Set.insert pkh set ) _set signatures
 
     collaterals ::   Maybe [(TxIn,PubKeyHash )]
     collaterals   = case foldl getCollaterals [] _collaterals of
@@ -328,7 +333,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
         bodyContent allOutputs = mkBodyContent meta fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
         requiredSignatories = foldl (\acc (_,TxOut a _ _) -> fromMaybe acc (addrInEraToPkh a <&> flip Set.insert acc)) signatories  extraUtxos
         signatureCount=fromIntegral $ length requiredSignatories
-      Debug.traceM $ "Initial :" ++ show signatories 
+      Debug.traceM $ "Initial :" ++ show signatories
       Debug.traceM $ "Final signatories :" ++ show requiredSignatories
 
       if null missingAssets then pure () else Left (FrameworkError InsufficientInput (show $ negateValue $ valueFromList missingAssets))
@@ -378,7 +383,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
         txValidityRange= (txLowerBound,txUpperBound),
         Cardano.Api.Shelley.txMetadata=meta  ,
         txAuxScripts=TxAuxScriptsNone,
-        txExtraKeyWits=TxExtraKeyWitnessesNone,
+        txExtraKeyWits=keyWitnesses,
         txProtocolParams=BuildTxWith (Just  pParam),
         txWithdrawals=TxWithdrawalsNone,
         txCertificates=TxCertificatesNone,
@@ -386,6 +391,19 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
         txMintValue=txMintValue',
         txScriptValidity=TxScriptValidityNone
           })
+    keyWitnesses = if null extraSignatures
+                    then TxExtraKeyWitnessesNone
+                    else TxExtraKeyWitnesses ExtraKeyWitnessesInAlonzoEra $ foldl (\list x -> case x of
+                                                                           TxExtraSignature n -> list
+                                                                           TxSignatureAddr aie -> case addressInEraToPaymentKeyHash aie of 
+                                                                             Nothing -> list
+                                                                             Just ha -> ha: list
+                                                                           TxSignaturePkh (PubKeyHash pkh) -> case
+                                                                               deserialiseFromRawBytes (AsHash AsPaymentKey) $ fromBuiltin pkh
+                                                                                   of
+                                                                                     Nothing -> list
+                                                                                     Just ha -> ha:list  ) [] extraSignatures
+
     fixedOutputSum = foldMap txOutputVal _outputs
       where
       txOutputVal :: TxOutput -> Value
@@ -511,7 +529,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
 
      -- consider change while minimizing i.e. make sure that the change has the minLovelace value.
     selectUtxosConsideringChange f txout  u c  = minimizeConsideringChange txout f u (c <> utxoListSum u)
-    minimizeConsideringChange txout f available change= case filterNegativeQuantity change of 
+    minimizeConsideringChange txout f available change= case filterNegativeQuantity change of
       [] -> do
            if existingLove < minLove
               then
@@ -521,7 +539,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
                 )
               else
                 Right matched
-      missing -> do 
+      missing -> do
         Left  $ FrameworkError  InsufficientInput $ "Missing Balance :" ++ show ( map (\(a,b)-> (a,-b)) missing)
 
       where
