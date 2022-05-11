@@ -25,8 +25,20 @@ cabal run kuber
  
  ### 2.1 TransactionBuilder Object
  Transaction builder object specifies the spec for the transaction that is to be composed.
+ 
 
-#### 2.1.1 `selections` : [ TxHash#index | Address ] Array of utxos that can be used to balance the transaction . 
+- [selections](#211-selections---txhashindex--address--array-of-utxos-that-can-be-used-to-balance-the-transaction) : List of utxos/addresses that can be used for balancing transaction
+- [inputs](#212-inputs---txixindex--address--object---inputs-utxos-being-spent-in-the-transaction) : Utxos input in transactions
+- [outputs](#213-outputs--object--outputs-of-the-transaction) : Output Utxos in the transaction
+- collaterals : Collateral in the transaciton (It is automatically selected if missing) 
+- validityStart : [Integer: UnixTimestamp millisecond] Transaction validFrom
+- validityEnd : [Integer : UnixTimestamp millisecond] Transaction validUntil 
+- mint : Minting Scripts and value in the transaction
+- fee : Set transaction fee explicitly . If not provided it is calculated automatically 
+- defaultChangeAddr : Default change address. If it's missing, it's selected from one of the selection address
+- [metadata](#214-metadata--transaction-metadata) : Transaction metadata
+
+#### 2.1.1 `selections` : [ TxHash#index | Address ] Array of utxos that can be used to balance the transaction
  
  Selection is  generally the wallet from which payment is being made.  Selection can be in one of following format
 
@@ -52,7 +64,7 @@ eg:
 
 input can have following fields  depending on the context in which it's being used.
 
-- "utxo" \[required] : Utxo being consumed "TxHaxh#index" 
+- "utxo" [required] : Utxo being consumed "TxHaxh#index" 
 - "script" [optional]: The script code in json format if it's script input
 - "datum"  [optional]: if it's script utxo, datum of the utxo. Datum is in json format with object structure
 
@@ -103,7 +115,7 @@ eg:
 }
 ```
 
-### 2.1.3 `outputs` : Object : Outputs of the transaction.
+### 2.1.3 `outputs` : Object : Outputs of the transaction
 
 Output can have following fields depending on the context in which it's being used
 
@@ -136,3 +148,20 @@ e.g:
     ]
 }
 ```
+      
+
+## something
+### 2.1.4 `metadata` : Transaction Metadata 
+Transaction metadata must be a json object with top level integer key label.
+ e.g:
+ ```
+ {
+     "metadata":{
+         "420": "content here"
+         "421": {
+             "key": "value"
+             "key": ["value1","value2"]
+         }
+     }
+ }
+ ```
