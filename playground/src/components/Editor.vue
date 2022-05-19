@@ -63,7 +63,16 @@ import * as _notification from "@dafcoe/vue-notification";
 const notification = _notification.useNotificationStore();
 export default {
   mounted() {
-        this.providers = listProviders();
+          let counter=8;
+          const __this=this
+
+        function refreshProvider(){
+           __this.providers=listProviders()
+          if(counter--) __this.timeout=setTimeout(refreshProvider,1000)
+          else __this.timeout=0
+        }
+         this.providers = listProviders();
+        this.timeout=setTimeout(refreshProvider,1000)
   },
   data() {
     const providers: Array<CIP30Provider> = [];
@@ -74,10 +83,12 @@ export default {
       addSelections: true,
       editor: null,
       interval: 0,
+      timeout:0
     };
   },
   beforeUnmount() {
     this.interval && clearInterval(this.interval);
+    this.timeout && clearTimeout(this.timeout)
   },
   methods: {
     submitTx(provider: CIP30Provider) {

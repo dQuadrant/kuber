@@ -101,9 +101,9 @@ import {Buffer} from 'buffer'
         pluginMap.set(plugin.name, plugin)
       }
     })
-    console.log(Array.from(pluginMap.values()))
-    return Array.from(pluginMap.values()
-    )
+    const providers=Array.from(pluginMap.values())
+    console.log("Provides",providers)
+    return providers
   }
 
 
