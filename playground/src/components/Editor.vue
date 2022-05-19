@@ -25,7 +25,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
           >
             <!-- @ts-ignores -->
             <img style="display: inline; height: 1em; width: 1em" :src="provider.icon" />
-            <span>{{ provider.name }}</span>
+            <span class="ml-1"> {{ provider.name }}</span>
           </button>
 
           <div class="ml-2 mt-1 form-check form-check text-sm">
