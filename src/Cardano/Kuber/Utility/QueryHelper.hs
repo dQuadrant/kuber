@@ -10,7 +10,7 @@ import Data.Set (Set)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(SubmitSuccess))
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult(SubmitFail))
 import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
-import Cardano.Kuber.Utility.DataTransformation
+import Cardano.Kuber.Utility.DataTransformation ( addressInEraToAddressAny )
 
 
 performQuery :: LocalNodeConnectInfo CardanoMode -> QueryInShelleyBasedEra AlonzoEra b -> IO (Either FrameworkError b)
@@ -26,7 +26,6 @@ performQuery conn q=
   where
   qFilter = QueryInEra AlonzoEraInCardanoMode
                     $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo q
-
 
 
 queryUtxos :: LocalNodeConnectInfo CardanoMode-> Set AddressAny -> IO (Either FrameworkError  (UTxO AlonzoEra))

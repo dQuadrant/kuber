@@ -20,7 +20,7 @@ module Cardano.Kuber.Util
     -- TypeCast/Conversion Utilities (PlutusTypes)
     , dataToScriptData
     , toPlutusAssetClass
- 
+
     -- Value utility and utxoto Value
     , isNullValue
     , valueLte
@@ -39,8 +39,13 @@ module Cardano.Kuber.Util
     , evaluateExUnitMap
 
     -- query helpers
+    , performQuery
     , queryUtxos
-
+    , queryTxins
+    , queryAddressInEraUtxos
+    
+    -- metadata utility
+    , splitMetadataStrings
 )
 where
 
@@ -49,7 +54,6 @@ import Cardano.Kuber.Utility.DataTransformation
 import Cardano.Kuber.Core.ChainInfo
 import Cardano.Kuber.Utility.QueryHelper
 
-import Data.ByteString (ByteString,readFile)
 import qualified Cardano.Api.Shelley as Shelley
 import qualified Data.Set as Set
 import Control.Exception (try, throw)
@@ -86,25 +90,39 @@ import Data.Map (Map)
 import qualified Codec.CBOR.Write as Cborg
 import qualified Codec.CBOR.Encoding as Cborg
 import qualified Cardano.Binary as Cborg
-import qualified Data.ByteString as BS
 import Cardano.Slotting.Time (SystemStart)
 import Cardano.Ledger.Alonzo.TxBody (inputs')
 import Cardano.Ledger.Shelley.UTxO (txins)
 import Cardano.Kuber.Utility.ChainInfoUtil
+import qualified Data.Aeson as A
+import qualified Data.Vector as Vector
+import qualified Data.HashMap.Strict as HashMap
+
+import Data.Int
+import qualified Data.Char as C
+import Data.Word (Word64)
+
+import Data.ByteString ( readFile, ByteString )
+import qualified Data.ByteString.Builder as Builder
+import qualified Data.ByteString.Short as SBS
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Builder as BSL
+import Data.ByteString.Builder (charUtf8)
+
 
 
 
 calculateTxoutMinLovelace :: TxOut CtxUTxO  AlonzoEra -> ProtocolParameters -> Maybe Lovelace
 calculateTxoutMinLovelace txout pParams=do
   costPerWord <- protocolParamUTxOCostPerWord pParams
-  pure $calculateTxoutMinLovelaceWithcpw costPerWord txout 
+  pure $calculateTxoutMinLovelaceWithcpw costPerWord txout
 
 calculateTxoutMinLovelaceFunc :: ProtocolParameters  -> Maybe ( TxOut CtxUTxO    AlonzoEra -> Lovelace)
 calculateTxoutMinLovelaceFunc pParams = do
   costPerWord <- protocolParamUTxOCostPerWord pParams
   pure $ calculateTxoutMinLovelaceWithcpw costPerWord
 
-calculateTxoutMinLovelaceWithcpw :: Lovelace -> TxOut CtxUTxO  AlonzoEra -> Lovelace  
+calculateTxoutMinLovelaceWithcpw :: Lovelace -> TxOut CtxUTxO  AlonzoEra -> Lovelace
 calculateTxoutMinLovelaceWithcpw (Lovelace cpw) txout = Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo   txout) * cpw
 
 
@@ -144,15 +162,15 @@ utxoSum (UTxO uMap)= utxoMapSum uMap
 
 
 evaluateExecutionUnits :: DetailedChainInfo ->  Tx AlonzoEra -> IO [Either String ExecutionUnits]
-evaluateExecutionUnits (DetailedChainInfo costPerWord conn pParam systemStart eraHistory)  tx = do 
+evaluateExecutionUnits (DetailedChainInfo costPerWord conn pParam systemStart eraHistory)  tx = do
       let txbody =  getTxBody tx
 
-          inputs :: Set.Set TxIn 
+          inputs :: Set.Set TxIn
           inputs = case txbody of {ShelleyTxBody sbe tb scripts scriptData mAuxData validity -> Set.map fromShelleyTxIn   $ inputs' tb }
-      txins <- queryTxins  conn  inputs 
-      case txins of 
+      txins <- queryTxins  conn  inputs
+      case txins of
         Left fe -> throw $ FrameworkError  ExUnitCalculationError  (show fe)
-        Right uto -> case evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam uto txbody of 
+        Right uto -> case evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam uto txbody of
             Left tve -> throw $ FrameworkError ExUnitCalculationError $ show tve
             Right exUnitMap -> pure $ Prelude.map (\case
                                         Left see -> Left (show see)
@@ -161,14 +179,14 @@ evaluateExecutionUnits (DetailedChainInfo costPerWord conn pParam systemStart er
 
 
 evaluateExUnitMapIO ::  DetailedChainInfo  ->  TxBody AlonzoEra -> IO ( Either FrameworkError   (Map TxIn ExecutionUnits))
-evaluateExUnitMapIO dcinfo txbody = do 
-  let 
-      inputs :: Set.Set TxIn 
+evaluateExUnitMapIO dcinfo txbody = do
+  let
+      inputs :: Set.Set TxIn
       inputs = case txbody of {ShelleyTxBody sbe tb scripts scriptData mAuxData validity -> Set.map fromShelleyTxIn   $ inputs' tb }
-  txins <- queryTxins  (dciConn dcinfo)  inputs 
-  case txins of 
+  txins <- queryTxins  (dciConn dcinfo)  inputs
+  case txins of
     Left fe -> throw $ FrameworkError  ExUnitCalculationError  (show fe)
-    Right uto ->  pure $  evaluateExUnitMap dcinfo uto txbody 
+    Right uto ->  pure $  evaluateExUnitMap dcinfo uto txbody
 
 evaluateExUnitMap :: DetailedChainInfo  -> UTxO AlonzoEra ->  TxBody AlonzoEra ->  Either FrameworkError   (Map TxIn ExecutionUnits)
 evaluateExUnitMap  (DetailedChainInfo cpw conn pParam systemStart eraHistory ) usedUtxos txbody   = case eExUnits of
@@ -198,3 +216,49 @@ evaluateExUnitMap  (DetailedChainInfo cpw conn pParam systemStart eraHistory ) u
     transformIn (txIn,wit) exUnit= (txIn  ,case BuildTxWith $ KeyWitness KeyWitnessForSpending of {
       BuildTxWith wit' -> wit } )
 
+
+splitMetadataStrings :: Map Word64 A.Value -> Map Word64 A.Value
+splitMetadataStrings = Map.map morphValue
+  where
+    morphValue :: A.Value -> A.Value
+    morphValue  val = case val of
+      A.Object hm ->  A.Object $ HashMap.map morphValue hm
+      A.Array vec ->A.Array (Vector.map  morphValue vec )
+      A.String txt -> let txtList = stringToList Vector.empty txt in if length txtList <2 then A.String txt  else A.Array  txtList
+      _ -> val
+
+    -- Given a vecotr of Strings and Text, split the text into chunks of 64 bytes and append it into the vector as aeson String value. 
+    stringToList :: Vector.Vector A.Value ->  T.Text -> Vector.Vector A.Value
+    stringToList accum  txt = let
+      splitted=splitString 0 T.empty txt
+      (prefix,remaining) = splitted -- Debug.trace ("splitString " ++ show txt ++ " : " ++ show splitted ) splitted
+      in if T.null txt then accum
+          else stringToList (Vector.snoc accum (A.String prefix)) remaining
+
+    -- given prefix string and it's length, take characters from txt until prefix has size almost <=64 chars
+    splitString:: Int64 -> T.Text -> T.Text -> (T.Text,T.Text)
+    splitString size prefix txt =  let
+        tHead= T.head txt
+        tHeadBS = LBS.length $  BSL.toLazyByteString $ toCharUtf8 tHead
+        newSize= size + tHeadBS
+        in  --Debug.trace ("Size of (" ++ (T.unpack prefix ) ++"," ++ if T.null txt then ""  else [tHead] ++  ") : " ++ show (size,newSize)) $ 
+          if T.null txt  then (prefix,txt) else
+              ( if  newSize > 64
+                  then ( if  C.isSpace tHead  then (prefix,txt)
+                          else case splitOnLastSpace prefix of
+                                (txt', Nothing ) -> (prefix,txt)
+                                (txtPre,Just txtEnd) -> (txtPre,  T.concat [txtEnd,txt] )
+                        )
+                  else   splitString newSize (  T.snoc  prefix tHead) (T.tail txt)
+              )
+    -- given text try to find the last space and split it . Also make sure that the split is not too big :D
+    splitOnLastSpace :: T.Text -> (T.Text,Maybe T.Text)
+    splitOnLastSpace txt = let
+        end = T.takeWhileEnd  (not . C.isSpace) txt
+        stripCount =  T.length end
+        in if stripCount <=20  then (T.dropEnd stripCount  txt, Just end)
+            else  (txt, Nothing)
+
+
+toCharUtf8 :: Char -> BSL.Builder
+toCharUtf8 = charUtf8

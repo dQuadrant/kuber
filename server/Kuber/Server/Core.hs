@@ -51,7 +51,7 @@ txBuilder dcinfo txBuilder = do
   let encodedTxBuilder = A.encode txBuilder
   let txBuilderStr = TL.unpack $ TL.decodeUtf8 encodedTxBuilder
   print txBuilderStr
-  txBodyE<-txBuilderToTxBody dcinfo txBuilder
+  txBodyE<-txBuilderToTxBodyIO dcinfo txBuilder
   case txBodyE of 
     Left fe -> throw fe
     Right txBody -> pure $ TxResponse $ makeSignedTransaction [] txBody
@@ -62,7 +62,7 @@ testTx dcinfo txBuilder = do
   -- let encodedTxBuilder = A.encode txBuilder
   -- let txBuilderStr = TL.unpack $ TL.decodeUtf8 encodedTxBuilder
   -- print txBuilderStr
-  -- txBodyE<-txBuilderToTxBody dcinfo txBuilder
+  -- txBodyE<-txBuilderToTxBodyIO dcinfo txBuilder
   -- case txBodyE of 
   --   Left fe -> throw fe
   --   Right txBody -> do

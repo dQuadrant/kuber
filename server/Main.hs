@@ -8,6 +8,7 @@ import Cardano.Kuber.Api (chainInfoFromEnv, ChainInfo (withDetails))
 main :: IO ()
 main = do
   dcinfo <- chainInfoFromEnv >>= withDetails
+
   let port=8081
   putStrLn $ "Starting server on port " ++ show port ++"..."
   run port $ app dcinfo

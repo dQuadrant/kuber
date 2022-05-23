@@ -8,6 +8,9 @@ import Cardano.Kuber.Data.Parsers ( parseSignKey )
 import Cardano.Kuber.Utility.ChainInfoUtil ( getWorkPath )
 import Control.Exception (try)
 
+
+-- readSignKey relative to CARDANO_HOME path
+-- this funciton can throw errors
 readSignKey :: FilePath -> IO (SigningKey PaymentKey)
 readSignKey file = do
   eitherSkey<-try  readSkeyFromFile
@@ -25,5 +28,7 @@ readSignKey file = do
     readBs  = TextIO.readFile
 
 
+-- read the default.skey frole from   CARDANO_HOME directory.
+-- the file contains the filename of the which is to be read.
 getDefaultSignKey :: IO (SigningKey PaymentKey)
 getDefaultSignKey= getWorkPath ["default.skey"] >>= readSignKey

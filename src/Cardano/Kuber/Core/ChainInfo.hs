@@ -7,7 +7,11 @@ import Cardano.Slotting.Time
 
 import Data.Functor ((<&>))
 import Cardano.Kuber.Utility.QueryHelper
+import Data.ByteString.Char8 (unpack)
 
+
+-- ChainInfo class represents a class of objects that wraps cardano node connection information 
+-- and a bunch of other information cached with it that might be needed later
 class ChainInfo v where
   withProtocolParam :: v-> IO ChainInfoWithProtocolParams
   withDetails :: v->IO DetailedChainInfo
@@ -16,8 +20,11 @@ class ChainInfo v where
   getNetworkId :: v -> NetworkId
   getNetworkId v = localNodeNetworkId $ getConnectInfo v 
 
+-- ChainConnectInfo wraps (LocalNodeConnectInfo CardanoMode)
+-- This is the minimal information required to connect to a cardano node
 newtype ChainConnectInfo= ChainConnectInfo (LocalNodeConnectInfo CardanoMode)
  
+
 instance ChainInfo ChainConnectInfo where
   withProtocolParam  (ChainConnectInfo conn )=
         queryProtocolParam conn <&> ChainInfoWithProtocolParams conn 
@@ -25,6 +32,7 @@ instance ChainInfo ChainConnectInfo where
         eHistory <-queryEraHistory conn
         systemStart <-querySystemStart conn
         protocolPrams <-queryProtocolParam conn
+        print $ "CardanoNode " ++ show systemStart 
         Lovelace costPerWord <-case protocolParamUTxOCostPerWord protocolPrams of
           Nothing -> fail "Missing Cost per bytes of Transaction in protocol Parameters"
           Just lo -> pure lo
@@ -32,6 +40,7 @@ instance ChainInfo ChainConnectInfo where
   getConnectInfo (ChainConnectInfo conn )= conn 
   getNetworkId (ChainConnectInfo conn )=localNodeNetworkId conn 
 
+-- Along with the NodeConnectInfo, it caches Protocol parameters to be used during transaction creation
 data  ChainInfoWithProtocolParams=ChainInfoWithProtocolParams {
       ctxConn :: LocalNodeConnectInfo CardanoMode,
       ctxProtocolParameters:: ProtocolParameters
@@ -47,13 +56,17 @@ instance ChainInfo ChainInfoWithProtocolParams where
         pure  $ DetailedChainInfo costPerWord conn   pParams  systemStart eHistory
   getConnectInfo (ChainInfoWithProtocolParams conn  _)= conn 
 
+
+-- Along with the NodeconnectInfo, it caches protocolParameters, CostPerBytes in transaction, systemstart and eraHistory.
+-- These information are cached to be used during transaction construction/balancing and execution unitcalculation
 data  DetailedChainInfo=DetailedChainInfo  {
       dciCostPerWord ::  Integer,
       dciConn :: LocalNodeConnectInfo CardanoMode,
       dciProtocolParams:: ProtocolParameters,
       dciSystemStart :: SystemStart,
       dciEraHistory :: EraHistory CardanoMode
-    }
+    } 
+
 
 instance ChainInfo DetailedChainInfo where
   withProtocolParam  (DetailedChainInfo  fctxcpw conn  pParam _ _ ) = pure $ ChainInfoWithProtocolParams conn  pParam

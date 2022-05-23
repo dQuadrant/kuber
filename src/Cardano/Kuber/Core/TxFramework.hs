@@ -23,8 +23,15 @@ import Control.Exception
 import Data.Either
 import Cardano.Kuber.Util
 import Data.Functor ((<&>))
+
+
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Short as SBS
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Builder as BSL
+import Data.ByteString.Builder (charUtf8)
+
 import Codec.Serialise (serialise)
 import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes, fromMaybe, maybeToList)
@@ -32,7 +39,7 @@ import Data.List (intercalate, sortBy, minimumBy, find)
 import qualified Data.Foldable as Foldable
 import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, fromBuiltin)
 import Cardano.Kuber.Core.TxBuilder
-import Cardano.Kuber.Core.ChainInfo (DetailedChainInfo (DetailedChainInfo, dciConn), ChainInfo (getNetworkId))
+import Cardano.Kuber.Core.ChainInfo (DetailedChainInfo (DetailedChainInfo, dciConn), ChainInfo (getNetworkId, getConnectInfo, withDetails))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Cardano.Api.Crypto.Ed25519Bip32 (xPrvFromBytes)
 import Debug.Trace (trace, traceM)
@@ -53,14 +60,10 @@ import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Char as C
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.Text.Encoding as T
-import qualified Data.ByteString.Builder as Builder
-import Data.ByteString.Builder (charUtf8)
-import qualified Data.ByteString.Builder as BSL
 import Data.Int (Int64)
 import Cardano.Api.Byron (Address(ByronAddress))
 import Cardano.Ledger.Shelley.API (Credential(KeyHashObj), KeyHash (KeyHash))
 import Cardano.Ledger.DescribeEras (StandardCrypto)
-import Data.ByteString (ByteString)
 import Cardano.Binary (ToCBOR(toCBOR))
 import qualified Cardano.Binary as Cborg
 import Cardano.Kuber.Utility.ScriptUtil
@@ -72,28 +75,36 @@ type  ParsedOutput  = (Bool,Bool,TxOut CtxTx AlonzoEra)
 
 
 
+-- Given TxBuilder object, Construct a txBody 
+-- This IO code, constructs detailedChainInfo(protocolParam,costPerWord,eraHistory,SystemHistory) 
+-- then queries required utxos used in inputs and calls  txBuilderToTxBody
 
-txBuilderToTxBody:: DetailedChainInfo  -> TxBuilder  -> IO (Either FrameworkError  (TxBody AlonzoEra ))
-txBuilderToTxBody dcInfo builder = do
+txBuilderToTxBodyIO::  ChainInfo i =>  i ->  TxBuilder  -> IO (Either FrameworkError  (TxBody AlonzoEra ))
+txBuilderToTxBodyIO cInfo builder = do
+  -- first determine the addresses and txins that need to be queried for value and address.
   let (selectionAddrs,sel_txins,sel_utxo) = mergeSelections
       (input_txins,input_utxo) = mergeInputs
       (txins,utxo) = ( sel_txins  <> input_txins <> collateralins, sel_utxo <> input_utxo <> collateralUtxo)
       (collateralins,collateralUtxo) = mergeColaterals
       addrs=   selectionAddrs  <> Set.fromList (mapMaybe getInputAddresses (txInputs builder))
+  dcInfo <- withDetails cInfo
+  -- query utxos of the addresses
   addrUtxos <- queryIfNotEmpty addrs (queryUtxos  conn addrs) (Right $ UTxO  Map.empty)
   case addrUtxos of
     Left fe -> pure $ Left fe
     Right (UTxO  uto) -> do
+      -- query TxIns for the remaining Txins in input
       let missingTxins= Set.difference txins ( Map.keysSet  uto )
       vals <- queryIfNotEmpty missingTxins (queryTxins conn missingTxins) (Right $ UTxO  Map.empty)
       case vals of
         Left fe -> pure $ Left fe
         Right (UTxO uto') ->do
-          pure $ mkTx dcInfo (UTxO $ uto <> uto') builder
+          -- Compute Txbody and return
+          pure $ txBuilderToTxBody dcInfo (UTxO $ uto <> uto') builder
   where
 
     queryIfNotEmpty v f v' = if null  v then pure v' else f
-    conn=dciConn dcInfo
+    conn=getConnectInfo cInfo
     mergeSelections=foldl mergeSelection (Set.empty,Set.empty ,Map.empty ) (txSelections builder)
     getInputAddresses :: TxInput -> Maybe AddressAny
     getInputAddresses x = case x of
@@ -123,14 +134,16 @@ txBuilderToTxBody dcInfo builder = do
         TxSelectableTxIn tis -> (a,Set.union i (Set.fromList tis),u)
 
 
-mkTx::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (TxBody AlonzoEra)
-mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata ) = do
+-- Construct TxBody from TxBuilder specification.
+-- Utxos map must be provided for the utxos that are available in wallet and used in input
+txBuilderToTxBody::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (TxBody AlonzoEra)
+txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata ) = do
   let network = getNetworkId  dCinfo
   Debug.traceM $ BS8.unpack $  prettyPrintJSON   metadata
   meta<- if null metadata
           then  Right TxMetadataNone
           else  do
-            case metadataFromJson TxMetadataJsonNoSchema (toJSON $ morphMetadata metadata) of
+            case metadataFromJson TxMetadataJsonNoSchema (toJSON $ splitMetadataStrings  metadata) of
               Left tmje -> Left $ FrameworkError BadMetadata  (show tmje)
               Right tm -> Right $ TxMetadataInEra  TxMetadataInAlonzoEra tm
   resolvedInputs <- mapM resolveInputs _inputs
@@ -179,49 +192,6 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
       )
 
   where
-
-    morphMetadata :: Map Word64 A.Value -> Map Word64 A.Value
-    morphMetadata  mp = Map.map morphValue mp
-      where
-        morphValue :: A.Value -> A.Value
-        morphValue  val = case val of
-          A.Object hm ->  A.Object $ HashMap.map morphValue hm
-          A.Array vec ->A.Array (Vector.map  morphValue vec )
-          A.String txt -> let txtList = stringToList Vector.empty txt in if length txtList <2 then A.String txt  else A.Array  txtList
-          _ -> val
-
-        -- Given a vecotr of Strings and Text, split the text into chunks of 64 bytes and append it into the vector as aeson String value. 
-        stringToList :: Vector.Vector A.Value ->  T.Text -> Vector.Vector A.Value
-        stringToList accum  txt = let
-          splitted=splitString 0 T.empty txt
-          (prefix,remaining) = splitted -- Debug.trace ("splitString " ++ show txt ++ " : " ++ show splitted ) splitted
-          in if T.null txt then accum
-             else stringToList (Vector.snoc accum (A.String prefix)) remaining
-
-        -- given prefix string and it's length, take characters from txt until prefix has size almost <=64 chars
-        splitString:: Int64 -> T.Text -> T.Text -> (T.Text,T.Text)
-        splitString size prefix txt =  let
-            tHead= T.head txt
-            tHeadBS = LBS.length $  BSL.toLazyByteString   $ charUtf8 tHead
-            newSize= size + tHeadBS
-            in  --Debug.trace ("Size of (" ++ (T.unpack prefix ) ++"," ++ if T.null txt then ""  else [tHead] ++  ") : " ++ show (size,newSize)) $ 
-              if T.null txt  then (prefix,txt) else
-                  ( if  newSize > 64
-                      then ( if  C.isSpace tHead  then (prefix,txt)
-                              else case splitOnLastSpace prefix of
-                                    (txt', Nothing ) -> (prefix,txt)
-                                    (txtPre,Just txtEnd) -> (txtPre,  T.concat [txtEnd,txt] )
-                            )
-                      else   splitString newSize (  T.snoc  prefix tHead) (T.tail txt)
-                  )
-        -- given text try to find the last space and split it . Also make sure that the split is not too big :D
-        splitOnLastSpace :: T.Text -> (T.Text,Maybe T.Text)
-        splitOnLastSpace txt = let
-            end = T.takeWhileEnd  (not . C.isSpace) txt
-            stripCount =  T.length end
-            in if stripCount <=20  then (T.dropEnd stripCount  txt, Just end)
-                else  (txt, Nothing)
-
 
     mapPolicyIdAndWitness :: TxMintData -> (PolicyId, ScriptWitness WitCtxMint AlonzoEra)
     mapPolicyIdAndWitness (TxMintData pId sw _)= (pId, sw)

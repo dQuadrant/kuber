@@ -52,7 +52,7 @@ import qualified Data.Aeson as Aeson
 import Data.Word (Word64)
 import qualified Data.HashMap.Internal.Strict as H
 
--- mktx 
+
 data TxMintingScript = TxSimpleScript ScriptInAnyLang
               | TxPlutusScript ScriptInAnyLang ScriptData (Maybe ExecutionUnits)
                             deriving(Show)
@@ -99,6 +99,9 @@ data TxInputSelection = TxSelectableAddresses [AddressInEra AlonzoEra]
 
 data TxMintData = TxMintData PolicyId (ScriptWitness WitCtxMint AlonzoEra) Value deriving (Show)
 
+-- TxBuilder object
+-- It is a semigroup and monoid instance, so it can be constructed using helper function 
+-- and merged to construct a transaction specification 
 data TxBuilder=TxBuilder{
     txSelections :: [TxInputSelection],
     txInputs:: [TxInput],
@@ -166,46 +169,65 @@ txCollateral v =  TxBuilder  [] [] [] [v] Nothing Nothing [] [] Nothing Nothing 
 txSignature :: TxSignature -> TxBuilder
 txSignature v =  TxBuilder  [] [] [] [] Nothing Nothing [] [v] Nothing Nothing Map.empty
 
+
+
+-- Transaction validity
+
+-- Set validity Start and end time in posixMilliseconds
 txValidPosixTimeRangeMs :: Integer -> Integer -> TxBuilder
 txValidPosixTimeRangeMs start end = TxBuilder  [] [] [] [] (Just start) (Just end) [] [] Nothing Nothing Map.empty
 
+-- set  validity statart time in posixMilliseconds
 txValidFromPosixMs:: Integer -> TxBuilder
 txValidFromPosixMs start =  TxBuilder  [] [] [] [] (Just start) Nothing [] [] Nothing Nothing Map.empty
 
+-- set transaction validity end time in posixMilliseconds
 txValidUntilPosixMs :: Integer -> TxBuilder
 txValidUntilPosixMs end =  TxBuilder  [] [] [] [] Nothing (Just end) [] [] Nothing Nothing Map.empty
+
 
 txMint :: [TxMintData] -> TxBuilder
 txMint md= TxBuilder  [] [] [] [] Nothing Nothing md [] Nothing Nothing Map.empty
 
 -- payment contexts
 
+-- pay to an Address
 txPayTo:: AddressInEra AlonzoEra ->Value ->TxBuilder
 txPayTo addr v=  txOutput $  TxOutput (TxOutAddress  addr v) False False
 
+-- pay to an Address by pubKeyHash. Note that the resulting address will be an enterprise address
 txPayToPkh:: PubKeyHash  ->Value ->TxBuilder
 txPayToPkh pkh v= txOutput $  TxOutput ( TxOutPkh  pkh  v ) False False
 
+-- pay to Script address
 txPayToScript :: AddressInEra AlonzoEra -> Value -> Hash ScriptData -> TxBuilder
 txPayToScript addr v d = txOutput $  TxOutput (TxOutScriptAddress  addr v d) False False
 
+-- pay to script Address. automatically computes scriptDataHash from the scriptData.
 txPayToScriptWithData :: AddressInEra AlonzoEra -> Value -> ScriptData -> TxBuilder
 txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutScriptAddress addr v (hashScriptData d)) False False
 
 -- input consmptions
 
+-- use Utxo as input in the transaction
 txConsumeUtxos :: UTxO AlonzoEra -> TxBuilder
 txConsumeUtxos utxo =  txInput $ TxInputResolved $  TxInputUtxo  utxo
 
+-- use the TxIn as input in the transaction
+-- the Txout value and address  is determined by querying the node
 txConsumeTxIn :: TxIn -> TxBuilder
 txConsumeTxIn  v = txInput $ TxInputUnResolved $ TxInputTxin v
 
+-- use txIn as input in the transaction
+-- Since TxOut is also given the txIn is not queried from the node.
 txConsumeUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> TxBuilder
 txConsumeUtxo tin v =txConsumeUtxos $ UTxO $ Map.singleton tin  v
 
+-- Mark this address as txExtraKeyWitness in the transaction object.
 txSignBy :: AddressInEra AlonzoEra -> TxBuilder
 txSignBy  a = txSignature (TxSignatureAddr a)
 
+-- Mark this PublicKeyhash as txExtraKeyWitness in the transaction object.
 txSignByPkh :: PubKeyHash  -> TxBuilder
 txSignByPkh p = txSignature $ TxSignaturePkh p
 -- Lock value and data in a script.
@@ -213,24 +235,28 @@ txSignByPkh p = txSignature $ TxSignaturePkh p
 -- So, the validator of this script will not be executed.
 
 
--- Redeem from Script Address.
+-- Redeem from a Script. The script address and value in the TxIn is determined automatically by querying the utxo from cardano node
 txRedeemTxin:: TxIn -> ScriptInAnyLang ->ScriptData -> ScriptData  -> TxBuilder
 txRedeemTxin txin script _data _redeemer = txInput $ TxInputUnResolved $ TxInputScriptTxin  (TxValidatorScript $ script)  _data  _redeemer  Nothing txin
 
 -- Redeem from Script Address.
+-- TxOut is provided so the address and value need not be queried from the caradno-node
 txRedeemUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> ScriptInAnyLang  -> ScriptData  -> ScriptData -> TxBuilder
 txRedeemUtxo txin txout script _data _redeemer = txInput $ TxInputResolved $ TxInputScriptUtxo  (TxValidatorScript $ script)  _data  _redeemer  Nothing $ UTxO $ Map.singleton txin  txout
 
 
- -- wallet configuration
+ -- wallet addresses, from which utxos can be spent for balancing the transaction 
 txWalletAddresses :: [AddressInEra AlonzoEra] -> TxBuilder
 txWalletAddresses v = txSelection $ TxSelectableAddresses  v
 
+-- wallet address, from which utxos can be spent  for balancing the transaction
 txWalletAddress :: AddressInEra AlonzoEra -> TxBuilder
 txWalletAddress v = txWalletAddresses [v]
 
+-- wallet utxos, that can be spent  for balancing the transaction
 txWalletUtxos :: UTxO AlonzoEra -> TxBuilder
 txWalletUtxos v =  txSelection $  TxSelectableUtxos v
 
+-- wallet utxo, that can be spent  for balancing the transaction
 txWalletUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> TxBuilder
 txWalletUtxo tin tout = txWalletUtxos $  UTxO $ Map.singleton tin  tout

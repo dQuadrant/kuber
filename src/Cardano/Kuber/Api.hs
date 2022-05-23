@@ -27,7 +27,7 @@ module Cardano.Kuber.Api(
     -- Core Tx builder object and it's transformation functions
     ,   TxBuilder
     ,   txBuilderToTxBody
-    ,   mkTx
+    ,   txBuilderToTxBodyIO
 
     -- Chain info Structures
     , ChainInfo (withProtocolParam ,withDetails,getNetworkId ,getConnectInfo)

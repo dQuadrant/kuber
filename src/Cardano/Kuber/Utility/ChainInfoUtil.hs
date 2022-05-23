@@ -8,27 +8,43 @@ import System.Directory (doesFileExist)
 import Data.Char (toLower)
 import System.FilePath (joinPath)
 
+-- type wrapper for EnvironmentVariable String
+type EnvVariable = String
 
+-- Helper function to get Node conenction information
 localNodeConnInfo :: NetworkId -> FilePath   -> LocalNodeConnectInfo CardanoMode
 localNodeConnInfo = LocalNodeConnectInfo (CardanoModeParams (EpochSlots 21600))
 
 
+-- Using Environment variables get mainnet's ConnectInfo
+-- If CARDANO_NODE_SOCKET_PATH environment variable is set,  the socket path is set to it's value
+-- Otherwise CARDANO_HOME or "$HOME/.cardano"  is used and the socket path becomes "$CARDANO_HOME/.cardano/mainnet/node.socket"
 chainInfoMainnet :: IO ChainConnectInfo
 chainInfoMainnet =  do
   conn <-getDefaultConnection "mainnet" Mainnet
   pure $ ChainConnectInfo conn
 
+-- Using Environment variables get testnet's ConnectInfo
+-- If CARDANO_NODE_SOCKET_PATH environment variable is set,  the socket path is set to it's value
+-- Otherwise CARDANO_HOME or "$HOME/.cardano"  is used and the socket path becomes "$CARDANO_HOME/.cardano/testnet/node.socket"
 chainInfoTestnet :: IO ChainConnectInfo
 chainInfoTestnet = do
   let network=Testnet  (NetworkMagic 1097911063)
   conn <-getDefaultConnection  "testnet" network
   pure $ ChainConnectInfo conn
 
+
+-- Using Environment variables determine the NETWORK.
+-- NETWORK can be "mainnet", "testnet" or "networkMagic number".
+-- If CARDANO_NODE_SOCKET_PATH environment variable is set,  the socket path is set to it's value
+-- Otherwise CARDANO_HOME or "$HOME/.cardano"  is used and the socket path becomes "$CARDANO_HOME/node.socket"
 chainInfoFromEnv :: IO ChainConnectInfo
 chainInfoFromEnv = chainInfoFromEnv' "NETWORK"
 
-
-chainInfoFromEnv' :: String -> IO ChainConnectInfo
+-- Read Network value from the environment variable and then determine connection info
+-- If CARDANO_NODE_SOCKET_PATH environment variable is set,  the socket path is set to it's value
+-- Otherwise CARDANO_HOME or "$HOME/.cardano"  is used and the socket path becomes "$CARDANO_HOME/node.socket"
+chainInfoFromEnv' :: EnvVariable -> IO ChainConnectInfo
 chainInfoFromEnv' envKey = do
   v <- getNetworkFromEnv envKey
   case v of
@@ -39,6 +55,8 @@ chainInfoFromEnv' envKey = do
       pure $ ChainConnectInfo conn
 
 
+-- If CARDANO_NODE_SOCKET_PATH environment variable is set,  return ConnectInfo instance with the path
+-- Otherwise CARDANO_HOME or "$HOME/.cardano"  is used and the socket path becomes "$CARDANO_HOME/node.socket"
 getDefaultConnection :: String -> NetworkId ->  IO (LocalNodeConnectInfo CardanoMode)
 getDefaultConnection networkName networkId= do
   sockEnv <- try $ getEnv "CARDANO_NODE_SOCKET_PATH"
@@ -50,7 +68,9 @@ getDefaultConnection networkName networkId= do
     Right s -> pure s
   pure (localNodeConnInfo networkId socketPath )
 
-getNetworkFromEnv :: String -> IO NetworkId
+
+-- Given environment variable key, read the environmet variable and return network Id
+getNetworkFromEnv :: EnvVariable -> IO NetworkId
 getNetworkFromEnv envKey =  do
   networkEnv <- try $ getEnv envKey
   case  networkEnv of
@@ -63,11 +83,17 @@ getNetworkFromEnv envKey =  do
         Just v -> pure (Testnet  (NetworkMagic v))
         _ -> fail "Invalid network id"
 
+-- get absolute path given a directoryor file path.
+-- the absolute path is "CARANO_HOME/...paths" value to the path
 getWorkPath :: [FilePath] -> IO  FilePath
 getWorkPath paths= do
   f <- getWorkPathFunc
   pure $ f paths
 
+
+-- Get WrokPath calculatin Function
+-- getWorkPath function can throw errors. The error is only during initialization
+-- So if the function succeeds, it returns pure function to calculate filepath which can be reused.
 getWorkPathFunc :: IO( [FilePath] -> FilePath )
 getWorkPathFunc = do
   eitherHome <-try $ getEnv "HOME"
