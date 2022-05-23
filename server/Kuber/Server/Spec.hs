@@ -10,9 +10,8 @@ module Kuber.Server.Spec where
 
 import Cardano.Api
 import Cardano.Api.Shelley (AlonzoEra)
-import Cardano.Kuber.Error (ErrorType (..), FrameworkError (..))
 import Cardano.Kuber.Data.Models
-import Cardano.Kuber.Core.TxBuilder (TxBuilder)
+
 import Control.Exception
   ( Exception,
     IOException,
@@ -23,7 +22,6 @@ import Control.Exception
     try,
   )
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Core
 import Data.Aeson (FromJSON, KeyValue ((.=)), ToJSON (toJSON), decode, object)
 import qualified Data.ByteString as ByteString
 import Data.Data (typeOf)
@@ -42,18 +40,25 @@ import Network.Wai.Middleware.Servant.Errors (HasErrorBody (..), errorMw)
 import Servant
 import Servant.Exception (Exception (..), Throws, ToServantErr (..), mapException)
 import Servant.Exception.Server
-import Cardano.Kuber.TxBuilder (TxBuilder)
-import Cardano.Kuber.ChainInfo (DetailedChainInfo(DetailedChainInfo))
+
 import qualified Data.String as String
 
 import qualified Servant.API.ContentTypes as ContentTypes
 import Cardano.Ledger.Alonzo.Scripts (ExUnits(ExUnits))
 import Data.Text (Text)
-import MediaType (AnyTextType, CBORText, CBORBinary)
+import Kuber.Server.MediaType (AnyTextType, CBORText, CBORBinary)
 import qualified Data.ByteString.Lazy
 import Network.Wai.Middleware.Cors (simpleCors, CorsResourcePolicy (..), cors)
 import qualified Data.ByteString.Char8 as BS
 import Network.Wai (Request(requestMethod), Response, ResponseReceived, mapResponseHeaders)
+import Cardano.Kuber.Api
+import Kuber.Server.MediaType
+
+import Kuber.Server.MediaType
+
+import Cardano.Kuber.Util (evaluateExecutionUnits)
+import Kuber.Server.Core
+
 type TransactionAPI =
   Throws FrameworkError
     :> (
@@ -66,7 +71,7 @@ server :: DetailedChainInfo -> Server TransactionAPI
 server dcInfo =
   errorGuard (txBuilder dcInfo)
   :<|> errorGuard (testTx dcInfo)
-  :<|> errorGuard (evaluateExecutionUnits' dcInfo )
+  :<|> errorGuard (evaluateExecutionUnits dcInfo )
   where
 
     errorGuard f v = liftIO $ do

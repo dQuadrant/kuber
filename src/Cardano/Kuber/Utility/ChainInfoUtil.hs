@@ -1,38 +1,42 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Cardano.Kuber.Utility.ChainInfoUtil where
 import Cardano.Kuber.Core.ChainInfo ( ChainConnectInfo(..) )
-import Cardano.Api (NetworkId(Mainnet, Testnet), NetworkMagic (NetworkMagic), LocalNodeConnectInfo, CardanoMode)
+import Cardano.Api (NetworkId(Mainnet, Testnet), NetworkMagic (NetworkMagic), LocalNodeConnectInfo (LocalNodeConnectInfo), CardanoMode, ConsensusModeParams (CardanoModeParams), EpochSlots (EpochSlots))
 import Control.Exception (try)
-import Cardano.Kuber.Util ( localNodeConnInfo )
 import System.Environment (getEnv)
 import System.Directory (doesFileExist)
 import Data.Char (toLower)
 import System.FilePath (joinPath)
 
+
+localNodeConnInfo :: NetworkId -> FilePath   -> LocalNodeConnectInfo CardanoMode
+localNodeConnInfo = LocalNodeConnectInfo (CardanoModeParams (EpochSlots 21600))
+
+
 chainInfoMainnet :: IO ChainConnectInfo
-chainInfoMainnet =  do 
+chainInfoMainnet =  do
   conn <-getDefaultConnection "mainnet" Mainnet
-  pure $ ChainConnectInfo conn 
+  pure $ ChainConnectInfo conn
 
 chainInfoTestnet :: IO ChainConnectInfo
 chainInfoTestnet = do
   let network=Testnet  (NetworkMagic 1097911063)
   conn <-getDefaultConnection  "testnet" network
-  pure $ ChainConnectInfo conn 
+  pure $ ChainConnectInfo conn
 
 chainInfoFromEnv :: IO ChainConnectInfo
 chainInfoFromEnv = chainInfoFromEnv' "NETWORK"
 
 
 chainInfoFromEnv' :: String -> IO ChainConnectInfo
-chainInfoFromEnv' envKey = do 
+chainInfoFromEnv' envKey = do
   v <- getNetworkFromEnv envKey
-  case v of 
+  case v of
     Mainnet -> chainInfoMainnet
     (Testnet  (NetworkMagic 1097911063)) -> chainInfoTestnet
-    net ->  do 
+    net ->  do
       conn <- getDefaultConnection "" net
-      pure $ ChainConnectInfo conn  
+      pure $ ChainConnectInfo conn
 
 
 getDefaultConnection :: String -> NetworkId ->  IO (LocalNodeConnectInfo CardanoMode)
@@ -42,7 +46,7 @@ getDefaultConnection networkName networkId= do
     Left (e::IOError) -> do
           defaultSockPath<- getWorkPath ( if null networkName then ["node.socket"] else [networkName,"node.socket"])
           exists<-doesFileExist defaultSockPath
-          if exists then return defaultSockPath else  (error $ "Socket File is Missing: "++defaultSockPath ++"\n\tSet environment variable CARDANO_NODE_SOCKET_PATH  to use different path")
+          if exists then return defaultSockPath else  error $ "Socket File is Missing: "++defaultSockPath ++"\n\tSet environment variable CARDANO_NODE_SOCKET_PATH  to use different path"
     Right s -> pure s
   pure (localNodeConnInfo networkId socketPath )
 

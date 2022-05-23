@@ -27,7 +27,7 @@ library
     Cardano.Kuber.Util
     Cardano.Kuber.Console.ConsoleWritable
     Cardano.Kuber.Data.Models
-
+    Cardano.Kuber.Data.Parsers
 
   other-modules:
     Cardano.Kuber.Error
@@ -35,12 +35,12 @@ library
     Cardano.Kuber.Core.TxBuilder
     Cardano.Kuber.Core.TxFramework
     Cardano.Kuber.Data.TxBuilderAeson
-    Cardano.Kuber.Data.Parsers
     Cardano.Kuber.Utility.ChainInfoUtil
     Cardano.Kuber.Utility.WalletUtil
     Cardano.Kuber.Utility.QueryHelper
     Cardano.Kuber.Utility.DataTransformation
     Cardano.Kuber.Utility.Text
+    Cardano.Kuber.Utility.ScriptUtil
 
     -- Plutus.Contract.Wallet.Utils
   hs-source-dirs: src

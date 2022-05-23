@@ -6,11 +6,9 @@
 {-# LANGUAGE TupleSections #-}
 module Cardano.Kuber.Util
 (
-localNodeConnInfo
-
 
     -- TypeCast/Conversion Utilities (Address/Pkh/SignKey)
-    , skeyToAddr
+      skeyToAddr
     , skeyToAddrInEra
     , sKeyToPkh
     , addressInEraToAddressAny
@@ -43,13 +41,14 @@ localNodeConnInfo
     -- query helpers
     , queryUtxos
 
-
-
 )
 where
 
 import Cardano.Api
 import Cardano.Kuber.Utility.DataTransformation
+import Cardano.Kuber.Core.ChainInfo
+import Cardano.Kuber.Utility.QueryHelper
+
 import Data.ByteString (ByteString,readFile)
 import qualified Cardano.Api.Shelley as Shelley
 import qualified Data.Set as Set
@@ -79,7 +78,6 @@ import Codec.Serialise (serialise)
 import Cardano.Api.Byron (Address(ByronAddress))
 import qualified Data.Aeson as JSON
 import qualified Data.Text.Encoding as TSE
-import Cardano.Kuber.Data.Parsers
 import qualified Data.Map as Map
 import Data.Char (toLower)
 import Data.Set (Set)
@@ -90,18 +88,9 @@ import qualified Codec.CBOR.Encoding as Cborg
 import qualified Cardano.Binary as Cborg
 import qualified Data.ByteString as BS
 import Cardano.Slotting.Time (SystemStart)
-import Cardano.Kuber.Core.ChainInfo
-import Cardano.Kuber.Utility.QueryHelper
 import Cardano.Ledger.Alonzo.TxBody (inputs')
 import Cardano.Ledger.Shelley.UTxO (txins)
-
-
-
-localNodeConnInfo :: NetworkId -> FilePath   -> LocalNodeConnectInfo CardanoMode
-localNodeConnInfo = LocalNodeConnectInfo (CardanoModeParams (EpochSlots 21600))
-
-
-
+import Cardano.Kuber.Utility.ChainInfoUtil
 
 
 
@@ -125,6 +114,14 @@ isNullValue v = not $ any (\(aid,Quantity q) -> q>0) (valueToList v)
 
 isPositiveValue :: Value -> Bool
 isPositiveValue v = not $ any (\(aid,Quantity q) -> q<0) (valueToList v)
+
+valueLte :: Value -> Value -> Bool
+valueLte _v1 _v2= not $ any (\(aid,Quantity q) -> q > lookup aid) (valueToList _v1) -- do we find anything that's greater than q
+  where
+    lookup x= case Map.lookup x v2Map of
+      Nothing -> 0
+      Just (Quantity v) -> v
+    v2Map=Map.fromList $ valueToList _v2
 
 filterNegativeQuantity :: Value -> [(AssetId,Quantity)]
 filterNegativeQuantity  v = filter (\(_, v) -> v < 0 ) $ valueToList v
@@ -201,11 +198,3 @@ evaluateExUnitMap  (DetailedChainInfo cpw conn pParam systemStart eraHistory ) u
     transformIn (txIn,wit) exUnit= (txIn  ,case BuildTxWith $ KeyWitness KeyWitnessForSpending of {
       BuildTxWith wit' -> wit } )
 
-
-valueLte :: Value -> Value -> Bool
-valueLte _v1 _v2= not $ any (\(aid,Quantity q) -> q > lookup aid) (valueToList _v1) -- do we find anything that's greater than q
-  where
-    lookup x= case Map.lookup x v2Map of
-      Nothing -> 0
-      Just (Quantity v) -> v
-    v2Map=Map.fromList $ valueToList _v2

@@ -40,6 +40,10 @@ module Cardano.Kuber.Api(
     ,   chainInfoFromEnv' 
     ,   chainInfoMainnet 
     ,   chainInfoTestnet 
+    ,   localNodeConnInfo
+    ,   getWorkPath
+    ,   getWorkPathFunc
+
 
     -- Error Class
     ,   ErrorType(..)

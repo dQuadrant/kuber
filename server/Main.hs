@@ -1,14 +1,13 @@
-module Kuber.Server.Main where
+module Main where
 
 
-import Cardano.Kuber.ChainInfo (IsNetworkCtx (toFullNetworkContext, toNetworkContext), getDefaultTestnetContext, readContextFromEnv)
 import Network.Wai.Handler.Warp (run)
 import Kuber.Server.Spec (app)
-import Cardano.Kuber.ChainInfo
+import Cardano.Kuber.Api (chainInfoFromEnv, ChainInfo (withDetails))
 
+main :: IO ()
 main = do
-  ctx <- readContextFromEnv
-  chainInfo <- withDetails ctx
+  dcinfo <- chainInfoFromEnv >>= withDetails
   let port=8081
   putStrLn $ "Starting server on port " ++ show port ++"..."
-  run port $ app chainInfo
+  run port $ app dcinfo
