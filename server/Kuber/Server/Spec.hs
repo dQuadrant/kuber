@@ -6,14 +6,13 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Server where
+module Kuber.Server.Spec where
 
 import Cardano.Api
 import Cardano.Api.Shelley (AlonzoEra)
-import Cardano.Contrib.Kuber.Error (ErrorType (..), FrameworkError (..))
-import Cardano.Contrib.Kuber.Models
-import Cardano.Contrib.Kuber.TxBuilder (TxBuilder)
-import Cardano.Contrib.Kuber.Util (executeSubmitTx)
+import Cardano.Kuber.Error (ErrorType (..), FrameworkError (..))
+import Cardano.Kuber.Data.Models
+import Cardano.Kuber.Core.TxBuilder (TxBuilder)
 import Control.Exception
   ( Exception,
     IOException,
@@ -43,8 +42,8 @@ import Network.Wai.Middleware.Servant.Errors (HasErrorBody (..), errorMw)
 import Servant
 import Servant.Exception (Exception (..), Throws, ToServantErr (..), mapException)
 import Servant.Exception.Server
-import Cardano.Contrib.Kuber.TxBuilder (TxBuilder)
-import Cardano.Contrib.Kuber.ChainInfo (DetailedChainInfo(DetailedChainInfo))
+import Cardano.Kuber.TxBuilder (TxBuilder)
+import Cardano.Kuber.ChainInfo (DetailedChainInfo(DetailedChainInfo))
 import qualified Data.String as String
 
 import qualified Servant.API.ContentTypes as ContentTypes
@@ -61,7 +60,7 @@ type TransactionAPI =
             "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "submit" :> ReqBody '[JSON] (TxModal) :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary  ] (Tx AlonzoEra) :> Post '[JSON] ([Either String ExecutionUnits ])
-       )
+       ) 
 
 server :: DetailedChainInfo -> Server TransactionAPI
 server dcInfo =

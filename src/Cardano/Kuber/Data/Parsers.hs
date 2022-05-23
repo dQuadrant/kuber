@@ -1,10 +1,11 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 
-module Cardano.Contrib.Kuber.Parsers where
+module Cardano.Kuber.Data.Parsers where
 
 import Cardano.Api
-import Cardano.Contrib.Kuber.Error
+import Cardano.Kuber.Error
 import Control.Exception (SomeException, catch, throw)
 import qualified Data.Aeson as Aeson
 import Data.ByteString.Lazy (fromStrict)
@@ -12,7 +13,7 @@ import Data.Char (isDigit, isSeparator)
 import Data.Functor ((<&>))
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Conversions (Base16 (unBase16), convertText)
+import Data.Text.Conversions (Base16 (unBase16, Base16), convertText, FromText (fromText), ToText (toText))
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.Encoding as TSE
 import GHC.IO.Exception (IOErrorType (UserError), IOException (IOError))
@@ -26,7 +27,7 @@ import qualified Data.HashMap.Internal.Strict as H
 parseSignKey :: MonadFail m => Text -> m (SigningKey PaymentKey)
 parseSignKey txt
   | T.null txt = fail "Empty value for SignKey"
-  | T.head txt /= '{' =
+  | T.head txt /= '{' = 
     case deserialiseFromBech32 (AsSigningKey AsPaymentKey) txt of
       Left ide -> case convertText txt <&> unBase16 of
         Nothing -> fail "SignKey is neither Bench32 nor Hex encoded"
@@ -173,6 +174,7 @@ parseAddress addrText = case deserialiseAddress (AsAddressInEra AsAlonzoEra) add
   Just aie -> pure aie
 
 
+scriptDataParser :: MonadFail m => H.HashMap Text Aeson.Value -> Text -> m ScriptData
 scriptDataParser v key = case H.lookup key v of
   Nothing -> fail $"missing key \"" ++ T.unpack key ++ "\" if type ScriptData in json object"
   Just v -> doParsing v

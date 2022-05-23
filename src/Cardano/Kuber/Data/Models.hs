@@ -10,12 +10,11 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-module Cardano.Contrib.Kuber.Models where
+module Cardano.Kuber.Data.Models where
 
 import Cardano.Api
 import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData)
 import Cardano.Binary (ToCBOR (toCBOR), decodeFull, fromCBOR)
-import Cardano.Contrib.Kuber.Util (toHexString)
 import Cardano.Ledger.Alonzo.Data (Data)
 import Cardano.Ledger.Alonzo.Tx (TxBody (txfee))
 import Codec.CBOR.Write (toLazyByteString)
@@ -23,7 +22,7 @@ import Data.Aeson (KeyValue ((.=)), encode, object)
 import Data.Aeson.Types (FromJSON (parseJSON), Parser, ToJSON (toJSON), Value (Object, String), (.:), (.:?))
 import qualified Data.ByteString.Lazy as LBS
 import Data.ByteString.Lazy.Char8 (toStrict)
-import Data.Functor
+import Data.Functor ( (<&>) )
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Conversions (Base16 (Base16), convertText)
@@ -31,6 +30,7 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding as TSE
 import GHC.Generics (Generic)
 import Text.Read (readMaybe)
+import Cardano.Kuber.Utility.Text (toHexString)
 
 newtype AssetModal = AssetModal AssetId deriving (Show)
 

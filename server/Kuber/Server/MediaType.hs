@@ -4,7 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonoLocalBinds #-}
 
-module MediaType 
+module Kuber.Server.MediaType 
 where
     
 import Network.HTTP.Media ((//), (/:), MediaType)

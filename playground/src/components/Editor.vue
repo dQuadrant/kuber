@@ -30,7 +30,6 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
 
           <div class="ml-2 mt-1 form-check form-check text-sm">
             <input
-              ref="addUtxo"
               class="form-check-input h-4 w-4 border border-gray-300 rounded-sm bg-white checked:bg-blue-600 checked:border-blue-600 focus:outline-none transition duration-200 mt-1 align-top bg-no-repeat bg-center bg-contain float-left mr-2 cursor-pointer"
               type="checkbox"
               id="inlineCheckbox1"
@@ -40,15 +39,16 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               class="form-check-label inline-block text-gray-500"
               for="inlineCheckbox1"
             >
-              Add Wallet UTxOs in selection</label
-            >
+              Add Wallet UTxOs in selection
+              </label>
           </div>
         </span>
       </div>
     </div>
+      <!-- v-model="content" -->
 
     <v-ace-editor
-      v-model:value="content"
+      value=""
       @init="editorInit"
       lang="json"
       theme="chrome"
@@ -77,7 +77,6 @@ export default {
     const providers: Array<CIP30Provider> = [];
 
     return {
-      content: "",
       providers: providers,
       addSelections: true,
       editor: null,
@@ -91,11 +90,11 @@ export default {
   },
   methods: {
     submitTx(provider: CIP30Provider) {
-      this.save();
-      console.log("submitTx", this.content);
+      const editorContent=this.editor.getValue()
+      this.save(editorContent);
       let request
       try{
-       request = JSON.parse(this.content);
+       request = JSON.parse(editorContent);
       }catch(e:any){
         notification.setNotification({
             type: "alert",
@@ -139,11 +138,13 @@ export default {
         useWorker: true,
       });
       session.setUseWrapMode(true);
-      this.content = localStorage.getItem("editor.content") || "{\n\n}";
-      this.interval = setInterval(this.save, 2000);
+      session.setValue(localStorage.getItem("editor.content") || "{\n\n}");
+      this.interval = setInterval(()=>{this.save(this.editor.getValue())}, 2000);
+      this.editor=session
+      console.log(session)
     },
-    save() {
-      localStorage.setItem("editor.content", this.content);
+    save(v:string) {
+      localStorage.setItem("editor.content",v);
     },
   },
   components: {

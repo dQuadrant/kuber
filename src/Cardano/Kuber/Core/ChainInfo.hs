@@ -1,15 +1,12 @@
-module Cardano.Contrib.Kuber.ChainInfo
+module Cardano.Kuber.Core.ChainInfo
 where
 
 import Cardano.Api
 import Cardano.Api.Shelley
 import Cardano.Slotting.Time
-import Cardano.Contrib.Kuber.Util
-    ( getDefaultConnection,
-      queryProtocolParam,
-      querySystemStart,
-      queryEraHistory, getNetworkFromEnv )
+
 import Data.Functor ((<&>))
+import Cardano.Kuber.Utility.QueryHelper
 
 class ChainInfo v where
   withProtocolParam :: v-> IO ChainInfoWithProtocolParams
@@ -62,28 +59,3 @@ instance ChainInfo DetailedChainInfo where
   withProtocolParam  (DetailedChainInfo  fctxcpw conn  pParam _ _ ) = pure $ ChainInfoWithProtocolParams conn  pParam
   withDetails =pure
   getConnectInfo (DetailedChainInfo fctxcpw conn _  _ _)= conn 
-
-
-getDefaultMainnetContext :: IO ChainConnectInfo
-getDefaultMainnetContext =  do 
-  conn <-getDefaultConnection "mainnet" Mainnet
-  pure $ ChainConnectInfo conn 
-
-getDefaultTestnetContext :: IO ChainConnectInfo
-getDefaultTestnetContext = do
-  let network=Testnet  (NetworkMagic 1097911063)
-  conn <-getDefaultConnection  "testnet" network
-  pure $ ChainConnectInfo conn 
-
-readContextFromEnv :: IO ChainConnectInfo
-readContextFromEnv = readContextFromEnv' "NETWORK"
-
-readContextFromEnv' :: String -> IO ChainConnectInfo
-readContextFromEnv' envKey = do 
-  v <- getNetworkFromEnv envKey
-  case v of 
-    Mainnet -> getDefaultMainnetContext
-    (Testnet  (NetworkMagic 1097911063)) -> getDefaultTestnetContext
-    net ->  do 
-      conn <- getDefaultConnection "" net
-      pure $ ChainConnectInfo conn  

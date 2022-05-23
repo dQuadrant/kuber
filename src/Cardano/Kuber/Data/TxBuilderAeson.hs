@@ -5,14 +5,13 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE OverloadedStrings #-}
-
-module Cardano.Contrib.Kuber.TxBuilder
+module Cardano.Kuber.Data.TxBuilderAeson 
 where
 
 
 import Cardano.Api hiding(txMetadata, txFee)
 import Cardano.Api.Shelley hiding (txMetadata, txFee)
-import Cardano.Contrib.Kuber.Error
+import Cardano.Kuber.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
 import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
@@ -21,7 +20,7 @@ import qualified Data.Set as Set
 import Data.Map (Map)
 import Control.Exception
 import Data.Either
-import Cardano.Contrib.Kuber.Util
+import Cardano.Kuber.Util
 import Data.Functor ((<&>))
 import qualified Data.ByteString.Short as SBS
 import qualified Data.ByteString.Lazy as LBS
@@ -35,8 +34,8 @@ import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unVa
 import Data.Aeson.Types (FromJSON(parseJSON), (.:), Parser)
 import qualified Data.Aeson as A
 import qualified Data.Text as T
-import Cardano.Contrib.Kuber.Models (parseUtxo, unAddressModal)
-import Cardano.Contrib.Kuber.Parsers (parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser)
+import Cardano.Kuber.Data.Models (parseUtxo, unAddressModal)
+import Cardano.Kuber.Data.Parsers (parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON))
 import qualified Data.Aeson as A.Object
@@ -53,169 +52,8 @@ import qualified Debug.Trace as Debug
 import qualified Data.Aeson as Aeson
 import Data.Word (Word64)
 import qualified Data.HashMap.Internal.Strict as H
-
--- mktx 
-data TxMintingScript = TxSimpleScript ScriptInAnyLang
-              | TxPlutusScript ScriptInAnyLang ScriptData (Maybe ExecutionUnits)
-                            deriving(Show)
-
-newtype TxValidatorScript = TxValidatorScript ScriptInAnyLang deriving (Show)
-
-data TxInputResolved_ = TxInputUtxo (UTxO AlonzoEra)
-              | TxInputScriptUtxo TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) (UTxO AlonzoEra) deriving (Show)
-data TxInputUnResolved_ = TxInputTxin TxIn
-              | TxInputAddr (AddressInEra AlonzoEra)
-              | TxInputScriptTxin TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) TxIn deriving (Show)
-
-data TxInput  = TxInputResolved TxInputResolved_ | TxInputUnResolved TxInputUnResolved_ deriving (Show)
-
-data TxOutputContent =
-     TxOutAddress (AddressInEra AlonzoEra) Value
-  |  TxOutScriptAddress (AddressInEra AlonzoEra) Value (Hash ScriptData)
-  |  TxOutPkh PubKeyHash Value
-  |  TxOutScript TxValidatorScript Value  (Hash ScriptData)  deriving (Show)
-
-data TxOutput = TxOutput {
-  content :: TxOutputContent,
-  addChange :: Bool,
-  deductFee :: Bool
-} deriving (Show)
-
-data TxCollateral =  TxCollateralTxin TxIn
-                  |  TxCollateralUtxo (UTxO AlonzoEra)
-    deriving (Show)
-
-data TxSignature =  TxExtraSignature Integer
-                  | TxSignatureAddr (AddressInEra AlonzoEra)
-                  | TxSignaturePkh PubKeyHash
-    deriving (Show)
-
-
-data TxChangeAddr = TxChangeAddrUnset
-                  | TxChangeAddr (AddressInEra AlonzoEra)
-   deriving (Show)
-
-data TxInputSelection = TxSelectableAddresses [AddressInEra AlonzoEra]
-                  | TxSelectableUtxos  (UTxO AlonzoEra)
-                  | TxSelectableTxIn [TxIn]
-                   deriving(Show)
-
-data TxMintData = TxMintData PolicyId (ScriptWitness WitCtxMint AlonzoEra) Value deriving (Show)
-
-data TxBuilder=TxBuilder{
-    txSelections :: [TxInputSelection],
-    txInputs:: [TxInput],
-    txOutputs :: [TxOutput],
-    txCollaterals :: [TxCollateral],  -- collateral for the transaction
-    txValidityStart :: Maybe Integer,
-    txValidityEnd :: Maybe Integer,
-    txMintData :: [TxMintData],
-    txSignatures :: [TxSignature],
-    txFee :: Maybe Integer,
-    txDefaultChangeAddr :: Maybe (AddressInEra AlonzoEra),
-    txMetadata :: Map Word64 Aeson.Value
-  } deriving (Show)
-
-instance Monoid TxBuilder where
-  mempty = TxBuilder  [] [] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
-
-instance Semigroup TxBuilder where
-  (<>)  txb1 txb2 =TxBuilder{
-    txSelections = txSelections txb1 ++ txSelections txb2,
-    txInputs = txInputs txb1 ++ txInputs txb2,
-    txOutputs = txOutputs txb1 ++ txOutputs txb2,
-    txCollaterals  = txCollaterals txb1 ++ txCollaterals txb2,  -- collateral for the transaction
-    txValidityStart = case txValidityStart txb1 of
-          Just v1 -> case txValidityStart txb2 of
-            Just v2 -> Just $ min v1 v2
-            Nothing -> Just v1
-          Nothing -> txValidityStart txb2,
-    txValidityEnd = case txValidityEnd txb1 of
-      Just v1 -> case txValidityEnd txb2 of
-        Just v2 -> Just $ max v1 v2
-        _ -> Just v1
-      _ -> txValidityEnd txb2,
-    txMintData = txMintData txb2 <> txMintData txb2,
-    txSignatures = txSignatures txb1 ++ txSignatures txb2,
-    txFee  = case txFee txb1 of
-      Just f -> case txFee txb2 of
-        Just f2 -> Just $ max f f2
-        _ -> Just f
-      Nothing -> txFee txb2,
-    txDefaultChangeAddr = case txDefaultChangeAddr txb1 of
-      Just addr -> Just addr
-      _ -> txDefaultChangeAddr txb2,
-    txMetadata = txMetadata txb1 <> txMetadata txb2
-  }
-
-
-data TxContext = TxContext {
-  ctxAvailableUtxo :: UTxO AlonzoEra,
-  ctxBuiler :: [TxBuilder]
-}
-
-txSelection v = TxBuilder  [v] [] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
-
-txInput v = TxBuilder  [] [v] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
-
-txOutput v =  TxBuilder  [] [] [v] [] Nothing Nothing [] [] Nothing Nothing Map.empty
-
-txCollateral v =  TxBuilder  [] [] [] [v] Nothing Nothing [] [] Nothing Nothing Map.empty
-
-txValidPosixTimeRange start end = TxBuilder  [] [] [] [] (Just start) (Just end) [] [] Nothing Nothing Map.empty
-
-txValidFromPosixTime :: Integer -> TxBuilder
-txValidFromPosixTime start =  TxBuilder  [] [] [] [] (Just start) Nothing [] [] Nothing Nothing Map.empty
-
-txValidUntilPosixTime end =  TxBuilder  [] [] [] [] Nothing (Just end) [] [] Nothing Nothing Map.empty
-
-txMint md= TxBuilder  [] [] [] [] Nothing Nothing md [] Nothing Nothing Map.empty
-
--- payment contexts
-
-txPayTo:: AddressInEra AlonzoEra ->Value ->TxBuilder
-txPayTo addr v=  txOutput $  TxOutput (TxOutAddress  addr v) False False
-
-txPayToPkh:: PubKeyHash  ->Value ->TxBuilder
-txPayToPkh pkh v= txOutput $  TxOutput ( TxOutPkh  pkh  v ) False False
-
-txPayToScript addr v d = txOutput $  TxOutput (TxOutScriptAddress  addr v d) False False
-
--- input consmptions
-
-txConsumeUtxos :: UTxO AlonzoEra -> TxBuilder
-txConsumeUtxos utxo =  txInput $ TxInputResolved $  TxInputUtxo  utxo
-
-txConsumeTxIn :: TxIn -> TxBuilder
-txConsumeTxIn  v = txInput $ TxInputUnResolved $ TxInputTxin v
-
-txConsumeUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> TxBuilder
-txConsumeUtxo tin v =txConsumeUtxos $ UTxO $ Map.singleton tin  v
-
--- Lock value and data in a script.
--- It's a script that we depend on. but we are not testing it.
--- So, the validator of this script will not be executed.
-
-
--- Redeem from Script Address.
-txRedeemTxin:: TxIn -> ScriptInAnyLang ->ScriptData -> ScriptData  -> TxBuilder
-txRedeemTxin txin script _data _redeemer = txInput $ TxInputUnResolved $ TxInputScriptTxin  (TxValidatorScript $ script)  _data  _redeemer  Nothing txin
-
--- Redeem from Script Address.
-txRedeemUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> ScriptInAnyLang  -> ScriptData  -> ScriptData -> TxBuilder
-txRedeemUtxo txin txout script _data _redeemer = txInput $ TxInputResolved $ TxInputScriptUtxo  (TxValidatorScript $ script)  _data  _redeemer  Nothing $ UTxO $ Map.singleton txin  txout
-
-txPayerAddresses :: [AddressInEra AlonzoEra] -> TxBuilder
-txPayerAddresses v = txSelection $ TxSelectableAddresses  v
-
-txPayerAddress :: AddressInEra AlonzoEra -> TxBuilder
-txPayerAddress v = txPayerAddresses [v]
-
-txAvailableUtxos :: UTxO AlonzoEra -> TxBuilder
-txAvailableUtxos v =  txSelection $  TxSelectableUtxos v
-
-txAvailableUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> TxBuilder
-txAvailableUtxo tin tout = txAvailableUtxos $  UTxO $ Map.singleton tin  tout
+import Cardano.Kuber.Core.TxBuilder
+import Cardano.Kuber.Utility.ScriptUtil
 
 instance FromJSON TxBuilder where
   parseJSON (A.Object v) =
@@ -450,7 +288,6 @@ instance ToJSON TxCollateral where
   toJSON _ = "TxCollateralUtxo Not implemented."
 
 instance ToJSON TxSignature where
-  toJSON (TxExtraSignature _signature) = A.Number $ fromIntegral _signature
   toJSON (TxSignatureAddr _sigAddr) = toJSON _sigAddr
   toJSON _ = "TxSignaturePkh Not implemented."
 
@@ -610,8 +447,5 @@ instance FromJSON TxSignature where
       Nothing -> fail $ "Invalid address string: " ++ T.unpack v
       Just aie -> pure $ TxSignatureAddr aie
 
-  parseJSON (A.Number v) = do
-    let v' =  floor v
-    pure $ TxExtraSignature v'
 
-  parseJSON _ = fail "TxSignature must be an String or Number (integer)"
+  parseJSON _ = fail "TxSignature must be an String Address or PubKeyHash "

@@ -1,10 +1,10 @@
-module Main where
+module Kuber.Server.Main where
 
 
--- import Cardano.Contrib.Kuber.ChainInfo (IsNetworkCtx (toFullNetworkContext, toNetworkContext), getDefaultTestnetContext, readContextFromEnv)
+import Cardano.Kuber.ChainInfo (IsNetworkCtx (toFullNetworkContext, toNetworkContext), getDefaultTestnetContext, readContextFromEnv)
 import Network.Wai.Handler.Warp (run)
-import Server (app)
-import Cardano.Contrib.Kuber.ChainInfo
+import Kuber.Server.Spec (app)
+import Cardano.Kuber.ChainInfo
 
 main = do
   ctx <- readContextFromEnv

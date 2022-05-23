@@ -7,12 +7,12 @@
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use lambda-case" #-}
-module Cardano.Contrib.Kuber.TxFramework where
+module Cardano.Kuber.Core.TxFramework where
 
 
 import Cardano.Api hiding ( PaymentCredential)
 import Cardano.Api.Shelley hiding (PaymentCredential)
-import Cardano.Contrib.Kuber.Error
+import Cardano.Kuber.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
 import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
@@ -21,7 +21,7 @@ import qualified Data.Set as Set
 import Data.Map (Map)
 import Control.Exception
 import Data.Either
-import Cardano.Contrib.Kuber.Util
+import Cardano.Kuber.Util
 import Data.Functor ((<&>))
 import qualified Data.ByteString.Short as SBS
 import qualified Data.ByteString.Lazy as LBS
@@ -31,8 +31,8 @@ import Data.Maybe (mapMaybe, catMaybes, fromMaybe, maybeToList)
 import Data.List (intercalate, sortBy, minimumBy, find)
 import qualified Data.Foldable as Foldable
 import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, fromBuiltin)
-import Cardano.Contrib.Kuber.TxBuilder
-import Cardano.Contrib.Kuber.ChainInfo (DetailedChainInfo (DetailedChainInfo, dciConn), ChainInfo (getNetworkId))
+import Cardano.Kuber.Core.TxBuilder
+import Cardano.Kuber.Core.ChainInfo (DetailedChainInfo (DetailedChainInfo, dciConn), ChainInfo (getNetworkId))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Cardano.Api.Crypto.Ed25519Bip32 (xPrvFromBytes)
 import Debug.Trace (trace, traceM)
@@ -43,7 +43,7 @@ import qualified Data.Map.Strict as StrictMap
 import qualified Debug.Trace as Debug
 import Data.Aeson (ToJSON(toJSON))
 import qualified Data.Text as T
-import Cardano.Contrib.Kuber.Error (ErrorType(PlutusScriptError))
+import Cardano.Kuber.Error (ErrorType(PlutusScriptError))
 import Data.Text.Conversions (convertText)
 import Prettyprinter.Extras (pretty)
 import Data.Word (Word64)
@@ -63,6 +63,8 @@ import Cardano.Ledger.DescribeEras (StandardCrypto)
 import Data.ByteString (ByteString)
 import Cardano.Binary (ToCBOR(toCBOR))
 import qualified Cardano.Binary as Cborg
+import Cardano.Kuber.Utility.ScriptUtil
+import Cardano.Kuber.Utility.QueryHelper (queryUtxos, queryTxins)
 
 type IsChangeUsed   = Bool
 type  ParsedInput   = Either (Witness WitCtxTxIn AlonzoEra,TxOut CtxUTxO AlonzoEra) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn AlonzoEra,TxOut CtxUTxO  AlonzoEra)
@@ -83,7 +85,7 @@ txBuilderToTxBody dcInfo builder = do
     Left fe -> pure $ Left fe
     Right (UTxO  uto) -> do
       let missingTxins= Set.difference txins ( Map.keysSet  uto )
-      vals <- queryIfNotEmpty missingTxins (resolveTxins conn missingTxins) (Right $ UTxO  Map.empty)
+      vals <- queryIfNotEmpty missingTxins (queryTxins conn missingTxins) (Right $ UTxO  Map.empty)
       case vals of
         Left fe -> pure $ Left fe
         Right (UTxO uto') ->do
@@ -163,7 +165,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
     )
     else (
           let evaluateBodyWithExunits body fee= do
-                        exUnits <- createExUnitMap dCinfo ( UTxO availableUtxo) body
+                        exUnits <- evaluateExUnitMap dCinfo ( UTxO availableUtxo) body
                         inputs' <- usedInputs  (Map.map Right exUnits ) (Right defaultExunits)  resolvedInputs
                         calculator inputs' txMintValue' fee
           in do
@@ -234,43 +236,12 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
       TxInputUnResolved (TxInputScriptTxin _ _ _ Nothing _ ) -> True
       _ -> False ) _inputs
 
-    createExUnitMap ::
-          DetailedChainInfo
-      -> UTxO AlonzoEra
-      ->  TxBody AlonzoEra
-      ->  Either FrameworkError   (Map TxIn ExecutionUnits)
-    createExUnitMap  (DetailedChainInfo cpw conn pParam systemStart eraHistory ) usedUtxos txbody   = case eExUnits of
-      Left tve -> Left $ FrameworkError   ExUnitCalculationError (show tve)
-      Right map ->mapM  doMap ( Map.toList map) <&> Map.fromList
-
-      where
-        eExUnits=evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos txbody
-        inputList=case txbody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv ->  Set.toList (txins tb) }
-        inputLookup = Map.fromAscList $ zip [0..] inputList
-
-        doMap :: (ScriptWitnessIndex,Either ScriptExecutionError ExecutionUnits) -> Either FrameworkError  (TxIn,ExecutionUnits)
-        doMap  (i,mExUnitResult)= case i of
-          ScriptWitnessIndexTxIn wo -> unEitherExUnits (fromShelleyTxIn (inputList !! fromIntegral  wo),) mExUnitResult
-          ScriptWitnessIndexMint wo -> Left  $ FrameworkError FeatureNotSupported "Automatically calculating ex units for mint is not supported"
-          ScriptWitnessIndexCertificate wo ->  Left  $ FrameworkError FeatureNotSupported "Witness for Certificates is not supported"
-          ScriptWitnessIndexWithdrawal wo ->  Left  $ FrameworkError FeatureNotSupported "Plutus script for withdrawl is not supported"
-        unEitherExUnits :: (ExecutionUnits -> b) ->  Either ScriptExecutionError ExecutionUnits ->  Either FrameworkError  b
-        unEitherExUnits f v= case v of
-          Right e -> Right $ f e
-          Left e -> case e of
-            ScriptErrorEvaluationFailed ee txts -> Left (FrameworkError PlutusScriptError  (T.unpack $ T.intercalate (T.pack ", ") txts ))
-            _  -> Left (FrameworkError ExUnitCalculationError (show e))
-
-
-        transformIn (txIn,wit) exUnit= (txIn  ,case BuildTxWith $ KeyWitness KeyWitnessForSpending of {
-          BuildTxWith wit' -> wit } )
 
     -- unEitherExecutionUnit e= case e of
     --   Left e -> throw $  SomeError  $ "EvaluateExecutionUnits: " ++ show e
     --   Right v -> pure v
     appendExtraSignatures :: [TxSignature] -> Set PubKeyHash -> Set PubKeyHash
     appendExtraSignatures signatures _set = foldl (\set item -> case item of
-      TxExtraSignature n -> set
       TxSignatureAddr aie -> case addrInEraToPkh  aie of
                               Just pkh -> Set.insert pkh set
                               Nothing -> set
@@ -324,7 +295,7 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
           changeaddr <- monadFailChangeAddr
           pure (TxOut changeaddr  ( TxOutValue MultiAssetInAlonzoEra  (valueFromList [(AdaAssetId ,0)])) TxOutDatumNone)
         Just to -> pure to
-      (extraUtxos,change) <- selectUtxosConsideringChange (calculateTxoutMinLovelaceWithcpw cpw) changeTxOut availableInputs startingChange
+      (extraUtxos,change) <- selectUtxosConsideringChange (calculateTxoutMinLovelaceWithcpw cpw) (toCtxUTxOTxOut  changeTxOut) availableInputs startingChange
       let
         maxChange = utxoListSum availableInputs <> startingChange
         missing = filterNegativeQuantity maxChange
@@ -394,7 +365,6 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
     keyWitnesses = if null extraSignatures
                     then TxExtraKeyWitnessesNone
                     else TxExtraKeyWitnesses ExtraKeyWitnessesInAlonzoEra $ foldl (\list x -> case x of
-                                                                           TxExtraSignature n -> list
                                                                            TxSignatureAddr aie -> case addressInEraToPaymentKeyHash aie of 
                                                                              Nothing -> list
                                                                              Just ha -> ha: list
@@ -748,19 +718,10 @@ mkTx  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO a
 --             txScriptValidity=txScriptValidity txbody
 --           })
 
-valueLte :: Value -> Value -> Bool
-valueLte _v1 _v2= not $ any (\(aid,Quantity q) -> q > lookup aid) (valueToList _v1) -- do we find anything that's greater than q
-  where
-    lookup x= case Map.lookup x v2Map of
-      Nothing -> 0
-      Just (Quantity v) -> v
-    v2Map=Map.fromList $ valueToList _v2
     -- v1Bundle= case case valueToNestedRep _v1 of { ValueNestedRep bundle -> bundle} of
     --   [ValueNestedBundleAda v , ValueNestedBundle policy assetMap] ->LovelaceToValue v
     --   [ValueNestedBundle policy assetMap]
 
-filterNegativeQuantity :: Value -> [(AssetId,Quantity)]
-filterNegativeQuantity  v = filter (\(_, v) -> v < 0 ) $ valueToList v
 
 
 
