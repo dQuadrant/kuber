@@ -16,7 +16,9 @@ cabal update
 cabal run kuber
  ```
 
- This will start kuber on port `8081`
+ This will start kuber on port `8081`.
+
+ You can also test kuber on cardano testnet via this playground interface :  [Kuber-Playground](https://dquadrant.github.io/kuber/)
 
 
  ## 2. Composing transactions with api
