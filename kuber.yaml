@@ -3,15 +3,26 @@ networks:
   frontend:
     external: true
 volumes:
-  ipc :
+  ipc-testnet :
     name : cardano-db-sync_node-ipc-testnet
+  ipc-mainnet:
+    name: cardano-db-sync_node-ipc
 services :
-  api : 
+  testnet : 
     image: registry.sireto.io/kuber/api
     environment:
       VIRTUAL_HOST : https://testnet.cnftregistry.io/kuber/api -> :8081/api
     networks:
       - frontend
     volumes:
-      - ipc:/root/.cardano/testnet
+      - ipc-testnet:/root/.cardano/testnet
+  mainnet : 
+    image: registry.sireto.io/kuber/api
+    environment:
+      NETWORK: mainnet
+      VIRTUAL_HOST : https://cnftregistry.io/kuber/api -> :8081/api
+    networks:
+      - frontend
+    volumes:
+      - ipc-mainnet:/root/.cardano/mainnet
 
