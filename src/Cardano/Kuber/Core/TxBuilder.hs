@@ -40,10 +40,6 @@ import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON))
 import qualified Data.Aeson as A.Object
 import qualified Data.Vector as V
 import qualified Data.Text.Encoding as T
-import Data.ByteString            as B
-import Data.ByteString.Lazy       as BL
-import Data.Text.Lazy.Encoding    as TL
-import Data.Text.Lazy             as TL
 import Debug.Trace (trace, traceM)
 import qualified Data.HashMap.Strict as HM
 import Data.String (IsString(fromString))
@@ -70,8 +66,11 @@ data TxInput  = TxInputResolved TxInputResolved_ | TxInputUnResolved TxInputUnRe
 data TxOutputContent =
      TxOutAddress (AddressInEra AlonzoEra) Value
   |  TxOutScriptAddress (AddressInEra AlonzoEra) Value (Hash ScriptData)
+  |  TxOutScriptAddressWithData (AddressInEra AlonzoEra) Value   ScriptData
   |  TxOutPkh PubKeyHash Value
-  |  TxOutScript TxValidatorScript Value  (Hash ScriptData)  deriving (Show)
+  |  TxOutScript TxValidatorScript Value  (Hash ScriptData)
+  |  TxOutScriptWithData TxValidatorScript Value   ScriptData  deriving (Show)
+
 
 data TxOutput = TxOutput {
   content :: TxOutputContent,
@@ -80,22 +79,18 @@ data TxOutput = TxOutput {
 } deriving (Show)
 
 data TxCollateral =  TxCollateralTxin TxIn
-                  |  TxCollateralUtxo (UTxO AlonzoEra)
-    deriving (Show)
+                  |  TxCollateralUtxo (UTxO AlonzoEra) deriving (Show)
 
 data TxSignature =  TxSignatureAddr (AddressInEra AlonzoEra)
-                  | TxSignaturePkh PubKeyHash
-    deriving (Show)
+                  | TxSignaturePkh PubKeyHash deriving (Show)
 
 
 data TxChangeAddr = TxChangeAddrUnset
-                  | TxChangeAddr (AddressInEra AlonzoEra)
-   deriving (Show)
+                  | TxChangeAddr (AddressInEra AlonzoEra) deriving (Show)
 
 data TxInputSelection = TxSelectableAddresses [AddressInEra AlonzoEra]
                   | TxSelectableUtxos  (UTxO AlonzoEra)
-                  | TxSelectableTxIn [TxIn]
-                   deriving(Show)
+                  | TxSelectableTxIn [TxIn] deriving(Show)
 
 data TxMintData = TxMintData PolicyId (ScriptWitness WitCtxMint AlonzoEra) Value deriving (Show)
 
@@ -203,9 +198,9 @@ txPayToPkh pkh v= txOutput $  TxOutput ( TxOutPkh  pkh  v ) False False
 txPayToScript :: AddressInEra AlonzoEra -> Value -> Hash ScriptData -> TxBuilder
 txPayToScript addr v d = txOutput $  TxOutput (TxOutScriptAddress  addr v d) False False
 
--- pay to script Address. automatically computes scriptDataHash from the scriptData.
+-- pay to script Address with datum added to the transaction
 txPayToScriptWithData :: AddressInEra AlonzoEra -> Value -> ScriptData -> TxBuilder
-txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutScriptAddress addr v (hashScriptData d)) False False
+txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutScriptAddressWithData addr v  d) False False
 
 -- input consmptions
 

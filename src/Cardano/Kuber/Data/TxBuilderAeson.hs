@@ -364,34 +364,46 @@ instance FromJSON TxOutput where
         script <- parseAnyScript scriptJson
         pure $ Just script
 
-    datumHashM <- parseData
-    txOutputContent <- case (datumHashM, scriptAnyM, addressM) of
+   
+    datumHashE <- parseData
+    shouldEmbed <- v .:? "embedData" .!= True
+    let dHashConfigConsidered=if shouldEmbed 
+                                then datumHashE
+                                else (case datumHashE of
+                                  Just (Left datum) -> pure $ pure $ hashScriptData datum
+                                  _ -> datumHashE
+                                )
+    txOutputContent <- case (dHashConfigConsidered, scriptAnyM, addressM) of
       -- If there is no datum hash and no script then use address as script address
       (Nothing, Nothing, Just address) -> pure $ TxOutAddress address value
       -- If there is datum hash but no script then use address as script address
-      (Just datumHash, Nothing, Just address) -> pure $ TxOutScriptAddress address value datumHash
+      (Just datum, Nothing, Just address) -> case datum of 
+        Left sd -> pure $ TxOutScriptAddressWithData address value sd
+        Right ha -> pure $ TxOutScriptAddress address value ha
       -- If there is no datum hash but there is script then it is not supported
       (Nothing, Just scriptAny,_) -> fail "TxOutput must have a data or dataHash if it has a script"
       -- If there is datum hash and script then use script and datahash
-      (Just datumHash, Just scriptAny, Nothing) -> pure $ TxOutScript (TxValidatorScript scriptAny) value datumHash
+      (Just datum, Just scriptAny, Nothing) -> case datum of 
+        Left sd -> pure $ TxOutScriptWithData  (TxValidatorScript scriptAny) value sd
+        Right ha -> pure $ TxOutScript (TxValidatorScript scriptAny) value ha
       (_,_,_) -> fail "Unsupported output object format it must be address, value, optional datumhash for scriptaddress or script, value, datumHash"
 
     pure $ TxOutput txOutputContent addChange' deductFee'
 
     where
 
-      parseData :: Parser (Maybe (Hash ScriptData))
+      parseData :: Parser  (Maybe (Either (ScriptData) (Hash ScriptData)))
       parseData = do
         dataHashM <- v .:? "datumHash"
         case dataHashM of
           Just dataHash -> do
               case deserialiseFromRawBytes (AsHash AsScriptData) dataHash of
                   Nothing -> pure  Nothing
-                  Just dh -> pure $ Just dh
+                  Just dh -> pure $ pure $ pure dh
           Nothing -> case H.lookup "datum" v of
               Just _  -> do
                     val <- v `scriptDataParser` "datum"
-                    pure   $ Just $ hashScriptData  val
+                    pure   $ pure $ Right $ hashScriptData  val
               Nothing -> pure  Nothing
 
 

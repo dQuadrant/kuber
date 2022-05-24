@@ -50,7 +50,6 @@ import qualified Data.Map.Strict as StrictMap
 import qualified Debug.Trace as Debug
 import Data.Aeson (ToJSON(toJSON))
 import qualified Data.Text as T
-import Cardano.Kuber.Error (ErrorType(PlutusScriptError))
 import Data.Text.Conversions (convertText)
 import Prettyprinter.Extras (pretty)
 import Data.Word (Word64)
@@ -335,7 +334,7 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
     keyWitnesses = if null extraSignatures
                     then TxExtraKeyWitnessesNone
                     else TxExtraKeyWitnesses ExtraKeyWitnessesInAlonzoEra $ foldl (\list x -> case x of
-                                                                           TxSignatureAddr aie -> case addressInEraToPaymentKeyHash aie of 
+                                                                           TxSignatureAddr aie -> case addressInEraToPaymentKeyHash aie of
                                                                              Nothing -> list
                                                                              Just ha -> ha: list
                                                                            TxSignaturePkh (PubKeyHash pkh) -> case
@@ -351,7 +350,10 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
                                     TxOutAddress aie va -> va
                                     TxOutScriptAddress aie va ha -> va
                                     TxOutPkh pkh va -> va
-                                    TxOutScript tvs va ha -> va  }
+                                    TxOutScript tvs va ha -> va
+                                    TxOutScriptAddressWithData _ va _ -> va
+                                    TxOutScriptWithData _ va _ -> va
+                                }
     zeroValue = valueFromList []
     findChange :: [ParsedOutput] -> Maybe (TxOut CtxTx AlonzoEra )
     findChange ous =   find (\(_,c,v) -> c ) ous <&> (\(_,_,v)-> v)
@@ -385,6 +387,7 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
     parseOutputs  networkId output = case output of { TxOutput toc b b' -> case toc of
                                               TxOutAddress aie va -> pure  (b,b',TxOut aie  (TxOutValue MultiAssetInAlonzoEra va ) TxOutDatumNone )
                                               TxOutScriptAddress aie va ha -> pure (b,b',TxOut aie (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumHash ScriptDataInAlonzoEra ha ))
+                                              TxOutScriptAddressWithData aie va sd -> pure (b,b',TxOut aie (TxOutValue MultiAssetInAlonzoEra va ) (TxOutDatum ScriptDataInAlonzoEra  sd))
                                               TxOutPkh pkh va -> case pkhToMaybeAddr (getNetworkId  dCinfo) pkh of
                                                       Nothing -> Left  $ FrameworkError ParserError  ("Cannot convert PubKeyHash to Address : "++ show pkh)
                                                       Just aie ->  pure  (b,b',TxOut aie  (TxOutValue MultiAssetInAlonzoEra va ) TxOutDatumNone )
@@ -392,7 +395,12 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
                                                 let payCred = PaymentCredentialByScript (hashScript script)
                                                     addr = makeShelleyAddress networkId payCred NoStakeAddress
                                                     addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraAlonzo) addr
-                                                in pure (b,b',TxOut addrInEra (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumHash ScriptDataInAlonzoEra ha ))}
+                                                in pure (b,b',TxOut addrInEra (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumHash ScriptDataInAlonzoEra ha ))
+                                              TxOutScriptWithData  (TxValidatorScript (ScriptInAnyLang lang script)) va sd -> 
+                                                let payCred = PaymentCredentialByScript (hashScript script)
+                                                    addr = makeShelleyAddress networkId payCred NoStakeAddress
+                                                    addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraAlonzo) addr
+                                                in pure (b,b',TxOut addrInEra (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatum ScriptDataInAlonzoEra  sd))}
 
     resolveInputs ::  TxInput -> Either FrameworkError    TxInputResolved_
     resolveInputs v = case v of
