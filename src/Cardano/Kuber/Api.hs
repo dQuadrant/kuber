@@ -32,8 +32,9 @@ module Cardano.Kuber.Api(
     -- Chain info Structures
     , ChainInfo (withProtocolParam ,withDetails,getNetworkId ,getConnectInfo)
     , ChainConnectInfo(..)
-    , DetailedChainInfo
+    , DetailedChainInfo(dciProtocolParams,DetailedChainInfo)
     , ChainInfoWithProtocolParams
+
     
     -- ChainInfo constructor functions
     ,   chainInfoFromEnv 
