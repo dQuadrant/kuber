@@ -19,6 +19,10 @@ module Cardano.Kuber.Api(
     ,   txWalletUtxos
     ,   txWalletUtxo
 
+    -- function to add Vkey witnesses to the transaction
+    ,   txSignBy 
+    ,   txSignByPkh 
+    
     -- transaction validity
     , txValidFromPosixMs
     , txValidUntilPosixMs
