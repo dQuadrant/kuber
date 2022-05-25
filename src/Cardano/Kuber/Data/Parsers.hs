@@ -23,11 +23,24 @@ import Debug.Trace (traceM)
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as Aeson
 import qualified Data.HashMap.Internal.Strict as H
+import Data.Aeson ((.:), (.:?))
+import Cardano.Binary (FromCBOR(fromCBOR), decodeFull)
+import Cardano.Ledger.DescribeEras (StandardCrypto, Witness (Alonzo))
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Text.Encoding as T
+import Cardano.Kuber.Utility.Text
+import qualified Cardano.Ledger.Shelley.API as Shelley
+import qualified Cardano.Ledger.Mary.Value as Mary
+import qualified Data.Map as Map
+import Cardano.Api.Shelley (fromMaryValue, fromShelleyAddr, fromShelleyTxOut)
+import qualified Cardano.Ledger.Alonzo as Alonzo
+import Data.Aeson.Types (parseMaybe)
+
 
 parseSignKey :: MonadFail m => Text -> m (SigningKey PaymentKey)
 parseSignKey txt
   | T.null txt = fail "Empty value for SignKey"
-  | T.head txt /= '{' = 
+  | T.head txt /= '{' =
     case deserialiseFromBech32 (AsSigningKey AsPaymentKey) txt of
       Left ide -> case convertText txt <&> unBase16 of
         Nothing -> fail "SignKey is neither Bench32 nor Hex encoded"
@@ -186,3 +199,58 @@ scriptDataParser v key = case H.lookup key v of
         ScriptDataRangeError va sdre -> fail $  "Invalid data " ++ show sdre
        Right sd -> pure  sd
     doParsing _  = fail "Script data Must be either string or object"
+
+
+txInParser :: Aeson.Value -> Aeson.Parser TxIn
+txInParser  (Aeson.Object o) = do
+  txid' <- o .:? "hash"
+  txid'' <- o .:? "txid"
+  txid''' <- o.:? "txId"
+  txid <-case txid' of
+    Nothing -> case txid'' of
+        Nothing -> case txid''' of
+          Nothing -> o.: "txId"
+          Just ti -> pure ti
+        Just txid -> pure txid
+    Just txid -> pure txid
+  index <- o .: "index"
+  pure $ TxIn txid index
+txInParser (Aeson.String v) =parseTxIn v
+txInParser _ = fail "Expected Utxo to be of type Object or String"
+
+
+parseTxIn :: MonadFail m =>  Text -> m TxIn
+parseTxIn txt = do
+  case T.split (== '#') txt of
+      [txHash, index] ->
+        case deserialiseFromRawBytesHex AsTxId (TSE.encodeUtf8 txHash) of
+          Just txid -> case readMaybe (T.unpack index) of
+            Just txindex -> pure $ TxIn txid (TxIx txindex)
+            Nothing -> fail $ "Failed to parse txIndex in " ++ T.unpack txt
+          Nothing -> fail $ "Failed to parse value as txHash " ++ T.unpack txHash
+      _ -> fail $ "Expected to be of format 'txId#index' got :" ++ T.unpack txt
+
+parseUtxo :: MonadFail m => Text -> m (UTxO AlonzoEra )
+parseUtxo v = do
+  ((txHash,index ),txout) <- parseHexString v >>= parseCbor
+  txIn <- case deserialiseFromRawBytes AsTxId txHash of
+          Just txid -> pure $ TxIn txid (TxIx index)
+          Nothing -> fail $ "Failed to parse value as txHash " ++ toHexString  txHash
+  pure $ UTxO (Map.singleton txIn (fromShelleyTxOut ShelleyBasedEraAlonzo txout))
+
+parseTxOut :: MonadFail m => Text -> m (TxOut CtxTx   AlonzoEra)
+parseTxOut  val = decodeCbor <&> fromShelleyTxOut ShelleyBasedEraAlonzo
+  where
+    decodeCbor :: MonadFail m => m (Alonzo.TxOut (Alonzo.AlonzoEra StandardCrypto))
+    decodeCbor = parseHexString  val >>= parseCbor
+
+
+parseHexString :: (FromText (Maybe (Base16 a1)), ToText a2, MonadFail f) =>a2 -> f a1
+parseHexString  v = case unHex v  of
+  Just bs ->pure bs
+  Nothing -> fail $ "Invalid Hex string: " ++ convertText v
+
+parseCbor :: (FromCBOR a, MonadFail m) =>LBS.ByteString -> m a
+parseCbor  v = case decodeFull v of
+  Left de -> fail $  "Not a vaild cbor format: "++ show de
+  Right any -> pure any

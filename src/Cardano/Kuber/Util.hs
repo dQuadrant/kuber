@@ -50,6 +50,11 @@ module Cardano.Kuber.Util
     -- wallet utilities
     , readSignKey
     , getDefaultSignKey
+
+    -- text utilities
+    , toHexString
+    , unHex
+    , unHexLazy
 )
 where
 
@@ -113,6 +118,7 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Builder as BSL
 import Data.ByteString.Builder (charUtf8)
 import Cardano.Kuber.Utility.WalletUtil (readSignKey, getDefaultSignKey)
+import Cardano.Kuber.Utility.Text
 
 
 

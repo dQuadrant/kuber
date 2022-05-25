@@ -59,6 +59,7 @@ library
     , cardano-api
     , cardano-ledger-alonzo
     , cardano-ledger-shelley
+    , cardano-ledger-shelley-ma
     , cardano-slotting
 --    , shelley-spec-ledger
     , plutus-ledger-api
@@ -115,7 +116,7 @@ test-suite test
   main-is: Main.hs
   hs-source-dirs: test
   other-modules:
-    Test.AddressParsing
+    Test.ParserTest
 
   build-depends:
       base >= 4.9 && <5

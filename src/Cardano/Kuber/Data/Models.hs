@@ -56,30 +56,6 @@ unWitnessModal (WitnessModal w) = w
 
 unUtxoIdModal (UtxoIdModal x) = x
 
-parseUtxo :: Data.Aeson.Types.Value -> Parser TxIn
-parseUtxo (Object o) = do
-  txid' <- o .:? "hash"
-  txid'' <- o .:? "txid"
-  txid''' <- o.:? "txId"
-  txid <-case txid' of
-    Nothing -> case txid'' of 
-        Nothing -> case txid''' of 
-          Nothing -> o.: "txId"
-          Just ti -> pure ti
-        Just txid -> pure txid
-    Just txid -> pure txid 
-  index <- o .: "index"
-  pure $ TxIn txid index
-parseUtxo (String v) =
-  case T.split (== '#') v of
-    [txHash, index] ->
-      case deserialiseFromRawBytesHex AsTxId (TSE.encodeUtf8 txHash) of
-        Just txid -> case readMaybe (T.unpack index) of
-          Just txindex -> pure $ TxIn txid (TxIx txindex)
-          Nothing -> fail $ "Failed to parse txIndex in " ++ T.unpack v
-        Nothing -> fail $ "Failed to parse value as txHash " ++ T.unpack txHash
-    _ -> fail $ "Expected to be of format 'txId#index' got :" ++ T.unpack v
-parseUtxo _ = fail "Expected Utxo to be of type Object or String"
 
 data BalanceResponse = BalanceResponse
   { utxos :: UTxO AlonzoEra

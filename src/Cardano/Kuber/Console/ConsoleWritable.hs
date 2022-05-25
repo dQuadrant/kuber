@@ -11,6 +11,7 @@ import Data.List
 import qualified Data.Set as Set
 import Control.Monad (join)
 import qualified Cardano.Ledger.Alonzo.Tx as LedgerBody
+import qualified Data.Text as T
 -- import Cardano.Ledger.Alonzo.TxBody (ppTxBody)
 -- import Cardano.Ledger.Alonzo.Scripts (ppScript)
 -- import qualified Shelley.Spec.Ledger.TxBody as LedgerBody (TxIn (TxIn))
@@ -21,6 +22,10 @@ class ConsoleWritable v where
   toConsoleTextNoPrefix :: v -> String
   toConsoleTextNoPrefix v = toConsoleText "" v
 
+
+instance ConsoleWritable TxIn where
+  toConsoleText prefix txin = prefix ++ toConsoleTextNoPrefix txin
+  toConsoleTextNoPrefix txin = T.unpack (renderTxIn txin)
 
 instance IsCardanoEra era =>  ConsoleWritable (UTxO era) where
   toConsoleText prefix (UTxO utxoMap) =  prefix ++ intercalate (prefix ++ "\n") (map toStrings $ Map.toList utxoMap)
@@ -55,4 +60,4 @@ instance ConsoleWritable Value where
         TxOutValue masie va -> va
 
 
-showStr x = init $ tail $ show x 
+showStr x = init $ tail $ show x

@@ -5,6 +5,9 @@ import workerJsonUrl from "ace-builds/src-noconflict/mode-json";
 // @ts-ignore (for some reason ide is giving error on @/ imports)
 import { callKuberAndSubmit, listProviders } from "@/scripts/wallet";
 import type { CIP30Instace, CIP30Provider } from "@/types";
+import { Address } from "@emurgo/cardano-serialization-lib-asmjs";
+import { Buffer } from "buffer";
+
 // @ts-ignore
 ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
 </script>
@@ -40,12 +43,12 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               for="inlineCheckbox1"
             >
               Add Wallet UTxOs in selection
-              </label>
+            </label>
           </div>
         </span>
       </div>
     </div>
-      <!-- v-model="content" -->
+    <!-- v-model="content" -->
 
     <v-ace-editor
       value=""
@@ -62,16 +65,16 @@ import * as _notification from "@dafcoe/vue-notification";
 const notification = _notification.useNotificationStore();
 export default {
   mounted() {
-          let counter=8;
-          const __this=this
+    let counter = 8;
+    const __this = this;
 
-        function refreshProvider(){
-           __this.providers=listProviders()
-          if(counter--) __this.timeout=setTimeout(refreshProvider,1000)
-          else __this.timeout=0
-        }
-         this.providers = listProviders();
-        this.timeout=setTimeout(refreshProvider,1000)
+    function refreshProvider() {
+      __this.providers = listProviders();
+      if (counter--) __this.timeout = setTimeout(refreshProvider, 1000);
+      else __this.timeout = 0;
+    }
+    this.providers = listProviders();
+    this.timeout = setTimeout(refreshProvider, 1000);
   },
   data() {
     const providers: Array<CIP30Provider> = [];
@@ -81,43 +84,49 @@ export default {
       addSelections: true,
       editor: null,
       interval: 0,
-      timeout:0
+      timeout: 0,
     };
   },
   beforeUnmount() {
     this.interval && clearInterval(this.interval);
-    this.timeout && clearTimeout(this.timeout)
+    this.timeout && clearTimeout(this.timeout);
   },
   methods: {
     submitTx(provider: CIP30Provider) {
-      const editorContent=this.editor.getValue()
+      const editorContent = this.editor.getValue();
       this.save(editorContent);
-      let request
-      try{
-       request = JSON.parse(editorContent);
-      }catch(e:any){
+      let request;
+      try {
+        request = JSON.parse(editorContent);
+      } catch (e: any) {
         notification.setNotification({
-            type: "alert",
-            message: e.message ,
-          });
-          return;
+          type: "alert",
+          message: e.message,
+        });
+        return;
       }
       return provider
         .enable()
-        .then((instance: CIP30Instace) => {
+        .then(async (instance: CIP30Instace) => {
+          const collateral = await instance.getCollateral().catch(()=>{}) || [];
+          if (request.collaterals && typeof request.collaterals.push === "function") {
+            collateral.forEach((x) => request.collaterals.push(x));
+          } else if (collateral.length) {
+            request.collaterals = collateral;
+          }
           if (this.addSelections) {
-            return instance.getUsedAddresses().then((usedAddresses) => {
-              if (request.selections) {
-                if (typeof request.selections.push === "function") {
-                  usedAddresses.forEach((v) => {
-                    request.selections.push(v);
-                  });
-                }
-              } else {
-                request.selections = usedAddresses;
+            const availableUtxos = await instance.getUtxos();
+
+            if (request.selections) {
+              if (typeof request.selections.push === "function") {
+                availableUtxos.forEach((v) => {
+                  request.selections.push(v);
+                });
               }
-              return callKuberAndSubmit(instance, JSON.stringify(request));
-            });
+            } else {
+              request.selections = availableUtxos;
+            }
+            return callKuberAndSubmit(instance, JSON.stringify(request));
           } else {
             return callKuberAndSubmit(instance, JSON.stringify(request));
           }
@@ -139,12 +148,14 @@ export default {
       });
       session.setUseWrapMode(true);
       session.setValue(localStorage.getItem("editor.content") || "{\n\n}");
-      this.interval = setInterval(()=>{this.save(this.editor.getValue())}, 2000);
-      this.editor=session
-      console.log(session)
+      this.interval = setInterval(() => {
+        this.save(this.editor.getValue());
+      }, 2000);
+      this.editor = session;
+      console.log(session);
     },
-    save(v:string) {
-      localStorage.setItem("editor.content",v);
+    save(v: string) {
+      localStorage.setItem("editor.content", v);
     },
   },
   components: {

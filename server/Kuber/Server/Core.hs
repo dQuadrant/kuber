@@ -24,6 +24,7 @@ import Cardano.Ledger.Alonzo.TxBody (inputs')
 import qualified Data.Map as Map
 import Data.Text (Text)
 import Cardano.Kuber.Data.Models
+import qualified Data.ByteString.Char8 as BS8
 
 
 
@@ -45,12 +46,9 @@ submitTx ctx (SubmitTxModal tx mWitness) = do
       txbody = getTxBody tx
   executeSubmitTx (getConnectInfo ctx) tx'
   pure $ TxResponse tx'
-
 txBuilder :: DetailedChainInfo  ->  TxBuilder -> IO TxResponse
 txBuilder dcinfo txBuilder = do
-  let encodedTxBuilder = A.encode txBuilder
-  let txBuilderStr = TL.unpack $ TL.decodeUtf8 encodedTxBuilder
-  print txBuilderStr
+  putStrLn $ BS8.unpack $  prettyPrintJSON $ txBuilder
   txBodyE<-txBuilderToTxBodyIO dcinfo txBuilder
   case txBodyE of 
     Left fe -> throw fe

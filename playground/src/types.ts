@@ -17,4 +17,5 @@ export  interface CIP30Instace {
     getUnusedAddresses: ()=>Promise<Array<HexString>>
     getUsedAddresses: ()=>Promise<Array<HexString>>
     getUtxos: ()=>Promise<Array<HexString>>
+    getCollateral: () => Promise<Array<HexString>>
 }

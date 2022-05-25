@@ -11,9 +11,7 @@ import {
 import type {CIP30Instace} from "@/types";
 import {Buffer} from 'buffer'
 
-  const kuberUrl = "https://testnet.cnftregistry.io/kuber"
-
-  export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
+export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
     let tx;
     try {
         const txArray=Uint8Array.from(Buffer.from(_tx, 'hex'))
@@ -66,7 +64,7 @@ import {Buffer} from 'buffer'
         additionWitnessSet: witnesesRaw,
         finalTx:   signedTxString
       })
-      await provider.submitTx(signedTxString);
+      return provider.submitTx(signedTxString)
   }
   export async function callWithProvider(f,...params) {
     // @ts-ignore
@@ -108,9 +106,14 @@ import {Buffer} from 'buffer'
 
 
   export  async function callKuberAndSubmit(provider: CIP30Instace,data: string) {
+    let network = await provider.getNetworkId()
+    console.log("Current Network :", network)
+    let kuberUrlByNetwork= (network ==0? "https://testnet.cnftregistry.io/kuber":"https://cnftregistry.io/kuber")
+    //let kuberUrlByNetwork= 'http://localhost:8081'
+
     return fetch(
       // eslint-disable-next-line max-len
-      `${kuberUrl}/api/v1/tx`,
+      `${kuberUrlByNetwork}/api/v1/tx`,
       {
         mode: 'cors',
         method: 'POST',
@@ -118,14 +121,19 @@ import {Buffer} from 'buffer'
         headers: new Headers({'content-type': 'application/json'}),
       },
     ).catch(e=>{
+      console.error(`${kuberUrlByNetwork}/api/v1/tx`, e)
       throw Error(`Kubær API call : `+e.message)
-      console.error(`${kuberUrl}/api/v1/tx`, e)
     }).then(res=>{
       if (res.status===200) {
         return res.json()
           .then(json => {
             console.log(json)
-            return signAndSubmit(provider, json.tx)
+            return signAndSubmit(provider, json.tx).catch(e=>{
+              if(e.info && e.code){
+                  throw Error(`Code : ${e.code} :: \n ${e.info}`)
+              }
+              else throw e
+            });
           })
       } else {
         return res.text().then(txt=>{

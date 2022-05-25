@@ -92,14 +92,14 @@ txBuilderToTxBodyIO cInfo builder = do
   case addrUtxos of
     Left fe -> pure $ Left fe
     Right (UTxO  uto) -> do
-      -- query TxIns for the remaining Txins in input
-      let missingTxins= Set.difference txins ( Map.keysSet  uto )
+      let combinedUtxos = uto<> utxo
+      let missingTxins= Set.difference txins ( Map.keysSet combinedUtxos )
       vals <- queryIfNotEmpty missingTxins (queryTxins conn missingTxins) (Right $ UTxO  Map.empty)
       case vals of
         Left fe -> pure $ Left fe
-        Right (UTxO uto') ->do
+        Right (UTxO txInUtxos) ->do
           -- Compute Txbody and return
-          pure $ txBuilderToTxBody dcInfo (UTxO $ uto <> uto') builder
+          pure $ txBuilderToTxBody dcInfo (UTxO $ combinedUtxos <> txInUtxos) builder
   where
 
     queryIfNotEmpty v f v' = if null  v then pure v' else f
@@ -138,7 +138,6 @@ txBuilderToTxBodyIO cInfo builder = do
 txBuilderToTxBody::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (TxBody AlonzoEra)
 txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata ) = do
   let network = getNetworkId  dCinfo
-  Debug.traceM $ BS8.unpack $  prettyPrintJSON   metadata
   meta<- if null metadata
           then  Right TxMetadataNone
           else  do
@@ -264,19 +263,16 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
           changeaddr <- monadFailChangeAddr
           pure (TxOut changeaddr  ( TxOutValue MultiAssetInAlonzoEra  (valueFromList [(AdaAssetId ,0)])) TxOutDatumNone)
         Just to -> pure to
+      Debug.traceM $ "Available utxos:" ++ show (map fst  availableInputs)
+
       (extraUtxos,change) <- selectUtxosConsideringChange (calculateTxoutMinLovelaceWithcpw cpw) (toCtxUTxOTxOut  changeTxOut) availableInputs startingChange
       let
         maxChange = utxoListSum availableInputs <> startingChange
         missing = filterNegativeQuantity maxChange
-        missingAssets= filterNegativeQuantity change
         (feeUsed,changeUsed,outputs) = updateOutputs  fee change fixedOutputs
         bodyContent allOutputs = mkBodyContent meta fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
         requiredSignatories = foldl (\acc (_,TxOut a _ _) -> fromMaybe acc (addrInEraToPkh a <&> flip Set.insert acc)) signatories  extraUtxos
         signatureCount=fromIntegral $ length requiredSignatories
-      Debug.traceM $ "Initial :" ++ show signatories
-      Debug.traceM $ "Final signatories :" ++ show requiredSignatories
-
-      if null missingAssets then pure () else Left (FrameworkError InsufficientInput (show $ negateValue $ valueFromList missingAssets))
       bc <- if changeUsed
               then pure $ bodyContent outputs
               else do
@@ -478,17 +474,15 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
      -- consider change while minimizing i.e. make sure that the change has the minLovelace value.
     selectUtxosConsideringChange f txout  u c  = minimizeConsideringChange txout f u (c <> utxoListSum u)
     minimizeConsideringChange txout f available change= case filterNegativeQuantity change of
-      [] -> do
-           if existingLove < minLove
-              then
-                (case Foldable.find (\(tin,utxo) -> extraLove utxo > (minLove- existingLove)) unmatched of
-                  Just val -> Right (fst matched ++ [val],snd matched <> txOutValue_ (snd val))
-                  Nothing -> Right matched
-                )
-              else
-                Right matched
-      missing -> do
-        Left  $ FrameworkError  InsufficientInput $ "Missing Balance :" ++ show ( map (\(a,b)-> (a,-b)) missing)
+      [] -> Right $ if existingLove < minLove
+                    then
+                      (case Foldable.find (\(tin,utxo) -> extraLove utxo > (minLove- existingLove)) unmatched of
+                        Just val ->  (fst matched ++ [val],snd matched <> txOutValue_ (snd val))
+                        Nothing ->  matched
+                      )
+                    else
+                      matched
+      missing -> Left  $ FrameworkError  InsufficientInput $ "Missing Balance :" ++ show ( map (\(a,b)-> (a,-b)) missing)
 
       where
         matched@(utxos,newChange)=minimizeUtxos available change
