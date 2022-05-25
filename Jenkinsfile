@@ -16,7 +16,7 @@ pipeline {
         // From master branch:deployment details for staging
 
         DEPLOYMENT_STAGING_CLOUD = 'cnftregistry.io:2376'
-        DEPLOYMENT_STAGING_SERVICE = 'kuber-staging_api'
+        DEPLOYMENT_STAGING_SERVICE = 'kuber-staging'
 
         //When tag is pushed: deployment details for release
         DEPLOYMENT_RELEASE_CLOUD = 'cnftregistry.io:2376'
@@ -64,7 +64,8 @@ pipeline {
                     script {
                           docker.withServer("${DEPLOYMENT_CLOUD}") {
                               docker.withRegistry("https://${DEPLOYMENT_REGISTRY}", "${DEPLOYMENT_REGISTRY}") {
-                                sh "docker service update --with-registry-auth --image ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${COMPUTED_DOCKER_TAG} ${DEPLOYMENT_SERVICE}"
+                                sh "docker service update --with-registry-auth --image ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${COMPUTED_DOCKER_TAG} ${DEPLOYMENT_SERVICE}_mainnet"
+                                sh "docker service update --with-registry-auth --image ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${COMPUTED_DOCKER_TAG} ${DEPLOYMENT_SERVICE}_testnet"
                               }
                           }
                     }
