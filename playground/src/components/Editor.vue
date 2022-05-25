@@ -108,7 +108,7 @@ export default {
       return provider
         .enable()
         .then(async (instance: CIP30Instace) => {
-          const collateral = await instance.getCollateral().catch(()=>{}) || [];
+          const collateral = instance.getCollateral ? await instance.getCollateral().catch(()=>{}) || []: [];
           if (request.collaterals && typeof request.collaterals.push === "function") {
             collateral.forEach((x) => request.collaterals.push(x));
           } else if (collateral.length) {
