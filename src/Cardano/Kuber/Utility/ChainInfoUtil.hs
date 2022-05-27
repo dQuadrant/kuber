@@ -7,6 +7,8 @@ import System.Environment (getEnv)
 import System.Directory (doesFileExist)
 import Data.Char (toLower)
 import System.FilePath (joinPath)
+import qualified Debug.Trace as Debug
+import Text.Read (readMaybe)
 
 -- type wrapper for EnvironmentVariable String
 type EnvVariable = String
@@ -79,9 +81,11 @@ getNetworkFromEnv envKey =  do
     Right s ->  case map toLower s of
       "mainnet" -> pure  Mainnet
       "testnet" -> pure $ Testnet  (NetworkMagic 1097911063)
-      _  -> case read s of
-        Just v -> pure (Testnet  (NetworkMagic v))
-        _ -> fail "Invalid network id"
+      _  -> do 
+        Debug.traceM s
+        case readMaybe s of
+          Just v -> pure (Testnet  (NetworkMagic  v))
+          _ -> fail "Invalid network id : "
 
 -- get absolute path given a directoryor file path.
 -- the absolute path is "CARANO_HOME/...paths" value to the path
