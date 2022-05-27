@@ -59,5 +59,12 @@ instance ConsoleWritable Value where
         TxOutAdaOnly oasie lo -> lovelaceToValue lo
         TxOutValue masie va -> va
 
+instance IsCardanoEra era => ConsoleWritable (TxOut ctx era ) where
+ toConsoleTextNoPrefix  t@(TxOut aie val datum) = T.unpack (serialiseAddress aie) ++ toConsoleText " : "  (toValue t )
+  where
+        toValue (TxOut _ v _) = case v of
+          TxOutAdaOnly oasie lo -> lovelaceToValue lo
+          TxOutValue masie va -> va
+ toConsoleText prefix txout = prefix ++ toConsoleTextNoPrefix txout
 
 showStr x = init $ tail $ show x

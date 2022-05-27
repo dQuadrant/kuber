@@ -32,7 +32,7 @@ import Cardano.Kuber.Utility.Text
 import qualified Cardano.Ledger.Shelley.API as Shelley
 import qualified Cardano.Ledger.Mary.Value as Mary
 import qualified Data.Map as Map
-import Cardano.Api.Shelley (fromMaryValue, fromShelleyAddr, fromShelleyTxOut)
+import Cardano.Api.Shelley (fromMaryValue, fromShelleyAddr, fromShelleyTxOut, fromAlonzoData, fromPlutusData)
 import qualified Cardano.Ledger.Alonzo as Alonzo
 import Data.Aeson.Types (parseMaybe)
 
@@ -126,7 +126,7 @@ parseAssetNQuantity textStr = do
 parseScriptData :: MonadFail m => Text -> m ScriptData
 parseScriptData jsonText = do
   case decodeJson of
-    Nothing -> fail "Invalid Json for script data"
+    Nothing -> fail "Script data string must be json format"
     Just v -> case scriptDataFromJson ScriptDataJsonNoSchema v of
       Left sdje -> case sdje of
         ScriptDataJsonSchemaError va sdjse -> fail $ "Wrong schema" ++ show sdjse
@@ -183,9 +183,21 @@ parseAnyScript jsonText =
 
 parseAddress :: MonadFail m => Text -> m (AddressInEra AlonzoEra)
 parseAddress addrText = case deserialiseAddress (AsAddressInEra AsAlonzoEra) addrText of
-  Nothing -> fail $ "Invalid address string: " ++ T.unpack addrText
+  Nothing ->  case parseHexString addrText >>= parseAddressCbor of 
+      Just addr -> pure addr
+      Nothing -> fail $ "Address is neither bench32 nor cborHex :"++ T.unpack addrText
   Just aie -> pure aie
 
+
+parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra AlonzoEra)
+parseAddressCbor  cbor = do 
+  aie <-  parseCbor cbor
+  pure $ fromShelleyAddr ShelleyBasedEraAlonzo  aie 
+  
+parseAddressBench32 :: MonadFail m => Text -> m (AddressInEra AlonzoEra)
+parseAddressBench32 txt = case deserialiseAddress (AsAddressInEra AsAlonzoEra) txt of
+  Nothing -> fail $ "Address is not in bench32 format"
+  Just aie -> pure aie
 
 scriptDataParser :: MonadFail m => H.HashMap Text Aeson.Value -> Text -> m ScriptData
 scriptDataParser v key = case H.lookup key v of
@@ -231,12 +243,16 @@ parseTxIn txt = do
       _ -> fail $ "Expected to be of format 'txId#index' got :" ++ T.unpack txt
 
 parseUtxo :: MonadFail m => Text -> m (UTxO AlonzoEra )
-parseUtxo v = do
-  ((txHash,index ),txout) <- parseHexString v >>= parseCbor
+parseUtxo v =parseHexString v >>= parseUtxoCbor
+
+parseUtxoCbor :: MonadFail m => LBS.ByteString -> m (UTxO AlonzoEra)
+parseUtxoCbor val = do 
+  ((txHash,index ),txout) <- parseCbor val
   txIn <- case deserialiseFromRawBytes AsTxId txHash of
           Just txid -> pure $ TxIn txid (TxIx index)
           Nothing -> fail $ "Failed to parse value as txHash " ++ toHexString  txHash
   pure $ UTxO (Map.singleton txIn (fromShelleyTxOut ShelleyBasedEraAlonzo txout))
+
 
 parseTxOut :: MonadFail m => Text -> m (TxOut CtxTx   AlonzoEra)
 parseTxOut  val = decodeCbor <&> fromShelleyTxOut ShelleyBasedEraAlonzo
@@ -252,5 +268,8 @@ parseHexString  v = case unHex v  of
 
 parseCbor :: (FromCBOR a, MonadFail m) =>LBS.ByteString -> m a
 parseCbor  v = case decodeFull v of
-  Left de -> fail $  "Not a vaild cbor format: "++ show de
+  Left de -> fail $  "Not in required cbor format: "++ show de
   Right any -> pure any
+
+parseCborHex :: (ToText a2, MonadFail m, FromCBOR b) => a2 -> m b
+parseCborHex  v = parseHexString v >>=parseCbor

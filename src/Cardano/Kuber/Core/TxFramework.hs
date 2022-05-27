@@ -6,7 +6,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Use lambda-case" #-}
 module Cardano.Kuber.Core.TxFramework where
 
 
@@ -67,10 +66,12 @@ import Cardano.Binary (ToCBOR(toCBOR))
 import qualified Cardano.Binary as Cborg
 import Cardano.Kuber.Utility.ScriptUtil
 import Cardano.Kuber.Utility.QueryHelper (queryUtxos, queryTxins)
+import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable(toConsoleTextNoPrefix))
 
-type IsChangeUsed   = Bool
+type BoolChange   = Bool
+type BoolFee = Bool
 type  ParsedInput   = Either (Witness WitCtxTxIn AlonzoEra,TxOut CtxUTxO AlonzoEra) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn AlonzoEra,TxOut CtxUTxO  AlonzoEra)
-type  ParsedOutput  = (Bool,Bool,TxOut CtxTx AlonzoEra)
+type  ParsedOutput  = (BoolFee,BoolChange,TxOut CtxTx AlonzoEra)
 
 
 
@@ -263,7 +264,6 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
           changeaddr <- monadFailChangeAddr
           pure (TxOut changeaddr  ( TxOutValue MultiAssetInAlonzoEra  (valueFromList [(AdaAssetId ,0)])) TxOutDatumNone)
         Just to -> pure to
-      Debug.traceM $ "Available utxos:" ++ show (map fst  availableInputs)
 
       (extraUtxos,change) <- selectUtxosConsideringChange (calculateTxoutMinLovelaceWithcpw cpw) (toCtxUTxOTxOut  changeTxOut) availableInputs startingChange
       let
@@ -298,8 +298,10 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
         findInput :: TxInputSelection ->Maybe [AddressInEra AlonzoEra]
         findInput v= case v of
           TxSelectableAddresses aies -> Just aies
-          TxSelectableUtxos uto -> Nothing
-          TxSelectableTxIn tis -> Nothing
+          TxSelectableUtxos (UTxO mp) -> Just $ map (\(TxOut aie tov tod) -> aie ) $ Map.elems mp
+          TxSelectableTxIn tis -> Just $ foldl   (\addrs x -> case Map.lookup x availableUtxo of
+                    Nothing -> addrs
+                    Just (TxOut aie tov tod) -> aie: addrs) [] tis
     getTxin :: Map TxIn ParsedInput -> [(TxIn,TxOut CtxUTxO AlonzoEra )]-> [(TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra ))]
     getTxin v  v2 = map ( uncurry totxIn)  (Map.toList v) ++ map toPubKeyTxin v2
 
@@ -354,24 +356,28 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
     findChange :: [ParsedOutput] -> Maybe (TxOut CtxTx AlonzoEra )
     findChange ous =   find (\(_,c,v) -> c ) ous <&> (\(_,_,v)-> v)
     updateOutputs  fee change outputs' = updateOutput False False (getNetworkId  dCinfo) fee change outputs'
-    updateOutput :: Bool -> Bool -> NetworkId -> Lovelace -> Value -> [ParsedOutput] ->  (Bool,Bool,[TxOut CtxTx AlonzoEra])
+    updateOutput :: BoolFee -> BoolChange -> NetworkId -> Lovelace -> Value -> [ParsedOutput] ->  (BoolFee,BoolChange,[TxOut CtxTx AlonzoEra])
     updateOutput _ _ _ _ _ []  =  (False,False,[])
     updateOutput _fUsed _cUsed network (Lovelace fee) change (txOutput:outs) =let
         (feeUsed,changeUsed,result) = transformOut _fUsed _cUsed txOutput
         (feeUsed2,changeUsed2,others) = updateOutput feeUsed changeUsed network (Lovelace fee) change outs
-        in   (feeUsed  || feeUsed2 , changeUsed || changeUsed2, result : others )
+        updatedOutput = (feeUsed  || feeUsed2 , changeUsed || changeUsed2, result : others )
+        in   updatedOutput
       where
-        transformOut changeUsed feeUsed (addFee,addChange,TxOut aie (TxOutValue _ va) ha)=  (feeUsed'',changeUsed'',TxOut aie (TxOutValue MultiAssetInAlonzoEra modifiedVal) ha)
+        transformOut feeUsed changeUsed  (addFee,addChange,tout@(TxOut aie v@(TxOutValue _ va) ha))= 
+            (feeUsed',changeUsed',modifiedTxOut)
           where
-            (feeUsed'',changeUsed'',modifiedVal) = includeFeeNChange va
-            includeFeeNChange va = let  (feeUsed',feeIncluded) = includeFee va
-                                        (changeUsed', changeIncluded) = includeChange feeIncluded
-                                    in (feeUsed',changeUsed',changeIncluded)
+            modifiedTxOut = TxOut aie (TxOutValue MultiAssetInAlonzoEra changeNFeeIncluded) ha
+            (feeUsed',feeIncluded) = includeFee va
+            (changeUsed', changeNFeeIncluded) = includeChange feeIncluded
+
+            -- deduct fee from the val if needed
             includeFee val
               | feeUsed = (True, val)
               | addFee = (True, valueFromList [(AdaAssetId ,Quantity (- fee))] <> val)
               | otherwise = (False,val)
 
+            -- add change to the val if needed
             includeChange val
               | changeUsed = (True,val)
               | addChange = (True,change<> val)
@@ -392,7 +398,7 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
                                                     addr = makeShelleyAddress networkId payCred NoStakeAddress
                                                     addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraAlonzo) addr
                                                 in pure (b,b',TxOut addrInEra (TxOutValue MultiAssetInAlonzoEra va) (TxOutDatumHash ScriptDataInAlonzoEra ha ))
-                                              TxOutScriptWithData  (TxValidatorScript (ScriptInAnyLang lang script)) va sd -> 
+                                              TxOutScriptWithData  (TxValidatorScript (ScriptInAnyLang lang script)) va sd ->
                                                 let payCred = PaymentCredentialByScript (hashScript script)
                                                     addr = makeShelleyAddress networkId payCred NoStakeAddress
                                                     addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraAlonzo) addr

@@ -74,8 +74,8 @@ data TxOutputContent =
 
 data TxOutput = TxOutput {
   content :: TxOutputContent,
-  addChange :: Bool,
-  deductFee :: Bool
+  deductFee :: Bool,
+  addChange :: Bool
 } deriving (Show)
 
 data TxCollateral =  TxCollateralTxin TxIn
