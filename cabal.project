@@ -1,5 +1,5 @@
 -- Bump this if you need newer packages
-index-state: 2022-01-26T14:47:51Z
+index-state:2022-02-18T00:00:00Z
 
 packages: .
 
@@ -10,44 +10,6 @@ write-ghc-environment-files: never
 tests: true
 benchmarks: true
 
-
--- The following sections are copied from the 'plutus' repository cabal.project at the revision
--- given above.
--- This is necessary because the  'plutus' libraries depend on a number of other libraries which are
--- not on Hackage, and so need to be pulled in as `source-repository-package`s themselves. Make sure to
--- re-update this section from the template when you do an upgrade.
-package eventful-sql-common
-  ghc-options: -XDerivingStrategies -XStandaloneDeriving -XUndecidableInstances -XDataKinds -XFlexibleInstances
-
-allow-newer:
-           -- Pins to an old version of Template Haskell, unclear if/when it will be updated
-           size-based:template-haskell
-           , ouroboros-consensus-byron:formatting
-           , beam-core:aeson
-           , beam-sqlite:aeson
-           , beam-sqlite:dlist
-           , beam-migrate:aeson
-
-constraints:
-  -- big breaking change here, inline-r doens't have an upper bound
-  singletons < 3.0
-  -- bizarre issue: in earlier versions they define their own 'GEq', in newer
-  -- ones they reuse the one from 'some', but there isn't e.g. a proper version
-  -- constraint from dependent-sum-template (which is the library we actually use).
-  , dependent-sum > 0.6.2.0
-  -- Newer Hashable have instances for Set, which breaks beam-migrate
-  -- which declares its own instances of Hashable Set
-  , hashable < 1.3.4.0
-
-
--- See the note on nix/pkgs/default.nix:agdaPackages for why this is here.
--- (NOTE this will change to ieee754 in newer versions of nixpkgs).
-extra-packages: ieee, filemanip
-
--- These packages appear in our dependency tree and are very slow to build.
--- Empirically, turning off optimization shaves off ~50% build time.
--- It also mildly improves recompilation avoidance.
--- For deve work we don't care about performance so much, so this is okay.
 package cardano-ledger-alonzo
   optimization: False
 package ouroboros-consensus-shelley
@@ -57,23 +19,25 @@ package ouroboros-consensus-cardano
 package cardano-api
   optimization: False
 
--- https://github.com/Quid2/flat/pull/22 fixes a potential exception
--- when decoding invalid (e.g. malicious) text literals.
-source-repository-package
-  type: git
-  location: https://github.com/Quid2/flat.git
-  tag: ee59880f47ab835dbd73bea0847dab7869fc20d8
-
 
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/cardano-crypto.git
-  tag: f73079303f663e028288f9f4a9e08bcca39a923e
+  location: https://github.com/input-output-hk/optparse-applicative
+  tag: 7497a29cb998721a9068d5725d49461f2bba0e7a
+  --sha256: 1gvsrg925vynwgqwplgjmp53vj953qyh3wbdf34pw21c8r47w35r
+
+source-repository-package
+  type: git
+  location: https://github.com/vshabanov/ekg-json
+  tag: 00ebe7211c981686e65730b7144fbf5350462608
+  --sha256: 1zvjm3pb38w0ijig5wk5mdkzcszpmlp5d4zxvks2jk1rkypi8gsm
+
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: 41545ba3ac6b3095966316a99883d678b5ab8da8
+  tag: 631cb6cf1fa01ab346233b610a38b3b4cba6e6ab
+
   subdir:
     base-deriving-via
     binary
@@ -88,57 +52,16 @@ source-repository-package
 
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/cardano-prelude
-  tag: bb4ed71ba8e587f672d06edf9d2e376f4b055555
-  subdir:
-    cardano-prelude
-    cardano-prelude-test
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/ouroboros-network
-  tag: 4fac197b6f0d2ff60dc3486c593b68dc00969fbf
-  --sha256: 0lfbipfdrzay8v1pcazx0qgkda3d1j0505yig9jrml9j7991rmhl
-  subdir:
-    monoidal-synchronisation
-    typed-protocols
-    typed-protocols-cborg
-    typed-protocols-examples
-    ouroboros-network
-    ouroboros-network-testing
-    ouroboros-network-framework
-    ouroboros-consensus
-    ouroboros-consensus-byron
-    ouroboros-consensus-cardano
-    ouroboros-consensus-protocol
-    ouroboros-consensus-shelley
-    strict-stm
-    io-sim
-    io-classes
-    network-mux
-    ntp-client
-
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/iohk-monitoring-framework
-  tag: 808724ff8a19a33d0ed06f9ef59fbd900b08553c
-  subdir:
-    iohk-monitoring
-    tracer-transformers
-    contra-tracer
-    plugins/backend-aggregation
-    plugins/backend-ekg
-    plugins/backend-monitoring
-    plugins/backend-trace-forwarder
-    plugins/scribe-systemd
+  location: https://github.com/input-output-hk/cardano-crypto
+  tag: f73079303f663e028288f9f4a9e08bcca39a923e
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger
-  tag: 1a9ec4ae9e0b09d54e49b2a40c4ead37edadcce5
+  tag: c415253fff9a5ce9d7575230fc9098bcfee97653
   --sha256: 0my3801w1vinc0kf5yh9lxl6saqxgwm6ccg0vvzi104pafcwwcqx
   subdir:
+    eras/babbage/impl
     eras/alonzo/impl
     eras/byron/chain/executable-spec
     eras/byron/crypto
@@ -153,22 +76,39 @@ source-repository-package
     libs/cardano-ledger-pretty
     libs/cardano-protocol-tpraos
     libs/cardano-data
-    libs/compact-map
+    libs/vector-map
     libs/set-algebra
     libs/small-steps
     libs/small-steps-test
     libs/non-integral
 
-
--- A lot of plutus dependencies have to be synchronized with the dependencies of
--- cardano-node. If you update cardano-node, please make sure that all dependencies
--- of cardano-node are also updated.
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/cardano-node.git
-  tag: 73f9a746362695dc2cb63ba757fbcabb81733d23
+  location: https://github.com/input-output-hk/cardano-prelude
+  tag: bb4ed71ba8e587f672d06edf9d2e376f4b055555
   subdir:
-    cardano-api
+    cardano-prelude
+    cardano-prelude-test
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/goblins
+  tag: cde90a2b27f79187ca8310b6549331e59595e7ba
+
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/iohk-monitoring-framework
+  tag: eb7854d1337637b8672af1227b276aa33a658f47
+  subdir:
+    iohk-monitoring
+    tracer-transformers
+    contra-tracer
+    plugins/backend-aggregation
+    plugins/backend-ekg
+    plugins/backend-monitoring
+    plugins/backend-trace-forwarder
+    plugins/scribe-systemd
 
 source-repository-package
   type: git
@@ -177,17 +117,89 @@ source-repository-package
 
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/goblins
-  tag: cde90a2b27f79187ca8310b6549331e59595e7ba
+  location: https://github.com/input-output-hk/ouroboros-network
+  tag: ea202b7b21983140d1944ccfde8750b891b59699
+  --sha256: 0bixx0b61sjzls7hzwjlgmvl0yk1ckd40cfazda8b3smqvxfrphq
+  subdir:
+    monoidal-synchronisation
+    network-mux
+    ouroboros-consensus
+    ouroboros-consensus-byron
+    ouroboros-consensus-cardano
+    ouroboros-consensus-protocol
+    ouroboros-consensus-shelley
+    ouroboros-network
+    ouroboros-network-framework
+    ouroboros-network-testing
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/io-sim
+  tag: 606de33fa2f467d108fb1efb86daeb3348bf34e3
+  --sha256: 048djqfdkzrbmdz670knbkjy12wddpvsmhm4x5yldg3w9lwqi1yx
+  subdir:
+    io-classes
+    io-sim
+    strict-stm
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/typed-protocols
+  tag: 91c3fba44d68439df207796171cd6f867354b76b
+  --sha256: 1h1nh10859kd7j8bb55y577jfdp42aqpppx8fn0pm6fra5748a50
+  subdir:
+    typed-protocols
+    typed-protocols-cborg
+    typed-protocols-examples
+
+
+
+-- A lot of plutus dependencies have to be synchronized with the dependencies of
+-- cardano-node. If you update cardano-node, please make sure that all dependencies
+-- of cardano-node are also updated.
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/cardano-node.git
+  tag: d0b0fa10ac83dc1d0d40aaf294cfded1b455a0a4
+  subdir:
+    cardano-api
+
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus.git
-  tag: fc5fe94d3d9525d032bcbc79ff0e1ebcfd8ef143
+  tag: fec94223a985e34d3b270460c8f150002f41b85b
   subdir:
-    prettyprinter-configurable
-    stubs/plutus-ghc-stub
-    word-array
     plutus-core
     plutus-ledger-api
     plutus-tx
+    prettyprinter-configurable
+    stubs/plutus-ghc-stub
+    word-array
+
+-- Drops an instance breaking our code. Should be released to Hackage eventually.
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/flat
+  tag: ee59880f47ab835dbd73bea0847dab7869fc20d8
+  --sha256: 1lrzknw765pz2j97nvv9ip3l1mcpf2zr4n56hwlz0rk7wq7ls4cm
+
+constraints:
+    hedgehog >= 1.0
+  , bimap >= 0.4.0
+  , libsystemd-journal >= 1.4.4
+  , systemd >= 2.3.0
+    -- systemd-2.3.0 requires at least network 3.1.1.0 but it doesn't declare
+    -- that dependency
+  , network >= 3.1.1.0
+
+package comonad
+  flags: -test-doctests
+
+package cardano-ledger-alonzo-test
+  tests: False
+
+allow-newer:
+  *:aeson,
+  monoidal-containers:aeson,
+  size-based:template-haskell

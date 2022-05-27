@@ -76,6 +76,6 @@ evaluateExecutionUnits' :: DetailedChainInfo ->  String -> IO [Either String Exe
 evaluateExecutionUnits' dcinfo  txStr = do 
       case convertText txStr of
         Nothing -> fail "Tx string is not hex encoded"
-        Just (Base16 bs) -> case deserialiseFromCBOR (AsTx AsAlonzoEra ) bs of
+        Just (Base16 bs) -> case deserialiseFromCBOR (AsTx AsBabbageEra ) bs of
           Left  e -> fail $ "Tx string: Invalid CBOR format : "++ show e
           Right tx -> evaluateExecutionUnits dcinfo  tx

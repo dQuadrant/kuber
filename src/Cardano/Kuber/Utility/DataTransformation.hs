@@ -21,8 +21,8 @@ skeyToAddr skey network =
   where
     credential=PaymentCredentialByKey  $ verificationKeyHash   $ getVerificationKey  skey
 
--- Create enterprise  (AddressInEra AlonzoEra) datastructure
-skeyToAddrInEra ::  SigningKey PaymentKey -> NetworkId -> AddressInEra AlonzoEra
+-- Create enterprise  (AddressInEra BabbageEra) datastructure
+skeyToAddrInEra ::  SigningKey PaymentKey -> NetworkId -> AddressInEra BabbageEra
 skeyToAddrInEra skey network=makeShelleyAddressInEra network   credential NoStakeAddress
   where
     credential=PaymentCredentialByKey  $ verificationKeyHash   $ getVerificationKey  skey
@@ -38,7 +38,7 @@ sKeyToPkh skey= PubKeyHash (toBuiltin  $  serialiseToRawBytes  vkh)
     vkh=verificationKeyHash   $ getVerificationKey  skey
 
 
-addressInEraToPaymentKeyHash :: AddressInEra AlonzoEra -> Maybe (Hash PaymentKey)
+addressInEraToPaymentKeyHash :: AddressInEra BabbageEra -> Maybe (Hash PaymentKey)
 addressInEraToPaymentKeyHash a = case a of { AddressInEra atie ad -> case ad of
                                                ByronAddress ad' -> Nothing
                                                ShelleyAddress net cre sr -> case fromShelleyPaymentCredential cre of
@@ -49,7 +49,7 @@ addressInEraToPaymentKeyHash a = case a of { AddressInEra atie ad -> case ad of
 -- convert PubKeyhash to corresponding Enterprise address. 
 -- Note that the transformation  Address <-> Pkh is not symmetrical for all addresses
 -- It's symmetrical for Enterprise addresses (because enterprise addresses have no stake Key in it)
-pkhToMaybeAddr:: NetworkId -> PubKeyHash -> Maybe (AddressInEra  AlonzoEra)
+pkhToMaybeAddr:: NetworkId -> PubKeyHash -> Maybe (AddressInEra  BabbageEra)
 pkhToMaybeAddr network (PubKeyHash pkh) =do
     key <- vKey
     Just $ makeShelleyAddressInEra  network (PaymentCredentialByKey key)  NoStakeAddress
@@ -78,7 +78,7 @@ addrInEraToPkh a = case a of { AddressInEra atie ad -> case ad of
 
 -- convert the address to Enterprise Address. 
 -- Enterprise address is an address having no stakeKey
-unstakeAddr :: AddressInEra AlonzoEra -> AddressInEra AlonzoEra
+unstakeAddr :: AddressInEra BabbageEra -> AddressInEra BabbageEra
 unstakeAddr a = case a of { AddressInEra atie ad -> case ad of
                                       ByronAddress ad' ->a
                                       ShelleyAddress net cre sr ->  shelleyAddressInEra $ ShelleyAddress net cre StakeRefNull }

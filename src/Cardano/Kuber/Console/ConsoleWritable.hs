@@ -5,7 +5,7 @@ where
 
 import Cardano.Api
 import qualified Data.Map as Map
-import Cardano.Api.Shelley (Lovelace(Lovelace), TxBody (ShelleyTxBody))
+import Cardano.Api.Shelley (Lovelace(Lovelace), TxBody (ShelleyTxBody), ReferenceScript (ReferenceScriptNone))
 import GHC.Real
 import Data.List
 import qualified Data.Set as Set
@@ -30,7 +30,7 @@ instance ConsoleWritable TxIn where
 instance IsCardanoEra era =>  ConsoleWritable (UTxO era) where
   toConsoleText prefix (UTxO utxoMap) =  prefix ++ intercalate (prefix ++ "\n") (map toStrings $ Map.toList utxoMap)
     where
-      toStrings (TxIn txId (TxIx index),TxOut addr value hash )=    showStr txId ++ "#" ++  show index ++"\t:\t" ++ (case value of
+      toStrings (TxIn txId (TxIx index),TxOut addr value hash _  )=    showStr txId ++ "#" ++  show index ++"\t:\t" ++ (case value of
        TxOutAdaOnly oasie (Lovelace v) -> show v
        TxOutValue masie va ->  intercalate " +" (map vToString $valueToList va ) )
       vToString (AssetId policy asset,Quantity v)=show v ++ " " ++ showStr  policy ++ "." ++ showStr  asset
@@ -55,14 +55,14 @@ instance ConsoleWritable Value where
       toTxOut (UTxO a) = Map.elems  a
       renderAda (Quantity q)= show ((fromIntegral q::Double)/1e6) ++ " Ada"
 
-      toValue (TxOut _ v _) = case v of
+      toValue (TxOut _ v _ _) = case v of
         TxOutAdaOnly oasie lo -> lovelaceToValue lo
         TxOutValue masie va -> va
 
 instance IsCardanoEra era => ConsoleWritable (TxOut ctx era ) where
- toConsoleTextNoPrefix  t@(TxOut aie val datum) = T.unpack (serialiseAddress aie) ++ toConsoleText " : "  (toValue t )
+ toConsoleTextNoPrefix  t@(TxOut aie val datum _) = T.unpack (serialiseAddress aie) ++ toConsoleText " : "  (toValue t )
   where
-        toValue (TxOut _ v _) = case v of
+        toValue (TxOut _ v _ _) = case v of
           TxOutAdaOnly oasie lo -> lovelaceToValue lo
           TxOutValue masie va -> va
  toConsoleText prefix txout = prefix ++ toConsoleTextNoPrefix txout

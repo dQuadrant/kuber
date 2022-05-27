@@ -9,7 +9,7 @@
 module Kuber.Server.Spec where
 
 import Cardano.Api
-import Cardano.Api.Shelley (AlonzoEra)
+import Cardano.Api.Shelley (BabbageEra)
 import Cardano.Kuber.Data.Models
 
 import Control.Exception
@@ -36,7 +36,7 @@ import GHC.Generics (Generic)
 import GHC.IO.Exception (IOErrorType (UserError))
 import Network.HTTP.Types
 import Network.Wai.Handler.Warp (run)
-import Network.Wai.Middleware.Servant.Errors (HasErrorBody (..), errorMw)
+import Kuber.Server.ServantError (HasErrorBody (..), errorMw)
 import Servant
 import Servant.Exception (Exception (..), Throws, ToServantErr (..), mapException)
 import Servant.Exception.Server
@@ -64,7 +64,7 @@ type TransactionAPI =
     :> (
             "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "submit" :> ReqBody '[JSON] (TxModal) :> Post '[JSON] (TxResponse )
-      :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary  ] (Tx AlonzoEra) :> Post '[JSON] ([Either String ExecutionUnits ])
+      :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary  ] (Tx BabbageEra) :> Post '[JSON] ([Either String ExecutionUnits ])
        ) 
 
 server :: DetailedChainInfo -> Server TransactionAPI
