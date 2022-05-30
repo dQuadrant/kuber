@@ -199,10 +199,8 @@ parseAddressBench32 txt = case deserialiseAddress (AsAddressInEra AsAlonzoEra) t
   Nothing -> fail $ "Address is not in bench32 format"
   Just aie -> pure aie
 
-scriptDataParser :: MonadFail m => H.HashMap Text Aeson.Value -> Text -> m ScriptData
-scriptDataParser v key = case H.lookup key v of
-  Nothing -> fail $"missing key \"" ++ T.unpack key ++ "\" if type ScriptData in json object"
-  Just v -> doParsing v
+scriptDataParser :: MonadFail m =>  Aeson.Value  -> m ScriptData
+scriptDataParser v = doParsing v
   where
     doParsing (Aeson.String v) =  parseScriptData  v
     doParsing (Aeson.Object o )=case scriptDataFromJson ScriptDataJsonDetailedSchema  (Aeson.Object o) of

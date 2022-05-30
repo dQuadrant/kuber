@@ -56,10 +56,16 @@ data TxMintingScript = TxSimpleScript ScriptInAnyLang
 newtype TxValidatorScript = TxValidatorScript ScriptInAnyLang deriving (Show)
 
 data TxInputResolved_ = TxInputUtxo (UTxO AlonzoEra)
-              | TxInputScriptUtxo TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) (UTxO AlonzoEra) deriving (Show)
+              | TxInputScriptUtxo TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) (UTxO AlonzoEra) 
+              | TxInputScriptUtxoInlineDatum TxValidatorScript  ScriptData (Maybe ExecutionUnits) (UTxO AlonzoEra)
+              deriving (Show) 
+
+
 data TxInputUnResolved_ = TxInputTxin TxIn
               | TxInputAddr (AddressInEra AlonzoEra)
-              | TxInputScriptTxin TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) TxIn deriving (Show)
+              | TxInputScriptTxin TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) TxIn 
+              | TxInputScriptTxinInlineDatum TxValidatorScript  ScriptData (Maybe ExecutionUnits) TxIn 
+              deriving (Show)
 
 data TxInput  = TxInputResolved TxInputResolved_ | TxInputUnResolved TxInputUnResolved_ deriving (Show)
 
@@ -82,15 +88,19 @@ data TxCollateral =  TxCollateralTxin TxIn
                   |  TxCollateralUtxo (UTxO AlonzoEra) deriving (Show)
 
 data TxSignature =  TxSignatureAddr (AddressInEra AlonzoEra)
-                  | TxSignaturePkh PubKeyHash deriving (Show)
+                  | TxSignaturePkh PubKeyHash 
+                  | TxSignatureSkey (SigningKey PaymentKey) deriving (Show)
 
 
 data TxChangeAddr = TxChangeAddrUnset
-                  | TxChangeAddr (AddressInEra AlonzoEra) deriving (Show)
+                  | TxChangeAddr (AddressInEra AlonzoEra) 
+                  deriving (Show)
 
 data TxInputSelection = TxSelectableAddresses [AddressInEra AlonzoEra]
                   | TxSelectableUtxos  (UTxO AlonzoEra)
-                  | TxSelectableTxIn [TxIn] deriving(Show)
+                  | TxSelectableTxIn [TxIn] 
+                  | TxSelectableSkey [SigningKey PaymentKey] 
+                  deriving(Show)
 
 data TxMintData = TxMintData PolicyId (ScriptWitness WitCtxMint AlonzoEra) Value deriving (Show)
 
@@ -225,6 +235,11 @@ txSignBy  a = txSignature (TxSignatureAddr a)
 -- Mark this PublicKeyhash as txExtraKeyWitness in the transaction object.
 txSignByPkh :: PubKeyHash  -> TxBuilder
 txSignByPkh p = txSignature $ TxSignaturePkh p
+
+-- Mark this signingKey's vKey as txExtraKey Witness in the transaction object.
+-- When validating `txSignedBy` in plutus, this can be used to add the 
+txSign :: SigningKey PaymentKey -> TxBuilder
+txSign p = txSignature $ TxSignatureSkey p
 -- Lock value and data in a script.
 -- It's a script that we depend on. but we are not testing it.
 -- So, the validator of this script will not be executed.
@@ -255,3 +270,9 @@ txWalletUtxos v =  txSelection $  TxSelectableUtxos v
 -- wallet utxo, that can be spent  for balancing the transaction
 txWalletUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> TxBuilder
 txWalletUtxo tin tout = txWalletUtxos $  UTxO $ Map.singleton tin  tout
+
+txWalletSignKey :: SigningKey PaymentKey -> TxBuilder
+txWalletSignKey s= txWalletSignKeys [s]
+
+txWalletSignKeys :: [SigningKey PaymentKey] -> TxBuilder
+txWalletSignKeys s= txSelection $ TxSelectableSkey s

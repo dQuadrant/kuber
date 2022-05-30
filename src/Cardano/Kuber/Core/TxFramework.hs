@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use lambda-case" #-}
 module Cardano.Kuber.Core.TxFramework where
 
 
@@ -67,6 +68,7 @@ import qualified Cardano.Binary as Cborg
 import Cardano.Kuber.Utility.ScriptUtil
 import Cardano.Kuber.Utility.QueryHelper (queryUtxos, queryTxins)
 import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable(toConsoleTextNoPrefix))
+import Cardano.Kuber.Utility.DataTransformation (skeyToPaymentKeyHash, pkhToPaymentKeyHash)
 
 type BoolChange   = Bool
 type BoolFee = Bool
@@ -78,9 +80,21 @@ type  ParsedOutput  = (BoolFee,BoolChange,TxOut CtxTx AlonzoEra)
 -- Given TxBuilder object, Construct a txBody 
 -- This IO code, constructs detailedChainInfo(protocolParam,costPerWord,eraHistory,SystemHistory) 
 -- then queries required utxos used in inputs and calls  txBuilderToTxBody
+txBuilderToTxBodyIO ::  ChainInfo i =>  i ->  TxBuilder  -> IO (Either FrameworkError  (TxBody AlonzoEra))
+txBuilderToTxBodyIO  a b  = txBuilderToTxBodyIO'  a b <&> (<&> fst)
 
-txBuilderToTxBodyIO::  ChainInfo i =>  i ->  TxBuilder  -> IO (Either FrameworkError  (TxBody AlonzoEra ))
-txBuilderToTxBodyIO cInfo builder = do
+txBuilderToTxBody ::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (TxBody AlonzoEra )
+txBuilderToTxBody   a b c  =  txBuilderToTxBody' a b c <&> fst
+
+txBuilderToTx::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (Tx AlonzoEra)
+txBuilderToTx a b c = txBuilderToTxBody'  a b c <&> snd
+
+txBuilderToTxIO :: ChainInfo i => i -> TxBuilder -> IO (Either FrameworkError (Tx AlonzoEra))
+txBuilderToTxIO a b   = txBuilderToTxBodyIO' a b   <&> ( <&> snd)
+
+
+txBuilderToTxBodyIO'::  ChainInfo i =>  i ->  TxBuilder  -> IO (Either FrameworkError  (TxBody AlonzoEra,Tx AlonzoEra))
+txBuilderToTxBodyIO' cInfo builder = do
   -- first determine the addresses and txins that need to be queried for value and address.
   let (selectionAddrs,sel_txins,sel_utxo) = mergeSelections
       (input_txins,input_utxo) = mergeInputs
@@ -100,7 +114,7 @@ txBuilderToTxBodyIO cInfo builder = do
         Left fe -> pure $ Left fe
         Right (UTxO txInUtxos) ->do
           -- Compute Txbody and return
-          pure $ txBuilderToTxBody dcInfo (UTxO $ combinedUtxos <> txInUtxos) builder
+          pure $ txBuilderToTxBody' dcInfo (UTxO $ combinedUtxos <> txInUtxos) builder
   where
 
     queryIfNotEmpty v f v' = if null  v then pure v' else f
@@ -108,19 +122,21 @@ txBuilderToTxBodyIO cInfo builder = do
     mergeSelections=foldl mergeSelection (Set.empty,Set.empty ,Map.empty ) (txSelections builder)
     getInputAddresses :: TxInput -> Maybe AddressAny
     getInputAddresses x = case x of
-      TxInputResolved tir -> Nothing
       TxInputUnResolved (TxInputAddr aie) -> Just $ addressInEraToAddressAny aie
       _ -> Nothing
+
     mergeInputs = foldl  getInputTxins  (Set.empty,Map.empty) (txInputs  builder)
     getInputTxins :: (Set TxIn,Map TxIn (TxOut CtxUTxO AlonzoEra)) -> TxInput -> (Set TxIn,Map TxIn (TxOut CtxUTxO AlonzoEra))
     getInputTxins v@(ins,utxo) input = case input of
       TxInputResolved tir -> case tir of
         TxInputUtxo (UTxO uto) -> (ins, utxo <> uto)
         TxInputScriptUtxo tvs sd sd' m_eu (UTxO uto) -> (ins,utxo<>uto)
+        TxInputScriptUtxoInlineDatum tvs  sd' m_eu (UTxO uto) -> (ins,utxo<>uto)
       TxInputUnResolved tiur -> case tiur of
         TxInputTxin ti -> (Set.insert ti ins,utxo)
         TxInputAddr aie -> v
         TxInputScriptTxin tvs sd sd' m_eu ti -> (Set.insert ti ins, utxo)
+        TxInputScriptTxinInlineDatum  tvs  sd' m_eu  ti -> (Set.insert ti ins, utxo)
 
     mergeColaterals :: (Set TxIn,Map TxIn (TxOut CtxUTxO AlonzoEra) )
     mergeColaterals  =foldl (\(s,m) collateral -> case collateral of
@@ -132,12 +148,12 @@ txBuilderToTxBodyIO cInfo builder = do
         TxSelectableAddresses aies -> (Set.union a  (Set.fromList $ map addressInEraToAddressAny aies),i,u)
         TxSelectableUtxos (UTxO uto) -> (a,i, uto <> u)
         TxSelectableTxIn tis -> (a,Set.union i (Set.fromList tis),u)
-
+        TxSelectableSkey skeys -> (Set.union a (Set.fromList $ map (\s ->  toAddressAny $ skeyToAddr s (getNetworkId   cInfo ) ) skeys), i , u )
 
 -- Construct TxBody from TxBuilder specification.
 -- Utxos map must be provided for the utxos that are available in wallet and used in input
-txBuilderToTxBody::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (TxBody AlonzoEra)
-txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata ) = do
+txBuilderToTxBody'::DetailedChainInfo ->  UTxO AlonzoEra -> TxBuilder   -> Either FrameworkError  (TxBody AlonzoEra,Tx AlonzoEra )
+txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) (UTxO availableUtxo) (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata ) = do
   let network = getNetworkId  dCinfo
   meta<- if null metadata
           then  Right TxMetadataNone
@@ -164,16 +180,16 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
       calculator= computeBody meta (Lovelace cpw) compulsarySignatories  fixedInputSum availableInputs (map fst collaterals) fixedOutputs
       colalteralSignatories = Set.fromList ( map snd collaterals)
       compulsarySignatories = foldl (\acc x -> case x of
-                          Left (_,TxOut a _ _) -> case addrInEraToPkh a of
+                          Left (_,TxOut a _ _) -> case addressInEraToPaymentKeyHash  a of
                                                     Nothing -> acc
                                                     Just pkh -> Set.insert pkh acc
                           Right _ -> acc ) (appendExtraSignatures extraSignatures colalteralSignatories)   $ Map.elems  fixedInputs
-  (txBody1,fee1) <-  calculator  fixedInputs txMintValue'  fee
+  (txBody1,signatories,fee1) <-  calculator  fixedInputs txMintValue'  fee
   if  not requiresExUnitCalculation
     then  ( do
-      (body2,fee2) <- calculator fixedInputs txMintValue' fee1
+      (body2,signatories2,fee2) <- calculator fixedInputs txMintValue' fee1
       if fee1 /= fee2  then Left $ FrameworkError LibraryError "Transaction not balanced even in 3rd iteration" else pure  ()
-      pure body2
+      pure (body2, makeSignedTransaction [] body2)
     )
     else (
           let evaluateBodyWithExunits body fee= do
@@ -181,16 +197,24 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
                         inputs' <- usedInputs  (Map.map Right exUnits ) (Right defaultExunits)  resolvedInputs
                         calculator inputs' txMintValue' fee
           in do
-            (txBody2,fee2) <- evaluateBodyWithExunits  txBody1 fee1
-            (txBody3,fee3) <- evaluateBodyWithExunits  txBody2 fee2
-            (txBody4,fee4) <- evaluateBodyWithExunits  txBody3 fee3
+            (txBody2,signatories2,fee2) <- evaluateBodyWithExunits  txBody1 fee1
+            (txBody3,signatories3,fee3) <- evaluateBodyWithExunits  txBody2 fee2
+            (txBody4,signatories4,fee4) <- evaluateBodyWithExunits  txBody3 fee3
 
             if fee4==fee3
-              then pure txBody4
-              else evaluateBodyWithExunits txBody4 fee4 <&> fst
+              then pure (txBody4,makeSignedTransaction [] txBody4)
+              else evaluateBodyWithExunits txBody4 fee4 <&> (\(txBody5,signatories5,_)-> respond txBody5 signatories5)
       )
 
   where
+    respond txBody signatories = (txBody,makeSignedTransaction (map (toWitness txBody) $ mapMaybe (`Map.lookup` availableSkeys) $ Set.toList signatories) txBody)
+    toWitness body skey = makeShelleyKeyWitness body (WitnessPaymentKey skey)
+
+    availableSkeys =  Map.fromList $  map (\x -> (skeyToPaymentKeyHash x, x)) $  concat (mapMaybe (\s -> case s of
+        TxSelectableSkey sks -> Just sks
+        _ -> Nothing )  selections) ++ mapMaybe (\x -> case x of
+      TxSignatureSkey sk -> Just sk
+      _ -> Nothing) extraSignatures
 
     mapPolicyIdAndWitness :: TxMintData -> (PolicyId, ScriptWitness WitCtxMint AlonzoEra)
     mapPolicyIdAndWitness (TxMintData pId sw _)= (pId, sw)
@@ -209,27 +233,31 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
     -- unEitherExecutionUnit e= case e of
     --   Left e -> throw $  SomeError  $ "EvaluateExecutionUnits: " ++ show e
     --   Right v -> pure v
-    appendExtraSignatures :: [TxSignature] -> Set PubKeyHash -> Set PubKeyHash
+    appendExtraSignatures :: [TxSignature] -> Set (Hash PaymentKey) -> Set (Hash PaymentKey)
     appendExtraSignatures signatures _set = foldl (\set item -> case item of
-      TxSignatureAddr aie -> case addrInEraToPkh  aie of
-                              Just pkh -> Set.insert pkh set
-                              Nothing -> set
-      TxSignaturePkh pkh -> Set.insert pkh set ) _set signatures
+        TxSignatureAddr aie -> case addressInEraToPaymentKeyHash   aie of
+                                Just pkh -> Set.insert pkh set
+                                Nothing -> set
+        TxSignaturePkh pkh -> case pkhToPaymentKeyHash pkh of
+                                Just pkh' -> Set.insert pkh' set
+                                Nothing -> set
+        TxSignatureSkey sk -> Set.insert (skeyToPaymentKeyHash   sk) _set
+      ) _set signatures
 
-    collaterals ::   Maybe [(TxIn,PubKeyHash )]
+    collaterals ::   Maybe [(TxIn,Hash PaymentKey )]
     collaterals   = case foldl getCollaterals [] _collaterals of
                           [] -> case mapMaybe canBeCollateral $ Map.toList availableUtxo of
                             [] -> Nothing
                             v -> let  (tin,pkh,_) =minimumBy sortingFunc v in Just [(tin,pkh)]
                           v-> Just v
         where
-        canBeCollateral :: (TxIn  , TxOut ctx AlonzoEra) -> Maybe (TxIn, PubKeyHash, Integer)
+        canBeCollateral :: (TxIn  , TxOut ctx AlonzoEra) -> Maybe (TxIn, Hash PaymentKey, Integer)
         canBeCollateral v@(ti, to@(TxOut addr val mDatumHash)) = case mDatumHash of
                               TxOutDatumNone -> case val of
-                                TxOutAdaOnly _ (Lovelace v) ->  addrInEraToPkh addr >>= (\pkh -> Just (ti,pkh,v))
+                                TxOutAdaOnly _ (Lovelace v) ->  addressInEraToPaymentKeyHash  addr >>= (\pkh -> Just (ti,pkh,v))
                                 TxOutValue _ va ->  let _list = valueToList va
                                                     in if length _list == 1
-                                                        then  case addrInEraToPkh addr of
+                                                        then  case addressInEraToPaymentKeyHash  addr of
                                                                 Nothing -> Nothing
                                                                 Just pkh -> Just ( ti,pkh,case snd $ head _list of { Quantity n -> n } )
                                                         else Nothing
@@ -247,11 +275,11 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
     getCollaterals  accum  x = case x  of
         TxCollateralTxin txin -> accum++ (case Map.lookup txin availableUtxo of
           Nothing -> error "Collateral input missing in utxo map"
-          Just (TxOut a v dh) -> case addrInEraToPkh a of
+          Just (TxOut a v dh) -> case addressInEraToPaymentKeyHash  a of
                                     Just pkh ->  (txin,pkh) : accum
                                     Nothing -> error "Invalid address type utxo in collateral"
                                    )
-        TxCollateralUtxo (UTxO mp) ->  accum ++ map (\(tin,TxOut a v dh) -> case addrInEraToPkh a of
+        TxCollateralUtxo (UTxO mp) ->  accum ++ map (\(tin,TxOut a v dh) -> case addressInEraToPaymentKeyHash  a of
                                                                                  Just pkh -> (tin,pkh)
                                                                                  Nothing -> error "invalid address type utxo in collateral"
                       ) (Map.toList  mp)
@@ -271,7 +299,7 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
         missing = filterNegativeQuantity maxChange
         (feeUsed,changeUsed,outputs) = updateOutputs  fee change fixedOutputs
         bodyContent allOutputs = mkBodyContent meta fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
-        requiredSignatories = foldl (\acc (_,TxOut a _ _) -> fromMaybe acc (addrInEraToPkh a <&> flip Set.insert acc)) signatories  extraUtxos
+        requiredSignatories = foldl (\acc (_,TxOut a _ _) -> fromMaybe acc (addressInEraToPaymentKeyHash  a <&> flip Set.insert acc)) signatories  extraUtxos
         signatureCount=fromIntegral $ length requiredSignatories
       bc <- if changeUsed
               then pure $ bodyContent outputs
@@ -280,7 +308,7 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
                 pure $ bodyContent (outputs++ [TxOut changeaddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumNone])
       case makeTransactionBody bc of
           Left tbe ->Left  $ FrameworkError  LibraryError  (show tbe)
-          Right tb -> pure (tb,evaluateTransactionFee pParam tb signatureCount 0)
+          Right tb -> pure (tb,requiredSignatories,evaluateTransactionFee pParam tb signatureCount 0)
 
       where
         startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee )
@@ -302,15 +330,17 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
           TxSelectableTxIn tis -> Just $ foldl   (\addrs x -> case Map.lookup x availableUtxo of
                     Nothing -> addrs
                     Just (TxOut aie tov tod) -> aie: addrs) [] tis
+          TxSelectableSkey sk -> Just $ foldl (\addrs sk -> addrs ++ [skeyToAddrInEra sk (getNetworkId dCinfo)]) [] sk
     getTxin :: Map TxIn ParsedInput -> [(TxIn,TxOut CtxUTxO AlonzoEra )]-> [(TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra ))]
     getTxin v  v2 = map ( uncurry totxIn)  (Map.toList v) ++ map toPubKeyTxin v2
 
     toPubKeyTxin :: (TxIn,a) -> (TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra ))
     toPubKeyTxin (v1,v2) =(v1,BuildTxWith $ KeyWitness KeyWitnessForSpending )
 
+
     totxIn :: TxIn ->  ParsedInput -> (TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra ))
     totxIn  i  parsedInput = case parsedInput of
-      Left (a,b) -> (i,BuildTxWith a)
+      Left (a,b) -> (i,BuildTxWith a) 
       Right (e,a,b) -> (i,BuildTxWith  ( ScriptWitness ScriptWitnessForSpending a )  )
     mkBodyContent meta fixedInputs extraUtxos outs collateral  txMintValue' fee =
       (TxBodyContent {
@@ -331,15 +361,17 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
           })
     keyWitnesses = if null extraSignatures
                     then TxExtraKeyWitnessesNone
-                    else TxExtraKeyWitnesses ExtraKeyWitnessesInAlonzoEra $ foldl (\list x -> case x of
-                                                                           TxSignatureAddr aie -> case addressInEraToPaymentKeyHash aie of
-                                                                             Nothing -> list
-                                                                             Just ha -> ha: list
-                                                                           TxSignaturePkh (PubKeyHash pkh) -> case
-                                                                               deserialiseFromRawBytes (AsHash AsPaymentKey) $ fromBuiltin pkh
-                                                                                   of
-                                                                                     Nothing -> list
-                                                                                     Just ha -> ha:list  ) [] extraSignatures
+                    else TxExtraKeyWitnesses ExtraKeyWitnessesInAlonzoEra $
+                        foldl (\list x -> case x of
+                            TxSignatureSkey sk -> skeyToPaymentKeyHash sk:list
+                            TxSignatureAddr aie -> case addressInEraToPaymentKeyHash aie of
+                              Nothing -> list
+                              Just ha -> ha: list
+                            TxSignaturePkh (PubKeyHash pkh) -> case
+                                deserialiseFromRawBytes (AsHash AsPaymentKey) $ fromBuiltin pkh
+                                    of
+                                      Nothing -> list
+                                      Just ha -> ha:list  ) [] extraSignatures
 
     fixedOutputSum = foldMap txOutputVal _outputs
       where
@@ -364,7 +396,7 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
         updatedOutput = (feeUsed  || feeUsed2 , changeUsed || changeUsed2, result : others )
         in   updatedOutput
       where
-        transformOut feeUsed changeUsed  (addFee,addChange,tout@(TxOut aie v@(TxOutValue _ va) ha))= 
+        transformOut feeUsed changeUsed  (addFee,addChange,tout@(TxOut aie v@(TxOutValue _ va) ha))=
             (feeUsed',changeUsed',modifiedTxOut)
           where
             modifiedTxOut = TxOut aie (TxOutValue MultiAssetInAlonzoEra changeNFeeIncluded) ha
@@ -410,6 +442,8 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
       TxInputUnResolved (TxInputTxin txin) ->  doLookup txin <&> TxInputUtxo
       TxInputUnResolved (TxInputAddr addr) ->   filterAddrUtxo addr <&> TxInputUtxo
       TxInputUnResolved (TxInputScriptTxin s d r exunit txin) -> doLookup txin <&>  TxInputScriptUtxo s d r exunit
+      TxInputUnResolved (TxInputScriptTxinInlineDatum s  r exunit txin) -> doLookup txin <&>  TxInputScriptUtxoInlineDatum s r exunit
+
       where
         filterAddrUtxo addr =pure $ UTxO $ Map.filter (ofAddress addr) availableUtxo
         ofAddress addr (TxOut a _ _)= addr == a
@@ -426,6 +460,10 @@ txBuilderToTxBody  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHist
                                                                 exUnit <- getExUnit _in mExunit
                                                                 witness <-  createTxInScriptWitness s d r exUnit
                                                                 pure (_in,Right (mExunit, witness,val )) ) $ Map.toList txin
+      -- TODO change this to proper input tuxo in babbage era                                                          
+      TxInputScriptUtxoInlineDatum (TxValidatorScript s)  r mExunit (UTxO txin) ->
+                                                                Left $ FrameworkError EraMisMatch "Inline datum is not supported in alonzo era"
+      
       where
 
         getExUnit tin ex =case  ex of

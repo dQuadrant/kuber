@@ -4,9 +4,9 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonoLocalBinds #-}
 
-module Kuber.Server.MediaType 
+module Kuber.Server.MediaType
 where
-    
+
 import Network.HTTP.Media ((//), (/:), MediaType)
 import Servant.API.ContentTypes (Accept (contentType,contentTypes), MimeUnrender (mimeUnrender))
 import GHC.Base (NonEmpty ((:|)))
@@ -26,15 +26,16 @@ import Data.Data (Proxy (Proxy))
 import Data.ByteString (ByteString)
 import Data.Proxy (asProxyTypeOf)
 import qualified Data.ByteString.Lazy
+import Cardano.Kuber.Data.Models (SubmitTxModal(SubmitTxModal))
 
 data AnyTextType = AnyTextType
 
 instance Accept AnyTextType where
    contentTypes _ =  "text" // "plain" :| [  "text" // "*", "text" // "plain" /: ("charset", "utf-8") ]
 
- 
+
 instance  MimeUnrender AnyTextType String where
-   mimeUnrender _ bs = Right  $  BS8.unpack  $ BSL.toStrict bs 
+   mimeUnrender _ bs = Right  $  BS8.unpack  $ BSL.toStrict bs
 
 instance  MimeUnrender AnyTextType TL.Text where
     mimeUnrender _ bs = Right  $ TL.decodeUtf8 bs
@@ -53,11 +54,10 @@ instance  MimeUnrender  CBORBinary  ( Tx AlonzoEra ) where
         Left e -> Left $ "Tx string: Invalid CBOR format : " ++ show e
         Right tx -> pure  tx
 
--- instance FromCBOR a => MimeUnrender CBORBinary a where
---     mimeUnrender  _ bs = case CBOR.decodeFull' ( BSL.toStrict bs) of       
---         Left de -> Left $ show de
---         Right any -> Right any
-        
+instance MimeUnrender CBORBinary  SubmitTxModal where
+   mimeUnrender  _ bs  = case deserialiseFromCBOR (AsTx AsAlonzoEra) ( Data.ByteString.Lazy.toStrict bs) of
+        Left e -> Left $ "Tx string: Invalid CBOR format : " ++ show e
+        Right tx -> pure  $ SubmitTxModal tx Nothing
 
 
 data CBORText =CBORText
@@ -69,6 +69,4 @@ instance (MimeUnrender CBORBinary a) => MimeUnrender CBORText a where
   mimeUnrender  _ bs =  case convertText (BS8.unpack $ BSL.toStrict bs) of
       Nothing -> Left "Expected hex encoded CBOR string"
       Just (Base16 bs) -> mimeUnrender (Proxy  :: (Proxy CBORBinary)) bs
-
-      
 

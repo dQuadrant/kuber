@@ -18,10 +18,13 @@ module Cardano.Kuber.Api(
     ,   txWalletAddresses
     ,   txWalletUtxos
     ,   txWalletUtxo
+    ,   txWalletSignKey 
+    ,   txWalletSignKeys
 
     -- function to add Vkey witnesses to the transaction
     ,   txSignBy 
-    ,   txSignByPkh 
+    ,   txSignByPkh
+    ,   txSign  
     
     -- transaction validity
     , txValidFromPosixMs
@@ -32,6 +35,8 @@ module Cardano.Kuber.Api(
     ,   TxBuilder
     ,   txBuilderToTxBody
     ,   txBuilderToTxBodyIO
+    ,   txBuilderToTx
+    ,   txBuilderToTxIO
 
     -- Chain info Structures
     , ChainInfo (withProtocolParam ,withDetails,getNetworkId ,getConnectInfo)

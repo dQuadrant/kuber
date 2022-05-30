@@ -1,7 +1,7 @@
 module Cardano.Kuber.Utility.QueryHelper where
 import Cardano.Api
 import Cardano.Kuber.Error
-    ( ErrorType(EraMisMatch, NodeQueryError),
+    ( ErrorType(EraMisMatch, NodeQueryError, TxSubmissionError),
       FrameworkError(FrameworkError) )
 import Cardano.Api.Shelley (ProtocolParameters, TxBody (ShelleyTxBody))
 import Cardano.Slotting.Time (SystemStart)
@@ -74,12 +74,12 @@ signAndSubmitTxBody conn txBody skeys= do
   where
     toWitness skey = makeShelleyKeyWitness txBody (WitnessPaymentKey skey)
 
-executeSubmitTx :: LocalNodeConnectInfo CardanoMode -> Tx AlonzoEra -> IO ()
+executeSubmitTx :: LocalNodeConnectInfo CardanoMode -> Tx AlonzoEra -> IO  (Either FrameworkError ())
 executeSubmitTx conn  tx= do
       res <-submitTxToNodeLocal conn $  TxInMode tx AlonzoEraInCardanoMode
       case res of
-        SubmitSuccess ->  pure ()
+        SubmitSuccess ->  pure $ pure ()
         SubmitFail reason ->
           case reason of
-            TxValidationErrorInMode err _eraInMode ->  error $ "SubmitTx: " ++ show  err
-            TxValidationEraMismatch mismatchErr -> error $ "SubmitTx: " ++ show  mismatchErr
+            TxValidationErrorInMode err _eraInMode ->  pure $ Left  $ FrameworkError TxSubmissionError  (show  err)
+            TxValidationEraMismatch mismatchErr -> pure $ Left $ FrameworkError TxSubmissionError ("Era Mismatch : " ++ show mismatchErr)

@@ -5,7 +5,7 @@ import Cardano.Api
 import qualified Cardano.Api.Shelley as Shelley
 import Cardano.Api.Byron (Address(ByronAddress))
 import Cardano.Api.Shelley (Address(ShelleyAddress), fromPlutusData, fromShelleyPaymentCredential, shelleyPayAddrToPlutusPubKHash)
-import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), ToData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), toBuiltin, toData, fromBuiltin)
+import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash, getPubKeyHash), ToData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), toBuiltin, toData, fromBuiltin)
 import Data.ByteString
 import qualified Cardano.Binary as Cborg
 import Cardano.Ledger.Shelley.API (Credential(KeyHashObj, ScriptHashObj), StakeReference (StakeRefNull))
@@ -37,6 +37,11 @@ sKeyToPkh skey= PubKeyHash (toBuiltin  $  serialiseToRawBytes  vkh)
   where
     vkh=verificationKeyHash   $ getVerificationKey  skey
 
+pkhToPaymentKeyHash :: PubKeyHash -> Maybe  (Hash PaymentKey )
+pkhToPaymentKeyHash pkh = deserialiseFromRawBytes (AsHash AsPaymentKey) $ fromBuiltin $ getPubKeyHash  pkh 
+
+skeyToPaymentKeyHash :: SigningKey PaymentKey -> Hash PaymentKey
+skeyToPaymentKeyHash skey = verificationKeyHash   $ getVerificationKey  skey
 
 addressInEraToPaymentKeyHash :: AddressInEra AlonzoEra -> Maybe (Hash PaymentKey)
 addressInEraToPaymentKeyHash a = case a of { AddressInEra atie ad -> case ad of

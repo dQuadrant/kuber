@@ -32,7 +32,7 @@ import Data.Aeson.Types (FromJSON(parseJSON), (.:), Parser, parseMaybe, parseEit
 import qualified Data.Aeson as A
 import qualified Data.Text as T
 import Cardano.Kuber.Data.Models ( unAddressModal)
-import Cardano.Kuber.Data.Parsers (parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBench32, parseAddressCbor, parseUtxoCbor)
+import Cardano.Kuber.Data.Parsers (parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBench32, parseAddressCbor, parseUtxoCbor, parseSignKey)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey))
 import qualified Data.Aeson as A.Object
@@ -224,14 +224,20 @@ instance ToJSON TxMintData where
 instance ToJSON TxInputSelection where
   toJSON (TxSelectableAddresses v) = A.Array $ V.fromList $ Prelude.map toJSON v
   toJSON (TxSelectableTxIn v) = A.Array $ V.fromList $ Prelude.map toJSON v
-  toJSON (TxSelectableUtxos  utxo) =  utxoToAeson  utxo 
+  toJSON (TxSelectableUtxos  utxo) =  utxoToAeson  utxo
+  toJSON (TxSelectableSkey  sk) = A.Array $ V.fromList $ map (A.String . serialiseToBech32)  sk 
 
 instance ToJSON TxInput where
   toJSON (TxInputUnResolved txInputTxin) = toJSON txInputTxin
   toJSON (TxInputResolved val) = toJSON val
 instance ToJSON TxInputUnResolved_ where
   toJSON (TxInputTxin txin) = toJSON txin
+  toJSON (TxInputScriptTxinInlineDatum _script _redeemer _exUnits _txin ) = A.object [
+        "inlineScript" .= True,
+        "txin" .= renderTxIn _txin
+      ]
   toJSON (TxInputScriptTxin _script _data _redeemer _exUnits _txin) =
+
     A.object
       [
         "script" .= _script
@@ -246,6 +252,7 @@ instance ToJSON TxInputResolved_  where
   toJSON  v = case v of
     TxInputUtxo (UTxO umap) ->  Aeson.String $ T.pack $  "WithTxout: " ++ show (map renderTxIn $ Map.keys umap)
     TxInputScriptUtxo tvs sd sd' m_eu utxo ->  utxoToAeson  utxo 
+    TxInputScriptUtxoInlineDatum tvs d r utxo -> utxoToAeson utxo
 
 instance ToJSON TxValidatorScript where
   toJSON (TxValidatorScript script) = A.String $ T.pack $ show script
@@ -324,7 +331,10 @@ instance FromJSON TxInputSelection where
         Just addr -> pure $ TxSelectableAddresses  [addr]
         Nothing -> case parseTxIn s of
           Just txin -> pure $ TxSelectableTxIn  [txin]
-          Nothing -> fail $ "Invalid InputSelection String : It must be  address, txHash#index,  or  utxoCbor"
+          Nothing -> case parseSignKey s of 
+            Just s -> pure $ TxSelectableSkey [s]
+            Nothing -> fail $ "Invalid InputSelection String : It must be  address, txHash#index,  or  utxoCbor"
+
     -- if "addr" `T.isPrefixOf` s
     --   then do
     --     case deserialiseAddress (AsAddressInEra AsAlonzoEra) s of
@@ -342,7 +352,7 @@ instance FromJSON TxInputSelection where
     pure $ TxSelectableTxIn [txIn]
 
 instance FromJSON TxInput where
-  parseJSON (A.Object v) = do
+  parseJSON o@(A.Object v) = do
     utxo <- v .: "utxo"
     txIn <- txInParser  utxo
     mScript :: (Maybe A.Value) <- v .:? "script"
@@ -350,10 +360,14 @@ instance FromJSON TxInput where
       Nothing ->  pure $ TxInputUnResolved $ TxInputTxin txIn
       Just scriptJson -> do
         script <- parseAnyScript $ B.concat $ LBS.toChunks $ A.encode scriptJson
-        datum <- v  `scriptDataParser` "datum"
-        redeemer <- v `scriptDataParser` "redeemer"
+        mData <- v .:? "datum" 
+        redeemer <- v .: "redeemer" >>= scriptDataParser 
         exUnits <- v .:? "executionUnits"
-        pure $ TxInputUnResolved $ TxInputScriptTxin (TxValidatorScript script) datum redeemer exUnits txIn
+        case  mData of 
+          Nothing -> pure $ TxInputUnResolved $ TxInputScriptTxinInlineDatum (TxValidatorScript script) redeemer exUnits txIn
+          Just datum -> do 
+            sd <-scriptDataParser  datum
+            pure $ TxInputUnResolved $ TxInputScriptTxin (TxValidatorScript script) sd redeemer exUnits txIn
 
   parseJSON v@(A.String s) = do
     case parseHexString s of
@@ -434,8 +448,8 @@ instance FromJSON TxOutput where
                   Nothing -> pure  Nothing
                   Just dh -> pure $ pure $ pure dh
           Nothing -> case H.lookup "datum" v of
-              Just _  -> do
-                    val <- v `scriptDataParser` "datum"
+              Just val  -> do
+                    val <-  scriptDataParser val
                     pure   $ pure $ Right $ hashScriptData  val
               Nothing -> pure  Nothing
 
@@ -492,8 +506,10 @@ instance FromJSON TxCollateral where
 
 
 instance FromJSON TxSignature where
-  parseJSON (A.String v) = case deserialiseAddress (AsAddressInEra AsAlonzoEra) v of
-      Nothing -> fail $ "Invalid address string: " ++ T.unpack v
+  parseJSON (A.String v) = case parseAddress v of
+      Nothing -> case parseSignKey v of 
+        Just sk -> pure $ TxSignatureSkey sk
+        Nothing -> fail $ "Invalid address string: " ++ T.unpack v
       Just aie -> pure $ TxSignatureAddr aie
 
 
