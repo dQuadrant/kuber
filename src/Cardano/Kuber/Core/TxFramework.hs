@@ -190,8 +190,19 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
   if  not requiresExUnitCalculation
     then  ( do
       (body2,signatories2,fee2) <- calculator fixedInputs txMintValue' fee1
-      if fee1 /= fee2  then Left $ FrameworkError LibraryError "Transaction not balanced even in 3rd iteration" else pure  ()
-      pure (body2, makeSignedTransaction [] body2)
+      
+      if fee1 /= fee2  
+        then (
+          do  
+            (body3,signatories3,fee3) <- calculator fixedInputs txMintValue' fee1
+            if fee3 /= fee2
+              then Left $ FrameworkError LibraryError "Transaction not balanced even in 4th iteration" 
+              else pure  (respond body3 signatories3))
+
+       else 
+              pure ( respond body2 signatories2)
+
+        
     )
     else (
           let evaluateBodyWithExunits body fee= do
@@ -204,12 +215,12 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
             (txBody4,signatories4,fee4) <- evaluateBodyWithExunits  txBody3 fee3
 
             if fee4==fee3
-              then pure (txBody4,makeSignedTransaction [] txBody4)
+              then pure ( respond txBody4 signatories4)
               else evaluateBodyWithExunits txBody4 fee4 <&> (\(txBody5,signatories5,_)-> respond txBody5 signatories5)
       )
 
   where
-    respond txBody signatories = (txBody,makeSignedTransaction (map (toWitness txBody) $ mapMaybe (`Map.lookup` availableSkeys) $ Set.toList signatories) txBody)
+    respond txBody signatories = Debug.trace (show txBody ++"\n\n" ++ show signatories)(txBody,makeSignedTransaction (map (toWitness txBody) $ mapMaybe (`Map.lookup` availableSkeys) $ Set.toList signatories) txBody)
     toWitness body skey = makeShelleyKeyWitness body (WitnessPaymentKey skey)
 
     availableSkeys =  Map.fromList $  map (\x -> (skeyToPaymentKeyHash x, x)) $  concat (mapMaybe (\case
