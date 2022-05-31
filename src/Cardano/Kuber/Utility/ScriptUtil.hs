@@ -1,6 +1,7 @@
 module Cardano.Kuber.Utility.ScriptUtil where
 import Cardano.Api
 import Cardano.Kuber.Error
+import Cardano.Api.Shelley (fromPlutusData)
 
 
 createTxInScriptWitness :: ScriptInAnyLang -> ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn BabbageEra)

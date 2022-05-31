@@ -5,7 +5,7 @@
 module Cardano.Kuber.Data.Parsers where
 
 import           Cardano.Api
-import Cardano.Api.Shelley ( fromShelleyAddr, fromShelleyTxOut )   
+import Cardano.Api.Shelley ( fromShelleyAddr, fromShelleyTxOut )
 import           Cardano.Binary               (FromCBOR (fromCBOR), decodeFull)
 import           Cardano.Kuber.Utility.Text
 import qualified Cardano.Ledger.Babbage       as Babbage
@@ -203,10 +203,8 @@ parseAddressBench32 txt = case deserialiseAddress (AsAddressInEra AsBabbageEra) 
   Nothing  -> fail $ "Address is not in bench32 format"
   Just aie -> pure aie
 
-scriptDataParser :: MonadFail m => A.KeyMap Aeson.Value -> A.Key -> m ScriptData
-scriptDataParser v key = case A.lookup key v of
-  Nothing -> fail $"missing key \"" ++ A.toString key ++ "\" if type ScriptData in json object"
-  Just v -> doParsing v
+scriptDataParser :: MonadFail m =>  Aeson.Value  -> m ScriptData
+scriptDataParser v = doParsing v
   where
     doParsing (Aeson.String v) =  parseScriptData  v
     doParsing (Aeson.Object o )=case scriptDataFromJson ScriptDataJsonDetailedSchema  (Aeson.Object o) of

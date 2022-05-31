@@ -25,6 +25,8 @@ import qualified Data.Map as Map
 import Data.Text (Text)
 import Cardano.Kuber.Data.Models
 import qualified Data.ByteString.Char8 as BS8
+import Data.Functor ((<&>))
+
 
 
 
@@ -38,7 +40,7 @@ getBalance ctx addrStr = do
     Left fe -> throw fe
     Right utxos -> pure $ BalanceResponse  utxos
 
-submitTx :: ChainConnectInfo -> SubmitTxModal -> IO TxResponse
+submitTx :: ChainInfo x =>  x -> SubmitTxModal -> IO TxResponse
 submitTx ctx (SubmitTxModal tx mWitness) = do
   let tx' = case mWitness of
         Nothing -> tx
@@ -49,10 +51,10 @@ submitTx ctx (SubmitTxModal tx mWitness) = do
 txBuilder :: DetailedChainInfo  ->  TxBuilder -> IO TxResponse
 txBuilder dcinfo txBuilder = do
   putStrLn $ BS8.unpack $  prettyPrintJSON $ txBuilder
-  txBodyE<-txBuilderToTxBodyIO dcinfo txBuilder
-  case txBodyE of 
+  txE <- txBuilderToTxIO dcinfo txBuilder 
+  case txE of 
     Left fe -> throw fe
-    Right txBody -> pure $ TxResponse $ makeSignedTransaction [] txBody
+    Right tx -> pure $ TxResponse tx
 
 testTx :: DetailedChainInfo  ->  TxModal -> IO TxResponse
 testTx dcinfo txBuilder = do

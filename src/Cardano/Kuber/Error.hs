@@ -16,6 +16,7 @@ data ErrorType =  ConnectionError
                 | ExUnitCalculationError
                 | FeatureNotSupported
                 | BadMetadata
+                | TxSubmissionError
                 | WrongScriptType deriving Show 
 
 

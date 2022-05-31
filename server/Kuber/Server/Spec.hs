@@ -46,14 +46,11 @@ import qualified Data.String as String
 import qualified Servant.API.ContentTypes as ContentTypes
 import Cardano.Ledger.Alonzo.Scripts (ExUnits(ExUnits))
 import Data.Text (Text)
-import Kuber.Server.MediaType (AnyTextType, CBORText, CBORBinary)
 import qualified Data.ByteString.Lazy
 import Network.Wai.Middleware.Cors (simpleCors, CorsResourcePolicy (..), cors)
 import qualified Data.ByteString.Char8 as BS
 import Network.Wai (Request(requestMethod), Response, ResponseReceived, mapResponseHeaders)
 import Cardano.Kuber.Api
-import Kuber.Server.MediaType
-
 import Kuber.Server.MediaType
 
 import Cardano.Kuber.Util (evaluateExecutionUnits)
@@ -63,14 +60,14 @@ type TransactionAPI =
   Throws FrameworkError
     :> (
             "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
-      :<|>  "api" :> "v1" :> "tx" :> "submit" :> ReqBody '[JSON] (TxModal) :> Post '[JSON] (TxResponse )
-      :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary  ] (Tx BabbageEra) :> Post '[JSON] ([Either String ExecutionUnits ])
-       ) 
+      :<|>  "api" :> "v1" :> "tx" :> "submit" :> ReqBody '[JSON ,CBORBinary,CBORText  ] (SubmitTxModal ) :> Post '[JSON] (TxResponse )
+      :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx BabbageEra) :> Post '[JSON] ([Either String ExecutionUnits ])
+       )
 
 server :: DetailedChainInfo -> Server TransactionAPI
 server dcInfo =
   errorGuard (txBuilder dcInfo)
-  :<|> errorGuard (testTx dcInfo)
+  :<|> errorGuard (submitTx dcInfo)
   :<|> errorGuard (evaluateExecutionUnits dcInfo )
   where
 

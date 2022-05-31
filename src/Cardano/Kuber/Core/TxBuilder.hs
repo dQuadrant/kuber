@@ -56,10 +56,16 @@ data TxMintingScript = TxSimpleScript ScriptInAnyLang
 newtype TxValidatorScript = TxValidatorScript ScriptInAnyLang deriving (Show)
 
 data TxInputResolved_ = TxInputUtxo (UTxO BabbageEra)
-              | TxInputScriptUtxo TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra) deriving (Show)
+              | TxInputScriptUtxo TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
+              | TxInputScriptUtxoInlineDatum TxValidatorScript  ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
+              deriving (Show)
+
+
 data TxInputUnResolved_ = TxInputTxin TxIn
               | TxInputAddr (AddressInEra BabbageEra)
-              | TxInputScriptTxin TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) TxIn deriving (Show)
+              | TxInputScriptTxin TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) TxIn
+              | TxInputScriptTxinInlineDatum TxValidatorScript  ScriptData (Maybe ExecutionUnits) TxIn
+              deriving (Show)
 
 data TxInput  = TxInputResolved TxInputResolved_ | TxInputUnResolved TxInputUnResolved_ deriving (Show)
 
@@ -82,7 +88,10 @@ data TxCollateral =  TxCollateralTxin TxIn
                   |  TxCollateralUtxo (UTxO BabbageEra) deriving (Show)
 
 data TxSignature =  TxSignatureAddr (AddressInEra BabbageEra)
-                  | TxSignaturePkh PubKeyHash deriving (Show)
+                  | TxSignaturePkh PubKeyHash
+                  | TxSignatureSkey (SigningKey PaymentKey)
+                  deriving (Show)
+
 
 
 data TxChangeAddr = TxChangeAddrUnset
@@ -90,13 +99,16 @@ data TxChangeAddr = TxChangeAddrUnset
 
 data TxInputSelection = TxSelectableAddresses [AddressInEra BabbageEra]
                   | TxSelectableUtxos  (UTxO BabbageEra)
-                  | TxSelectableTxIn [TxIn] deriving(Show)
+                  | TxSelectableTxIn [TxIn]
+                  | TxSelectableSkey [SigningKey PaymentKey]
+                  deriving(Show)
+
 
 data TxMintData = TxMintData PolicyId (ScriptWitness WitCtxMint BabbageEra) Value deriving (Show)
 
 -- TxBuilder object
--- It is a semigroup and monoid instance, so it can be constructed using helper function 
--- and merged to construct a transaction specification 
+-- It is a semigroup and monoid instance, so it can be constructed using helper function
+-- and merged to construct a transaction specification
 data TxBuilder=TxBuilder{
     txSelections :: [TxInputSelection],
     txInputs:: [TxInput],
@@ -225,6 +237,11 @@ txSignBy  a = txSignature (TxSignatureAddr a)
 -- Mark this PublicKeyhash as txExtraKeyWitness in the transaction object.
 txSignByPkh :: PubKeyHash  -> TxBuilder
 txSignByPkh p = txSignature $ TxSignaturePkh p
+
+-- Mark this signingKey's vKey as txExtraKey Witness in the transaction object.
+-- When validating `txSignedBy` in plutus, this can be used to add the
+txSign :: SigningKey PaymentKey -> TxBuilder
+txSign p = txSignature $ TxSignatureSkey p
 -- Lock value and data in a script.
 -- It's a script that we depend on. but we are not testing it.
 -- So, the validator of this script will not be executed.
@@ -240,7 +257,7 @@ txRedeemUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> ScriptIn
 txRedeemUtxo txin txout script _data _redeemer = txInput $ TxInputResolved $ TxInputScriptUtxo  (TxValidatorScript $ script)  _data  _redeemer  Nothing $ UTxO $ Map.singleton txin  txout
 
 
- -- wallet addresses, from which utxos can be spent for balancing the transaction 
+ -- wallet addresses, from which utxos can be spent for balancing the transaction
 txWalletAddresses :: [AddressInEra BabbageEra] -> TxBuilder
 txWalletAddresses v = txSelection $ TxSelectableAddresses  v
 
@@ -255,3 +272,9 @@ txWalletUtxos v =  txSelection $  TxSelectableUtxos v
 -- wallet utxo, that can be spent  for balancing the transaction
 txWalletUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> TxBuilder
 txWalletUtxo tin tout = txWalletUtxos $  UTxO $ Map.singleton tin  tout
+
+txWalletSignKey :: SigningKey PaymentKey -> TxBuilder
+txWalletSignKey s= txWalletSignKeys [s]
+
+txWalletSignKeys :: [SigningKey PaymentKey] -> TxBuilder
+txWalletSignKeys s= txSelection $ TxSelectableSkey s
