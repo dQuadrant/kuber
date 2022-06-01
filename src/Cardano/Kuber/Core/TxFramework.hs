@@ -152,10 +152,10 @@ txBuilderToTxBodyIO' cInfo builder = do
 -- Construct TxBody from TxBuilder specification.
 -- Utxos map must be provided for the utxos that are available in wallet and used in input
 txBuilderToTxBody'::DetailedChainInfo ->  UTxO BabbageEra -> TxBuilder   -> Either FrameworkError  (TxBody BabbageEra,Tx BabbageEra )
-txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory ) 
-                    (UTxO availableUtxo) 
-                    (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata ) 
-  = do 
+txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory )
+                    (UTxO availableUtxo)
+                    (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata )
+  = do
   let network = getNetworkId  dCinfo
   meta<- if null metadata
           then  Right TxMetadataNone
@@ -190,19 +190,19 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
   if  not requiresExUnitCalculation
     then  ( do
       (body2,signatories2,fee2) <- calculator fixedInputs txMintValue' fee1
-      
-      if fee1 /= fee2  
+
+      if fee1 /= fee2
         then (
-          do  
+          do
             (body3,signatories3,fee3) <- calculator fixedInputs txMintValue' fee1
             if fee3 /= fee2
-              then Left $ FrameworkError LibraryError "Transaction not balanced even in 4th iteration" 
+              then Left $ FrameworkError LibraryError "Transaction not balanced even in 4th iteration"
               else pure  (respond body3 signatories3))
 
-       else 
+       else
               pure ( respond body2 signatories2)
 
-        
+
     )
     else (
           let evaluateBodyWithExunits body fee= do
@@ -220,7 +220,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
       )
 
   where
-    respond txBody signatories = Debug.trace (show txBody ++"\n\n" ++ show signatories)(txBody,makeSignedTransaction (map (toWitness txBody) $ mapMaybe (`Map.lookup` availableSkeys) $ Set.toList signatories) txBody)
+    respond txBody signatories = (txBody,makeSignedTransaction (map (toWitness txBody) $ mapMaybe (`Map.lookup` availableSkeys) $ Set.toList signatories) txBody)
     toWitness body skey = makeShelleyKeyWitness body (WitnessPaymentKey skey)
 
     availableSkeys =  Map.fromList $  map (\x -> (skeyToPaymentKeyHash x, x)) $  concat (mapMaybe (\case
@@ -233,13 +233,17 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
     mapPolicyIdAndWitness (TxMintData pId sw _)= (pId, sw)
 
     hasScriptInput = any (\case
-      TxInputResolved TxInputScriptUtxo {} -> True
-      TxInputUnResolved TxInputScriptTxin {} -> True
+      TxInputResolved TxInputScriptUtxo {}-> True
+      TxInputResolved TxInputScriptUtxoInlineDatum{}-> True
+      TxInputUnResolved TxInputScriptTxin{} -> True
+      TxInputUnResolved TxInputScriptTxinInlineDatum{} -> True
       _ -> False ) _inputs
 
     requiresExUnitCalculation = any (\case
-      TxInputResolved (TxInputScriptUtxo _ _ _ Nothing _)-> True
-      TxInputUnResolved (TxInputScriptTxin _ _ _ Nothing _ ) -> True
+      TxInputResolved TxInputScriptUtxo {}-> True
+      TxInputResolved TxInputScriptUtxoInlineDatum{}-> True
+      TxInputUnResolved TxInputScriptTxin{} -> True
+      TxInputUnResolved TxInputScriptTxinInlineDatum{} -> True
       _ -> False ) _inputs
 
 
@@ -476,9 +480,14 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
                                                                 exUnit <- getExUnit _in mExunit
                                                                 witness <-  createTxInScriptWitness s d r exUnit
                                                                 pure (_in,Right (mExunit, witness,val )) ) $ Map.toList txin
-      -- TODO change this to proper input tuxo in babbage era
-      TxInputScriptUtxoInlineDatum (TxValidatorScript s)  r mExunit (UTxO txin) ->
-                                                                Left $ FrameworkError EraMisMatch "Inline datum is not supported in alonzo era"
+      TxInputScriptUtxoInlineDatum (TxValidatorScript s)  r mExunit (UTxO txin) -> mapM (\(_in,val) -> do
+                                                                sd <- case val of { TxOut aie tov tod rs -> case tod of
+                                                                                TxOutDatumNone -> Left $ FrameworkError  BalancingError  $ "for input "++ T.unpack (renderTxIn _in) ++ " Datum not provided and it's not inlined in the utxo"
+                                                                                TxOutDatumHash sdsie ha -> Left $ FrameworkError  BalancingError  $ "for input "++ T.unpack (renderTxIn _in) ++ " Datum not provided and it's not inlined in the utxo"
+                                                                                TxOutDatumInline _ sd -> pure sd  }
+                                                                exUnit <- getExUnit _in mExunit
+                                                                witness <-  createTxInScriptWitness s sd r exUnit
+                                                                pure (_in,Right (mExunit, witness,val )) ) $ Map.toList txin
 
       where
 

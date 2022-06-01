@@ -233,10 +233,12 @@ instance ToJSON TxInput where
   toJSON (TxInputResolved val) = toJSON val
 instance ToJSON TxInputUnResolved_ where
   toJSON (TxInputTxin txin) = toJSON txin
-  toJSON (TxInputScriptTxinInlineDatum _script _redeemer _exUnits _txin ) = A.object [
-        "inlineScript" .= True,
+  toJSON (TxInputScriptTxinInlineDatum _script _redeemer _exUnits _txin ) = A.object $ [
+        "inlineDatum" .= True,
         "txin" .= renderTxIn _txin
-      ]
+      ] ++ (case _exUnits of
+    Nothing -> []
+    Just e@(ExecutionUnits mem step) -> ["exUnits" .= e ] )
   toJSON (TxInputScriptTxin _script _data _redeemer _exUnits _txin) =
 
     A.object
@@ -360,7 +362,10 @@ instance FromJSON TxInput where
         script <- parseAnyScript $ B.concat $ LBS.toChunks $ A.encode scriptJson
         mData <- v .:? "datum"
         redeemer <- v .: "redeemer" >>= scriptDataParser
-        exUnits <- v .:? "executionUnits"
+        _exUnits <- v .:? "executionUnits"
+        exUnits <- case _exUnits of
+          Nothing -> v .:? "exUnits"
+          Just eu -> pure eu
         case  mData of
           Nothing -> pure $ TxInputUnResolved $ TxInputScriptTxinInlineDatum (TxValidatorScript script) redeemer exUnits txIn
           Just datum -> do
@@ -411,7 +416,7 @@ instance FromJSON TxOutput where
 
 
     datumHashE <- parseData
-    shouldEmbed <- v .:? "embedData" .!= True
+    shouldEmbed <- v .:? "inline" .!= True
     let dHashConfigConsidered=if shouldEmbed
                                 then datumHashE
                                 else (case datumHashE of
@@ -436,20 +441,20 @@ instance FromJSON TxOutput where
     pure $ TxOutput txOutputContent deductFee' addChange'
 
     where
-
       parseData :: Parser  (Maybe (Either ScriptData (Hash ScriptData)))
       parseData = do
-        dataHashM <- v .:? "datumHash"
-        case dataHashM of
-          Just dataHash -> do
-              case deserialiseFromRawBytesHex (AsHash AsScriptData) (T.encodeUtf8 dataHash) of
-                  Left e -> pure  Nothing
+        mDatum <- v .:? "datum"
+        case mDatum of
+          Just datum -> do
+                  val <- scriptDataParser datum
+                  pure $ pure $ Left $  val
+          Nothing ->do
+            datumHashM <- v .:? "datumHash"
+            case datumHashM of
+              Just dHash ->case deserialiseFromRawBytesHex (AsHash AsScriptData) (T.encodeUtf8 dHash) of
+                  Left e -> fail "Expected hex string "
                   Right dh -> pure $ pure $ pure dh
-          Nothing -> case A.lookup "datum" v of
-              Just val  -> do
-                    val <- scriptDataParser val
-                    pure   $ pure $ Right $ hashScriptData  val
-              Nothing -> pure  Nothing
+              Nothing -> pure Nothing
 
 
   parseJSON _ = fail "TxOutput must be an object"
