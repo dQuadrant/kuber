@@ -4,11 +4,16 @@ Kuber
 Haskell library and API server for composing balanced cardano transaction
 
 ## 1. Building locally
-Kuber depends on `cardano-api` library. The system packages and dependencies required for building this project is same as that of `cardano-node`
+Kuber uses  `cardano-api` library. The system packages and dependencies required for building this project is same as that of `cardano-node`
 
 To prepare your system for building kuber from sources, you can follow these instructions:
 
- [building-cardano-node](https://developers.cardano.org/docs/get-started/installing-cardano-node/)
+    The steps can be summarized as 
+    - install system dependencies for ghc and cardano-node
+    - install ghc compiler and tools with ghcup
+    - install iokhk patch of libsodium on the system
+ 
+ The steps are described in detailed in the documentation of [building-cardano-node-from-soruces](https://developers.cardano.org/docs/get-started/installing-cardano-node/)
 
  Once everything is installed and is ready, kuber is ready to run
  ```
@@ -22,148 +27,255 @@ cabal run kuber
 
 
  ## 2. Composing transactions with api
- transaction can be composed by posting a TransactionBuilder object as POST request to  /api/v1/tx
 
  
  ### 2.1 TransactionBuilder Object
  Transaction builder object specifies the spec for the transaction that is to be composed.
+  transaction can be composed by posting a TransactionBuilder JSON object as POST request to  localhost:8081/api/v1/tx
+
+
+- [**selections**](#211-selections---string--object--array-of-utxos-that-can-be-used-to-balance-the-transaction) : List of utxos/addresses that can be used for balancing transaction
+- [**inputs**](#212-inputs---string--object---inputs-utxos-being-spent-in-the-transaction) : List inputs in transactions
+- [**outputs**](#213-outputs--object--outputs-of-the-transaction) : List Output utxos in the transaction
+- [**collaterals**](#214-collaterals-string-optional--collateral-inputs-in-the-transaction) : [optional] List of collaterals in the transaciton (It is automatically selected if missing) 
+- **validityStart** : [Integer: UnixTimestamp millisecond] Transaction validFrom
+- **validityEnd** : [Integer : UnixTimestamp millisecond] Transaction validUntil 
+- [**mint**](#215-mint--object--minting-script-and-amount-in-the-transaction) : Minting Scripts and value in the transaction
+- **fee** : [Integer : Lovelace]  Fee  is calculated automatically, but setting this will set  transaction fee explicitly.
+- **changeAddress** [Optional ] : Default change address. If it's missing, it's selected from one of the selection address. Setting `addChange`  in any one output will disable this option
+- [**metadata**](#216-metadata--object--transaction-metadata) : Transaction metadata
+
+### 2.1.1 `selections` : [ string | object ] Array of utxos that can be used to balance the transaction
  
+ Selection is the wallet from which payment is being made. Selection utxos are used if required during balancing.
+  Selection utxos can only be the output to PublicKey addresses and not to Script addresses. 
+  The  Selection can be in one of following format.
 
-- [selections](#211-selections---txhashindex--address--array-of-utxos-that-can-be-used-to-balance-the-transaction) : List of utxos/addresses that can be used for balancing transaction
-- [inputs](#212-inputs---txixindex--address--object---inputs-utxos-being-spent-in-the-transaction) : Utxos input in transactions
-- [outputs](#213-outputs--object--outputs-of-the-transaction) : Output Utxos in the transaction
-- collaterals : Collateral in the transaciton (It is automatically selected if missing) 
-- validityStart : [Integer: UnixTimestamp millisecond] Transaction validFrom
-- validityEnd : [Integer : UnixTimestamp millisecond] Transaction validUntil 
-- mint : Minting Scripts and value in the transaction
-- fee : Set transaction fee explicitly . If not provided it is calculated automatically 
-- defaultChangeAddr : Default change address. If it's missing, it's selected from one of the selection address
-- [metadata](#214-metadata--transaction-metadata) : Transaction metadata
-
-#### 2.1.1 `selections` : [ TxHash#index | Address ] Array of utxos that can be used to balance the transaction
- 
- Selection is  generally the wallet from which payment is being made.  Selection can be in one of following format
-
- - "3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8#1" : Transaction output 
- - "addr_test1qrmntnd29t3kpnn...qtpcsrj" : PublicKey  Address i.e. Script address cannot be used for selection
- - ""00f7...f99531306750d3d460d88" : PubkicKey Address in CBOR hex format
-
- When address is used for selection, any of the utxos of the address may be used if required.  
-
-eg: 
-
-```json
-    {
-        "selections": [
-            "3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8#1",
-            "00a4dcec5ae1b9882304d6597f7a3763f0372c4f06939edaa4720ee29a927020a2ac787f4fa218a59ee1ecab4eaf117b8fab9a79850534e41f",
-            "addr_test1qrmntnd29t3kpnn8uf7d9asr3fzvw7lnah55h52yvaxnfe4g2v2ge520usmkn0zcl46gy38877hej5cnqe6s602xpkyqtpcsrj"
-        ] 
+- TxIn Object : TxIn in object format.  Kuber will determine the utxo value by querying with node and use it if required for balancing
+    { 
+      "hash" | "txid" | "txId" : "String" transaction hash,
+      "index"                  : [integer] transaction output index
     }
-```
+    eg: { "hash": "3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8", "index": 1}
 
-#### 2.1.2 `inputs` : [ TxIx#index | Address | Object ] : Inputs (Utxos being spent) in the transaction
+ - TxIn [ TxHash#index ]
+    TxIn in readable format. Kuber will determine the utxo value by querying with node and use it if required for balancing
+    eg: "3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8#1"
+
+ -  Utxo CborHex 
+    Utxo( transaction output ) in cbor format. Utxo cbor contains output address, value).  Kuber directly uses the value  and address by decoding it so, querying the node is not necesasry.
+    eg: "828258202ff238f64b773435d6f626aafe56073f251b52281c50a3872951905fbc597e560082583901ab1d01c80b7ef656194c4af4a682f2d55d714379bde1afe72dc5d348f9c9e87246d2f0373885896ad2804b7229673204cac9208345c1ea5b1a0037e4d2"  
+ - Address bench32
+    Wallet address in bench32 format. when address is used, all the utxos in the address is queried from the node and then the utxos are used in the transaction if required.
+    eg: "addr_test1vzzc9nx2lxmu9r7gyd8cyd0dcx0ynh729rpv4c553exs7kgyu9cxl"
+    
+ - Address CborHex 
+    Wallet address in cbor format. when address is used, all the utxos in the address is queried from the node and then the utxos are used if required for balancing.
+    eg: "6136e0cf1e52e05ef92e52c7bc2a04493d6bae481b8acbab12ec4300d7"
+    eg: "0136e0cf1e52e05ef92e52c7bc2a04493d6bae481b8acbab12ec4300d7f9c9e87246d2f0373885896ad2804b7229673204cac9208345c1ea5b"
+
+### 2.1.2 `inputs` : [ string | Object ] : Inputs (Utxos being spent) in the transaction
 
 input can have following fields  depending on the context in which it's being used.
 
-- "utxo" [required] : Utxo being consumed "TxHaxh#index" 
-- "script" [optional]: The script code in json format if it's script input
-- "datum"  [optional]: if it's script utxo, datum of the utxo. Datum is in json format with object structure
+PubKeyUtxos as input
 
-eg:
-```json
-{
-    "inputs": [
-        "3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8#1",
+- TxIn Object : TxIn in object format.  Kuber will determine the utxo value by querying with node and use it if required for balancing
+    { 
+      "hash" | "txid" | "txId" : "String" transaction hash,
+      "index"                  : [integer] transaction output index
+    }
+    eg: { "hash": "3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8", "index": 1}
+
+ - TxIn [ TxHash#index ]
+    TxIn in readable format. Kuber will use this utxo in the transaction 
+    eg: "3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8#1"
+ - Address bench32
+    Wallet address in bench32 format. when address is used, all the utxos int the address will be used as input and spent in the transaction. 
+    eg: "addr_test1vzzc9nx2lxmu9r7gyd8cyd0dcx0ynh729rpv4c553exs7kgyu9cxl"
+    
+ - Address CborHex 
+    Wallet address in cbor format. When address is used, all the utxos int the address will be used as input and spent in the transaction.
+    eg: "6136e0cf1e52e05ef92e52c7bc2a04493d6bae481b8acbab12ec4300d7"
+    eg: "0136e0cf1e52e05ef92e52c7bc2a04493d6bae481b8acbab12ec4300d7f9c9e87246d2f0373885896ad2804b7229673204cac9208345c1ea5b"
+
+ -  Utxo CborHex 
+    Utxo( transaction output ) in cbor format. Utxo cbor contains output address, value , (datum hash in case of script output).  Kuber directly uses the value  and address by decoding it so, querying the node is not necesasry.
+    eg: "828258202ff238f64b773435d6f626aafe56073f251b52281c50a3872951905fbc597e560082583901ab1d01c80b7ef656194c4af4a682f2d55d714379bde1afe72dc5d348f9c9e87246d2f0373885896ad2804b7229673204cac9208345c1ea5b1a0037e4d2"
+
+Script Utxos as input
+
+When spending/reedming form script utxo, Input value should be object with all of the following fields.
+ - `utxo` : TxIn [ TxHash#index ]
+    TxIn in readable format. Kuber will use this utxo in the transaction 
+    eg: "3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8#1"   
+
+- `script` [Object] :  Serialized script wrapped in text evelope. `script` object must have following fields
+    {
+        "type": "String" Script type [ "PlutuScrpitV1" | "PlutusScriptV2" ]
+        "cborHex": "String" Scrialized cbor hex representation of the script.
+    }
+- `redeemer` [Object] : Redeemer datum in json format.
+    eg: `{ "constructor": 0, "fields": []}`
+
+- `datum` [Object] [Optional] : Datum matching the datumHash in the utxo. If Inline Datum feature is used, datum is not required and is directly fetched from the datum. Datum 
+   eg: `{"constructor": 0, "fields": [{"bytes":"3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8"}]}`
+
+- `exUnits` | `executionUnits` [Object] [Optional]: Specify Execution units values. If not provided, Kuber automatically calculates the executionunits and includes it in the transaction
+    {
+        "steps": "String" Execution units steps
+        "memory": "String" Execution units memory
+    }
+
+### 2.1.3 `outputs` : [Object] : Outputs created in  the transaction
+
+##### Output object can have following common fields
+
+- `address` \"String" [Optional if script is present] :  Receiver address. Receiver address may be script or public key address. Address may be in bench32 or cborHex format. If `address` is not provided and script is present, address is automatically calculated.
+
+    ___e.g___: "addr_test1vzzc9nx2lxmu9r7gyd8cyd0dcx0ynh729rpv4c553exs7kgyu9cxl"
+
+    ___e.g___: "6136e0cf1e52e05ef92e52c7bc2a04493d6bae481b8acbab12ec4300d7" 
+                                                                                          
+
+- `value` [String | Integer] : Amount to be sent. In case of native tokens, they can be joined by `+` like in cardano-cli response
+
+    ___e.g: ada amount___ :  "3A", "3.2Ada", "3.3a", "3ada"
+
+    ___e.g: lovelace amount___ : 3000000 or "3000000"
+
+    ___e.g: with native token___ : "3a + b14005d41c24863c570edc85e180cde5eda45bff6c9117ea70856b04.546f6b656e2331"
+
+    ___e.g: with native token___ : "3000000 + 3 21666f85344ad0f92b47ad3b359d91edc369e51031cb80e649a43434d058bd6a.546f6b656e2331"
+                                                                                 
+
+- `deductFee`  [_Optional_] :  If set to true, Fee will be deducted from this output
+
+
+- `addChange` [_Optional_] : If set to true, Change is added to this output. This can be used to make sure that at least `value` amount  is sent to this output.
+                                                                                                                                                          
+
+##### Following fields can be present **if the Output address is scriptAddress**
+
+- `script` | `inlineScript` : [Object] : Serialized script wrapped in text evelope. When `inlineScript` is provided, the script is inlined in the Utxo.  It object must have following fields
+    {
+        "type": "String" Script type [ "PlutuScrpitV1" | "PlutusScriptV2" ]
+        "cborHex": "String" Scrialized cbor hex representation of the script.
+    }
+
+
+- `datumHash` \"String" \[Optional]  : DatumHash in cbor format.
+
+
+- `datum` | `inlineDatum` \"String" \[Optional]  : Datum of the script output. `datum` is added in the transaction as Auxiliary Data whereas `inlineDatum` is inlined in the utxo
+
+### 2.1.4 `collaterals` "String" [Optional] : Collateral inputs in the transaction.
+Collaterals are selected automatically by Kuber using one of the utxos in the `selections` .
+If desired, collaterals list can be set explicitely .
+
+Each Item in the list can be in one of the following form.
+
+- _TxIn Object_ : TxIn in object format.  
+  {
+  "hash" | "txid" | "txId" : "String" transaction hash,
+  "index"                  : [integer] transaction output index
+  }
+
+  ___eg___:&#160;{&#160;"hash":&#160;"3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8",&#160;"index":&#160;1}
+           
+
+- _TxIn_ [ TxHash#index ] :  TxIn in readable format.
+
+  ___eg___:&#160;"3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8#1"        c
+
+
+- _Address bench32_
+  Wallet address in bench32 format. when address is used, all the utxos int the address will be used as input and spent in the transaction.
+
+  ___eg___:&#160;"addr_test1vzzc9nx2lxmu9r7gyd8cyd0dcx0ynh729rpv4c553exs7kgyu9cxl"
+                        
+
+- _Utxo CborHex_
+   Utxo( transaction output ) in cbor format. Utxo cbor contains output address, value .
+
+   ___eg___:&#160;"828258202ff238f64b773435d6f626aafe56073f251b52281c50a3872951905fbc597e560082583901ab1d01c80b7ef656194c4af4a682f2d55d714379bde1afe72dc5d348f9c9e87246d2f0373885896ad2804b7229673204cac9208345c1ea5b1a0037e4d2"
+       
+
+### 2.1.5 mint : [Object] : Minting script and amount in the transaction
+Each object in the mint list must have following keys
+
+- `amount` {Object} : in amount object, keys represent the tokenName in hexFromat and value is the amount of that token to be minted. 
+
+    e.g. `{ "546f6b656e2331": 1, "546f6b656e2332": 1}`
+
+#### For Plutus script
+- `script` {Object} :  Serialized script wrapped in text evelope. `script` object must have following fields
+
+      {
+           "type": "String" Script type [ "PlutuScrpitV1" | "PlutusScriptV2" ]
+           "cborHex": "String" Scrialized cbor hex representation of the script.
+      }
+ 
+- `executionUnits` {Object} [Optional] : Specify Execution units values. If not provided, Kuber automatically calculates the executionunits and include it in the transaction
+
+      {
+        "steps": (integer) Execution units steps
+        "memory": (integer) Execution units memory
+      }
+
+#### For Simple script 
+ - `script` {Object} : Simple script json format object
+
         {
-            "utxo": "8277e7ca93315b49fd0bc7b4c9bebf1e553bce7c967cd5e8ed061dae736a567d#0",
-            "script": {
-                "type": "PlutusScriptV1",
-                "description": "",
-                "cborHex": "5916de5916db010000332332232332232323233322232..048202b7881120c096b1022222123333001005004003002200101",
-                    "datum": {
-                    "constructor": 0,
-                    "fields": [
-                        {
-                            "bytes": "faf109a75f7eff663c15a36954f6b27aed5d461932a5651dc2966448"
-                        },
-                        {
-                            "list": [
-                                {
-                                    "fields": [
-                                        {
-                                            "bytes": "f735cdaa2ae360ce67e27cd2f6038a44c77bf3ede94bd144674d34e6"
-                                        },
-                                        {
-                                            "int": 33330000
-                                        }
-                                    ],
-                                    "constructor": 0
-                                }
-                            ]
-                        },
-                        {
-                            "int": 76234100
-                        },
-                        {
-                            "fields": [],
-                            "constructor": 0
-                        }
-                    ]
-                }
-            }
-        }
-    ]
-}
-```
-
-### 2.1.3 `outputs` : Object : Outputs of the transaction
-
-Output can have following fields depending on the context in which it's being used
-
-- address : Receiving address
-- value : Amount to be sent. In case of native tokens, they can be joined by `+` like in cardano-cli response
-- script : Plutus script in jsonenvelope. Address is determined from the scipt if it's not provided
-- datumHash : In case of script address, datum hash should be provided
-- datum : Datum can directly be provided instead of dataumHash. In that case, datumHas is calculated and used for the output
-- deductFee :  Deduct fee value from this output
-- addChange :  add Change in balancing to this output
-
-
-e.g:
-```json
-{
-    "outputs": [
-        {
-            "address": "addr_test1vzlea6jj330c8549xynn25stqxteetrket668hp65w73ussmzu06p",
-            "value": "200A",
-            "deductFee": true
+            "type": "String" Script type ["all" | "any"| "atleast" | "sig" | "after" | "before" ]
+            "..." : Other keys are based on the type of simple script.
         },
-        {
-            "address": "addr_test1wp04uqjsfjeaqgrzq60y8aajuqhcaa3ar4jp227k5w2v8hs4p9my9",
-            "value": "2A + 366757b2f1bf64ea60760dced8ebfacbbbc8a5f110abbdc5e2f5e2a6.UltraKingKongNFT014",
-            "datum":{
-              "fields":[{"bytes":"bf9eea528c5f83d2a5312735520b01979cac76caf5a3dc3aa3bd1e42"},{"list":[]},{"bytes":""},{"bytes":""},{"int":20000000},{"fields":[],"constructor":0}],
-              "constructor":0
-            }
+
+    **BasicScripts**
+
+        SignatureScript : {
+            "type": "sig" ,
+            "keyHash": "String" PublicKeyHash hex string. This public key can only mint the token
         }
-    ]
+
+        TimeBeforeScript : {
+            "type" : "before"
+            "slot" : (number) the slot no  before which this script cannot be minted.  
+        }
+
+        TimeAfterScript : {
+            "type" : "after"
+            "slot" : (number) the slot no after which this script cannot be minted.  
+        }
+
+    **MultiScripts:**
+
+        AnyScript{
+            "type": "any",
+            "scripts" : [ BasicScript | MultiScript ] : If any one of these script condition is met, token can be minted
+        }
+        AllScript{
+            "type": "all"
+            "scripts": [ BasicScript | MultiScript ] : If condition of all of these scripts is 
+        }
+        AnyMScript{
+            "type": "atLeast"
+            "required": (number) minimun no of scripts for which condition should be met. 
+            "scripts": [ BasicScript | MultiScript ] : when required number of script condition is met, token can be minted.
+        }
+
+
+### 2.1.6 metadata : Object : Transaction Metadata
+Transaction metadata must be a json object with top level integer key label.
+Keys in the json shouldn't be longer than 64 bytes length. If the string value in the metadata is longer than 64 bytes length, Kuber will split the string and replace it with array of smaller chunks of the string.
+
+Metadata object example:
+```
+{
+    "420": "content here"
+    "421": {
+        "key": "value"
+        "key": ["value1","value2"]
+    }
 }
 ```
-      
-
-## something
-### 2.1.4 `metadata` : Transaction Metadata 
-Transaction metadata must be a json object with top level integer key label.
- e.g:
- ```
- {
-     "metadata":{
-         "420": "content here"
-         "421": {
-             "key": "value"
-             "key": ["value1","value2"]
-         }
-     }
- }
- ```
