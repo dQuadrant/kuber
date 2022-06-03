@@ -1,5 +1,5 @@
 ### Minting With Kuber
-For minting with kuber one can use "mint" key containing script and amount to be minted as shown in the examples below.
+For minting with kuber one can use same transcation creator endpoint /api/v1/tx in which the request body contains "mint" key containing script and amount to be minted as shown in the examples below.
 
 #### 1. Signature  Policy
 
