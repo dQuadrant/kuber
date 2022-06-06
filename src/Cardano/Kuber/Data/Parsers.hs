@@ -1,6 +1,8 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Kuber.Data.Parsers where
 
@@ -181,13 +183,28 @@ parseAnyScript jsonText =
             (SimpleScriptLanguage SimpleScriptV1)
             (SimpleScript SimpleScriptV1 s')
 
+parseAddressBinary :: MonadFail m => ByteString -> m (AddressInEra AlonzoEra)
+parseAddressBinary bs = case parseAddressCbor (LBS.fromStrict bs) of 
+  Just addr -> pure addr
+  Nothing -> parseAddressRaw bs 
+
+parseAddressRaw :: MonadFail m =>  ByteString -> m(AddressInEra AlonzoEra)
+parseAddressRaw addrBs = case deserialiseFromRawBytes (AsAddressInEra AsAlonzoEra) addrBs of             
+            Nothing -> fail  "Invalid Address Hex "
+            Just addr -> pure addr
+
 parseAddress :: MonadFail m => Text -> m (AddressInEra AlonzoEra)
 parseAddress addrText = case deserialiseAddress (AsAddressInEra AsAlonzoEra) addrText of
-  Nothing ->  case parseHexString addrText >>= parseAddressCbor of 
-      Just addr -> pure addr
-      Nothing -> fail $ "Address is neither bench32 nor cborHex :"++ T.unpack addrText
+  Nothing -> do 
+     let hex :: Maybe  ByteString = parseHexString addrText 
+     case  hex of 
+      Just hex -> case parseAddressBinary hex of 
+        Just addr -> pure addr
+        Nothing -> case deserialiseFromRawBytes (AsAddressInEra AsAlonzoEra) hex of             
+            Nothing -> fail  $ "Address is neither bench32 nor cborHex : "++ T.unpack addrText
+            Just addr -> pure addr
+      Nothing -> fail $ "Address is neither bench32 nor cborHex : "++ T.unpack addrText
   Just aie -> pure aie
-
 
 parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra AlonzoEra)
 parseAddressCbor  cbor = do 

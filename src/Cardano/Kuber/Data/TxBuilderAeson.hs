@@ -32,7 +32,7 @@ import Data.Aeson.Types (FromJSON(parseJSON), (.:), Parser, parseMaybe, parseEit
 import qualified Data.Aeson as A
 import qualified Data.Text as T
 import Cardano.Kuber.Data.Models ( unAddressModal)
-import Cardano.Kuber.Data.Parsers (parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBench32, parseAddressCbor, parseUtxoCbor, parseSignKey)
+import Cardano.Kuber.Data.Parsers (parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBench32, parseAddressCbor, parseUtxoCbor, parseSignKey, parseAddressRaw, parseAddressBinary)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey))
 import qualified Data.Aeson as A.Object
@@ -322,7 +322,7 @@ instance ToJSON TxSignature where
 instance FromJSON TxInputSelection where
   parseJSON v@(A.String s) = do
     case parseHexString s of
-      Just str -> case parseAddressCbor  str of
+      Just str -> case parseAddressBinary  (LBS.toStrict  str) of
         Nothing -> case parseUtxoCbor str of
           Just utxo ->  pure $ TxSelectableUtxos  utxo
           Nothing -> fail $ "Invalid InputSelection Hex:  It must be  addressBench32, addressCborHex,  txHash#index or  utxoCbor"
@@ -371,7 +371,7 @@ instance FromJSON TxInput where
 
   parseJSON v@(A.String s) = do
     case parseHexString s of
-      Just str -> case parseAddressCbor  str of
+      Just str -> case parseAddressBinary (LBS.toStrict str) of
         Nothing -> case parseUtxoCbor str of
           Just utxo ->  pure $ TxInputResolved $ TxInputUtxo utxo
           Nothing -> fail $ "Invalid Inpu HexString : It must be  address, txHash#index or  utxoCbor"
