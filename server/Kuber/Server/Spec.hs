@@ -62,6 +62,7 @@ type TransactionAPI =
             "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "submit" :> ReqBody '[JSON ,CBORBinary,CBORText  ] (SubmitTxModal ) :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx AlonzoEra) :> Post '[JSON] ([Either String ExecutionUnits ])
+      :<|>  "api" :> "v1" :> "addresses"           :> Capture "address" String  :> "balance" :> Get '[JSON] BalanceResponse
        )
 
 server :: DetailedChainInfo -> Server TransactionAPI
@@ -69,6 +70,7 @@ server dcInfo =
   errorGuard (txBuilder dcInfo)
   :<|> errorGuard (submitTx dcInfo)
   :<|> errorGuard (evaluateExecutionUnits dcInfo )
+  :<|> errorGuard(getBalance dcInfo )
   where
 
     errorGuard f v = liftIO $ do

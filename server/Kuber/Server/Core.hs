@@ -30,7 +30,7 @@ import Data.Functor ((<&>))
 
 
 
-getBalance :: ChainConnectInfo -> String -> IO BalanceResponse
+getBalance :: ChainInfo x => x -> String -> IO BalanceResponse
 getBalance ctx addrStr = do
   addr <- case deserialiseAddress AsAddressAny $ T.pack addrStr of
     Nothing -> throw $ FrameworkError  ParserError  "Invalid address"
