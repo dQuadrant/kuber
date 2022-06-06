@@ -5,6 +5,7 @@ module Cardano.Kuber.Api(
     ,   txPayToPkh
     ,   txPayToScript
     ,   txPayToScriptWithData
+    ,   txMint
 
     -- inputs to the transaction
     ,   txConsumeTxIn
@@ -32,7 +33,8 @@ module Cardano.Kuber.Api(
     , txValidPosixTimeRangeMs
 
     -- Core Tx builder object and it's transformation functions
-    ,   TxBuilder
+    ,   TxBuilder(..)
+    ,   TxMintData(..)
     ,   txBuilderToTxBody
     ,   txBuilderToTxBodyIO
     ,   txBuilderToTx
