@@ -325,7 +325,7 @@ instance FromJSON TxInputSelection where
       Just str -> case parseAddressCbor  str of
         Nothing -> case parseUtxoCbor str of
           Just utxo ->  pure $ TxSelectableUtxos  utxo
-          Nothing -> fail $ "Invalid InputSelection Hex:  It must be  address, txHash#index or  utxoCbor"
+          Nothing -> fail $ "Invalid InputSelection Hex:  It must be  addressBench32, addressCborHex,  txHash#index or  utxoCbor"
         Just addr -> pure $ TxSelectableAddresses  [addr]
       Nothing -> case parseAddressBench32 s  of
         Just addr -> pure $ TxSelectableAddresses  [addr]
@@ -333,7 +333,7 @@ instance FromJSON TxInputSelection where
           Just txin -> pure $ TxSelectableTxIn  [txin]
           Nothing -> case parseSignKey s of 
             Just s -> pure $ TxSelectableSkey [s]
-            Nothing -> fail $ "Invalid InputSelection String : It must be  address, txHash#index,  or  utxoCbor"
+            Nothing -> fail $ "Invalid InputSelection String : It must be  addressBench32, addressCborHex,  txHash#index or  utxoCbor"
 
     -- if "addr" `T.isPrefixOf` s
     --   then do
