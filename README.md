@@ -67,7 +67,7 @@ cabal run kuber
  
 
 - Utxo CborHex\
-   Utxo( transaction output ) in cbor format. Utxo cbor contains output address, value.  Kuber directly uses the value  and address by decoding it so, querying the node is not necesasry.\
+   Utxo( transaction output ) in cbor format. Utxo cbor contains output address, value.  Kuber directly uses the value  and address by decoding it so, querying the node is not necessary.\
    ___eg___:&#160;"828258202ff238f64b773435d6f626aafe56073f251b52281c50a3872951905fbc597e560082583901ab1d01c80b7ef656194c4af4a682f2d55d714379bde1afe72dc5d348f9c9e87246d2f0373885896ad2804b7229673204cac9208345c1ea5b1a0037e4d2"  
 
 
