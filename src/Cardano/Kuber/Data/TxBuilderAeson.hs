@@ -128,9 +128,10 @@ instance FromJSON TxMintData where
 
 
       getPolicyIdFromScriptWitness :: ScriptWitness WitCtxMint  BabbageEra  -> PolicyId
-      getPolicyIdFromScriptWitness witness =
-          case scriptWitnessScript witness of
-            ScriptInEra _ script -> scriptPolicyId script
+      getPolicyIdFromScriptWitness witness = case scriptWitnessScript witness of
+        Nothing -> error "Unexpected in era babbage or soemthing"
+        Just (ScriptInEra _ script) -> scriptPolicyId  script
+           
 
   parseJSON _ = fail "TxMintData must be an object"
         --   case mintValueJson of

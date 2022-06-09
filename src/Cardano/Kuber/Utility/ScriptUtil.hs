@@ -1,7 +1,7 @@
 module Cardano.Kuber.Utility.ScriptUtil where
 import Cardano.Api
 import Cardano.Kuber.Error
-import Cardano.Api.Shelley (fromPlutusData)
+import Cardano.Api.Shelley (fromPlutusData, PlutusScriptOrReferenceInput (PScript))
 
 
 createTxInScriptWitness :: ScriptInAnyLang -> ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn BabbageEra)
@@ -9,7 +9,7 @@ createTxInScriptWitness anyScript datum redeemer exUnits = do
   ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anyScript
   case script' of
     PlutusScript version pscript ->
-      pure $ PlutusScriptWitness langInEra version pscript (ScriptDatumForTxIn  datum) redeemer exUnits
+      pure $ PlutusScriptWitness langInEra version (PScript pscript) (ScriptDatumForTxIn  datum) redeemer exUnits
     SimpleScript version sscript ->Left $ FrameworkError  WrongScriptType "Simple Script used in Txin"
 
 createPlutusMintingWitness :: ScriptInAnyLang ->ScriptData ->ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxMint BabbageEra)
@@ -17,7 +17,7 @@ createPlutusMintingWitness anyScript redeemer exUnits = do
   ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anyScript
   case script' of
     PlutusScript version pscript ->
-      pure $ PlutusScriptWitness langInEra version pscript NoScriptDatumForMint redeemer exUnits
+      pure $ PlutusScriptWitness langInEra version (PScript pscript) NoScriptDatumForMint redeemer exUnits
     SimpleScript version sscript -> Left $ FrameworkError WrongScriptType "Simple script not supported on creating plutus script witness."
 
 createSimpleMintingWitness :: ScriptInAnyLang -> Either FrameworkError (ScriptWitness WitCtxMint BabbageEra)
