@@ -81,8 +81,8 @@ getNetworkFromEnv envKey =  do
     Right s ->  case map toLower s of
       "mainnet" -> pure  Mainnet
       "testnet" -> pure $ Testnet  (NetworkMagic 1097911063)
-      _  -> do 
-        Debug.traceM s
+      _  -> do
+        Debug.traceM $ "Network Magic : "++ show s
         case readMaybe s of
           Just v -> pure (Testnet  (NetworkMagic  v))
           _ -> fail "Invalid network id : "

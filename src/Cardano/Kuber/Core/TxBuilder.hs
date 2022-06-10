@@ -47,6 +47,7 @@ import qualified Debug.Trace as Debug
 import qualified Data.Aeson as Aeson
 import Data.Word (Word64)
 import qualified Data.HashMap.Internal.Strict as H
+import Data.Bifunctor (bimap)
 
 
 data TxMintingScript = TxSimpleScript ScriptInAnyLang
@@ -56,15 +57,15 @@ data TxMintingScript = TxSimpleScript ScriptInAnyLang
 newtype TxValidatorScript = TxValidatorScript ScriptInAnyLang deriving (Show)
 
 data TxInputResolved_ = TxInputUtxo (UTxO AlonzoEra)
-              | TxInputScriptUtxo TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) (UTxO AlonzoEra) 
+              | TxInputScriptUtxo TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) (UTxO AlonzoEra)
               | TxInputScriptUtxoInlineDatum TxValidatorScript  ScriptData (Maybe ExecutionUnits) (UTxO AlonzoEra)
-              deriving (Show) 
+              deriving (Show)
 
 
 data TxInputUnResolved_ = TxInputTxin TxIn
               | TxInputAddr (AddressInEra AlonzoEra)
-              | TxInputScriptTxin TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) TxIn 
-              | TxInputScriptTxinInlineDatum TxValidatorScript  ScriptData (Maybe ExecutionUnits) TxIn 
+              | TxInputScriptTxin TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) TxIn
+              | TxInputScriptTxinInlineDatum TxValidatorScript  ScriptData (Maybe ExecutionUnits) TxIn
               deriving (Show)
 
 data TxInput  = TxInputResolved TxInputResolved_ | TxInputUnResolved TxInputUnResolved_ deriving (Show)
@@ -88,25 +89,25 @@ data TxCollateral =  TxCollateralTxin TxIn
                   |  TxCollateralUtxo (UTxO AlonzoEra) deriving (Show)
 
 data TxSignature =  TxSignatureAddr (AddressInEra AlonzoEra)
-                  | TxSignaturePkh PubKeyHash 
+                  | TxSignaturePkh PubKeyHash
                   | TxSignatureSkey (SigningKey PaymentKey) deriving (Show)
 
 
 data TxChangeAddr = TxChangeAddrUnset
-                  | TxChangeAddr (AddressInEra AlonzoEra) 
+                  | TxChangeAddr (AddressInEra AlonzoEra)
                   deriving (Show)
 
 data TxInputSelection = TxSelectableAddresses [AddressInEra AlonzoEra]
                   | TxSelectableUtxos  (UTxO AlonzoEra)
-                  | TxSelectableTxIn [TxIn] 
-                  | TxSelectableSkey [SigningKey PaymentKey] 
+                  | TxSelectableTxIn [TxIn]
+                  | TxSelectableSkey [SigningKey PaymentKey]
                   deriving(Show)
 
 data TxMintData = TxMintData PolicyId (ScriptWitness WitCtxMint AlonzoEra) Value deriving (Show)
 
 -- TxBuilder object
--- It is a semigroup and monoid instance, so it can be constructed using helper function 
--- and merged to construct a transaction specification 
+-- It is a semigroup and monoid instance, so it can be constructed using helper function
+-- and merged to construct a transaction specification
 data TxBuilder=TxBuilder{
     txSelections :: [TxInputSelection],
     txInputs:: [TxInput],
@@ -165,6 +166,9 @@ txSelection v = TxBuilder  [v] [] [] [] Nothing Nothing [] [] Nothing Nothing Ma
 txInput :: TxInput -> TxBuilder
 txInput v = TxBuilder  [] [v] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
 
+txMints :: [TxMintData] -> TxBuilder
+txMints md= TxBuilder  [] [] [] [] Nothing Nothing md [] Nothing Nothing Map.empty
+
 txOutput :: TxOutput -> TxBuilder
 txOutput v =  TxBuilder  [] [] [v] [] Nothing Nothing [] [] Nothing Nothing Map.empty
 
@@ -190,9 +194,16 @@ txValidFromPosixMs start =  TxBuilder  [] [] [] [] (Just start) Nothing [] [] No
 txValidUntilPosixMs :: Integer -> TxBuilder
 txValidUntilPosixMs end =  TxBuilder  [] [] [] [] Nothing (Just end) [] [] Nothing Nothing Map.empty
 
+--- minting
+txMint  v = txMints [v]
 
-txMint :: [TxMintData] -> TxBuilder
-txMint md= TxBuilder  [] [] [] [] Nothing Nothing md [] Nothing Nothing Map.empty
+-- mint Simple Script
+txMintSimpleScript :: SimpleScript SimpleScriptV2   ->   [(AssetName,Integer)] -> TxBuilder
+txMintSimpleScript simpleScript amounts = txMint $ TxMintData policyId  witness (valueFromList  $ map (bimap (AssetId policyId) Quantity )  amounts )
+  where
+    witness=   SimpleScriptWitness SimpleScriptV2InAlonzo SimpleScriptV2 simpleScript
+    script = SimpleScript SimpleScriptV2 simpleScript
+    policyId = scriptPolicyId script
 
 -- payment contexts
 
@@ -237,7 +248,7 @@ txSignByPkh :: PubKeyHash  -> TxBuilder
 txSignByPkh p = txSignature $ TxSignaturePkh p
 
 -- Mark this signingKey's vKey as txExtraKey Witness in the transaction object.
--- When validating `txSignedBy` in plutus, this can be used to add the 
+-- When validating `txSignedBy` in plutus, this can be used to add the
 txSign :: SigningKey PaymentKey -> TxBuilder
 txSign p = txSignature $ TxSignatureSkey p
 -- Lock value and data in a script.
@@ -255,7 +266,7 @@ txRedeemUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> ScriptInA
 txRedeemUtxo txin txout script _data _redeemer = txInput $ TxInputResolved $ TxInputScriptUtxo  (TxValidatorScript $ script)  _data  _redeemer  Nothing $ UTxO $ Map.singleton txin  txout
 
 
- -- wallet addresses, from which utxos can be spent for balancing the transaction 
+ -- wallet addresses, from which utxos can be spent for balancing the transaction
 txWalletAddresses :: [AddressInEra AlonzoEra] -> TxBuilder
 txWalletAddresses v = txSelection $ TxSelectableAddresses  v
 

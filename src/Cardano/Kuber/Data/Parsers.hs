@@ -116,11 +116,11 @@ parseAssetNQuantity textStr = do
         else parseFail
   where
     convertAdaOrLovelace str iAmount _otherwise = case T.unpack (T.toLower str) of
-      "ada" -> lovelaceAmount (iAmount * 1_000_000)
-      "a" -> lovelaceAmount (iAmount * 1_000_000)
-      "l" -> lovelaceAmount iAmount
+      "ada"      -> lovelaceAmount (iAmount * 1_000_000)
+      "a"        -> lovelaceAmount (iAmount * 1_000_000)
+      "l"        -> lovelaceAmount iAmount
       "lovelace" -> lovelaceAmount iAmount
-      _ -> _otherwise
+      _          -> _otherwise
     lovelaceAmount v = pure (AdaAssetId, Quantity v)
     parseFail = fail $ "Value parse failed : invalid value token `" ++ T.unpack textStr ++ "`"
     performBreak = T.break isSeparator (T.stripStart textStr)
@@ -184,33 +184,33 @@ parseAnyScript jsonText =
             (SimpleScript SimpleScriptV1 s')
 
 parseAddressBinary :: MonadFail m => ByteString -> m (AddressInEra AlonzoEra)
-parseAddressBinary bs = case parseAddressCbor (LBS.fromStrict bs) of 
+parseAddressBinary bs = case parseAddressCbor (LBS.fromStrict bs) of
   Just addr -> pure addr
-  Nothing -> parseAddressRaw bs 
+  Nothing -> parseAddressRaw bs
 
 parseAddressRaw :: MonadFail m =>  ByteString -> m(AddressInEra AlonzoEra)
-parseAddressRaw addrBs = case deserialiseFromRawBytes (AsAddressInEra AsAlonzoEra) addrBs of             
+parseAddressRaw addrBs = case deserialiseFromRawBytes (AsAddressInEra AsAlonzoEra) addrBs of
             Nothing -> fail  "Invalid Address Hex "
             Just addr -> pure addr
 
 parseAddress :: MonadFail m => Text -> m (AddressInEra AlonzoEra)
 parseAddress addrText = case deserialiseAddress (AsAddressInEra AsAlonzoEra) addrText of
-  Nothing -> do 
-     let hex :: Maybe  ByteString = parseHexString addrText 
-     case  hex of 
-      Just hex -> case parseAddressBinary hex of 
+  Nothing -> do
+     let hex :: Maybe  ByteString = parseHexString addrText
+     case  hex of
+      Just hex -> case parseAddressBinary hex of
         Just addr -> pure addr
-        Nothing -> case deserialiseFromRawBytes (AsAddressInEra AsAlonzoEra) hex of             
+        Nothing -> case deserialiseFromRawBytes (AsAddressInEra AsAlonzoEra) hex of
             Nothing -> fail  $ "Address is neither bench32 nor cborHex : "++ T.unpack addrText
             Just addr -> pure addr
       Nothing -> fail $ "Address is neither bench32 nor cborHex : "++ T.unpack addrText
   Just aie -> pure aie
 
 parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra AlonzoEra)
-parseAddressCbor  cbor = do 
+parseAddressCbor  cbor = do
   aie <-  parseCbor cbor
-  pure $ fromShelleyAddr ShelleyBasedEraAlonzo  aie 
-  
+  pure $ fromShelleyAddr ShelleyBasedEraAlonzo  aie
+
 parseAddressBench32 :: MonadFail m => Text -> m (AddressInEra AlonzoEra)
 parseAddressBench32 txt = case deserialiseAddress (AsAddressInEra AsAlonzoEra) txt of
   Nothing -> fail $ "Address is not in bench32 format"
@@ -261,7 +261,7 @@ parseUtxo :: MonadFail m => Text -> m (UTxO AlonzoEra )
 parseUtxo v =parseHexString v >>= parseUtxoCbor
 
 parseUtxoCbor :: MonadFail m => LBS.ByteString -> m (UTxO AlonzoEra)
-parseUtxoCbor val = do 
+parseUtxoCbor val = do
   ((txHash,index ),txout) <- parseCbor val
   txIn <- case deserialiseFromRawBytes AsTxId txHash of
           Just txid -> pure $ TxIn txid (TxIx index)

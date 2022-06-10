@@ -6,6 +6,10 @@ module Cardano.Kuber.Api(
     ,   txPayToScript
     ,   txPayToScriptWithData
 
+-- minting related
+    ,   txMintSimpleScript
+    ,   txMint
+
     -- inputs to the transaction
     ,   txConsumeTxIn
     ,   txConsumeUtxo
@@ -18,14 +22,14 @@ module Cardano.Kuber.Api(
     ,   txWalletAddresses
     ,   txWalletUtxos
     ,   txWalletUtxo
-    ,   txWalletSignKey 
+    ,   txWalletSignKey
     ,   txWalletSignKeys
 
     -- function to add Vkey witnesses to the transaction
-    ,   txSignBy 
+    ,   txSignBy
     ,   txSignByPkh
-    ,   txSign  
-    
+    ,   txSign
+
     -- transaction validity
     , txValidFromPosixMs
     , txValidUntilPosixMs
@@ -44,12 +48,12 @@ module Cardano.Kuber.Api(
     , DetailedChainInfo(dciProtocolParams,DetailedChainInfo)
     , ChainInfoWithProtocolParams
 
-    
+
     -- ChainInfo constructor functions
-    ,   chainInfoFromEnv 
-    ,   chainInfoFromEnv' 
-    ,   chainInfoMainnet 
-    ,   chainInfoTestnet 
+    ,   chainInfoFromEnv
+    ,   chainInfoFromEnv'
+    ,   chainInfoMainnet
+    ,   chainInfoTestnet
     ,   localNodeConnInfo
     ,   getWorkPath
     ,   getWorkPathFunc
@@ -71,7 +75,7 @@ where
 import Cardano.Kuber.Core.ChainInfo
 import Cardano.Kuber.Data.Parsers
 import Cardano.Kuber.Core.TxBuilder
-import Cardano.Kuber.Core.TxFramework 
+import Cardano.Kuber.Core.TxFramework
 import Cardano.Kuber.Data.TxBuilderAeson
 import Cardano.Kuber.Utility.ChainInfoUtil
 import Cardano.Kuber.Error

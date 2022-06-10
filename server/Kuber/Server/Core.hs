@@ -33,10 +33,13 @@ import Data.Functor ((<&>))
 getBalance :: ChainInfo x => x -> String -> IO BalanceResponse
 getBalance ctx addrStr = do
   addr <- case deserialiseAddress AsAddressAny $ T.pack addrStr of
-    Nothing -> throw $ FrameworkError  ParserError  "Invalid address"
+    Nothing -> case
+        deserialiseFromBech32 (AsSigningKey AsPaymentKey) $ T.pack addrStr of
+      Left bde ->       throw $ FrameworkError  ParserError  "Invalid address"
+      Right any -> pure $ toAddressAny $ skeyToAddr   any (getNetworkId ctx)
     Just aany -> pure aany
   eUtxos <- queryUtxos (getConnectInfo ctx) $ Set.singleton addr
-  case eUtxos of 
+  case eUtxos of
     Left fe -> throw fe
     Right utxos -> pure $ BalanceResponse  utxos
 
@@ -47,15 +50,15 @@ submitTx ctx (SubmitTxModal tx mWitness) = do
         Just kw -> makeSignedTransaction (kw : getTxWitnesses tx) txbody
       txbody = getTxBody tx
   status <- executeSubmitTx (getConnectInfo ctx) tx'
-  case status of 
+  case status of
     Left fe -> throw fe
     Right x1 ->   pure $ TxResponse tx'
 
 txBuilder :: DetailedChainInfo  ->  TxBuilder -> IO TxResponse
 txBuilder dcinfo txBuilder = do
-  putStrLn $ BS8.unpack $  prettyPrintJSON $ txBuilder
-  txE <- txBuilderToTxIO dcinfo txBuilder 
-  case txE of 
+  putStrLn $ BS8.unpack $  prettyPrintJSON txBuilder
+  txE <- txBuilderToTxIO dcinfo txBuilder
+  case txE of
     Left fe -> throw fe
     Right tx -> pure $ TxResponse tx
 
@@ -66,7 +69,7 @@ testTx dcinfo txBuilder = do
   -- let txBuilderStr = TL.unpack $ TL.decodeUtf8 encodedTxBuilder
   -- print txBuilderStr
   -- txBodyE<-txBuilderToTxBodyIO dcinfo txBuilder
-  -- case txBodyE of 
+  -- case txBodyE of
   --   Left fe -> throw fe
   --   Right txBody -> do
   --     signKey <- getDefaultSignKey
@@ -78,7 +81,7 @@ testTx dcinfo txBuilder = do
 
 
 evaluateExecutionUnits' :: DetailedChainInfo ->  String -> IO [Either String ExecutionUnits]
-evaluateExecutionUnits' dcinfo  txStr = do 
+evaluateExecutionUnits' dcinfo  txStr = do
       case convertText txStr of
         Nothing -> fail "Tx string is not hex encoded"
         Just (Base16 bs) -> case deserialiseFromCBOR (AsTx AsAlonzoEra ) bs of

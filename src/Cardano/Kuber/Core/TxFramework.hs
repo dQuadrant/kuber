@@ -77,8 +77,8 @@ type  ParsedOutput  = (BoolFee,BoolChange,TxOut CtxTx AlonzoEra)
 
 
 
--- Given TxBuilder object, Construct a txBody 
--- This IO code, constructs detailedChainInfo(protocolParam,costPerWord,eraHistory,SystemHistory) 
+-- Given TxBuilder object, Construct a txBody
+-- This IO code, constructs detailedChainInfo(protocolParam,costPerWord,eraHistory,SystemHistory)
 -- then queries required utxos used in inputs and calls  txBuilderToTxBody
 txBuilderToTxBodyIO ::  ChainInfo i =>  i ->  TxBuilder  -> IO (Either FrameworkError  (TxBody AlonzoEra))
 txBuilderToTxBodyIO  a b  = txBuilderToTxBodyIO'  a b <&> (<&> fst)
@@ -188,8 +188,19 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
   if  not requiresExUnitCalculation
     then  ( do
       (body2,signatories2,fee2) <- calculator fixedInputs txMintValue' fee1
-      if fee1 /= fee2  then Left $ FrameworkError LibraryError "Transaction not balanced even in 3rd iteration" else pure  ()
-      pure (body2, makeSignedTransaction [] body2)
+
+      if fee1 /= fee2
+        then (
+          do
+            (body3,signatories3,fee3) <- calculator fixedInputs txMintValue' fee1
+            if fee3 /= fee2
+              then Left $ FrameworkError LibraryError "Transaction not balanced even in 4th iteration"
+              else pure  (respond body3 signatories3))
+
+       else
+              pure ( respond body2 signatories2)
+
+
     )
     else (
           let evaluateBodyWithExunits body fee= do
@@ -210,9 +221,9 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
     respond txBody signatories = (txBody,makeSignedTransaction (map (toWitness txBody) $ mapMaybe (`Map.lookup` availableSkeys) $ Set.toList signatories) txBody)
     toWitness body skey = makeShelleyKeyWitness body (WitnessPaymentKey skey)
 
-    availableSkeys =  Map.fromList $  map (\x -> (skeyToPaymentKeyHash x, x)) $  concat (mapMaybe (\s -> case s of
+    availableSkeys =  Map.fromList $  map (\x -> (skeyToPaymentKeyHash x, x)) $  concat (mapMaybe (\case
         TxSelectableSkey sks -> Just sks
-        _ -> Nothing )  selections) ++ mapMaybe (\x -> case x of
+        _ -> Nothing )  selections) ++ mapMaybe (\case
       TxSignatureSkey sk -> Just sk
       _ -> Nothing) extraSignatures
 
@@ -340,7 +351,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
 
     totxIn :: TxIn ->  ParsedInput -> (TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra ))
     totxIn  i  parsedInput = case parsedInput of
-      Left (a,b) -> (i,BuildTxWith a) 
+      Left (a,b) -> (i,BuildTxWith a)
       Right (e,a,b) -> (i,BuildTxWith  ( ScriptWitness ScriptWitnessForSpending a )  )
     mkBodyContent meta fixedInputs extraUtxos outs collateral  txMintValue' fee =
       (TxBodyContent {
@@ -460,10 +471,10 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
                                                                 exUnit <- getExUnit _in mExunit
                                                                 witness <-  createTxInScriptWitness s d r exUnit
                                                                 pure (_in,Right (mExunit, witness,val )) ) $ Map.toList txin
-      -- TODO change this to proper input tuxo in babbage era                                                          
+      -- TODO change this to proper input tuxo in babbage era
       TxInputScriptUtxoInlineDatum (TxValidatorScript s)  r mExunit (UTxO txin) ->
                                                                 Left $ FrameworkError EraMisMatch "Inline datum is not supported in alonzo era"
-      
+
       where
 
         getExUnit tin ex =case  ex of
@@ -574,7 +585,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
       -- x <- f
       -- case  x  of
       --  Left tbe -> throw $ SomeError $ "First Balance :" ++ show tbe
-      --  Right res -> pure res 
+      --  Right res -> pure res
     toSlot tStamp= case getNetworkId  dCinfo of
       Mainnet -> SlotNo $ fromIntegral $  mainnetSlot tStamp
       Testnet nm -> SlotNo $ fromIntegral $ testnetSlot tStamp
@@ -679,8 +690,8 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
 
 
 --   -- change is whatever will remain after making payment.
---   -- At the beginning, we will assume that we will all the available utxos, 
---   -- so it should be a +ve value, otherwise it means we don't have sufficient balance to fulfill the transaction 
+--   -- At the beginning, we will assume that we will all the available utxos,
+--   -- so it should be a +ve value, otherwise it means we don't have sufficient balance to fulfill the transaction
 --   startingChange available outputs  fee=
 --         negateValue (foldMap (txOutValueToValue  . txOutValue ) outputs)  --already existing outputs
 --     <>   inputSum -- already existing inputs
@@ -745,6 +756,6 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
 -- mkTxExplicitFee = error "sad"
 
 -- gatherInfo :: ChainInfo i -> i  -> TxBuilder  ->  IO (Either AcquireFailure TxContext)
--- gatherInfo cInfo  txBuilder@TxBuilder{txSelections, txInputs} = do 
+-- gatherInfo cInfo  txBuilder@TxBuilder{txSelections, txInputs} = do
 --   error "sad"
 --   where
