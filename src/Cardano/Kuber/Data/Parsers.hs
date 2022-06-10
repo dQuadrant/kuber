@@ -129,7 +129,7 @@ parseScriptData :: MonadFail m => Text -> m ScriptData
 parseScriptData jsonText = do
   case decodeJson of
     Nothing -> fail "Script data string must be json format"
-    Just v -> case scriptDataFromJson ScriptDataJsonNoSchema v of
+    Just v -> case scriptDataFromJson ScriptDataJsonDetailedSchema v of
       Left sdje -> case sdje of
         ScriptDataJsonSchemaError va sdjse -> fail $ "Wrong schema" ++ show sdjse
         ScriptDataRangeError va sdre -> fail $ "Invalid data " ++ show sdre

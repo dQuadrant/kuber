@@ -79,7 +79,8 @@ executeSubmitTx conn  tx= do
       res <-submitTxToNodeLocal conn $  TxInMode tx AlonzoEraInCardanoMode
       case res of
         SubmitSuccess ->  pure $ pure ()
-        SubmitFail reason ->
+        SubmitFail reason ->do
+          putStrLn "failed"
           case reason of
             TxValidationErrorInMode err _eraInMode ->  pure $ Left  $ FrameworkError TxSubmissionError  (show  err)
             TxValidationEraMismatch mismatchErr -> pure $ Left $ FrameworkError TxSubmissionError ("Era Mismatch : " ++ show mismatchErr)

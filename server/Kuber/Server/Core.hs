@@ -46,8 +46,11 @@ submitTx ctx (SubmitTxModal tx mWitness) = do
         Nothing -> tx
         Just kw -> makeSignedTransaction (kw : getTxWitnesses tx) txbody
       txbody = getTxBody tx
-  executeSubmitTx (getConnectInfo ctx) tx'
-  pure $ TxResponse tx'
+  status <- executeSubmitTx (getConnectInfo ctx) tx'
+  case status of 
+    Left fe -> throw fe
+    Right x1 ->   pure $ TxResponse tx'
+
 txBuilder :: DetailedChainInfo  ->  TxBuilder -> IO TxResponse
 txBuilder dcinfo txBuilder = do
   putStrLn $ BS8.unpack $  prettyPrintJSON $ txBuilder

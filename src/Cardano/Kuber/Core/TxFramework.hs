@@ -202,7 +202,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
             (txBody4,signatories4,fee4) <- evaluateBodyWithExunits  txBody3 fee3
 
             if fee4==fee3
-              then pure (txBody4,makeSignedTransaction [] txBody4)
+              then pure  $ respond txBody4 signatories4
               else evaluateBodyWithExunits txBody4 fee4 <&> (\(txBody5,signatories5,_)-> respond txBody5 signatories5)
       )
 
