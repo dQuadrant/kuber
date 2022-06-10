@@ -31,7 +31,7 @@ import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes)
 import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
-import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, TxOut, CurrencySymbol)
+import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, TxOut, CurrencySymbol, MintingPolicy)
 import Data.Aeson.Types (FromJSON(parseJSON), (.:), Parser)
 import qualified Data.Aeson as A
 import qualified Data.Text as T
@@ -47,6 +47,7 @@ import qualified Debug.Trace as Debug
 import qualified Data.Aeson as Aeson
 import Data.Word (Word64)
 import qualified Data.HashMap.Internal.Strict as H
+import Data.Bifunctor
 
 
 data TxMintingScript = TxSimpleScript ScriptInAnyLang
@@ -167,6 +168,9 @@ txSelection v = TxBuilder  [v] [] [] [] Nothing Nothing [] [] Nothing Nothing Ma
 txInput :: TxInput -> TxBuilder
 txInput v = TxBuilder  [] [v] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
 
+txMints :: [TxMintData] -> TxBuilder
+txMints md= TxBuilder  [] [] [] [] Nothing Nothing md [] Nothing Nothing Map.empty
+
 txOutput :: TxOutput -> TxBuilder
 txOutput v =  TxBuilder  [] [] [v] [] Nothing Nothing [] [] Nothing Nothing Map.empty
 
@@ -192,11 +196,17 @@ txValidFromPosixMs start =  TxBuilder  [] [] [] [] (Just start) Nothing [] [] No
 txValidUntilPosixMs :: Integer -> TxBuilder
 txValidUntilPosixMs end =  TxBuilder  [] [] [] [] Nothing (Just end) [] [] Nothing Nothing Map.empty
 
+--- minting
+txMint  v = txMints [v]
 
-txMint :: [TxMintData] -> TxBuilder
-txMint md= TxBuilder  [] [] [] [] Nothing Nothing md [] Nothing Nothing Map.empty
+-- mint Simple Script
+txMintSimpleScript :: SimpleScript SimpleScriptV2   ->   [(AssetName,Integer)] -> TxBuilder
+txMintSimpleScript simpleScript amounts = txMint $ TxMintData policyId  witness (valueFromList  $ map (bimap (AssetId policyId) Quantity )  amounts )
+  where
+    witness=   SimpleScriptWitness SimpleScriptV2InBabbage SimpleScriptV2 simpleScript
+    script = SimpleScript SimpleScriptV2 simpleScript
+    policyId = scriptPolicyId script
 
--- payment contexts
 
 -- pay to an Address
 txPayTo:: AddressInEra BabbageEra ->Value ->TxBuilder
