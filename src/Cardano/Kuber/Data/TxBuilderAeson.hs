@@ -55,6 +55,7 @@ import Cardano.Kuber.Utility.ScriptUtil
 import Data.Text.Internal.Fusion.CaseMapping (upperMapping)
 import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable(toConsoleTextNoPrefix, toConsoleText))
 import qualified Data.Aeson.Types as A
+import Data.Text.Encoding (encodeUtf8)
 
 instance FromJSON TxBuilder where
   parseJSON (A.Object v) =
@@ -117,7 +118,11 @@ instance FromJSON TxMintData where
       mapToValue :: MonadFail m => PolicyId -> (T.Text,A.Value) -> m (AssetId, Quantity)
       mapToValue policyId (tName, amountT) = do
         amount <- parseAmount amountT
-        let assetName = fromString $ T.unpack tName
+        assetName <- case unHex tName >>= deserialiseFromRawBytes AsAssetName of 
+              Just as -> pure as
+              Nothing -> case deserialiseFromRawBytes AsAssetName (encodeUtf8 tName) of 
+                Nothing -> fail $ "Invalid assetname string : " ++ T.unpack tName
+                Just an -> pure an
         pure (AssetId policyId assetName, Quantity amount)
 
       parseAmount :: MonadFail m => A.Value -> m Integer
@@ -292,7 +297,29 @@ instance ToJSON TxOutputContent where
       , "value" .= value
       , "dataHash" .= dataHash
       ]
-  toJSON _ = "TxOutPkh Not implemented."
+  toJSON (TxOutScriptAddressWithData address value   sd) =
+    A.object [
+        "address" .= address
+      , "value" .= value
+      , "data" .= sd
+    ]
+  toJSON (TxOutScriptWithData script value   sData) =
+    A.object[
+        "scriptCode" .= T.pack "present"
+      , "value" .= value
+      , "data" .= sData
+
+    ]
+  toJSON (TxOutPkh pkh value) =
+    A.object[
+        "pkh" .= show pkh
+      , "value" .= value
+
+    ]
+
+
+
+
 
 instance ToJSON TxMintingScript where
   toJSON (TxSimpleScript _script) =
@@ -443,17 +470,18 @@ instance FromJSON TxOutput where
 
       parseData :: Parser  (Maybe (Either ScriptData (Hash ScriptData)))
       parseData = do
-        dataHashM <- v .:? "datumHash"
-        case dataHashM of
-          Just dataHash -> do
-              case deserialiseFromRawBytes (AsHash AsScriptData) dataHash of
-                  Nothing -> pure  Nothing
+        mDatum <- v .:? "datum"
+        case mDatum of
+          Just datum -> do
+                  val <- scriptDataParser datum
+                  pure $ pure $ Left $  val
+          Nothing ->do
+            datumHashM <- v .:? "datumHash"
+            case datumHashM of
+              Just dHash ->case deserialiseFromRawBytesHex (AsHash AsScriptData) (T.encodeUtf8 dHash) of
+                  Nothing -> fail "Expected hex string "
                   Just dh -> pure $ pure $ pure dh
-          Nothing -> case H.lookup "datum" v of
-              Just val  -> do
-                    val <-  scriptDataParser val
-                    pure   $ pure $ Right $ hashScriptData  val
-              Nothing -> pure  Nothing
+              Nothing -> pure Nothing
 
 
   parseJSON _ = fail "TxOutput must be an object"
@@ -518,6 +546,7 @@ instance FromJSON TxSignature where
   parseJSON _ = fail "TxSignature must be an String Address or PubKeyHash "
 
 
+utxoToAeson :: IsCardanoEra era => UTxO era -> A.Value
 utxoToAeson (UTxO uMap) = Aeson.object  $ map  (\(k,TxOut addr val dh) ->
          T.pack  (toConsoleTextNoPrefix k)
          .=

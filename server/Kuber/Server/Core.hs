@@ -29,7 +29,6 @@ import Data.Functor ((<&>))
 
 
 
-
 getBalance :: ChainInfo x => x -> String -> IO BalanceResponse
 getBalance ctx addrStr = do
   addr <- case deserialiseAddress AsAddressAny $ T.pack addrStr of
@@ -60,7 +59,9 @@ txBuilder dcinfo txBuilder = do
   txE <- txBuilderToTxIO dcinfo txBuilder
   case txE of
     Left fe -> throw fe
-    Right tx -> pure $ TxResponse tx
+    Right tx -> do
+      print tx
+      pure $ TxResponse tx
 
 testTx :: DetailedChainInfo  ->  TxModal -> IO TxResponse
 testTx dcinfo txBuilder = do

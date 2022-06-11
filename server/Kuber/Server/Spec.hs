@@ -5,6 +5,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE BlockArguments #-}
 
 module Kuber.Server.Spec where
 
@@ -55,6 +56,10 @@ import Kuber.Server.MediaType
 
 import Cardano.Kuber.Util (evaluateExecutionUnits)
 import Kuber.Server.Core
+import qualified Data.Aeson as Aeson
+import Cardano.Kuber.Data.Parsers (parseAnyScript)
+import Data.Functor ((<&>))
+import Data.ByteString.Lazy (toStrict)
 
 type TransactionAPI =
   Throws FrameworkError
@@ -63,6 +68,7 @@ type TransactionAPI =
       :<|>  "api" :> "v1" :> "tx" :> "submit" :> ReqBody '[JSON ,CBORBinary,CBORText  ] (SubmitTxModal ) :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx AlonzoEra) :> Post '[JSON] ([Either String ExecutionUnits ])
       :<|>  "api" :> "v1" :> "addresses"           :> Capture "address" String  :> "balance" :> Get '[JSON] BalanceResponse
+      :<|> "api" :> "v1" :> "scriptPolicy"        :> ReqBody '[JSON] (Aeson.Value ) :> Post '[PlainText ] (Text)
        )
 
 server :: DetailedChainInfo -> Server TransactionAPI
@@ -71,6 +77,7 @@ server dcInfo =
   :<|> errorGuard (submitTx dcInfo)
   :<|> errorGuard (evaluateExecutionUnits dcInfo )
   :<|> errorGuard(getBalance dcInfo )
+  :<|> errorGuard (\sc -> parseAnyScript (toStrict $  Aeson.encode sc)<&> (\(ScriptInAnyLang sl sc') ->serialiseToRawBytesHexText ( scriptPolicyId sc')) )
   where
 
     errorGuard f v = liftIO $ do
