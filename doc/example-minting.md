@@ -8,19 +8,19 @@ Here simple policy script specifying key-hash indicating who can mint the tokens
 
 {
     "selections": [
-        "<Type your address from which utxos are selected while creating transaction.>"
+        "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n"
     ],
     "output":[
        {
             "address": "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n",
-            "value": "1 <policy_id>.<asset_name> + 1  31b0b0702f5d5432053586adfa15f3d1bdf83f57152ba7f371addf00.546f6b656e32"
+            "value": "1  31b0b0702f5d5432053586adfa15f3d1bdf83f57152ba7f371addf00.546f6b656e32"
        }
     ],
     "mint": [
         {
             "script": {
                 "type": "sig",
-                "keyHash": "<Enter key hash here> eg.6c68d85ae54204a77c2b20928e027b5d5c88603445d8cbe28bcc679f"
+                "keyHash": "6c68d85ae54204a77c2b20928e027b5d5c88603445d8cbe28bcc679f"
             },
             "amount": {
                 "Token1": 1,
@@ -36,12 +36,12 @@ It is same as above except it contains script using time lock policy in mint fie
 
 {
     "selections": [
-        "<Type your address from which utxos are selected while creating transaction.>"
+        "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n"
     ],
     "output":[
        {
             "address": "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n",
-            "value": "1 <policy_id>.<asset_name> + 1  31b0b0702f5d5432053586adfa15f3d1bdf83f57152ba7f371addf00.546f6b656e32"
+            "value": "1 31b0b0702f5d5432053586adfa15f3d1bdf83f57152ba7f371addf00.546f6b656e32"
        }
     ],
     "mint": [
@@ -65,12 +65,12 @@ Here the policy script contains key hash and time lock both.
 ```json
 {
     "selections": [
-        "<Type your address from which utxos are selected while creating transaction.>"
+        "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n"
     ],
     "output": [
         {
             "address": "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n",
-            "value": "1 <policy_id>.<asset_name> + 1  31b0b0702f5d5432053586adfa15f3d1bdf83f57152ba7f371addf00.546f6b656e32"
+            "value": "1 31b0b0702f5d5432053586adfa15f3d1bdf83f57152ba7f371addf00.546f6b656e32"
         }
     ],
     "mint": [
@@ -103,12 +103,12 @@ Here the script used in plutus script in the format given below on mint field. P
 
 {
     "selections": [
-        "<Type your address from which utxos are selected while creating transaction.>"
+        "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n"
     ],
     "output":[
        {
             "address": "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n",
-            "value": "1 <policy_id>.<asset_name> + 1  31b0b0702f5d5432053586adfa15f3d1bdf83f57152ba7f371addf00.546f6b656e32"
+            "value": "1 31b0b0702f5d5432053586adfa15f3d1bdf83f57152ba7f371addf00.546f6b656e32"
        }
     ],
     "mint": [
