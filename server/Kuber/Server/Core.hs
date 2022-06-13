@@ -42,13 +42,13 @@ getBalance ctx addrStr = do
     Left fe -> throw fe
     Right utxos -> pure $ BalanceResponse  utxos
 
-submitTx :: ChainInfo x =>  x -> SubmitTxModal -> IO TxResponse
-submitTx ctx (SubmitTxModal tx mWitness) = do
+submitTxApi :: ChainInfo x =>  x -> SubmitTxModal -> IO TxResponse
+submitTxApi ctx (SubmitTxModal tx mWitness) = do
   let tx' = case mWitness of
         Nothing -> tx
         Just kw -> makeSignedTransaction (kw : getTxWitnesses tx) txbody
       txbody = getTxBody tx
-  executeSubmitTx (getConnectInfo ctx) tx'
+  submitTx (getConnectInfo ctx) tx'
   pure $ TxResponse tx'
 
 txBuilder :: DetailedChainInfo  ->  TxBuilder -> IO TxResponse

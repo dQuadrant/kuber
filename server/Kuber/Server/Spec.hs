@@ -68,7 +68,7 @@ type TransactionAPI =
 server :: DetailedChainInfo -> Server TransactionAPI
 server dcInfo =
   errorGuard (txBuilder dcInfo)
-  :<|> errorGuard (submitTx dcInfo)
+  :<|> errorGuard (submitTxApi dcInfo)
   :<|> errorGuard (evaluateExecutionUnits dcInfo )
   :<|> errorGuard (getBalance dcInfo )
   where

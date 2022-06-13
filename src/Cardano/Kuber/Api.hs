@@ -7,7 +7,6 @@ module Cardano.Kuber.Api(
     ,   txPayToScriptWithData
 
 -- minting related
-    ,   txMintSimpleScript
     ,   txMint
 
     -- inputs to the transaction
@@ -65,14 +64,14 @@ module Cardano.Kuber.Api(
     ,   FrameworkError(..)
 
     -- tx submission
-    , executeSubmitTx
-    , signAndSubmitTxBody
+    , submitTx
+    , signTxBody
 )
 
 where
 
 -- input consmptions
-
+import Cardano.Kuber.Utility.WalletUtil
 import Cardano.Kuber.Core.ChainInfo
 import Cardano.Kuber.Data.Parsers
 import Cardano.Kuber.Core.TxBuilder

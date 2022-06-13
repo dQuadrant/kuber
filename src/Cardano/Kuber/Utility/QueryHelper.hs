@@ -65,18 +65,8 @@ queryEraHistory conn=do
     Right eh -> pure eh
 
 
-
-signAndSubmitTxBody :: LocalNodeConnectInfo CardanoMode -> TxBody BabbageEra -> [SigningKey PaymentKey] -> IO (Tx BabbageEra)
-signAndSubmitTxBody conn txBody skeys= do
-      let (ins,outs)=case txBody of { ShelleyTxBody sbe (LedgerBody.TxBody ins outs _ _ _ _ _ _ _ _ _ _ _ _ _ _ ) scs tbsd m_ad tsv -> (ins,outs) }
-          tx = makeSignedTransaction (map toWitness skeys) txBody -- witness and txBody
-      executeSubmitTx conn tx
-      pure tx
-  where
-    toWitness skey = makeShelleyKeyWitness txBody (WitnessPaymentKey skey)
-
-executeSubmitTx :: LocalNodeConnectInfo CardanoMode -> Tx BabbageEra -> IO  (Either FrameworkError ())
-executeSubmitTx conn  tx= do
+submitTx :: LocalNodeConnectInfo CardanoMode -> Tx BabbageEra -> IO  (Either FrameworkError ())
+submitTx conn  tx= do
       res <-submitTxToNodeLocal conn $  TxInMode tx BabbageEraInCardanoMode
       case res of
         SubmitSuccess ->  pure $ pure ()
