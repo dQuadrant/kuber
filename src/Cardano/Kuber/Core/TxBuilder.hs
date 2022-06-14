@@ -263,8 +263,8 @@ txRedeemTxin txin script _data _redeemer = txInput $ TxInputUnResolved $ TxInput
 
 -- Redeem from Script Address.
 -- TxOut is provided so the address and value need not be queried from the caradno-node
-txRedeemUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> ScriptInAnyLang  -> ScriptData  -> ScriptData -> TxBuilder
-txRedeemUtxo txin txout script _data _redeemer = txInput $ TxInputResolved $ TxInputScriptUtxo  (TxValidatorScript $ script)  _data  _redeemer  Nothing $ UTxO $ Map.singleton txin  txout
+txRedeemUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> ScriptInAnyLang  -> ScriptData  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxo txin txout script _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (TxValidatorScript $ script)  _data  _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
 
 
  -- wallet addresses, from which utxos can be spent for balancing the transaction
