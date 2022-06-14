@@ -55,35 +55,6 @@ submitTx ctx (SubmitTxModal tx mWitness) = do
     Left fe -> throw fe
     Right x1 ->   pure $ TxResponse tx'
 
-txBuilder :: DetailedChainInfo  ->  TxBuilder -> IO TxResponse
-txBuilder dcinfo txBuilder = do
-  putStrLn $ BS8.unpack $  prettyPrintJSON txBuilder
-  txE <- txBuilderToTxIO dcinfo txBuilder
-  case txE of
-    Left fe -> throw fe
-    Right tx -> do
-      print tx
-      pure $ TxResponse tx
-
-testTx :: DetailedChainInfo  ->  TxModal -> IO TxResponse
-testTx dcinfo txBuilder = do
-    fail "sad"
-  -- let encodedTxBuilder = A.encode txBuilder
-  -- let txBuilderStr = TL.unpack $ TL.decodeUtf8 encodedTxBuilder
-  -- print txBuilderStr
-  -- txBodyE<-txBuilderToTxBodyIO dcinfo txBuilder
-  -- case txBodyE of
-  --   Left fe -> throw fe
-  --   Right txBody -> do
-  --     signKey <- getDefaultSignKey
-  --     print txBody
-  --     let keyWit = makeShelleyKeyWitness txBody (WitnessPaymentKey signKey)
-  --         tx = makeSignedTransaction [keyWit] txBody
-  --     executeSubmitTx (getConnectInfo dcinfo) tx
-  --     pure $ TxResponse tx
-  executeSubmitTx (getConnectInfo ctx) tx'
-  pure $ TxResponse tx'
-
 txBuilder :: DetailedChainInfo  ->  Maybe Bool -> TxBuilder -> IO TxResponse
 txBuilder dcinfo submitM txBuilder = do
   putStrLn $ BS8.unpack $  prettyPrintJSON $ txBuilder
