@@ -26,6 +26,8 @@ import Data.Text (Text)
 import Cardano.Kuber.Data.Models
 import qualified Data.ByteString.Char8 as BS8
 import Data.Functor ((<&>))
+import Servant (Handler)
+import Control.Monad.IO.Class (liftIO)
 
 
 
@@ -79,6 +81,22 @@ testTx dcinfo txBuilder = do
   --         tx = makeSignedTransaction [keyWit] txBody
   --     executeSubmitTx (getConnectInfo dcinfo) tx
   --     pure $ TxResponse tx
+  executeSubmitTx (getConnectInfo ctx) tx'
+  pure $ TxResponse tx'
+
+txBuilder :: DetailedChainInfo  ->  Maybe Bool -> TxBuilder -> IO TxResponse
+txBuilder dcinfo submitM txBuilder = do
+  putStrLn $ BS8.unpack $  prettyPrintJSON $ txBuilder
+  txE <- txBuilderToTxIO dcinfo txBuilder
+  case txE of
+    Left fe -> throw fe
+    Right tx -> case submitM of
+      Nothing ->   pure $ TxResponse tx
+      Just submit -> do
+        txE <- executeSubmitTx (getConnectInfo dcinfo) tx
+        case txE of
+          Left fe -> throw fe
+          Right _ ->   pure $ TxResponse tx
 
 
 evaluateExecutionUnits' :: DetailedChainInfo ->  String -> IO [Either String ExecutionUnits]

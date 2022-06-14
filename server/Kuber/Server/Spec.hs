@@ -64,7 +64,7 @@ import Data.ByteString.Lazy (toStrict)
 type TransactionAPI =
   Throws FrameworkError
     :> (
-            "api" :> "v1" :> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
+            "api" :> "v1" :> "tx" :> QueryParam "submit" Bool :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "submit" :> ReqBody '[JSON ,CBORBinary,CBORText  ] (SubmitTxModal ) :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx AlonzoEra) :> Post '[JSON] ([Either String ExecutionUnits ])
       :<|>  "api" :> "v1" :> "addresses"           :> Capture "address" String  :> "balance" :> Get '[JSON] BalanceResponse
@@ -73,7 +73,7 @@ type TransactionAPI =
 
 server :: DetailedChainInfo -> Server TransactionAPI
 server dcInfo =
-  errorGuard (txBuilder dcInfo)
+   errorGuard2 (txBuilder dcInfo)
   :<|> errorGuard (submitTx dcInfo)
   :<|> errorGuard (evaluateExecutionUnits dcInfo )
   :<|> errorGuard(getBalance dcInfo )
@@ -82,6 +82,7 @@ server dcInfo =
 
     errorGuard f v = liftIO $ do
       errorHandler $ f v
+    errorGuard2 f v1 v2 = liftIO $ do errorHandler $ f v1 v2
 
     errorHandler f = do
       result <- try f
