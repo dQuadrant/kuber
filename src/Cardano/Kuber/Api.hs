@@ -15,6 +15,7 @@ module Cardano.Kuber.Api(
     ,   txConsumeUtxo
     ,   txConsumeUtxos
     ,   txRedeemUtxo
+    ,   txRedeemUtxoWithInlineDatum
     ,   txRedeemTxin
 
     -- usable inputs in the transaction for balancing
@@ -67,6 +68,8 @@ module Cardano.Kuber.Api(
     -- tx submission
     , submitTx
     , signTxBody
+
+
 )
 
 where

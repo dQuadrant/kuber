@@ -266,6 +266,8 @@ txRedeemTxin txin script _data _redeemer = txInput $ TxInputUnResolved $ TxInput
 txRedeemUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> ScriptInAnyLang  -> ScriptData  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
 txRedeemUtxo txin txout script _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (TxValidatorScript $ script)  _data  _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
 
+txRedeemUtxoWithInlineDatum :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> ScriptInAnyLang  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxoWithInlineDatum txin txout script _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxoInlineDatum  (TxValidatorScript script)  _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
 
  -- wallet addresses, from which utxos can be spent for balancing the transaction
 txWalletAddresses :: [AddressInEra BabbageEra] -> TxBuilder
