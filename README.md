@@ -11,9 +11,9 @@ To prepare your system for building kuber from sources, you can follow these ins
     The steps can be summarized as 
     - install system dependencies for ghc and cardano-node
     - install ghc compiler and tools with ghcup
-    - install iokhk patch of libsodium on the system
+    - install iohk patch of libsodium on the system
  
- The steps are described in detailed in the documentation of [building-cardano-node-from-soruces](https://developers.cardano.org/docs/get-started/installing-cardano-node/)
+ The steps are described in detailed in the documentation of [building-cardano-node-from-sources](https://developers.cardano.org/docs/get-started/installing-cardano-node/)
 
  Once everything is installed and is ready, kuber is ready to run
  ```
@@ -37,7 +37,7 @@ cabal run kuber
 - [**selections**](#211-selections---string--object--array-of-utxos-that-can-be-used-to-balance-the-transaction) : List of utxos/addresses that can be used for balancing transaction
 - [**inputs**](#212-inputs---string--object---inputs-utxos-being-spent-in-the-transaction) : List inputs in transactions
 - [**outputs**](#213-outputs--object--outputs-of-the-transaction) : List Output utxos in the transaction
-- [**collaterals**](#214-collaterals-string-optional--collateral-inputs-in-the-transaction) : [optional] List of collaterals in the transaciton (It is automatically selected if missing) 
+- [**collaterals**](#214-collaterals-string-optional--collateral-inputs-in-the-transaction) : [optional] List of collaterals in the transaction (It is automatically selected if missing) 
 - **validityStart** : [Integer: UnixTimestamp millisecond] Transaction validFrom
 - **validityEnd** : [Integer : UnixTimestamp millisecond] Transaction validUntil 
 - [**mint**](#215-mint--object--minting-script-and-amount-in-the-transaction) : Minting Scripts and value in the transaction
@@ -67,7 +67,7 @@ cabal run kuber
  
 
 - Utxo CborHex\
-   Utxo( transaction output ) in cbor format. Utxo cbor contains output address, value).  Kuber directly uses the value  and address by decoding it so, querying the node is not necesasry.\
+   Utxo( transaction output ) in cbor format. Utxo cbor contains output address, value.  Kuber directly uses the value  and address by decoding it so, querying the node is not necessary.\
    ___eg___:&#160;"828258202ff238f64b773435d6f626aafe56073f251b52281c50a3872951905fbc597e560082583901ab1d01c80b7ef656194c4af4a682f2d55d714379bde1afe72dc5d348f9c9e87246d2f0373885896ad2804b7229673204cac9208345c1ea5b1a0037e4d2"  
 
 
@@ -102,12 +102,12 @@ input can have following fields  depending on the context in which it's being us
 
 
 - Address bench32\
-   Wallet address in bench32 format. when address is used, all the utxos int the address will be used as input and spent in the transaction.\
+   Wallet address in bench32 format. when address is used, all the utxos in the address will be used as input and spent in the transaction.\
    __eg__:&#160;"addr_test1vzzc9nx2lxmu9r7gyd8cyd0dcx0ynh729rpv4c553exs7kgyu9cxl"
                             
   
 - Address CborHex\
-   Wallet address in cbor format. When address is used, all the utxos int the address will be used as input and spent in the transaction.\
+   Wallet address in cbor format. When address is used, all the utxos in the address will be used as input and spent in the transaction.\
    ___eg___:&#160;"6136e0cf1e52e05ef92e52c7bc2a04493d6bae481b8acbab12ec4300d7"\
    ___eg___:&#160;"0136e0cf1e52e05ef92e52c7bc2a04493d6bae481b8acbab12ec4300d7f9c9e87246d2f0373885896ad2804b7229673204cac9208345c1ea5b"
           
@@ -119,14 +119,14 @@ Utxo( transaction output ) in cbor format. Utxo cbor contains output address, va
 
 #### Script Utxos as input
 
-When spending/reedming form script utxo, Input value should be object with all of the following fields.
+When spending/redeeming form script utxo, Input value should be an object with all of the following fields.
  - `utxo` : TxIn [ TxHash#index ]
     TxIn in readable format. Kuber will use this utxo in the transaction 
 
     ___eg___:&#160;"3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8#1"   
              
 
- - `script` [Object] :  Serialized script wrapped in text evelope. `script` object must have following fields
+ - `script` [Object] :  Serialized script wrapped in text evelope. `script` object must have the following fields
 
        {
           "type": "String" Script type [ "PlutuScrpitV1" | "PlutusScriptV2" ]
@@ -145,7 +145,7 @@ When spending/reedming form script utxo, Input value should be object with all o
                 
 
  - `exUnits` | `executionUnits` [Object] [Optional]: \
-Specify Execution units values. If not provided, Kuber automatically calculates the executionunits and includes it in the transaction
+Specify Execution units values. If not provided, Kuber automatically calculates the execution units and includes it in the transaction
  
        {
            "steps": "String" Execution units steps
@@ -179,7 +179,7 @@ Amount to be sent. In case of native tokens, they can be joined by `+` like in c
 
 ##### Following fields can be present **if the Output address is scriptAddress**
 
-- `script` | `inlineScript` : [Object] : Serialized script wrapped in text evelope. When `inlineScript` is provided, the script is inlined in the Utxo.  It object must have following fields
+- `script` | `inlineScript` : [Object] : Serialized script wrapped in text evelope. When `inlineScript` is provided, the script is inlined in the Utxo.  It's object must have following fields
     {
         "type": "String" Script type [ "PlutuScrpitV1" | "PlutusScriptV2" ]
         "cborHex": "String" Scrialized cbor hex representation of the script.
@@ -193,7 +193,7 @@ Amount to be sent. In case of native tokens, they can be joined by `+` like in c
 
 ### 2.1.4 `collaterals` "String" [Optional] : Collateral inputs in the transaction.
 Collaterals are selected automatically by Kuber using one of the utxos in the `selections` .
-If desired, collaterals list can be set explicitely .
+If desired, collaterals list can be set explicitly .
 
 Each Item in the list can be in one of the following form.
 
@@ -213,7 +213,7 @@ Each Item in the list can be in one of the following form.
 
 
 - _Address bench32_
-  Wallet address in bench32 format. when address is used, all the utxos int the address will be used as input and spent in the transaction.
+  Wallet address in bench32 format. when address is used, all the utxos int the address will be used as an input and spent in the transaction.
 
   ___eg___:&#160;"addr_test1vzzc9nx2lxmu9r7gyd8cyd0dcx0ynh729rpv4c553exs7kgyu9cxl"
                         
@@ -296,9 +296,9 @@ Keys in the json shouldn't be longer than 64 bytes length. If the string value i
 Metadata object example:
 ```json
 {
-    "420": "content here"
+    "420": "content here",
     "421": {
-        "key": "value"
+        "key": "value",
         "key": ["value1","value2"]
     }
 }
