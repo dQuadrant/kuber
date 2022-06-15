@@ -37,6 +37,8 @@ import qualified Data.Map as Map
 import Cardano.Api.Shelley (fromMaryValue, fromShelleyAddr, fromShelleyTxOut, fromAlonzoData, fromPlutusData)
 import qualified Cardano.Ledger.Alonzo as Alonzo
 import Data.Aeson.Types (parseMaybe)
+import qualified Data.ByteString as BS
+import qualified Debug.Trace as Debug
 
 
 parseSignKey :: MonadFail m => Text -> m (SigningKey PaymentKey)
@@ -56,31 +58,33 @@ parseSignKey txt
       Right sk' -> pure sk'
     Left err -> fail err
 
-parseAssetId :: MonadFail m => T.Text -> T.Text -> m AssetId
-parseAssetId policyText nameText = do
-  if T.null policyText
-    then
-      if T.null nameText
-        then pure AdaAssetId
-        else fail "Policy Id is for Ada but tokenName provided"
-    else do
-      let policyId = deserialiseFromRawBytesHex AsPolicyId $ encodeUtf8 policyText
-      let assetName = deserialiseFromRawBytes AsAssetName $ encodeUtf8 nameText
-      case policyId of
-        Nothing -> fail "ParseError: invalid policyId value"
-        Just pi -> case assetName of
-          Nothing -> fail "ParseError: invalid tokenName"
-          Just an -> pure $ AssetId pi an
 
-parseAssetIdText :: MonadFail m => T.Text -> m AssetId
-parseAssetIdText assetText = case T.split (== '.') assetText of
-  [policy, tokenName] -> parseAssetId policy tokenName
-  _ ->
-    if T.null assetText || (T.toLower assetText == "lovelace")
-      then pure AdaAssetId
-      else failure
+ -- parse plain text for assetName
+parseAssetId :: MonadFail m => T.Text -> m AssetId
+parseAssetId assetText
+  | T.null policy = if T.null tokenNameWithDot then  pure AdaAssetId else if T.null tokenName then pure AdaAssetId  else ( fail "TokenName provided for AdaAssetId")
+  | T.null tokenNameWithDot = parseCombined policy
+  | T.null tokenName = parseCombined policy
+  | otherwise = parsePair policy tokenName
   where
-    failure = fail "ParseError : Cannot construct AssetId from text. Expected format :`policyHex.tokenName`"
+      (policy, tokenNameWithDot) = T.break (== '.') $ T.strip assetText
+      tokenName = T.tail tokenNameWithDot
+      parseCombined combined 
+        | T.toLower combined == "lovelace" = pure AdaAssetId 
+        | T.toLower combined == "l" = pure AdaAssetId 
+        | T.length policy < 56 = fail "ParserError : Too short input for assetId"
+        | otherwise =  parsePair (T.take 56 policy ) (T.drop 56 policy)
+      parsePair policyText nameText=do 
+              let policyId = Debug.trace (show policyText) $ deserialiseFromRawBytesHex AsPolicyId $ encodeUtf8 policyText
+              let assetName =Debug.trace  (show nameText)  $  case deserialiseFromRawBytesHex AsAssetName $ encodeUtf8 nameText
+                              of
+                                Nothing -> deserialiseFromRawBytes AsAssetName $ encodeUtf8 nameText
+                                Just an -> pure an
+              case policyId of 
+                Nothing -> fail "ParserError : Invalid policy name"
+                Just pi -> case assetName of 
+                  Nothing -> fail "ParserError : Invalid token name"
+                  Just an -> pure $ AssetId pi an
 
 parseValueText :: MonadFail f => Text -> f Value
 parseValueText valueTxt =
@@ -97,7 +101,7 @@ parseAssetNQuantity textStr = do
       assetTxtStripped = T.strip assetTxt
   case readMaybe (T.unpack amountTxt) of
     Just iAmount -> do
-      case parseAssetIdText assetTxtStripped of
+      case parseAssetId assetTxtStripped of
         Just asset -> pure (asset, Quantity iAmount)
         _ ->
           convertAdaOrLovelace
@@ -106,7 +110,7 @@ parseAssetNQuantity textStr = do
             (fail $ "Invalid AssetId in value `" ++ T.unpack textStr ++ "`")
     _ ->
       if T.null assetTxtStripped
-        then case parseAssetIdText amountTxt of
+        then case parseAssetId amountTxt of
           Just asset -> pure (asset, Quantity 1)
           _ -> do
             let (newAmountTxt, postfix) = T.span isDigit amountTxt
