@@ -12,6 +12,15 @@ createTxInScriptWitness anyScript datum redeemer exUnits = do
       pure $ PlutusScriptWitness langInEra version (PScript pscript) (ScriptDatumForTxIn  datum) redeemer exUnits
     SimpleScript version sscript ->Left $ FrameworkError  WrongScriptType "Simple Script used in Txin"
 
+createTxInScriptWitnessInlineDatum :: ScriptInAnyLang -> ScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn BabbageEra)
+createTxInScriptWitnessInlineDatum anyScript redeemer exUnits = do
+  ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anyScript
+  case script' of
+    PlutusScript version pscript ->
+      pure $ PlutusScriptWitness langInEra version (PScript pscript) InlineScriptDatum redeemer exUnits
+    SimpleScript version sscript ->Left $ FrameworkError  WrongScriptType "Simple Script used in Txin"
+
+
 createPlutusMintingWitness :: ScriptInAnyLang ->ScriptData ->ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxMint BabbageEra)
 createPlutusMintingWitness anyScript redeemer exUnits = do
   ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anyScript
