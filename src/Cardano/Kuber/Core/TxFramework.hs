@@ -483,12 +483,8 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
                                                                 witness <-  createTxInScriptWitness s d r exUnit
                                                                 pure (_in,Right (mExunit, witness,val )) ) $ Map.toList txin
       TxInputScriptUtxoInlineDatum (TxValidatorScript s)  r mExunit (UTxO txin) -> mapM (\(_in,val) -> do
-                                                                sd <- case val of { TxOut aie tov tod rs -> case tod of
-                                                                                TxOutDatumNone -> Left $ FrameworkError  BalancingError  $ "for input "++ T.unpack (renderTxIn _in) ++ " Datum not provided and it's not inlined in the utxo"
-                                                                                TxOutDatumHash sdsie ha -> Left $ FrameworkError  BalancingError  $ "for input "++ T.unpack (renderTxIn _in) ++ " Datum not provided and it's not inlined in the utxo"
-                                                                                TxOutDatumInline _ sd -> pure sd  }
                                                                 exUnit <- getExUnit _in mExunit
-                                                                witness <-  createTxInScriptWitness s sd r exUnit
+                                                                witness <-  createTxInScriptWitnessInlineDatum s r exUnit
                                                                 pure (_in,Right (mExunit, witness,val )) ) $ Map.toList txin
 
       where
