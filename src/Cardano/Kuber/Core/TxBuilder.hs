@@ -203,7 +203,7 @@ txMint  v = txMints [v]
 txMintSimpleScript :: SimpleScript SimpleScriptV2   ->   [(AssetName,Integer)] -> TxBuilder
 txMintSimpleScript simpleScript amounts = txMint $ TxMintData policyId  witness (valueFromList  $ map (bimap (AssetId policyId) Quantity )  amounts )
   where
-    witness=   SimpleScriptWitness SimpleScriptV2InBabbage SimpleScriptV2 simpleScript
+    witness=   SimpleScriptWitness SimpleScriptV2InBabbage SimpleScriptV2 (SScript simpleScript)
     script = SimpleScript SimpleScriptV2 simpleScript
     policyId = scriptPolicyId script
 

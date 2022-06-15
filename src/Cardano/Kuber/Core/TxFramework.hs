@@ -206,7 +206,9 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
     )
     else (
           let evaluateBodyWithExunits body fee= do
-                        exUnits <- evaluateExUnitMap dCinfo ( UTxO availableUtxo) body
+                        let exUnits =case evaluateExUnitMap dCinfo (UTxO availableUtxo) body of
+                              Left fe -> mempty
+                              Right map -> map
                         inputs' <- usedInputs  (Map.map Right exUnits ) (Right defaultExunits)  resolvedInputs
                         calculator inputs' txMintValue' fee
           in do

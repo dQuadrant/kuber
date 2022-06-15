@@ -1,7 +1,7 @@
 module Cardano.Kuber.Utility.ScriptUtil where
 import Cardano.Api
 import Cardano.Kuber.Error
-import Cardano.Api.Shelley (fromPlutusData, PlutusScriptOrReferenceInput (PScript))
+import Cardano.Api.Shelley (fromPlutusData, PlutusScriptOrReferenceInput (PScript), SimpleScriptOrReferenceInput (SScript))
 
 
 createTxInScriptWitness :: ScriptInAnyLang -> ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn BabbageEra)
@@ -25,7 +25,7 @@ createSimpleMintingWitness anyScript = do
   ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anyScript
   case script' of
     PlutusScript version pscript -> Left $ FrameworkError  WrongScriptType "Plutus script not supported on creating simple script witness"
-    SimpleScript version sscript -> pure $ SimpleScriptWitness langInEra version sscript
+    SimpleScript version sscript -> pure $ SimpleScriptWitness langInEra version (SScript sscript)
 
 
 validateScriptSupportedInEra' ::  CardanoEra era -> ScriptInAnyLang -> Either FrameworkError (ScriptInEra era)

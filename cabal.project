@@ -7,8 +7,8 @@ packages: .
 write-ghc-environment-files: never
 
 -- Always build tests and benchmarks.
-tests: true
-benchmarks: true
+tests: False
+benchmarks: False
 
 package cardano-ledger-alonzo
   optimization: False
@@ -32,12 +32,16 @@ source-repository-package
   tag: 00ebe7211c981686e65730b7144fbf5350462608
   --sha256: 1zvjm3pb38w0ijig5wk5mdkzcszpmlp5d4zxvks2jk1rkypi8gsm
 
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/hedgehog-extras
+  tag: 967d79533c21e33387d0227a5f6cc185203fe658
+  --sha256: 0rbqb7a64aya1qizlr3im06hdydg9zr6sl3i8bvqqlf7kpa647sd
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: 631cb6cf1fa01ab346233b610a38b3b4cba6e6ab
-
+  tag: 0f3a867493059e650cda69e20a5cbf1ace289a57
   subdir:
     base-deriving-via
     binary
@@ -58,7 +62,7 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger
-  tag: e290bf8d0ea272a51e9acd10adc96b4e12e00d37
+  tag: 52da70e5a0472cd4433876289f1aebaa0c6e5c85
   --sha256: 0my3801w1vinc0kf5yh9lxl6saqxgwm6ccg0vvzi104pafcwwcqx
   subdir:
     eras/babbage/impl
@@ -118,7 +122,7 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: 04245dbd69387da98d3a37de9f400965e922bb0e
+  tag: a65c29b6a85e90d430c7f58d362b7eb097fd4949
   --sha256: 0bixx0b61sjzls7hzwjlgmvl0yk1ckd40cfazda8b3smqvxfrphq
   subdir:
     monoidal-synchronisation
@@ -152,18 +156,6 @@ source-repository-package
     typed-protocols-cborg
     typed-protocols-examples
 
-
-
--- A lot of plutus dependencies have to be synchronized with the dependencies of
--- cardano-node. If you update cardano-node, please make sure that all dependencies
--- of cardano-node are also updated.
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/cardano-node.git
-  tag: 95c3692cfbd4cdb82071495d771b23e51840fb0e
-  subdir:
-    cardano-api
-
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus.git
@@ -183,6 +175,30 @@ source-repository-package
   tag: ee59880f47ab835dbd73bea0847dab7869fc20d8
   --sha256: 1lrzknw765pz2j97nvv9ip3l1mcpf2zr4n56hwlz0rk7wq7ls4cm
 
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/ekg-forward
+  tag: 297cd9db5074339a2fb2e5ae7d0780debb670c63
+  --sha256: 1zcwry3y5rmd9lgxy89wsb3k4kpffqji35dc7ghzbz603y1gy24g
+
+source-repository-package
+  type: git
+  location: https://github.com/denisshevchenko/threepenny-gui
+  tag: 4ec92ded05ccf59ba4a874be4b404ac1b6d666b6
+  --sha256: 00fvvaf4ir4hskq4a6gggbh2wmdvy8j8kn6s4m1p1vlh8m8mq514
+
+
+-- A lot of plutus dependencies have to be synchronized with the dependencies of
+-- cardano-node. If you update cardano-node, please make sure that all dependencies
+-- of cardano-node are also updated.
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/cardano-node.git
+  tag: 797289144ad87d494603f19b301e6dbf93310f81
+  subdir:
+    cardano-api
+
+
 constraints:
     hedgehog >= 1.0
   , bimap >= 0.4.0
@@ -191,6 +207,11 @@ constraints:
     -- systemd-2.3.0 requires at least network 3.1.1.0 but it doesn't declare
     -- that dependency
   , network >= 3.1.1.0
+  , HSOpenSSL >= 0.11.7.2
+
+
+package snap-server
+  flags: +openssl
 
 package comonad
   flags: -test-doctests
