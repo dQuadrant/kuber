@@ -131,6 +131,7 @@ txBuilderToTxBodyIO' cInfo builder = do
         TxInputUtxo (UTxO uto) -> (ins, utxo <> uto)
         TxInputScriptUtxo tvs sd sd' m_eu (UTxO uto) -> (ins,utxo<>uto)
         TxInputScriptUtxoInlineDatum tvs  sd' m_eu (UTxO uto) -> (ins,utxo<>uto)
+        TxInputScriptUtxoInlineDatumWithReferenceScript tvs sd' m_eu (UTxO uto) -> (ins,utxo<>uto)
       TxInputUnResolved tiur -> case tiur of
         TxInputTxin ti -> (Set.insert ti ins,utxo)
         TxInputAddr aie -> v
@@ -400,6 +401,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
       txOutputVal :: TxOutput -> Value
       txOutputVal o = case o of { TxOutput toc b b' -> case toc of
                                     TxOutAddress aie va -> va
+                                    TxOutAddressWithReference aie va sa -> va
                                     TxOutScriptAddress aie va ha -> va
                                     TxOutPkh pkh va -> va
                                     TxOutScript tvs va ha -> va
@@ -441,22 +443,23 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
 
     parseOutputs ::  NetworkId -> TxOutput -> Either FrameworkError   ParsedOutput
     parseOutputs  networkId output = case output of { TxOutput toc b b' -> case toc of
-                                              TxOutAddress aie va -> pure  (b,b',TxOut aie  (TxOutValue MultiAssetInBabbageEra va ) TxOutDatumNone ReferenceScriptNone )
+                                              TxOutAddress aie va-> pure  (b,b',TxOut aie  (TxOutValue MultiAssetInBabbageEra va ) TxOutDatumNone ReferenceScriptNone )
+                                              TxOutAddressWithReference aie va (TxValidatorScript sa)-> pure  (b,b',TxOut aie  (TxOutValue MultiAssetInBabbageEra va ) TxOutDatumNone (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra sa) )
                                               TxOutScriptAddress aie va ha -> pure (b,b',TxOut aie (TxOutValue MultiAssetInBabbageEra va) (TxOutDatumHash ScriptDataInBabbageEra ha) ReferenceScriptNone)
-                                              TxOutScriptAddressWithData aie va sd -> pure (b,b',TxOut aie (TxOutValue MultiAssetInBabbageEra va ) (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra  sd) ReferenceScriptNone)
+                                              TxOutScriptAddressWithData aie va sd -> pure (b,b',TxOut aie (TxOutValue MultiAssetInBabbageEra va ) (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra sd) ReferenceScriptNone)
                                               TxOutPkh pkh va -> case pkhToMaybeAddr (getNetworkId  dCinfo) pkh of
                                                       Nothing -> Left  $ FrameworkError ParserError  ("Cannot convert PubKeyHash to Address : "++ show pkh)
                                                       Just aie ->  pure  (b,b',TxOut aie  (TxOutValue MultiAssetInBabbageEra va ) TxOutDatumNone ReferenceScriptNone  )
-                                              TxOutScript (TxValidatorScript (ScriptInAnyLang lang script)) va ha ->
+                                              TxOutScript (TxValidatorScript sa@(ScriptInAnyLang lang script)) va ha ->
                                                 let payCred = PaymentCredentialByScript (hashScript script)
                                                     addr = makeShelleyAddress networkId payCred NoStakeAddress
                                                     addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) addr
-                                                in pure (b,b',TxOut addrInEra (TxOutValue MultiAssetInBabbageEra va) (TxOutDatumHash ScriptDataInBabbageEra ha ) ReferenceScriptNone)
-                                              TxOutScriptWithData  (TxValidatorScript (ScriptInAnyLang lang script)) va sd ->
+                                                in pure (b,b',TxOut addrInEra (TxOutValue MultiAssetInBabbageEra va) (TxOutDatumHash ScriptDataInBabbageEra ha ) (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra sa))
+                                              TxOutScriptWithData  (TxValidatorScript sa@(ScriptInAnyLang lang script)) va sd ->
                                                 let payCred = PaymentCredentialByScript (hashScript script)
                                                     addr = makeShelleyAddress networkId payCred NoStakeAddress
                                                     addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) addr
-                                                in pure (b,b',TxOut addrInEra (TxOutValue MultiAssetInBabbageEra  va) (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra  sd) ReferenceScriptNone)}
+                                                in pure (b,b',TxOut addrInEra (TxOutValue MultiAssetInBabbageEra  va) (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra  sd) (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra sa))}
 
     resolveInputs ::  TxInput -> Either FrameworkError    TxInputResolved_
     resolveInputs v = case v of
@@ -486,6 +489,10 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
                                                                 exUnit <- getExUnit _in mExunit
                                                                 witness <-  createTxInScriptWitnessInlineDatum s r exUnit
                                                                 pure (_in,Right (mExunit, witness,val )) ) $ Map.toList txin
+      TxInputScriptUtxoInlineDatumWithReferenceScript txIn redeemer mExunit (UTxO utxoMap) -> mapM (\(_in,val) -> do
+                                                                exUnit <- getExUnit _in mExunit
+                                                                witness <-  createTxInScriptWitnessInlineDatumWithReference txIn redeemer exUnit
+                                                                pure (_in,Right (mExunit, witness,val )) ) $ Map.toList utxoMap
 
       where
 

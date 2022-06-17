@@ -1,8 +1,11 @@
 module Cardano.Kuber.Utility.ScriptUtil where
 import Cardano.Api
 import Cardano.Kuber.Error
-import Cardano.Api.Shelley (fromPlutusData, PlutusScriptOrReferenceInput (PScript), SimpleScriptOrReferenceInput (SScript))
-
+import Cardano.Api.Shelley (fromPlutusData, PlutusScriptOrReferenceInput (PScript, PReferenceScript), SimpleScriptOrReferenceInput (SScript), PlutusScript (PlutusScriptSerialised))
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Short as SBS
+import Codec.Serialise (serialise)
+import qualified Plutus.V1.Ledger.Api as Plutus
 
 createTxInScriptWitness :: ScriptInAnyLang -> ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn BabbageEra)
 createTxInScriptWitness anyScript datum redeemer exUnits = do
@@ -20,6 +23,8 @@ createTxInScriptWitnessInlineDatum anyScript redeemer exUnits = do
       pure $ PlutusScriptWitness langInEra version (PScript pscript) InlineScriptDatum redeemer exUnits
     SimpleScript version sscript ->Left $ FrameworkError  WrongScriptType "Simple Script used in Txin"
 
+createTxInScriptWitnessInlineDatumWithReference :: TxIn -> ScriptData -> ExecutionUnits -> Either FrameworkError (ScriptWitness WitCtxTxIn BabbageEra)
+createTxInScriptWitnessInlineDatumWithReference scTxIn redeemer exUnits = pure $ PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2 (PReferenceScript scTxIn) InlineScriptDatum redeemer exUnits
 
 createPlutusMintingWitness :: ScriptInAnyLang ->ScriptData ->ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxMint BabbageEra)
 createPlutusMintingWitness anyScript redeemer exUnits = do
@@ -42,3 +47,7 @@ validateScriptSupportedInEra' era script@(ScriptInAnyLang lang _) =
   case toScriptInEra era script of
     Nothing -> Left $ FrameworkError WrongScriptType   (show lang ++ " not supported in " ++ show era ++ " era")
     Just script' -> pure script'
+
+
+plutusScriptToScriptAny :: Plutus.Script -> ScriptInAnyLang
+plutusScriptToScriptAny plutusScript = ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2) $ PlutusScript PlutusScriptV2 $ PlutusScriptSerialised . SBS.toShort . LBS.toStrict $ serialise plutusScript

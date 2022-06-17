@@ -55,6 +55,7 @@ module Cardano.Kuber.Util
     , toHexString
     , unHex
     , unHexLazy
+    , getDefaultConnection
 )
 where
 

@@ -32,6 +32,7 @@ import Data.Maybe (mapMaybe, catMaybes)
 import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
 import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, TxOut, CurrencySymbol, MintingPolicy)
+import qualified Plutus.V1.Ledger.Api as Plutus
 import Data.Aeson.Types (FromJSON(parseJSON), (.:), Parser)
 import qualified Data.Aeson as A
 import qualified Data.Text as T
@@ -48,6 +49,7 @@ import qualified Data.Aeson as Aeson
 import Data.Word (Word64)
 import qualified Data.HashMap.Internal.Strict as H
 import Data.Bifunctor
+import Cardano.Kuber.Utility.ScriptUtil (plutusScriptToScriptAny)
 
 
 data TxMintingScript = TxSimpleScript ScriptInAnyLang
@@ -59,6 +61,7 @@ newtype TxValidatorScript = TxValidatorScript ScriptInAnyLang deriving (Show)
 data TxInputResolved_ = TxInputUtxo (UTxO BabbageEra)
               | TxInputScriptUtxo TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
               | TxInputScriptUtxoInlineDatum TxValidatorScript  ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
+              | TxInputScriptUtxoInlineDatumWithReferenceScript TxIn ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
               deriving (Show)
 
 
@@ -72,12 +75,12 @@ data TxInput  = TxInputResolved TxInputResolved_ | TxInputUnResolved TxInputUnRe
 
 data TxOutputContent =
      TxOutAddress (AddressInEra BabbageEra) Value
+  |  TxOutAddressWithReference (AddressInEra BabbageEra) Value TxValidatorScript
   |  TxOutScriptAddress (AddressInEra BabbageEra) Value (Hash ScriptData)
   |  TxOutScriptAddressWithData (AddressInEra BabbageEra) Value   ScriptData
   |  TxOutPkh PubKeyHash Value
   |  TxOutScript TxValidatorScript Value  (Hash ScriptData)
-  |  TxOutScriptWithData TxValidatorScript Value   ScriptData  deriving (Show)
-
+  |  TxOutScriptWithData TxValidatorScript Value ScriptData deriving (Show)
 
 data TxOutput = TxOutput {
   content :: TxOutputContent,
@@ -212,6 +215,9 @@ txMintSimpleScript simpleScript amounts = txMint $ TxMintData policyId  witness 
 txPayTo:: AddressInEra BabbageEra ->Value ->TxBuilder
 txPayTo addr v=  txOutput $  TxOutput (TxOutAddress  addr v) False False
 
+txPayToWithReference:: Plutus.Script -> AddressInEra BabbageEra ->Value ->TxBuilder
+txPayToWithReference pScript addr v=  txOutput $  TxOutput (TxOutAddressWithReference addr v (TxValidatorScript (plutusScriptToScriptAny pScript))) False False
+
 -- pay to an Address by pubKeyHash. Note that the resulting address will be an enterprise address
 txPayToPkh:: PubKeyHash  ->Value ->TxBuilder
 txPayToPkh pkh v= txOutput $  TxOutput ( TxOutPkh  pkh  v ) False False
@@ -220,9 +226,19 @@ txPayToPkh pkh v= txOutput $  TxOutput ( TxOutPkh  pkh  v ) False False
 txPayToScript :: AddressInEra BabbageEra -> Value -> Hash ScriptData -> TxBuilder
 txPayToScript addr v d = txOutput $  TxOutput (TxOutScriptAddress  addr v d) False False
 
+--Babbage era functions
 -- pay to script Address with datum added to the transaction
 txPayToScriptWithData :: AddressInEra BabbageEra -> Value -> ScriptData -> TxBuilder
 txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutScriptAddressWithData addr v  d) False False
+
+-- pay to script with reference script attached to the output
+txPayToScriptWithReference :: Plutus.Script -> Value -> Hash ScriptData -> TxBuilder
+txPayToScriptWithReference pScript v d = txOutput $ TxOutput (TxOutScript (TxValidatorScript (plutusScriptToScriptAny pScript)) v d) False False
+
+-- pay to script with reference script attached to the output and datum inlined
+txPayToScriptWithDataAndReference :: Plutus.Script -> Value -> ScriptData -> TxBuilder
+txPayToScriptWithDataAndReference pScript v d  = 
+  txOutput $ TxOutput (TxOutScriptWithData (TxValidatorScript $ plutusScriptToScriptAny pScript) v d) False False
 
 -- input consmptions
 
@@ -268,6 +284,11 @@ txRedeemUtxo txin txout script _data _redeemer exUnitsM = txInput $ TxInputResol
 
 txRedeemUtxoWithInlineDatum :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> ScriptInAnyLang  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
 txRedeemUtxoWithInlineDatum txin txout script _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxoInlineDatum  (TxValidatorScript script)  _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
+
+type ScriptReferenceTxIn = TxIn
+
+txRedeemUtxoWithInlineDatumWithReferenceScript :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> ScriptReferenceTxIn -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxoWithInlineDatumWithReferenceScript txin txout scRefTxIn _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxoInlineDatumWithReferenceScript scRefTxIn _redeemer exUnitsM (UTxO $ Map.singleton txin  txout)
 
  -- wallet addresses, from which utxos can be spent for balancing the transaction
 txWalletAddresses :: [AddressInEra BabbageEra] -> TxBuilder
