@@ -73,6 +73,8 @@ data TxInputUnResolved_ = TxInputTxin TxIn
 
 data TxInput  = TxInputResolved TxInputResolved_ | TxInputUnResolved TxInputUnResolved_ deriving (Show)
 
+newtype TxInputReference  = TxInputReference TxIn deriving (Show)
+
 data TxOutputContent =
      TxOutAddress (AddressInEra BabbageEra) Value
   |  TxOutAddressWithReference (AddressInEra BabbageEra) Value TxValidatorScript
@@ -116,6 +118,7 @@ data TxMintData = TxMintData PolicyId (ScriptWitness WitCtxMint BabbageEra) Valu
 data TxBuilder=TxBuilder{
     txSelections :: [TxInputSelection],
     txInputs:: [TxInput],
+    txInputReferences:: [TxInputReference],
     txOutputs :: [TxOutput],
     txCollaterals :: [TxCollateral],  -- collateral for the transaction
     txValidityStart :: Maybe Integer,
@@ -128,12 +131,13 @@ data TxBuilder=TxBuilder{
   } deriving (Show)
 
 instance Monoid TxBuilder where
-  mempty = TxBuilder  [] [] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
+  mempty = TxBuilder  [] [] [] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
 
 instance Semigroup TxBuilder where
   (<>)  txb1 txb2 =TxBuilder{
     txSelections = txSelections txb1 ++ txSelections txb2,
     txInputs = txInputs txb1 ++ txInputs txb2,
+    txInputReferences = txInputReferences txb1 ++ txInputReferences txb2,
     txOutputs = txOutputs txb1 ++ txOutputs txb2,
     txCollaterals  = txCollaterals txb1 ++ txCollaterals txb2,  -- collateral for the transaction
     txValidityStart = case txValidityStart txb1 of
@@ -166,22 +170,26 @@ data TxContext = TxContext {
 }
 
 txSelection :: TxInputSelection -> TxBuilder
-txSelection v = TxBuilder  [v] [] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
+txSelection v = TxBuilder  [v] [] [] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
 
 txInput :: TxInput -> TxBuilder
-txInput v = TxBuilder  [] [v] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
+txInput v = TxBuilder  [] [v] [] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
+
+txInputReference :: TxInputReference -> TxBuilder
+txInputReference v = TxBuilder  [] [] [v] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
+
 
 txMints :: [TxMintData] -> TxBuilder
-txMints md= TxBuilder  [] [] [] [] Nothing Nothing md [] Nothing Nothing Map.empty
+txMints md= TxBuilder  [] [] [] [] [] Nothing Nothing md [] Nothing Nothing Map.empty
 
 txOutput :: TxOutput -> TxBuilder
-txOutput v =  TxBuilder  [] [] [v] [] Nothing Nothing [] [] Nothing Nothing Map.empty
+txOutput v =  TxBuilder  [] [] [] [v] [] Nothing Nothing [] [] Nothing Nothing Map.empty
 
 txCollateral :: TxCollateral -> TxBuilder
-txCollateral v =  TxBuilder  [] [] [] [v] Nothing Nothing [] [] Nothing Nothing Map.empty
+txCollateral v =  TxBuilder  [] [] [] [] [v] Nothing Nothing [] [] Nothing Nothing Map.empty
 
 txSignature :: TxSignature -> TxBuilder
-txSignature v =  TxBuilder  [] [] [] [] Nothing Nothing [] [v] Nothing Nothing Map.empty
+txSignature v =  TxBuilder  [] [] [] [] [] Nothing Nothing [] [v] Nothing Nothing Map.empty
 
 
 
@@ -189,15 +197,15 @@ txSignature v =  TxBuilder  [] [] [] [] Nothing Nothing [] [v] Nothing Nothing M
 
 -- Set validity Start and end time in posixMilliseconds
 txValidPosixTimeRangeMs :: Integer -> Integer -> TxBuilder
-txValidPosixTimeRangeMs start end = TxBuilder  [] [] [] [] (Just start) (Just end) [] [] Nothing Nothing Map.empty
+txValidPosixTimeRangeMs start end = TxBuilder  [] [] [] [] [] (Just start) (Just end) [] [] Nothing Nothing Map.empty
 
 -- set  validity statart time in posixMilliseconds
 txValidFromPosixMs:: Integer -> TxBuilder
-txValidFromPosixMs start =  TxBuilder  [] [] [] [] (Just start) Nothing [] [] Nothing Nothing Map.empty
+txValidFromPosixMs start =  TxBuilder  [] [] [] [] [] (Just start) Nothing [] [] Nothing Nothing Map.empty
 
 -- set transaction validity end time in posixMilliseconds
 txValidUntilPosixMs :: Integer -> TxBuilder
-txValidUntilPosixMs end =  TxBuilder  [] [] [] [] Nothing (Just end) [] [] Nothing Nothing Map.empty
+txValidUntilPosixMs end =  TxBuilder  [] [] [] [] [] Nothing (Just end) [] [] Nothing Nothing Map.empty
 
 --- minting
 txMint  v = txMints [v]
@@ -250,6 +258,12 @@ txConsumeUtxos utxo =  txInput $ TxInputResolved $  TxInputUtxo  utxo
 -- the Txout value and address  is determined by querying the node
 txConsumeTxIn :: TxIn -> TxBuilder
 txConsumeTxIn  v = txInput $ TxInputUnResolved $ TxInputTxin v
+
+-- use the TxIn as input in the transaction
+-- the Txout value and address  is determined by querying the node
+txUseReferenceTxIn :: TxIn -> TxBuilder
+txUseReferenceTxIn  v = txInputReference $ TxInputReference v
+
 
 -- use txIn as input in the transaction
 -- Since TxOut is also given the txIn is not queried from the node.

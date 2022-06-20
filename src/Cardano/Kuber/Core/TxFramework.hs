@@ -155,7 +155,7 @@ txBuilderToTxBodyIO' cInfo builder = do
 txBuilderToTxBody'::DetailedChainInfo ->  UTxO BabbageEra -> TxBuilder   -> Either FrameworkError  (TxBody BabbageEra,Tx BabbageEra )
 txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory )
                     (UTxO availableUtxo)
-                    (TxBuilder selections _inputs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata )
+                    (TxBuilder selections _inputs _inputRefs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata )
   = do
   let network = getNetworkId  dCinfo
   meta<- if null metadata
@@ -369,7 +369,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
         txIns= getTxin fixedInputs extraUtxos ,
         txInsCollateral= if null collateral then TxInsCollateralNone  else TxInsCollateral CollateralInBabbageEra collateral,
         txOuts=outs,
-        txInsReference =TxInsReferenceNone ,
+        txInsReference =TxInsReference ReferenceTxInsScriptsInlineDatumsInBabbageEra (map (\(TxInputReference a) -> a) _inputRefs),
         txTotalCollateral= TxTotalCollateralNone  ,
         txReturnCollateral = TxReturnCollateralNone ,
         Cardano.Api.Shelley.txFee=TxFeeExplicit TxFeesExplicitInBabbageEra  fee,
