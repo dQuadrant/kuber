@@ -240,6 +240,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
       TxInputResolved TxInputScriptUtxoInlineDatum{}-> True
       TxInputUnResolved TxInputScriptTxin{} -> True
       TxInputUnResolved TxInputScriptTxinInlineDatum{} -> True
+      TxInputResolved TxInputScriptUtxoInlineDatumWithReferenceScript{} -> True
       _ -> False ) _inputs
 
     requiresExUnitCalculation = any (\case
@@ -247,6 +248,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
       TxInputResolved TxInputScriptUtxoInlineDatum{}-> True
       TxInputUnResolved TxInputScriptTxin{} -> True
       TxInputUnResolved TxInputScriptTxinInlineDatum{} -> True
+      TxInputResolved TxInputScriptUtxoInlineDatumWithReferenceScript{} -> True
       _ -> False ) _inputs
 
 
@@ -468,6 +470,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
       TxInputUnResolved (TxInputAddr addr) ->   filterAddrUtxo addr <&> TxInputUtxo
       TxInputUnResolved (TxInputScriptTxin s d r exunit txin) -> doLookup txin <&>  TxInputScriptUtxo s d r exunit
       TxInputUnResolved (TxInputScriptTxinInlineDatum s  r exunit txin) -> doLookup txin <&>  TxInputScriptUtxoInlineDatum s r exunit
+
 
       where
         filterAddrUtxo addr =pure $ UTxO $ Map.filter (ofAddress addr) availableUtxo

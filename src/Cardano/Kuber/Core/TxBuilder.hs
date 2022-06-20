@@ -146,7 +146,7 @@ instance Semigroup TxBuilder where
         Just v2 -> Just $ max v1 v2
         _ -> Just v1
       _ -> txValidityEnd txb2,
-    txMintData = txMintData txb2 <> txMintData txb2,
+    txMintData = txMintData txb1 <> txMintData txb2,
     txSignatures = txSignatures txb1 ++ txSignatures txb2,
     txFee  = case txFee txb1 of
       Just f -> case txFee txb2 of

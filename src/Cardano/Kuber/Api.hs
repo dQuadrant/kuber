@@ -19,6 +19,7 @@ module Cardano.Kuber.Api(
     ,   txConsumeUtxos
     ,   txRedeemUtxo
     ,   txRedeemUtxoWithInlineDatum
+    ,   txRedeemUtxoWithInlineDatumWithReferenceScript
     ,   txRedeemTxin
 
     -- usable inputs in the transaction for balancing

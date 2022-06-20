@@ -26,6 +26,7 @@ createTxInScriptWitnessInlineDatum anyScript redeemer exUnits = do
 createTxInScriptWitnessInlineDatumWithReference :: TxIn -> ScriptData -> ExecutionUnits -> Either FrameworkError (ScriptWitness WitCtxTxIn BabbageEra)
 createTxInScriptWitnessInlineDatumWithReference scTxIn redeemer exUnits = pure $ PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2 (PReferenceScript scTxIn) InlineScriptDatum redeemer exUnits
 
+
 createPlutusMintingWitness :: ScriptInAnyLang ->ScriptData ->ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxMint BabbageEra)
 createPlutusMintingWitness anyScript redeemer exUnits = do
   ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anyScript
