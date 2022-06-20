@@ -22,6 +22,9 @@ module Cardano.Kuber.Api(
     ,   txRedeemUtxoWithInlineDatumWithReferenceScript
     ,   txRedeemTxin
 
+    -- tx reference input
+    ,   txReferenceTxIn
+
     -- usable inputs in the transaction for balancing
     ,   txWalletAddress
     ,   txWalletAddresses

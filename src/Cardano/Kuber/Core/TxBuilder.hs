@@ -261,8 +261,8 @@ txConsumeTxIn  v = txInput $ TxInputUnResolved $ TxInputTxin v
 
 -- use the TxIn as input in the transaction
 -- the Txout value and address  is determined by querying the node
-txUseReferenceTxIn :: TxIn -> TxBuilder
-txUseReferenceTxIn  v = txInputReference $ TxInputReference v
+txReferenceTxIn :: TxIn -> TxBuilder
+txReferenceTxIn  v = txInputReference $ TxInputReference v
 
 
 -- use txIn as input in the transaction

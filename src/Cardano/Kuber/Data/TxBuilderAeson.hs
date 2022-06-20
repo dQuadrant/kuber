@@ -62,6 +62,7 @@ instance FromJSON TxBuilder where
     TxBuilder
       <$> (v .:? "selections" .!=[])
       <*> (v .:? "inputs" .!=[])
+      <*> (v.:?"referenceInputs".!=[])
       <*> (v .:? "outputs" .!= [])
       <*> (v .:? "collaterals" .!= [])
       <*> v .:? "validityStart"
@@ -187,7 +188,8 @@ instance IsString a =>  MonadFail (Either a ) where
   fail msg = Left $ fromString msg
 
 instance ToJSON TxBuilder where
-  toJSON (TxBuilder selections inputs outputs collaterals validityStart validityEnd mintData signatures fee defaultChangeAddr metadata) =
+  toJSON (TxBuilder selections inputs _ outputs collaterals validityStart validityEnd mintData signatures fee defaultChangeAddr metadata) =
+      -- TODO: tojson for input reference
     A.object $ nonEmpyPair
 
     where
@@ -388,6 +390,8 @@ instance FromJSON TxInput where
 
   parseJSON _ = fail "TxInput must be an object or string"
 
+instance FromJSON TxInputReference where
+  parseJSON _ = fail "Not implemented" --TODO: implement to json for txinputReference
 instance FromJSON TxOutput where
   parseJSON (A.Object v) = do
     -- Parse TxOutput according to address type if simple
