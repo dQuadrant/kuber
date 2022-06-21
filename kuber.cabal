@@ -57,6 +57,7 @@ library
     , aeson
     , text-conversions
     , cardano-api
+    , cardano-ledger-core
     , cardano-ledger-babbage
     , cardano-ledger-alonzo
     , cardano-ledger-shelley

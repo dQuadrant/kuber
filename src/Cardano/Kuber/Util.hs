@@ -16,10 +16,17 @@ module Cardano.Kuber.Util
     , addrToMaybePkh
     , addrInEraToPkh
     , addressInEraToPaymentKeyHash
+    
 
     -- TypeCast/Conversion Utilities (PlutusTypes)
     , dataToScriptData
     , toPlutusAssetClass
+    , fromPlutusData
+    , fromPlutusAddress 
+    , toPlutusAddress
+    , toPlutusCredential
+    , addrInEraToPlutusAddress
+    , addressToPlutusCredential
 
     -- Value utility and utxoto Value
     , isNullValue
