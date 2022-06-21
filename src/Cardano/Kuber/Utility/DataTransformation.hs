@@ -110,6 +110,8 @@ toPlutusAssetClass AdaAssetId  =AssetClass (CurrencySymbol $ fromString "", Toke
 dataToScriptData :: (ToData a1) => a1 -> ScriptData
 dataToScriptData sData =  fromPlutusData $ toData sData
 
+toPlutusScriptHash = Alonzo.transScriptHash 
+
 toPlutusCredential :: Credential keyrole crypto -> Plutus.Credential
 toPlutusCredential  = Alonzo.transCred
 

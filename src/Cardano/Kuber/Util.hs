@@ -27,6 +27,7 @@ module Cardano.Kuber.Util
     , toPlutusCredential
     , addrInEraToPlutusAddress
     , addressToPlutusCredential
+    , toPlutusScriptHash
 
     -- Value utility and utxoto Value
     , isNullValue
