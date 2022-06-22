@@ -7,24 +7,21 @@ import qualified Data.ByteString.Short as SBS
 import Codec.Serialise (serialise)
 import qualified Plutus.V1.Ledger.Api as Plutus
 
-createTxInScriptWitness :: ScriptInAnyLang -> ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn BabbageEra)
-createTxInScriptWitness anyScript datum redeemer exUnits = do
+createTxInScriptWitness :: ScriptInAnyLang -> Maybe ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn BabbageEra)
+createTxInScriptWitness anyScript mDatum redeemer exUnits = do
   ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anyScript
   case script' of
     PlutusScript version pscript ->
-      pure $ PlutusScriptWitness langInEra version (PScript pscript) (ScriptDatumForTxIn  datum) redeemer exUnits
+      pure $ PlutusScriptWitness langInEra version (PScript pscript) datumForTxin redeemer exUnits
     SimpleScript version sscript ->Left $ FrameworkError  WrongScriptType "Simple Script used in Txin"
+  where
+    datumForTxin = maybe InlineScriptDatum ScriptDatumForTxIn mDatum
 
-createTxInScriptWitnessInlineDatum :: ScriptInAnyLang -> ScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn BabbageEra)
-createTxInScriptWitnessInlineDatum anyScript redeemer exUnits = do
-  ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anyScript
-  case script' of
-    PlutusScript version pscript ->
-      pure $ PlutusScriptWitness langInEra version (PScript pscript) InlineScriptDatum redeemer exUnits
-    SimpleScript version sscript ->Left $ FrameworkError  WrongScriptType "Simple Script used in Txin"
 
-createTxInScriptWitnessInlineDatumWithReference :: TxIn -> ScriptData -> ExecutionUnits -> Either FrameworkError (ScriptWitness WitCtxTxIn BabbageEra)
-createTxInScriptWitnessInlineDatumWithReference scTxIn redeemer exUnits = pure $ PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2 (PReferenceScript scTxIn) InlineScriptDatum redeemer exUnits
+createTxInReferenceScriptWitness :: TxIn -> Maybe ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError (ScriptWitness WitCtxTxIn BabbageEra)
+createTxInReferenceScriptWitness scTxIn mDatum redeemer exUnits = pure $ PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2 (PReferenceScript scTxIn Nothing) datumForTxin redeemer exUnits
+  where
+    datumForTxin = maybe InlineScriptDatum ScriptDatumForTxIn mDatum
 
 
 createPlutusMintingWitness :: ScriptInAnyLang ->ScriptData ->ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxMint BabbageEra)

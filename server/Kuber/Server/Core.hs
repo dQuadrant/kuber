@@ -27,20 +27,30 @@ import Cardano.Kuber.Data.Models
 import qualified Data.ByteString.Char8 as BS8
 import Data.Functor ((<&>))
 import Cardano.Kuber.Api (TxBuilder)
+import Cardano.Kuber.Data.Parsers (parseTxIn)
 
 
 getBalance :: ChainInfo x =>  x  -> String -> IO BalanceResponse
 getBalance ctx addrStr = do
-  addr <- case deserialiseAddress AsAddressAny $ T.pack addrStr of
-    Nothing -> case
-        deserialiseFromBech32 (AsSigningKey AsPaymentKey) $ T.pack addrStr of
-      Left bde ->       throw $ FrameworkError  ParserError  "Invalid address"
-      Right any -> pure $ toAddressAny $ skeyToAddr   any (getNetworkId ctx)
-    Just aany -> pure aany
-  eUtxos <- queryUtxos (getConnectInfo ctx) $ Set.singleton addr
-  case eUtxos of
-    Left fe -> throw fe
-    Right utxos -> pure $ BalanceResponse  utxos
+  case parseTxIn (T.pack addrStr) of 
+    Just txin -> do
+      eUtxos <- queryTxins (getConnectInfo ctx) (Set.singleton txin)
+      case eUtxos of
+        Left fe -> throw fe
+        Right utxos -> do 
+          putStrLn $ addrStr ++ " : " ++ show utxos
+          pure $ BalanceResponse  utxos
+    Nothing -> do  
+      addr <- case deserialiseAddress AsAddressAny $ T.pack addrStr of
+        Nothing -> case
+            deserialiseFromBech32 (AsSigningKey AsPaymentKey) $ T.pack addrStr of
+          Left bde ->       throw $ FrameworkError  ParserError  "Invalid address"
+          Right any -> pure $ toAddressAny $ skeyToAddr   any (getNetworkId ctx)
+        Just aany -> pure aany
+      eUtxos <- queryUtxos (getConnectInfo ctx) $ Set.singleton addr
+      case eUtxos of
+        Left fe -> throw fe
+        Right utxos -> pure $ BalanceResponse  utxos
 
 submitTxApi :: ChainInfo x =>  x -> SubmitTxModal -> IO TxResponse
 submitTxApi ctx (SubmitTxModal tx mWitness) = do
@@ -48,8 +58,10 @@ submitTxApi ctx (SubmitTxModal tx mWitness) = do
         Nothing -> tx
         Just kw -> makeSignedTransaction (kw : getTxWitnesses tx) txbody
       txbody = getTxBody tx
-  submitTx (getConnectInfo ctx) tx'
-  pure $ TxResponse tx'
+  submitTx (getConnectInfo ctx) tx' >>= \case 
+    Left e -> throw e
+    Right _ ->  pure $ TxResponse tx'
+ 
 
 txBuilder :: DetailedChainInfo  ->  TxBuilder -> IO TxResponse
 txBuilder dcinfo txBuilder = do

@@ -130,13 +130,12 @@ txBuilderToTxBodyIO' cInfo builder = do
       TxInputResolved tir -> case tir of
         TxInputUtxo (UTxO uto) -> (ins, utxo <> uto)
         TxInputScriptUtxo tvs sd sd' m_eu (UTxO uto) -> (ins,utxo<>uto)
-        TxInputScriptUtxoInlineDatum tvs  sd' m_eu (UTxO uto) -> (ins,utxo<>uto)
-        TxInputScriptUtxoInlineDatumWithReferenceScript tvs sd' m_eu (UTxO uto) -> (ins,utxo<>uto)
+        TxInputReferenceScriptUtxo ref sd sd' m_eu (UTxO uto) -> (ins,utxo<>uto)
       TxInputUnResolved tiur -> case tiur of
         TxInputTxin ti -> (Set.insert ti ins,utxo)
         TxInputAddr aie -> v
         TxInputScriptTxin tvs sd sd' m_eu ti -> (Set.insert ti ins, utxo)
-        TxInputScriptTxinInlineDatum  tvs  sd' m_eu  ti -> (Set.insert ti ins, utxo)
+        TxInputReferenceScriptTxin  ref sd sd' m_eu  ti -> (Set.insert ti ins, utxo)
 
     mergeColaterals :: (Set TxIn,Map TxIn (TxOut CtxUTxO BabbageEra) )
     mergeColaterals  =foldl (\(s,m) collateral -> case collateral of
@@ -237,18 +236,16 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
 
     hasScriptInput = any (\case
       TxInputResolved TxInputScriptUtxo {}-> True
-      TxInputResolved TxInputScriptUtxoInlineDatum{}-> True
+      TxInputResolved TxInputReferenceScriptUtxo{}-> True
       TxInputUnResolved TxInputScriptTxin{} -> True
-      TxInputUnResolved TxInputScriptTxinInlineDatum{} -> True
-      TxInputResolved TxInputScriptUtxoInlineDatumWithReferenceScript{} -> True
+      TxInputUnResolved TxInputReferenceScriptTxin{} -> True
       _ -> False ) _inputs
 
     requiresExUnitCalculation = any (\case
       TxInputResolved TxInputScriptUtxo {}-> True
-      TxInputResolved TxInputScriptUtxoInlineDatum{}-> True
+      TxInputResolved TxInputReferenceScriptUtxo{}-> True
       TxInputUnResolved TxInputScriptTxin{} -> True
-      TxInputUnResolved TxInputScriptTxinInlineDatum{} -> True
-      TxInputResolved TxInputScriptUtxoInlineDatumWithReferenceScript{} -> True
+      TxInputUnResolved TxInputReferenceScriptTxin{} -> True
       _ -> False ) _inputs
 
 
@@ -364,8 +361,9 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
     totxIn  i  parsedInput = case parsedInput of
       Left (a,b) -> (i,BuildTxWith a)
       Right (e,a,b) -> (i,BuildTxWith  ( ScriptWitness ScriptWitnessForSpending a )  )
-    mkBodyContent meta fixedInputs extraUtxos outs collateral  txMintValue' fee =
-      (TxBodyContent {
+    mkBodyContent meta fixedInputs extraUtxos outs collateral  txMintValue' fee = Debug.trace ("Body Content : " ++ show bodyContent) bodyContent
+      where
+      bodyContent=(TxBodyContent {
         txIns= getTxin fixedInputs extraUtxos ,
         txInsCollateral= if null collateral then TxInsCollateralNone  else TxInsCollateral CollateralInBabbageEra collateral,
         txOuts=outs,
@@ -469,7 +467,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
       TxInputUnResolved (TxInputTxin txin) ->  doLookup txin <&> TxInputUtxo
       TxInputUnResolved (TxInputAddr addr) ->   filterAddrUtxo addr <&> TxInputUtxo
       TxInputUnResolved (TxInputScriptTxin s d r exunit txin) -> doLookup txin <&>  TxInputScriptUtxo s d r exunit
-      TxInputUnResolved (TxInputScriptTxinInlineDatum s  r exunit txin) -> doLookup txin <&>  TxInputScriptUtxoInlineDatum s r exunit
+      TxInputUnResolved (TxInputReferenceScriptTxin ref d r exunit txin) -> doLookup txin <&>  TxInputReferenceScriptUtxo ref d r exunit
 
 
       where
@@ -478,24 +476,18 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
         doLookup tin = case Map.lookup tin availableUtxo of
           Nothing -> Left $ FrameworkError LibraryError  "Input Utxo missing in utxo map"
           Just to ->pure $ UTxO $ Map.singleton  tin  to
-    mapInputs  exlookup onMissing is=do
-          tuples<- mapM (toInput exlookup onMissing) is
-          pure $ Map.fromList $ concat tuples
     toInput ::  Map TxIn (Either ScriptExecutionError ExecutionUnits)  -> Either FrameworkError ExecutionUnits-> TxInputResolved_  -> Either FrameworkError   [(TxIn,ParsedInput)]
     toInput exUnitLookup onMissing inCtx = case inCtx of
       TxInputUtxo (UTxO txin) ->  pure $ map (\(_in,val) -> (_in,Left (  KeyWitness KeyWitnessForSpending, val) ))  $ Map.toList txin
-      TxInputScriptUtxo (TxValidatorScript s) d r mExunit (UTxO txin) ->mapM (\(_in,val) -> do
+      TxInputScriptUtxo (TxValidatorScript s) mData r mExunit (UTxO txin) ->mapM (\(_in,val) -> do
                                                                 exUnit <- getExUnit _in mExunit
-                                                                witness <-  createTxInScriptWitness s d r exUnit
+                                                                witness <-  createTxInScriptWitness s  mData r exUnit
                                                                 pure (_in,Right (mExunit, witness,val )) ) $ Map.toList txin
-      TxInputScriptUtxoInlineDatum (TxValidatorScript s)  r mExunit (UTxO txin) -> mapM (\(_in,val) -> do
+      TxInputReferenceScriptUtxo scriptRefTin mData r mExunit (UTxO txin) -> mapM (\(_in,val) -> do
                                                                 exUnit <- getExUnit _in mExunit
-                                                                witness <-  createTxInScriptWitnessInlineDatum s r exUnit
+                                                                witness <-  createTxInReferenceScriptWitness scriptRefTin mData r exUnit
                                                                 pure (_in,Right (mExunit, witness,val )) ) $ Map.toList txin
-      TxInputScriptUtxoInlineDatumWithReferenceScript txIn redeemer mExunit (UTxO utxoMap) -> mapM (\(_in,val) -> do
-                                                                exUnit <- getExUnit _in mExunit
-                                                                witness <-  createTxInScriptWitnessInlineDatumWithReference txIn redeemer exUnit
-                                                                pure (_in,Right (mExunit, witness,val )) ) $ Map.toList utxoMap
+
 
       where
 
@@ -595,7 +587,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
                             (ScriptDatumForTxIn _data) -- script data
                             redeemer -- script redeemer
                             exUnits
-    defaultExunits=ExecutionUnits {executionSteps= 6000000000, executionMemory=14000000}
+    defaultExunits=ExecutionUnits {executionMemory=10000000,executionSteps= 6000000000 }
     -- isOnlyAdaTxOut (TxOut a v d) = case v of
     --                                     -- only ada then it's ok
     --                                     TxOutAdaOnly oasie (Lovelace lo) -> lo>=2500000

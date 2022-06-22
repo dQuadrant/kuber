@@ -59,16 +59,17 @@ data TxMintingScript = TxSimpleScript ScriptInAnyLang
 newtype TxValidatorScript = TxValidatorScript ScriptInAnyLang deriving (Show)
 
 data TxInputResolved_ = TxInputUtxo (UTxO BabbageEra)
-              | TxInputScriptUtxo TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
-              | TxInputScriptUtxoInlineDatum TxValidatorScript  ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
-              | TxInputScriptUtxoInlineDatumWithReferenceScript TxIn ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
+              | TxInputScriptUtxo TxValidatorScript (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
+              | TxInputReferenceScriptUtxo TxIn (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
+
               deriving (Show)
 
 
 data TxInputUnResolved_ = TxInputTxin TxIn
               | TxInputAddr (AddressInEra BabbageEra)
-              | TxInputScriptTxin TxValidatorScript ScriptData ScriptData (Maybe ExecutionUnits) TxIn
-              | TxInputScriptTxinInlineDatum TxValidatorScript  ScriptData (Maybe ExecutionUnits) TxIn
+              | TxInputScriptTxin TxValidatorScript (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) TxIn
+              | TxInputReferenceScriptTxin TxIn (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) TxIn
+
               deriving (Show)
 
 data TxInput  = TxInputResolved TxInputResolved_ | TxInputUnResolved TxInputUnResolved_ deriving (Show)
@@ -289,20 +290,33 @@ txSign p = txSignature $ TxSignatureSkey p
 
 -- Redeem from a Script. The script address and value in the TxIn is determined automatically by querying the utxo from cardano node
 txRedeemTxin:: TxIn -> ScriptInAnyLang ->ScriptData -> ScriptData  -> TxBuilder
-txRedeemTxin txin script _data _redeemer = txInput $ TxInputUnResolved $ TxInputScriptTxin  (TxValidatorScript $ script)  _data  _redeemer  Nothing txin
+txRedeemTxin txin script _data _redeemer = txInput $ TxInputUnResolved $ TxInputScriptTxin  ( TxValidatorScript $ script)  (Just  _data)  _redeemer  Nothing txin
 
 -- Redeem from Script Address.
 -- TxOut is provided so the address and value need not be queried from the caradno-node
 txRedeemUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> ScriptInAnyLang  -> ScriptData  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemUtxo txin txout script _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (TxValidatorScript $ script)  _data  _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
+txRedeemUtxo txin txout script _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (  TxValidatorScript $ script)  (Just _data)  _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
 
 txRedeemUtxoWithInlineDatum :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> ScriptInAnyLang  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemUtxoWithInlineDatum txin txout script _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxoInlineDatum  (TxValidatorScript script)  _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
+txRedeemUtxoWithInlineDatum txin txout script _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (TxValidatorScript script)  Nothing _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
+
+txRedeemTxinWithInlineDatum :: TxIn  -> ScriptInAnyLang  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemTxinWithInlineDatum txin  script _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxInputScriptTxin  (TxValidatorScript script)  Nothing _redeemer  exUnitsM  txin 
 
 type ScriptReferenceTxIn = TxIn
 
-txRedeemUtxoWithInlineDatumWithReferenceScript :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> ScriptReferenceTxIn -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemUtxoWithInlineDatumWithReferenceScript txin txout scRefTxIn _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxoInlineDatumWithReferenceScript scRefTxIn _redeemer exUnitsM (UTxO $ Map.singleton txin  txout)
+txRedeemUtxoWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra  -> ScriptData ->  ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxoWithReferenceScript scRefTxIn txin txout _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputReferenceScriptUtxo scRefTxIn (Just _data) _redeemer exUnitsM (UTxO $ Map.singleton txin  txout)
+
+txRedeemTxinWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra  -> ScriptData ->  ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemTxinWithReferenceScript scRefTxIn txin txout _data _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxInputReferenceScriptTxin scRefTxIn (Just _data) _redeemer exUnitsM txin
+
+txRedeemUtxoWithInlineDatumWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxoWithInlineDatumWithReferenceScript scRefTxIn txin txout  _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputReferenceScriptUtxo scRefTxIn Nothing _redeemer exUnitsM (UTxO $ Map.singleton txin  txout)
+
+txRedeemTxinWithInlineDatumWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemTxinWithInlineDatumWithReferenceScript scRefTxIn txin txout  _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxInputReferenceScriptTxin scRefTxIn Nothing _redeemer exUnitsM txin
+
 
  -- wallet addresses, from which utxos can be spent for balancing the transaction
 txWalletAddresses :: [AddressInEra BabbageEra] -> TxBuilder

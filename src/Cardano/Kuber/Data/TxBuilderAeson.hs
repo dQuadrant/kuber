@@ -23,7 +23,7 @@ import Data.Functor ((<&>), ($>))
 import Codec.Serialise (serialise)
 
 import Data.Set (Set)
-import Data.Maybe (mapMaybe, catMaybes)
+import Data.Maybe (mapMaybe, catMaybes, isNothing)
 import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
 import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, TxOut, CurrencySymbol)
@@ -132,7 +132,7 @@ instance FromJSON TxMintData where
       getPolicyIdFromScriptWitness witness = case scriptWitnessScript witness of
         Nothing -> error "Unexpected in era babbage or soemthing"
         Just (ScriptInEra _ script) -> scriptPolicyId  script
-           
+
 
   parseJSON _ = fail "TxMintData must be an object"
         --   case mintValueJson of
@@ -188,7 +188,7 @@ instance IsString a =>  MonadFail (Either a ) where
   fail msg = Left $ fromString msg
 
 instance ToJSON TxBuilder where
-  toJSON (TxBuilder selections inputs _ outputs collaterals validityStart validityEnd mintData signatures fee defaultChangeAddr metadata) =
+  toJSON (TxBuilder selections inputs refInputs outputs collaterals validityStart validityEnd mintData signatures fee defaultChangeAddr metadata) =
       -- TODO: tojson for input reference
     A.object $ nonEmpyPair
 
@@ -199,6 +199,7 @@ instance ToJSON TxBuilder where
     nonEmpyPair :: [A.Pair]
     nonEmpyPair =  "selections"     >= selections
               <+>  "inputs"         >= inputs
+              <+>  "referenceInputs">= map (\(TxInputReference tin) ->renderTxIn tin) refInputs
               <+>  "collaterals"    >= collaterals
               <+>  "mint"           >= mintData
               <+>  "output"         >= outputs
@@ -236,8 +237,8 @@ instance ToJSON TxInput where
   toJSON (TxInputResolved val) = toJSON val
 instance ToJSON TxInputUnResolved_ where
   toJSON (TxInputTxin txin) = toJSON txin
-  toJSON (TxInputScriptTxinInlineDatum _script _redeemer _exUnits _txin ) = A.object $ [
-        "inlineDatum" .= True,
+  toJSON (TxInputReferenceScriptTxin  _refScript _mData _redeemer _exUnits _txin ) = A.object $ [
+        "inlineDatum" .= isNothing _mData,
         "txin" .= renderTxIn _txin
       ] ++ (case _exUnits of
     Nothing -> []
@@ -258,7 +259,7 @@ instance ToJSON TxInputResolved_  where
   toJSON  v = case v of
     TxInputUtxo (UTxO umap) ->  Aeson.String $ T.pack $  "WithTxout: " ++ show (map renderTxIn $ Map.keys umap)
     TxInputScriptUtxo tvs sd sd' m_eu utxo ->  utxoToAeson  utxo
-    TxInputScriptUtxoInlineDatum tvs d r utxo -> utxoToAeson utxo
+    TxInputReferenceScriptUtxo refTxin mData r mExunit utxo -> utxoToAeson utxo
 
 instance ToJSON TxValidatorScript where
   toJSON (TxValidatorScript script) = A.String $ T.pack $ show script
@@ -362,18 +363,23 @@ instance FromJSON TxInput where
     case mScript of
       Nothing ->  pure $ TxInputUnResolved $ TxInputTxin txIn
       Just scriptJson -> do
-        script <- parseAnyScript $ B.concat $ LBS.toChunks $ A.encode scriptJson
+        inputFunc<-case scriptJson of 
+          A.String txt -> parseTxIn txt <&> TxInputReferenceScriptTxin
+          _  ->  parseAnyScript ( B.concat $ LBS.toChunks $ A.encode scriptJson ) 
+                  <&> TxValidatorScript 
+                  <&> TxInputScriptTxin 
         mData <- v .:? "datum"
         redeemer <- v .: "redeemer" >>= scriptDataParser
         _exUnits <- v .:? "executionUnits"
         exUnits <- case _exUnits of
           Nothing -> v .:? "exUnits"
           Just eu -> pure eu
-        case  mData of
-          Nothing -> pure $ TxInputUnResolved $ TxInputScriptTxinInlineDatum (TxValidatorScript script) redeemer exUnits txIn
+        mParsedData <- case  mData of
+          Nothing -> pure Nothing
           Just datum -> do
             sd <-scriptDataParser  datum
-            pure $ TxInputUnResolved $ TxInputScriptTxin (TxValidatorScript script) sd redeemer exUnits txIn
+            pure $ Just sd
+        pure $ TxInputUnResolved $ inputFunc mParsedData  redeemer exUnits txIn
 
   parseJSON v@(A.String s) = do
     case parseHexString s of
@@ -391,7 +397,9 @@ instance FromJSON TxInput where
   parseJSON _ = fail "TxInput must be an object or string"
 
 instance FromJSON TxInputReference where
-  parseJSON _ = fail "Not implemented" --TODO: implement to json for txinputReference
+  parseJSON (A.String v)  =parseTxIn v <&> TxInputReference 
+  parseJSON _             = fail "Expected InputReference string" 
+
 instance FromJSON TxOutput where
   parseJSON (A.Object v) = do
     -- Parse TxOutput according to address type if simple
