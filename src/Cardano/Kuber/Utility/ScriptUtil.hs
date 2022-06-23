@@ -18,8 +18,8 @@ createTxInScriptWitness anyScript mDatum redeemer exUnits = do
     datumForTxin = maybe InlineScriptDatum ScriptDatumForTxIn mDatum
 
 
-createTxInReferenceScriptWitness :: TxIn -> Maybe ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError (ScriptWitness WitCtxTxIn BabbageEra)
-createTxInReferenceScriptWitness scTxIn mDatum redeemer exUnits = pure $ PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2 (PReferenceScript scTxIn Nothing) datumForTxin redeemer exUnits
+createTxInReferenceScriptWitness :: TxIn -> Maybe ScriptHash -> Maybe ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError (ScriptWitness WitCtxTxIn BabbageEra)
+createTxInReferenceScriptWitness scTxIn mScriptHash mDatum redeemer exUnits = pure $ PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2 (PReferenceScript scTxIn mScriptHash) datumForTxin redeemer exUnits
   where
     datumForTxin = maybe InlineScriptDatum ScriptDatumForTxIn mDatum
 

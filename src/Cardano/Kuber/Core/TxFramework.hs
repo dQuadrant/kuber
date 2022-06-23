@@ -97,7 +97,7 @@ txBuilderToTxBodyIO' cInfo builder = do
   -- first determine the addresses and txins that need to be queried for value and address.
   let (selectionAddrs,sel_txins,sel_utxo) = mergeSelections
       (input_txins,input_utxo) = mergeInputs
-      (txins,utxo) = ( sel_txins  <> input_txins <> collateralins, sel_utxo <> input_utxo <> collateralUtxo)
+      (txins,utxo) = ( sel_txins  <> input_txins <> collateralins <> referenceTxins, sel_utxo <> input_utxo <> collateralUtxo)
       (collateralins,collateralUtxo) = mergeColaterals
       addrs=   selectionAddrs  <> Set.fromList (mapMaybe getInputAddresses (txInputs builder))
   dcInfo <- withDetails cInfo
@@ -130,17 +130,20 @@ txBuilderToTxBodyIO' cInfo builder = do
       TxInputResolved tir -> case tir of
         TxInputUtxo (UTxO uto) -> (ins, utxo <> uto)
         TxInputScriptUtxo tvs sd sd' m_eu (UTxO uto) -> (ins,utxo<>uto)
-        TxInputReferenceScriptUtxo ref sd sd' m_eu (UTxO uto) -> (ins,utxo<>uto)
+        TxInputReferenceScriptUtxo ref sd sd' m_eu (UTxO uto) -> (Set.insert ref ins,utxo<>uto)
       TxInputUnResolved tiur -> case tiur of
         TxInputTxin ti -> (Set.insert ti ins,utxo)
         TxInputAddr aie -> v
         TxInputScriptTxin tvs sd sd' m_eu ti -> (Set.insert ti ins, utxo)
-        TxInputReferenceScriptTxin  ref sd sd' m_eu  ti -> (Set.insert ti ins, utxo)
+        TxInputReferenceScriptTxin  ref sd sd' m_eu  ti -> (Set.insert ref $ Set.insert ti ins, utxo)
 
     mergeColaterals :: (Set TxIn,Map TxIn (TxOut CtxUTxO BabbageEra) )
     mergeColaterals  =foldl (\(s,m) collateral -> case collateral of
                     TxCollateralTxin ti -> (Set.insert ti s,m)
                     TxCollateralUtxo (UTxO uto) -> (s,uto <> m) ) (mempty,mempty) (txCollaterals builder)
+
+    referenceTxins :: (Set TxIn)
+    referenceTxins = foldl  (\s ref -> case ref of { TxInputReference ti -> Set.insert ti s }  ) Set.empty $   txInputReferences builder
 
     mergeSelection :: ( Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO BabbageEra))  -> TxInputSelection  -> (Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO BabbageEra))
     mergeSelection (a,i,u) sel = case sel of
@@ -206,9 +209,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
     )
     else (
           let evaluateBodyWithExunits body fee= do
-                        let exUnits =case evaluateExUnitMap dCinfo (UTxO availableUtxo) body of
-                              Left fe -> mempty
-                              Right map -> map
+                        exUnits <- evaluateExUnitMap dCinfo ( UTxO availableUtxo) body
                         inputs' <- usedInputs  (Map.map Right exUnits ) (Right defaultExunits)  resolvedInputs
                         calculator inputs' txMintValue' fee
           in do
@@ -327,7 +328,8 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
                 pure $ bodyContent (outputs++ [TxOut changeaddr (TxOutValue MultiAssetInBabbageEra change) TxOutDatumNone ReferenceScriptNone ])
       case makeTransactionBody bc of
           Left tbe ->Left  $ FrameworkError  LibraryError  (show tbe)
-          Right tb -> pure (tb,requiredSignatories,evaluateTransactionFee pParam tb signatureCount 0)
+          Right tb -> do
+            pure (tb,requiredSignatories,evaluateTransactionFee pParam tb signatureCount 0)
 
       where
         startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee )
@@ -361,13 +363,13 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
     totxIn  i  parsedInput = case parsedInput of
       Left (a,b) -> (i,BuildTxWith a)
       Right (e,a,b) -> (i,BuildTxWith  ( ScriptWitness ScriptWitnessForSpending a )  )
-    mkBodyContent meta fixedInputs extraUtxos outs collateral  txMintValue' fee = Debug.trace ("Body Content : " ++ show bodyContent) bodyContent
+    mkBodyContent meta fixedInputs extraUtxos outs collateral  txMintValue' fee =  bodyContent --   Debug.trace ("Body Content :\n" ++ show bodyContent) bodyContent
       where
       bodyContent=(TxBodyContent {
         txIns= getTxin fixedInputs extraUtxos ,
         txInsCollateral= if null collateral then TxInsCollateralNone  else TxInsCollateral CollateralInBabbageEra collateral,
         txOuts=outs,
-        txInsReference =TxInsReference ReferenceTxInsScriptsInlineDatumsInBabbageEra (map (\(TxInputReference a) -> a) _inputRefs),
+        txInsReference =TxInsReference ReferenceTxInsScriptsInlineDatumsInBabbageEra $  Set.toList $ Set.fromList (map (\(TxInputReference a) -> a) _inputRefs) <>   referenceInputsFromScriptReference ,
         txTotalCollateral= TxTotalCollateralNone  ,
         txReturnCollateral = TxReturnCollateralNone ,
         Cardano.Api.Shelley.txFee=TxFeeExplicit TxFeesExplicitInBabbageEra  fee,
@@ -409,6 +411,10 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
                                     TxOutScriptWithData _ va _ -> va
                                 }
     zeroValue = valueFromList []
+    referenceInputsFromScriptReference = foldl (\coll input  -> case input of
+          TxInputResolved (TxInputReferenceScriptUtxo txin _ _ _ _)-> Set.insert txin coll
+          TxInputUnResolved (TxInputReferenceScriptTxin txin _ _ _ _) -> Set.insert txin coll
+          _ -> coll ) Set.empty  _inputs
     findChange :: [ParsedOutput] -> Maybe (TxOut CtxTx BabbageEra )
     findChange ous =   find (\(_,c,v) -> c ) ous <&> (\(_,_,v)-> v)
     updateOutputs  fee change outputs' = updateOutput False False (getNetworkId  dCinfo) fee change outputs'
@@ -485,8 +491,15 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
                                                                 pure (_in,Right (mExunit, witness,val )) ) $ Map.toList txin
       TxInputReferenceScriptUtxo scriptRefTin mData r mExunit (UTxO txin) -> mapM (\(_in,val) -> do
                                                                 exUnit <- getExUnit _in mExunit
-                                                                witness <-  createTxInReferenceScriptWitness scriptRefTin mData r exUnit
-                                                                pure (_in,Right (mExunit, witness,val )) ) $ Map.toList txin
+                                                                case Map.lookup scriptRefTin availableUtxo of
+                                                                  Nothing -> Left $ FrameworkError LibraryError "Missing utxo for reference script"
+                                                                  Just (TxOut _ _ _ (ReferenceScript _ (ScriptInAnyLang sl sc))) ->do
+                                                                      witness <-  createTxInReferenceScriptWitness scriptRefTin Nothing mData r exUnit
+                                                                      pure (_in,Right (mExunit, witness,val ))
+                                                                  Just _ ->Left $ FrameworkError BalancingError "Reference script utxo doesn't contain reference script"
+
+                                                                      ) $ Map.toList txin
+
 
 
       where
