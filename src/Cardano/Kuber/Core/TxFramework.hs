@@ -74,8 +74,6 @@ type  ParsedInput   = Either (Witness WitCtxTxIn BabbageEra,TxOut CtxUTxO Babbag
 type  ParsedOutput  = (BoolFee,BoolChange,TxOut CtxTx BabbageEra  )
 
 
-
-
 txBuilderToTxBodyIO ::  ChainInfo i =>  i ->  TxBuilder  -> IO (Either FrameworkError  (TxBody BabbageEra))
 txBuilderToTxBodyIO  a b  = txBuilderToTxBodyIO'  a b <&> (<&> fst)
 
@@ -180,50 +178,72 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
       witnessProvidedMap = Map.fromList $ map (\(TxMintData policyId sw _)->(policyId,sw)) mintData
       txMintValue' = TxMintValue MultiAssetInBabbageEra mintValue $ BuildTxWith witnessProvidedMap
       fixedInputSum =  usedInputSum fixedInputs <> mintValue
-      fee= Lovelace 100_000
-      availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin fixedInputs) availableUtxo
-      calculator= computeBody meta (Lovelace cpw) compulsarySignatories  fixedInputSum availableInputs (map fst collaterals) fixedOutputs
+      fee= Lovelace 3_000_000
+      availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin fixedInputs) spendableUtxos
+      calculator= computeBody meta (Lovelace cpw) compulsarySignatories txMintValue'  fixedInputSum availableInputs (map fst collaterals) fixedOutputs
       colalteralSignatories = Set.fromList ( map snd collaterals)
       compulsarySignatories = foldl (\acc x -> case x of
                           Left (_,TxOut a _ _ _) -> case addressInEraToPaymentKeyHash  a of
                                                     Nothing -> acc
                                                     Just pkh -> Set.insert pkh acc
                           Right _ -> acc ) (appendExtraSignatures extraSignatures colalteralSignatories)   $ Map.elems  fixedInputs
-  (txBody1,signatories,fee1) <-  calculator  fixedInputs txMintValue'  fee
-  if  not requiresExUnitCalculation
-    then  ( do
-      (body2,signatories2,fee2) <- calculator fixedInputs txMintValue' fee1
-
-      if fee1 /= fee2
-        then (
-          do
-            (body3,signatories3,fee3) <- calculator fixedInputs txMintValue' fee1
-            if fee3 /= fee2
-              then Left $ FrameworkError LibraryError "Transaction not balanced even in 4th iteration"
-              else pure  (respond body3 signatories3))
-
-       else
-              pure ( respond body2 signatories2)
-
-
-    )
-    else (
-          let evaluateBodyWithExunits body fee= do
-                        exUnits <- evaluateExUnitMap dCinfo ( UTxO availableUtxo) body
-                        inputs' <- usedInputs  (Map.map Right exUnits ) (Right defaultExunits)  resolvedInputs
-                        calculator inputs' txMintValue' fee
-          in do
-            (txBody2,signatories2,fee2) <- evaluateBodyWithExunits  txBody1 fee1
-            (txBody3,signatories3,fee3) <- evaluateBodyWithExunits  txBody2 fee2
-            (txBody4,signatories4,fee4) <- evaluateBodyWithExunits  txBody3 fee3
-
-            if fee4==fee3
-              then pure ( respond txBody4 signatories4)
-              else evaluateBodyWithExunits txBody4 fee4 <&> (\(txBody5,signatories5,_)-> respond txBody5 signatories5)
+  (txBody1,signatories,fee1) <-  calculator  fixedInputs   fee
+  (finalBody,finalSignatories,finalFee) <- (
+    if  not requiresExUnitCalculation
+      then  (
+        let iteratedBalancing 0 _ = Left $ FrameworkError LibraryError "Transaction not balanced even in 7 iterations"
+            iteratedBalancing n lastFee= do 
+              case calculator fixedInputs  lastFee  of 
+                Right  v@(txBody',signatories',fee') -> 
+                  if fee' ==  lastFee 
+                    then pure v
+                    else iteratedBalancing (n-1)  fee'
+                Left e -> Left e
+        in iteratedBalancing  7  fee1
       )
+      else (
+          let iteratedBalancing 0 _ _ = Left $ FrameworkError LibraryError "Transaction not balanced even in 10 iterations"
+              iteratedBalancing n lastBody lastFee= do 
+                exUnits <- evaluateExUnitMap dCinfo ( UTxO availableUtxo) lastBody
+                inputs' <- usedInputs  (Map.map Right exUnits ) (Right defaultExunits)  resolvedInputs
+                calculator inputs' lastFee
+                case calculator inputs'  lastFee  of 
+                  Right  v@(txBody',signatories',fee') -> 
+                    if fee' ==  lastFee 
+                      then pure v
+                      else iteratedBalancing (n-1) txBody'  fee'
+                  Left e -> Left e
+                      
+          in  iteratedBalancing  10 txBody1 fee1
+        )
+    )
+  respond  finalBody finalSignatories
 
   where
-    respond txBody signatories = (txBody,makeSignedTransaction (map (toWitness txBody) $ mapMaybe (`Map.lookup` availableSkeys) $ Set.toList signatories) txBody)
+    iterateFeeCalculation 0 _ _ _ = Left $ FrameworkError LibraryError "Transaction not balanced even in 7 iterations"
+    iterateFeeCalculation n f txbody lastFee= do 
+      case f txbody  of 
+        Right  v@(txBody',signatories',fee') -> 
+          if fee' ==  lastFee 
+            then pure v
+            else iterateFeeCalculation (n-1) f txBody' fee'
+        Left e -> Left e
+      
+    selectableAddrs = foldl  (\s selection -> case selection of
+            TxSelectableAddresses aies -> Set.fromList (map toShelleyAddr aies) <>s
+            TxSelectableUtxos uto -> s
+            TxSelectableTxIn tis -> s
+            TxSelectableSkey sks -> Set.fromList (map (\x -> toShelleyAddr $ skeyToAddrInEra x (getNetworkId dCinfo)) sks) <> s  ) Set.empty  selections
+    spendableUtxos = foldl (\mp (ti , tout@(TxOut addr _ _ _ ))-> if Set.member (toShelleyAddr addr) selectableAddrs then Map.insert ti tout mp else mp ) selectableUtxos  (Map.toList availableUtxo)
+    selectableUtxos = foldl  (\s selection -> case selection of
+          TxSelectableAddresses aies -> s
+          TxSelectableUtxos (UTxO uto) -> s <> uto
+          TxSelectableTxIn tin -> foldl (\s tin -> case Map.lookup tin availableUtxo of
+            Nothing -> s
+            Just any ->Map.insert tin any s  ) Map.empty tin 
+          TxSelectableSkey sks -> s  ) Map.empty  selections
+  
+    respond txBody signatories = pure (txBody,makeSignedTransaction (map (toWitness txBody) $ mapMaybe (`Map.lookup` availableSkeys) $ Set.toList signatories) txBody)
     toWitness body skey = makeShelleyKeyWitness body (WitnessPaymentKey skey)
 
     availableSkeys =  Map.fromList $  map (\x -> (skeyToPaymentKeyHash x, x)) $  concat (mapMaybe (\case
@@ -266,7 +286,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
 
     collaterals ::   Maybe [(TxIn,Hash PaymentKey )]
     collaterals   = case foldl getCollaterals [] _collaterals of
-                          [] -> case mapMaybe canBeCollateral $ Map.toList availableUtxo of
+                          [] -> case mapMaybe canBeCollateral $ Map.toList spendableUtxos of
                             [] -> Nothing
                             v -> let  (tin,pkh,_) =minimumBy sortingFunc v in Just [(tin,pkh)]
                           v-> Just v
@@ -282,7 +302,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
                                                                 Just pkh -> Just ( ti,pkh,case snd $ head _list of { Quantity n -> n } )
                                                         else Nothing
                               _ -> Nothing
-        filterCollateral = mapMaybe  canBeCollateral $ Map.toList availableUtxo
+        filterCollateral = mapMaybe  canBeCollateral $ Map.toList spendableUtxos
 
         -- sort based on following conditions => Utxos having >4ada come eariler and the lesser ones come later.
         sortingFunc :: (TxIn,a,Integer) -> (TxIn,a,Integer)-> Ordering
@@ -290,10 +310,10 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
           | v1 < 4 = if v2 < 4 then  v2 `compare` v1 else GT
           | v2 < 4 = LT
           | otherwise = v1 `compare` v2
-
+    
 
     getCollaterals  accum  x = case x  of
-        TxCollateralTxin txin -> accum++ (case Map.lookup txin availableUtxo of
+        TxCollateralTxin txin -> accum++ (case Map.lookup txin spendableUtxos of
           Nothing -> error "Collateral input missing in utxo map"
           Just (TxOut a v dh _) -> case addressInEraToPaymentKeyHash  a of
                                     Just pkh ->  (txin,pkh) : accum
@@ -306,7 +326,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
     isJust (Just x)  = True
     isJust _ = False
 
-    computeBody meta cpw signatories fixedInputSum availableInputs collaterals fixedOutputs fixedInputs txMintValue' fee = do
+    computeBody meta cpw signatories  txMintValue' fixedInputSum availableInputs collaterals fixedOutputs fixedInputs fee = do
       changeTxOut <-case findChange fixedOutputs of
         Nothing -> do
           changeaddr <- monadFailChangeAddr
