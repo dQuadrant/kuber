@@ -36,7 +36,6 @@ module Cardano.Kuber.Api(
     , txValidPosixTimeRangeMs
 
     -- Core Tx builder object and it's transformation functions
-    ,   TxBuilder
     ,   txBuilderToTxBody
     ,   txBuilderToTxBodyIO
     ,   txBuilderToTx
@@ -66,6 +65,20 @@ module Cardano.Kuber.Api(
     -- tx submission
     , executeSubmitTx
     , signAndSubmitTxBody
+
+    -- TxBuilderConstructors
+    , TxBuilder(..)
+    , TxInputUnResolved_(..)
+    , TxInputResolved_(..)
+    , TxInput(..)
+    , TxOutput(..)
+    , TxOutputContent(..)
+    , TxMintData (..)
+    , TxInputSelection(..)
+    , TxSignature(..)
+    , TxCollateral(..)
+    ,TxValidatorScript(..)
+    , TxMintingScript(..)
 )
 
 where
