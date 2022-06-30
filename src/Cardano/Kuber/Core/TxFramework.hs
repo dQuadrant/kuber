@@ -183,7 +183,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
                           Left (_,TxOut a _ _) -> case addressInEraToPaymentKeyHash  a of
                                                     Nothing -> acc
                                                     Just pkh -> Set.insert pkh acc
-                          Right _ -> acc ) (appendExtraSignatures extraSignatures colalteralSignatories)   $ Map.elems  fixedInputs
+                          Right _ -> acc ) (appendMintingScriptSignatures mintData $  appendExtraSignatures extraSignatures colalteralSignatories)   $ Map.elems  fixedInputs
   (txBody1,signatories,fee1) <-  calculator  fixedInputs txMintValue'  fee
   if  not requiresExUnitCalculation
     then  ( do
@@ -254,6 +254,20 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
                                 Nothing -> set
         TxSignatureSkey sk -> Set.insert (skeyToPaymentKeyHash   sk) _set
       ) _set signatures
+
+    appendMintingScriptSignatures :: [TxMintData] -> Set (Hash PaymentKey) -> Set (Hash PaymentKey)
+    appendMintingScriptSignatures mints _set = foldl (\set (TxMintData pi sw va) -> case sw of
+      SimpleScriptWitness _ _ ss -> getScriptSignatures ss <> _set
+      _ -> _set  ) _set mints
+      where
+        getScriptSignatures s = case  s of
+          RequireSignature pkh -> Set.singleton pkh
+          RequireTimeBefore tls sn -> mempty
+          RequireTimeAfter tls sn -> mempty
+          RequireAllOf sss -> foldMap getScriptSignatures sss
+          RequireAnyOf sss -> foldMap getScriptSignatures sss
+          RequireMOf n sss -> foldMap getScriptSignatures sss
+
 
     collaterals ::   Maybe [(TxIn,Hash PaymentKey )]
     collaterals   = case foldl getCollaterals [] _collaterals of
