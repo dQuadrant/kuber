@@ -257,8 +257,8 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
 
     appendMintingScriptSignatures :: [TxMintData] -> Set (Hash PaymentKey) -> Set (Hash PaymentKey)
     appendMintingScriptSignatures mints _set = foldl (\set (TxMintData pi sw va) -> case sw of
-      SimpleScriptWitness _ _ ss -> getScriptSignatures ss <> _set
-      _ -> _set  ) _set mints
+      SimpleScriptWitness _ _ ss -> getScriptSignatures ss <> set
+      _ -> set  ) _set mints
       where
         getScriptSignatures s = case  s of
           RequireSignature pkh -> Set.singleton pkh
