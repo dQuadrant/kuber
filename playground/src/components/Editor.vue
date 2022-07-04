@@ -1,15 +1,22 @@
 <script setup lang="ts">
 import { VAceEditor } from "vue3-ace-editor";
 import ace from "ace-builds";
-import workerJsonUrl from "ace-builds/src-noconflict/mode-json";
-// @ts-ignore (for some reason ide is giving error on @/ imports)
+
+import workerJsonUrl from 'ace-builds/src-noconflict/worker-json?url';
+
 import { callKuberAndSubmit, listProviders } from "@/scripts/wallet";
 import type { CIP30Instace, CIP30Provider } from "@/types";
-import { Address } from "@emurgo/cardano-serialization-lib-asmjs";
-import { Buffer } from "buffer";
 
-// @ts-ignore
-ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
+import 'ace-builds/src-noconflict/mode-json';
+import 'ace-builds/src-noconflict/theme-chrome';
+import 'ace-builds/src-noconflict/ext-language_tools';
+
+import suggestion from '../assets/suggestions.json';
+
+ace.require('ace/ext/language_tools');
+
+
+ace.config.setModuleUrl('ace/mode/json_worker', workerJsonUrl);
 </script>
 
 <template>
@@ -26,7 +33,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             class="ml-3 bg-transparent hover:bg-blue-500 text-blue-700 font-semibold hover:text-white py-0.5 px-1.5 border border-blue-500 hover:border-transparent rounded"
             @click="submitTx(provider)"
           >
-            <!-- @ts-ignores -->
+
             <img style="display: inline; height: 1em; width: 1em" :src="provider.icon" />
             <span class="ml-1"> {{ provider.name }}</span>
           </button>
@@ -140,6 +147,30 @@ export default {
         });
     },
     editorInit(v: any) {
+
+      // options for enabling autocompletion
+      const options = {
+        useWorker: true,
+        autoScrollEditorIntoView: true,
+        enableBasicAutocompletion: true,
+        enableSnippets: true,
+        enableLiveAutocompletion: true,
+      };
+
+      v.setOptions(options)
+      
+
+      const suggestionData = {
+        getCompletions: function(editor, session, pos, prefix, callback){
+          if(prefix.length === 0) {callback(null,[]);return }
+          callback(null, suggestion.map( suggestion =>  suggestion))
+        }
+      }
+
+    // add the suggestion data to editor instance
+      v.completers = [suggestionData]
+
+
       const session = v.getSession();
       session.setTabSize(2);
       session.setOptions({
