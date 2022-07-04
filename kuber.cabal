@@ -77,13 +77,14 @@ library kuber-server
     Kuber.Server.ServantError
     Kuber.Server.Core
     Kuber.Server.MediaType
-
+    Kuber.Server.Spec
+  other-modules:
 
     -- Plutus.Contract.Wallet.Utils
   hs-source-dirs: server 
 
   build-depends:
-    kuber
+      kuber
     , servant
     , servant-server
     , text-conversions
@@ -104,19 +105,17 @@ library kuber-server
     , string-conversions
     , scientific
     , base-compat-batteries
+    , wai-cors
+    , servant-exceptions-server
+    , servant-exceptions
+    , warp
 
 
 
 executable kuber
   default-language: Haskell2010
   main-is:  Main.hs
-  hs-source-dirs: server
-  other-modules:
-    Kuber.Server.Core
-    Kuber.Server.Spec
-    Kuber.Server.MediaType
-    Kuber.Server.ServantError
-
+  hs-source-dirs: app
   build-depends:
       base >= 4.9 && <5
     , containers
@@ -151,6 +150,7 @@ executable kuber
     , wai-cors
     , cardano-binary
     , cardano-ledger-core
+    , kuber-server
 
 
 test-suite test
