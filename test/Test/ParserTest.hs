@@ -53,12 +53,12 @@ parseUtxoWithAsset =  testCase  "should parse utxo with asset" $
 
 parseAssetIdTest :: TestTree
 parseAssetIdTest = testCase " should parse with dot" $ (parseAssetId (T.pack " 4b36a781645ef8eea2a75687edc16b2d0aa4be3016eeed04f59d3d36.Flowery. Video\n ")
-   @?= Just (AssetId  ( forceJust $  deserialiseFromRawBytesHex AsPolicyId  $ BS8.pack "4b36a781645ef8eea2a75687edc16b2d0aa4be3016eeed04f59d3d36") (AssetName $ BS8.pack "Flowery. Video" ))
+   @?= Just (AssetId  ( forceRight $  deserialiseFromRawBytesHex AsPolicyId  $ BS8.pack "4b36a781645ef8eea2a75687edc16b2d0aa4be3016eeed04f59d3d36") (AssetName $ BS8.pack "Flowery. Video" ))
   )
 
 parseAssetIdHex :: TestTree
 parseAssetIdHex = testCase " should parse assetId Hex" $ (parseAssetId (T.pack " 4b36a781645ef8eea2a75687edc16b2d0aa4be3016eeed04f59d3d3604f59d3d36\n ")
-   @?= Just (AssetId  ( forceJust $  deserialiseFromRawBytesHex AsPolicyId  $ BS8.pack "4b36a781645ef8eea2a75687edc16b2d0aa4be3016eeed04f59d3d36") ( forceJust $  deserialiseFromRawBytesHex AsAssetName  $ BS8.pack "04f59d3d36" ))
+   @?= Just (AssetId  ( forceRight $  deserialiseFromRawBytesHex AsPolicyId  $ BS8.pack "4b36a781645ef8eea2a75687edc16b2d0aa4be3016eeed04f59d3d36") ( forceRight $  deserialiseFromRawBytesHex AsAssetName  $ BS8.pack "04f59d3d36" ))
   )
 
 
@@ -76,4 +76,5 @@ unHex :: (Functor f, FromText (f (Base16 b)), ToText a) => a -> f b
 unHex v = convertText (toText v) <&> unBase16
 
 forceJust (Just v) =v
+forceRight(Right r) = r
 

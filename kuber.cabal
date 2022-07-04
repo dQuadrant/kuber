@@ -70,6 +70,43 @@ library
     , vector
     , unordered-containers
 
+
+library kuber-server 
+   default-language: Haskell2010
+  exposed-modules:
+    Kuber.Server.ServantError
+    Kuber.Server.Core
+    Kuber.Server.MediaType
+
+
+    -- Plutus.Contract.Wallet.Utils
+  hs-source-dirs: server 
+
+  build-depends:
+    kuber
+    , servant
+    , servant-server
+    , text-conversions
+    , cardano-api
+    , cardano-ledger-core
+    , cardano-ledger-shelley
+    , cardano-ledger-alonzo
+    , text
+    , bytestring
+    , containers
+    , filepath
+    , base
+    , aeson
+    , cardano-binary
+    , http-media
+    , wai
+    , http-types
+    , string-conversions
+    , scientific
+    , base-compat-batteries
+
+
+
 executable kuber
   default-language: Haskell2010
   main-is:  Main.hs
