@@ -313,7 +313,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
     
 
     getCollaterals  accum  x = case x  of
-        TxCollateralTxin txin -> accum++ (case Map.lookup txin spendableUtxos of
+        TxCollateralTxin txin -> accum++ (case Map.lookup txin availableUtxo of
           Nothing -> error "Collateral input missing in utxo map"
           Just (TxOut a v dh _) -> case addressInEraToPaymentKeyHash  a of
                                     Just pkh ->  (txin,pkh) : accum
