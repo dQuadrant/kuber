@@ -339,3 +339,6 @@ txWalletSignKey s= txWalletSignKeys [s]
 
 txWalletSignKeys :: [SigningKey PaymentKey] -> TxBuilder
 txWalletSignKeys s= txSelection $ TxSelectableSkey s
+
+txAddTxInCollateral :: TxIn -> TxBuilder
+txAddTxInCollateral colTxIn = txCollateral $ TxCollateralTxin colTxIn

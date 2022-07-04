@@ -75,6 +75,7 @@ module Cardano.Kuber.Api(
     -- tx submission
     , submitTx
     , signTxBody
+    , txAddTxInCollateral
 
 
 )
