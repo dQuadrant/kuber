@@ -10,7 +10,7 @@
 module Kuber.Server.Spec where
 
 import Cardano.Api
-import Cardano.Api.Shelley (AlonzoEra)
+import Cardano.Api.Shelley (BabbageEra)
 import Cardano.Kuber.Data.Models
 
 import Control.Exception
@@ -37,7 +37,7 @@ import GHC.Generics (Generic)
 import GHC.IO.Exception (IOErrorType (UserError))
 import Network.HTTP.Types
 import Network.Wai.Handler.Warp (run)
-import Network.Wai.Middleware.Servant.Errors (HasErrorBody (..), errorMw)
+import Kuber.Server.ServantError (HasErrorBody (..), errorMw)
 import Servant
 import Servant.Exception (Exception (..), Throws, ToServantErr (..), mapException)
 import Servant.Exception.Server
@@ -57,26 +57,25 @@ import Kuber.Server.MediaType
 import Cardano.Kuber.Util (evaluateExecutionUnits)
 import Kuber.Server.Core
 import qualified Data.Aeson as Aeson
-import Cardano.Kuber.Data.Parsers (parseAnyScript)
-import Data.Functor ((<&>))
+import Cardano.Kuber.Data.Parsers
 import Data.ByteString.Lazy (toStrict)
+import Data.Functor ((<&>))
 
 type TransactionAPI =
   Throws FrameworkError
     :> (
             "api" :> "v1" :> "tx" :> QueryParam "submit" Bool :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "submit" :> ReqBody '[JSON ,CBORBinary,CBORText  ] (SubmitTxModal ) :> Post '[JSON] (TxResponse )
-      :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx AlonzoEra) :> Post '[JSON] ([Either String ExecutionUnits ])
-      :<|>  "api" :> "v1" :> "addresses"           :> Capture "address" String  :> "balance" :> Get '[JSON] BalanceResponse
+      :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx BabbageEra) :> Post '[JSON] ([Either String ExecutionUnits ])
       :<|> "api" :> "v1" :> "scriptPolicy"        :> ReqBody '[JSON] (Aeson.Value ) :> Post '[PlainText ] (Text)
+
        )
 
 server :: DetailedChainInfo -> Server TransactionAPI
 server dcInfo =
    errorGuard2 (txBuilder dcInfo)
-  :<|> errorGuard (submitTx dcInfo)
+  :<|> errorGuard (submitTx' dcInfo)
   :<|> errorGuard (evaluateExecutionUnits dcInfo )
-  :<|> errorGuard(getBalance dcInfo )
   :<|> errorGuard (\sc -> parseAnyScript (toStrict $  Aeson.encode sc)<&> (\(ScriptInAnyLang sl sc') ->serialiseToRawBytesHexText ( scriptPolicyId sc')) )
   where
 

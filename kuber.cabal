@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               kuber
-version:            1.0.0.0
+version:            2.0.0.0
 
 -- A short (one-line) description of the package.
 -- synopsis:
@@ -57,6 +57,8 @@ library
     , aeson
     , text-conversions
     , cardano-api
+    , cardano-ledger-core
+    , cardano-ledger-babbage
     , cardano-ledger-alonzo
     , cardano-ledger-shelley
     , cardano-ledger-shelley-ma
@@ -76,10 +78,15 @@ executable kuber
     Kuber.Server.Core
     Kuber.Server.Spec
     Kuber.Server.MediaType
+    Kuber.Server.ServantError
 
   build-depends:
       base >= 4.9 && <5
     , containers
+    , unordered-containers
+    , scientific
+    , string-conversions
+    , base-compat-batteries
     , bytestring
     , serialise
     , text
@@ -97,7 +104,6 @@ executable kuber
     , kuber
     , servant
     , servant-server
-    , servant-errors
     , servant-exceptions
     , wai
     , servant-exceptions-server

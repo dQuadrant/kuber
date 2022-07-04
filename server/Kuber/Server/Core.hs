@@ -26,31 +26,39 @@ import Data.Text (Text)
 import Cardano.Kuber.Data.Models
 import qualified Data.ByteString.Char8 as BS8
 import Data.Functor ((<&>))
-import Servant (Handler)
-import Control.Monad.IO.Class (liftIO)
+import Cardano.Kuber.Api (TxBuilder)
+import Cardano.Kuber.Data.Parsers (parseTxIn)
 
 
-
-getBalance :: ChainInfo x => x -> String -> IO BalanceResponse
+getBalance :: ChainInfo x =>  x  -> String -> IO BalanceResponse
 getBalance ctx addrStr = do
-  addr <- case deserialiseAddress AsAddressAny $ T.pack addrStr of
-    Nothing -> case
-        deserialiseFromBech32 (AsSigningKey AsPaymentKey) $ T.pack addrStr of
-      Left bde ->       throw $ FrameworkError  ParserError  "Invalid address"
-      Right any -> pure $ toAddressAny $ skeyToAddr   any (getNetworkId ctx)
-    Just aany -> pure aany
-  eUtxos <- queryUtxos (getConnectInfo ctx) $ Set.singleton addr
-  case eUtxos of
-    Left fe -> throw fe
-    Right utxos -> pure $ BalanceResponse  utxos
+  case parseTxIn (T.pack addrStr) of
+    Just txin -> do
+      eUtxos <- queryTxins (getConnectInfo ctx) (Set.singleton txin)
+      case eUtxos of
+        Left fe -> throw fe
+        Right utxos -> do
+          putStrLn $ addrStr ++ " : " ++ show utxos
+          pure $ BalanceResponse  utxos
+    Nothing -> do
+      addr <- case deserialiseAddress AsAddressAny $ T.pack addrStr of
+        Nothing -> case
+            deserialiseFromBech32 (AsSigningKey AsPaymentKey) $ T.pack addrStr of
+          Left bde ->       throw $ FrameworkError  ParserError  "Invalid address"
+          Right any -> pure $ toAddressAny $ skeyToAddr   any (getNetworkId ctx)
+        Just aany -> pure aany
+      eUtxos <- queryUtxos (getConnectInfo ctx) $ Set.singleton addr
+      case eUtxos of
+        Left fe -> throw fe
+        Right utxos -> pure $ BalanceResponse  utxos
 
-submitTx :: ChainInfo x =>  x -> SubmitTxModal -> IO TxResponse
-submitTx ctx (SubmitTxModal tx mWitness) = do
+submitTx' :: ChainInfo x =>  x -> SubmitTxModal -> IO TxResponse
+submitTx' ctx (SubmitTxModal tx mWitness) = do
   let tx' = case mWitness of
         Nothing -> tx
         Just kw -> makeSignedTransaction (kw : getTxWitnesses tx) txbody
       txbody = getTxBody tx
-  status <- executeSubmitTx (getConnectInfo ctx) tx'
+  status <- submitTx (getConnectInfo ctx) tx'
   case status of
     Left fe -> throw fe
     Right x1 ->   pure $ TxResponse tx'
@@ -64,7 +72,7 @@ txBuilder dcinfo submitM txBuilder = do
     Right tx -> case submitM of
       Nothing ->   pure $ TxResponse tx
       Just submit -> do
-        txE <- executeSubmitTx (getConnectInfo dcinfo) tx
+        txE <- submitTx (getConnectInfo dcinfo) tx
         case txE of
           Left fe -> throw fe
           Right _ ->   pure $ TxResponse tx
@@ -74,6 +82,6 @@ evaluateExecutionUnits' :: DetailedChainInfo ->  String -> IO [Either String Exe
 evaluateExecutionUnits' dcinfo  txStr = do
       case convertText txStr of
         Nothing -> fail "Tx string is not hex encoded"
-        Just (Base16 bs) -> case deserialiseFromCBOR (AsTx AsAlonzoEra ) bs of
+        Just (Base16 bs) -> case deserialiseFromCBOR (AsTx AsBabbageEra ) bs of
           Left  e -> fail $ "Tx string: Invalid CBOR format : "++ show e
           Right tx -> evaluateExecutionUnits dcinfo  tx

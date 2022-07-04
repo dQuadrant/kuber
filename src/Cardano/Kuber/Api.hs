@@ -5,17 +5,25 @@ module Cardano.Kuber.Api(
     ,   txPayToPkh
     ,   txPayToScript
     ,   txPayToScriptWithData
+    ,   txPayToScriptWithReference
+    ,   txPayToScriptWithDataAndReference
+    ,   txPayToWithReference
 
 -- minting related
-    ,   txMintSimpleScript
     ,   txMint
+    ,   txMintSimpleScript
 
     -- inputs to the transaction
     ,   txConsumeTxIn
     ,   txConsumeUtxo
     ,   txConsumeUtxos
     ,   txRedeemUtxo
+    ,   txRedeemUtxoWithInlineDatum
+    ,   txRedeemUtxoWithInlineDatumWithReferenceScript
     ,   txRedeemTxin
+
+    -- tx reference input
+    ,   txReferenceTxIn
 
     -- usable inputs in the transaction for balancing
     ,   txWalletAddress
@@ -36,6 +44,8 @@ module Cardano.Kuber.Api(
     , txValidPosixTimeRangeMs
 
     -- Core Tx builder object and it's transformation functions
+    ,   TxBuilder
+    ,   TxMintData(..)
     ,   txBuilderToTxBody
     ,   txBuilderToTxBodyIO
     ,   txBuilderToTx
@@ -63,8 +73,8 @@ module Cardano.Kuber.Api(
     ,   FrameworkError(..)
 
     -- tx submission
-    , executeSubmitTx
-    , signAndSubmitTxBody
+    , submitTx
+    , signTxBody
 
     -- TxBuilderConstructors
     , TxBuilder(..)
@@ -84,7 +94,7 @@ module Cardano.Kuber.Api(
 where
 
 -- input consmptions
-
+import Cardano.Kuber.Utility.WalletUtil
 import Cardano.Kuber.Core.ChainInfo
 import Cardano.Kuber.Data.Parsers
 import Cardano.Kuber.Core.TxBuilder

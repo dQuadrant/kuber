@@ -34,7 +34,7 @@ tests =
 
 
 tAddressToPkh  :: String ->  Maybe String
-tAddressToPkh address = deserialiseAddress (AsAddressInEra AsAlonzoEra) (T.pack address) >>= addrInEraToPkh <&> (\(PubKeyHash pkh ) -> toHexString $ fromBuiltin pkh )
+tAddressToPkh address = deserialiseAddress (AsAddressInEra AsBabbageEra) (T.pack address) >>= addrInEraToPkh <&> (\(PubKeyHash pkh ) -> toHexString $ fromBuiltin pkh )
 
 
 baseAddressToPkh :: TestTree

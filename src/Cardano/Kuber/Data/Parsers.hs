@@ -1,44 +1,45 @@
+{-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Kuber.Data.Parsers where
 
-import Cardano.Api
-import Cardano.Kuber.Error
-import Control.Exception (SomeException, catch, throw)
-import qualified Data.Aeson as Aeson
-import Data.ByteString.Lazy (fromStrict)
-import Data.Char (isDigit, isSeparator)
-import Data.Functor ((<&>))
-import Data.Text (Text)
-import qualified Data.Text as T
-import Data.Text.Conversions (Base16 (unBase16, Base16), convertText, FromText (fromText), ToText (toText))
-import Data.Text.Encoding (encodeUtf8)
-import qualified Data.Text.Encoding as TSE
-import GHC.IO.Exception (IOErrorType (UserError), IOException (IOError))
-import Text.Read (readMaybe)
-import Data.ByteString (ByteString)
-import Debug.Trace (traceM)
-import qualified Data.Aeson as A
-import qualified Data.Aeson.Types as Aeson
+import           Cardano.Api
+import Cardano.Api.Shelley ( fromShelleyAddr, fromShelleyTxOut )
+import           Cardano.Binary               (FromCBOR (fromCBOR), decodeFull)
+import           Cardano.Kuber.Utility.Text
+import qualified Cardano.Ledger.Babbage       as Babbage
+import           Cardano.Ledger.DescribeEras  (StandardCrypto, Witness (Alonzo))
+import qualified Cardano.Ledger.Mary.Value    as Mary
+import qualified Cardano.Ledger.Shelley.API   as Shelley
+import           Control.Exception            (SomeException, catch, throw)
+import           Data.Aeson                   ((.:), (.:?))
+import qualified Data.Aeson                   as A
+import qualified Data.Aeson.KeyMap            as A
+import qualified Data.Aeson.Key as A
+
+import           Data.Aeson.Types             (parseMaybe)
+import qualified Data.Aeson.Types             as Aeson
+import           Data.ByteString              (ByteString)
+import           Data.ByteString.Lazy         (fromStrict)
+import qualified Data.ByteString.Lazy         as LBS
+import           Data.Char                    (isDigit, isSeparator)
+import           Data.Functor                 ((<&>))
 import qualified Data.HashMap.Internal.Strict as H
-import Data.Aeson ((.:), (.:?))
-import Cardano.Binary (FromCBOR(fromCBOR), decodeFull)
-import Cardano.Ledger.DescribeEras (StandardCrypto, Witness (Alonzo))
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.Text.Encoding as T
-import Cardano.Kuber.Utility.Text
-import qualified Cardano.Ledger.Shelley.API as Shelley
-import qualified Cardano.Ledger.Mary.Value as Mary
-import qualified Data.Map as Map
-import Cardano.Api.Shelley (fromMaryValue, fromShelleyAddr, fromShelleyTxOut, fromAlonzoData, fromPlutusData)
-import qualified Cardano.Ledger.Alonzo as Alonzo
-import Data.Aeson.Types (parseMaybe)
-import qualified Data.ByteString as BS
-import qualified Debug.Trace as Debug
+import qualified Data.Map                     as Map
+import           Data.Text                    (Text)
+import qualified Data.Text                    as T
+import           Data.Text.Conversions        (Base16 (Base16, unBase16),
+                                               FromText (fromText),
+                                               ToText (toText), convertText)
+import           Data.Text.Encoding           (encodeUtf8)
+import qualified Data.Text.Encoding           as T
+import qualified Data.Text.Encoding           as TSE
+import           Debug.Trace                  (traceM)
+import           GHC.IO.Exception             (IOErrorType (UserError),
+                                               IOException (IOError))
+import           Text.Read                    (readMaybe)
 
 
 parseSignKey :: MonadFail m => Text -> m (SigningKey PaymentKey)
@@ -49,12 +50,12 @@ parseSignKey txt
       Left ide -> case convertText txt <&> unBase16 of
         Nothing -> fail "SignKey is neither Bench32 nor Hex encoded"
         Just bs -> case deserialiseFromCBOR (AsSigningKey AsPaymentKey) bs of
-          Left de -> fail "SignKey is neither Bench32 nor CBOR encoded"
+          Left de   -> fail "SignKey is neither Bench32 nor CBOR encoded"
           Right sk' -> pure sk'
       Right sk -> pure sk
-  | otherwise = case Aeson.eitherDecode (fromStrict $ encodeUtf8 txt) of
+  | otherwise = case A.eitherDecode (fromStrict $ encodeUtf8 txt) of
     Right (TextEnvelope _ _ cborHex) -> case deserialiseFromCBOR (AsSigningKey AsPaymentKey) cborHex of
-      Left de -> fail "TextEnvelope doesn't contain cborHex for signKey"
+      Left de   -> fail "TextEnvelope doesn't contain cborHex for signKey"
       Right sk' -> pure sk'
     Left err -> fail err
 
@@ -62,27 +63,27 @@ parseSignKey txt
  -- parse plain text for assetName
 parseAssetId :: MonadFail m => T.Text -> m AssetId
 parseAssetId assetText
-  | T.null policy = if T.null tokenNameWithDot then  pure AdaAssetId else if T.null tokenName then pure AdaAssetId  else ( fail "TokenName provided for AdaAssetId")
+  | T.null policy = if T.null tokenNameWithDot || T.null tokenName then pure AdaAssetId else fail "TokenName provided for AdaAssetId"
   | T.null tokenNameWithDot = parseCombined policy
   | T.null tokenName = parseCombined policy
   | otherwise = parsePair policy tokenName
   where
       (policy, tokenNameWithDot) = T.break (== '.') $ T.strip assetText
       tokenName = T.tail tokenNameWithDot
-      parseCombined combined 
-        | T.toLower combined == "lovelace" = pure AdaAssetId 
-        | T.toLower combined == "l" = pure AdaAssetId 
+      parseCombined combined
+        | T.toLower combined == "lovelace" = pure AdaAssetId
+        | T.toLower combined == "l" = pure AdaAssetId
         | T.length policy < 56 = fail "ParserError : Too short input for assetId"
         | otherwise =  parsePair (T.take 56 policy ) (T.drop 56 policy)
-      parsePair policyText nameText=do 
-              let policyId = Debug.trace (show policyText) $ deserialiseFromRawBytesHex AsPolicyId $ encodeUtf8 policyText
-              let assetName =Debug.trace  (show nameText)  $  case deserialiseFromRawBytesHex AsAssetName $ encodeUtf8 nameText
+      parsePair policyText nameText=do
+              let policyId = deserialiseFromRawBytesHex AsPolicyId $ encodeUtf8 policyText
+              let assetName = case deserialiseFromRawBytesHex AsAssetName $ encodeUtf8 nameText
                               of
-                                Nothing -> deserialiseFromRawBytes AsAssetName $ encodeUtf8 nameText
-                                Just an -> pure an
-              case policyId of 
-                Nothing -> fail "ParserError : Invalid policy name"
-                Just pi -> case assetName of 
+                                Left _  -> deserialiseFromRawBytes AsAssetName $ encodeUtf8 nameText
+                                Right an -> pure an
+              case policyId of
+                Left _  -> fail "ParserError : Invalid policy name"
+                Right  pi -> case assetName of
                   Nothing -> fail "ParserError : Invalid token name"
                   Just an -> pure $ AssetId pi an
 
@@ -116,7 +117,7 @@ parseAssetNQuantity textStr = do
             let (newAmountTxt, postfix) = T.span isDigit amountTxt
             case readMaybe (T.unpack newAmountTxt) of
               Just iAmount -> convertAdaOrLovelace postfix iAmount parseFail
-              _ -> parseFail
+              _            -> parseFail
         else parseFail
   where
     convertAdaOrLovelace str iAmount _otherwise = case T.unpack (T.toLower str) of
@@ -139,7 +140,7 @@ parseScriptData jsonText = do
         ScriptDataRangeError va sdre -> fail $ "Invalid data " ++ show sdre
       Right sd -> pure sd
   where
-    decodeJson = Aeson.decode $ fromStrict $ TSE.encodeUtf8 jsonText
+    decodeJson = A.decode $ fromStrict $ TSE.encodeUtf8 jsonText
 
 
 parseAnyScript :: MonadFail m => ByteString -> m ScriptInAnyLang
@@ -154,7 +155,7 @@ parseAnyScript jsonText =
         Right script -> pure $ toMinimumSimpleScriptVersion script
     Right te ->
       case deserialiseFromTextEnvelopeAnyOf textEnvTypes te of
-        Left err -> fail "Error while decoding script text envelope"
+        Left err     -> fail "Error while decoding script text envelope"
         Right script -> pure script
   where
     textEnvTypes :: [FromSomeType HasTextEnvelope ScriptInAnyLang]
@@ -187,36 +188,36 @@ parseAnyScript jsonText =
             (SimpleScriptLanguage SimpleScriptV1)
             (SimpleScript SimpleScriptV1 s')
 
-parseAddressBinary :: MonadFail m => ByteString -> m (AddressInEra AlonzoEra)
+parseAddressBinary :: MonadFail m => ByteString -> m (AddressInEra BabbageEra )
 parseAddressBinary bs = case parseAddressCbor (LBS.fromStrict bs) of
   Just addr -> pure addr
   Nothing -> parseAddressRaw bs
 
-parseAddressRaw :: MonadFail m =>  ByteString -> m(AddressInEra AlonzoEra)
-parseAddressRaw addrBs = case deserialiseFromRawBytes (AsAddressInEra AsAlonzoEra) addrBs of
+parseAddressRaw :: MonadFail m =>  ByteString -> m(AddressInEra BabbageEra)
+parseAddressRaw addrBs = case deserialiseFromRawBytes (AsAddressInEra AsBabbageEra) addrBs of
             Nothing -> fail  "Invalid Address Hex "
             Just addr -> pure addr
 
-parseAddress :: MonadFail m => Text -> m (AddressInEra AlonzoEra)
-parseAddress addrText = case deserialiseAddress (AsAddressInEra AsAlonzoEra) addrText of
+parseAddress :: MonadFail m => Text -> m (AddressInEra BabbageEra)
+parseAddress addrText = case deserialiseAddress (AsAddressInEra AsBabbageEra) addrText of
   Nothing -> do
      let hex :: Maybe  ByteString = parseHexString addrText
      case  hex of
       Just hex -> case parseAddressBinary hex of
         Just addr -> pure addr
-        Nothing -> case deserialiseFromRawBytes (AsAddressInEra AsAlonzoEra) hex of
+        Nothing -> case deserialiseFromRawBytes (AsAddressInEra AsBabbageEra) hex of
             Nothing -> fail  $ "Address is neither bench32 nor cborHex : "++ T.unpack addrText
             Just addr -> pure addr
       Nothing -> fail $ "Address is neither bench32 nor cborHex : "++ T.unpack addrText
   Just aie -> pure aie
 
-parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra AlonzoEra)
+parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra BabbageEra)
 parseAddressCbor  cbor = do
   aie <-  parseCbor cbor
-  pure $ fromShelleyAddr ShelleyBasedEraAlonzo  aie
+  pure $ fromShelleyAddr ShelleyBasedEraBabbage   aie
 
-parseAddressBench32 :: MonadFail m => Text -> m (AddressInEra AlonzoEra)
-parseAddressBench32 txt = case deserialiseAddress (AsAddressInEra AsAlonzoEra) txt of
+parseAddressBench32 :: MonadFail m => Text -> m (AddressInEra BabbageEra)
+parseAddressBench32 txt = case deserialiseAddress (AsAddressInEra AsBabbageEra) txt of
   Nothing -> fail $ "Address is not in bench32 format"
   Just aie -> pure aie
 
@@ -255,28 +256,28 @@ parseTxIn txt = do
   case T.split (== '#') txt of
       [txHash, index] ->
         case deserialiseFromRawBytesHex AsTxId (TSE.encodeUtf8 txHash) of
-          Just txid -> case readMaybe (T.unpack index) of
+          Right txid -> case readMaybe (T.unpack index) of
             Just txindex -> pure $ TxIn txid (TxIx txindex)
-            Nothing -> fail $ "Failed to parse txIndex in " ++ T.unpack txt
-          Nothing -> fail $ "Failed to parse value as txHash " ++ T.unpack txHash
+            Nothing      -> fail $ "Failed to parse txIndex in " ++ T.unpack txt
+          Left _ -> fail $ "Failed to parse value as txHash " ++ T.unpack txHash
       _ -> fail $ "Expected to be of format 'txId#index' got :" ++ T.unpack txt
 
-parseUtxo :: MonadFail m => Text -> m (UTxO AlonzoEra )
+parseUtxo :: MonadFail m => Text -> m (UTxO BabbageEra )
 parseUtxo v =parseHexString v >>= parseUtxoCbor
 
-parseUtxoCbor :: MonadFail m => LBS.ByteString -> m (UTxO AlonzoEra)
+parseUtxoCbor :: MonadFail m => LBS.ByteString -> m (UTxO BabbageEra)
 parseUtxoCbor val = do
   ((txHash,index ),txout) <- parseCbor val
   txIn <- case deserialiseFromRawBytes AsTxId txHash of
           Just txid -> pure $ TxIn txid (TxIx index)
           Nothing -> fail $ "Failed to parse value as txHash " ++ toHexString  txHash
-  pure $ UTxO (Map.singleton txIn (fromShelleyTxOut ShelleyBasedEraAlonzo txout))
+  pure $ UTxO (Map.singleton txIn (fromShelleyTxOut ShelleyBasedEraBabbage txout))
 
 
-parseTxOut :: MonadFail m => Text -> m (TxOut CtxTx   AlonzoEra)
-parseTxOut  val = decodeCbor <&> fromShelleyTxOut ShelleyBasedEraAlonzo
+parseTxOut :: MonadFail m => Text -> m (TxOut CtxTx   BabbageEra)
+parseTxOut  val = decodeCbor <&> fromShelleyTxOut ShelleyBasedEraBabbage
   where
-    decodeCbor :: MonadFail m => m (Alonzo.TxOut (Alonzo.AlonzoEra StandardCrypto))
+    decodeCbor :: MonadFail m => m (Babbage.TxOut (Babbage.BabbageEra StandardCrypto))
     decodeCbor = parseHexString  val >>= parseCbor
 
 
@@ -287,7 +288,7 @@ parseHexString  v = case unHex v  of
 
 parseCbor :: (FromCBOR a, MonadFail m) =>LBS.ByteString -> m a
 parseCbor  v = case decodeFull v of
-  Left de -> fail $  "Not in required cbor format: "++ show de
+  Left de   -> fail $  "Not in required cbor format: "++ show de
   Right any -> pure any
 
 parseCborHex :: (ToText a2, MonadFail m, FromCBOR b) => a2 -> m b
