@@ -1,0 +1,101 @@
+cabal-version:      2.4
+name:               kuber-server
+version:            2.0.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+license:     Apache-2.0
+author:      Sudip Bhattarai
+maintainer:  Sudip Bhattarai
+
+-- A copyright notice.
+-- copyright:
+-- category:
+-- extra-source-files: CHANGELOG.md
+
+library
+  default-language: Haskell2010
+  exposed-modules:
+    Kuber.Server.ServantError
+    Kuber.Server.Core
+    Kuber.Server.MediaType
+    Kuber.Server.Spec
+  other-modules:
+
+    -- Plutus.Contract.Wallet.Utils
+  hs-source-dirs: src 
+
+  build-depends:
+      kuber
+    , servant
+    , servant-server
+    , text-conversions
+    , cardano-api
+    , cardano-ledger-core
+    , cardano-ledger-shelley
+    , cardano-ledger-alonzo
+    , text
+    , bytestring
+    , containers
+    , filepath
+    , base
+    , aeson
+    , cardano-binary
+    , http-media
+    , wai
+    , http-types
+    , string-conversions
+    , scientific
+    , base-compat-batteries
+    , wai-cors
+    , servant-exceptions-server
+    , servant-exceptions
+    , warp
+
+
+executable kuber
+  default-language: Haskell2010
+  main-is:  Main.hs
+  hs-source-dirs: app
+  build-depends:
+      base >= 4.9 && <5
+    , containers
+    , unordered-containers
+    , scientific
+    , string-conversions
+    , base-compat-batteries
+    , bytestring
+    , serialise
+    , text
+    , filepath
+    , directory
+    , aeson
+    , text-conversions
+    , cardano-api
+    , cardano-ledger-alonzo
+    , cardano-ledger-shelley
+    , cardano-slotting
+    , plutus-ledger-api
+    , plutus-tx
+    , ouroboros-network
+    , kuber
+    , servant
+    , servant-server
+    , servant-exceptions
+    , wai
+    , servant-exceptions-server
+    , warp
+    , cborg
+    , http-types
+    , http-media
+    , wai-cors
+    , cardano-binary
+    , cardano-ledger-core
+    , kuber-server
