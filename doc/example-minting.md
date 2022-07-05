@@ -3,28 +3,57 @@ For minting with kuber one can use same transcation creator endpoint /api/v1/tx 
 
 #### 1. Signature  Policy
 
-Here simple policy script specifying key-hash indicating who can mint the tokens using the following policy script. selections contain the address from which utxos to be selected. Output contains address where the token is to be minted in which the value specifies new value, policy id and required asset name. Policy id for the script can be obtained from the kuber api using /api/v1/policy and passing script to request body.
+Here simple policy script specifying key-hash indicating who can mint the tokens using the following policy script. selections contain the address from which utxos to be selected. Output contains address where the token is to be minted in which the value specifies new value, policy id and required asset name.
+
+1. If you don't have key-hash then you can get your key-hash from your address
+For eg:
+```bash
+curl --location --request POST 'https://testnet.cnftregistry.io/api/v1/keyhash'\
+--header 'Content-Type: application/json' \
+--data-raw 'addr_test1qq3nr3rngpd0uxe5mlypvnc3ayg0ps56v9t5rpjjej9sd250kew3mfvytehnlda2k2v7c4upv4jqjn9pfr7j9a826n2q0mdh8u'
+```
+Curl output containing payment key hash of address
+```json
+{
+    "keyHash": "2331c473405afe1b34dfc8164f11e910f0c29a6157418652cc8b06aa"
+}
+```
+2. If you don't have policy id of the minting script then policy id for the script can be obtained from the kuber api using /api/v1/scriptPolicy and passing script to request body.
+For eg:
+
+```bash
+curl --location --request POST 'https://testnet.cnftregistry.io/kuber/api/v1/scriptPolicy' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "keyHash": "2331c473405afe1b34dfc8164f11e910f0c29a6157418652cc8b06aa",
+    "type": "sig"
+}'
+```
+Curl output is policy id
+```
+f75cdb5143473e94ef9d11221909c0d69187e4ac97039474fa526091
+```
+
 ```json
 
 {
     "selections": [
-        "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n"
+        "addr_test1qq3nr3rngpd0uxe5mlypvnc3ayg0ps56v9t5rpjjej9sd250kew3mfvytehnlda2k2v7c4upv4jqjn9pfr7j9a826n2q0mdh8u"
     ],
     "output":[
        {
-            "address": "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n",
-            "value": "1  31b0b0702f5d5432053586adfa15f3d1bdf83f57152ba7f371addf00.546f6b656e32"
+            "address": "addr_test1qq3nr3rngpd0uxe5mlypvnc3ayg0ps56v9t5rpjjej9sd250kew3mfvytehnlda2k2v7c4upv4jqjn9pfr7j9a826n2q0mdh8u",
+            "value": "1 f75cdb5143473e94ef9d11221909c0d69187e4ac97039474fa526091.Token1"
        }
     ],
     "mint": [
         {
             "script": {
                 "type": "sig",
-                "keyHash": "6c68d85ae54204a77c2b20928e027b5d5c88603445d8cbe28bcc679f"
+                "keyHash": "2331c473405afe1b34dfc8164f11e910f0c29a6157418652cc8b06aa"
             },
             "amount": {
-                "Token1": 1,
-                "Token2": 2
+                "Token1": 1
             }
         }
     ]
