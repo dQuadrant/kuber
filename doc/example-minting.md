@@ -5,7 +5,8 @@ For minting with kuber one can use same transcation creator endpoint /api/v1/tx 
 
 Here simple policy script specifying key-hash indicating who can mint the tokens using the following policy script. selections contain the address from which utxos to be selected. Output contains address where the token is to be minted in which the value specifies new value, policy id and required asset name.
 
-1. If you don't have key-hash then you can get your key-hash from your address
+1. If you don't have key-hash then you can get your key-hash from your address from /api/v1/keyhash and passing address in request body
+
 For eg:
 ```bash
 curl --location --request POST 'https://testnet.cnftregistry.io/api/v1/keyhash'\
