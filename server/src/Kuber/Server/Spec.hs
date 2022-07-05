@@ -68,6 +68,7 @@ type TransactionAPI =
       :<|>  "api" :> "v1" :> "tx" :> "submit" :> ReqBody '[JSON ,CBORBinary,CBORText  ] (SubmitTxModal ) :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx BabbageEra) :> Post '[JSON] ([Either String ExecutionUnits ])
       :<|> "api" :> "v1" :> "scriptPolicy"        :> ReqBody '[JSON] (Aeson.Value ) :> Post '[PlainText ] (Text)
+      :<|> "api" :> "v1" :> "keyhash"        :> ReqBody '[JSON] (AddressModal) :> Post '[JSON ] (KeyHashResponse)
 
        )
 
@@ -77,6 +78,7 @@ server dcInfo =
   :<|> errorGuard (submitTx' dcInfo)
   :<|> errorGuard (evaluateExecutionUnits dcInfo )
   :<|> errorGuard (\sc -> parseAnyScript (toStrict $  Aeson.encode sc)<&> (\(ScriptInAnyLang sl sc') ->serialiseToRawBytesHexText ( scriptPolicyId sc')) )
+  :<|> errorGuard (getKeyHash)
   where
 
     errorGuard f v = liftIO $ do

@@ -30,6 +30,14 @@ import Cardano.Kuber.Api (TxBuilder)
 import Cardano.Kuber.Data.Parsers (parseTxIn)
 
 
+getKeyHash :: AddressModal -> IO KeyHashResponse
+getKeyHash aie = do
+  case addressInEraToPaymentKeyHash (unAddressModal aie) of
+    Nothing -> throw $ FrameworkError  ParserError  "Couldn't derive key-hash from address "
+    Just ha -> pure $ KeyHashResponse $ BS8.unpack $ serialiseToRawBytesHex ha
+
+
+
 getBalance :: ChainInfo x =>  x  -> String -> IO BalanceResponse
 getBalance ctx addrStr = do
   case parseTxIn (T.pack addrStr) of

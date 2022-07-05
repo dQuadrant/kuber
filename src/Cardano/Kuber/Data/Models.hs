@@ -32,6 +32,7 @@ import GHC.Generics (Generic)
 import Text.Read (readMaybe)
 import Cardano.Kuber.Utility.Text (toHexString)
 
+
 newtype AssetModal = AssetModal AssetId deriving (Show)
 
 newtype AddressModal = AddressModal (AddressInEra BabbageEra) deriving (Show)
@@ -61,6 +62,12 @@ data BalanceResponse = BalanceResponse
   { utxos :: UTxO BabbageEra
   }
   deriving (Generic, Show, ToJSON)
+
+data KeyHashResponse = KeyHashResponse
+  { keyHash :: String
+  }
+  deriving (Generic, Show, ToJSON)
+
 
 data SubmitTxModal = SubmitTxModal
   { rawTx :: Tx BabbageEra,
