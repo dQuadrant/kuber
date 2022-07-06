@@ -19,7 +19,7 @@ function echo-usage() {
 }
 
 
-if [ ! -f ./cabal.project ] 
+if [ ! -f ./cabal.project ]
 then
   echo "    Missing cabal.project file current directory";
   echo;echo-usage
@@ -37,7 +37,7 @@ fi
 if ( grep -qE 'clean' <<< "$*")
 then
   for dir in "$HOME/.cabal-docker" "./dist-newstyle-docker"  "./chroot-env"
-  do 
+  do
     echo "  Removing  $dir";
     rm -rf $dir;
   done;
@@ -76,7 +76,7 @@ else
     execute-isolated 'cabal build exe:kuber && bash -e ./.ci/copy-libraries.sh'
 
     ## build  final docker image. by determining the git revision or passing the arguments to docker command.
-    
+
     if [ $# -gt 0 ]
     then
       showCommand docker build --build-arg  OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/ -f ./.ci/Dockerfile  "$@" .
@@ -87,6 +87,3 @@ else
       showCommand docker build --build-arg  OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/  -f ./.ci/Dockerfile -t "sireto/kuber:$(git rev-parse HEAD)" .
     fi
 fi
-
-
-

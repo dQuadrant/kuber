@@ -40,6 +40,7 @@ import           Debug.Trace                  (traceM)
 import           GHC.IO.Exception             (IOErrorType (UserError),
                                                IOException (IOError))
 import           Text.Read                    (readMaybe)
+import qualified Debug.Trace as Debug
 
 
 parseSignKey :: MonadFail m => Text -> m (SigningKey PaymentKey)
@@ -109,16 +110,13 @@ parseAssetNQuantity textStr = do
             assetTxtStripped
             iAmount
             (fail $ "Invalid AssetId in value `" ++ T.unpack textStr ++ "`")
-    _ ->
-      if T.null assetTxtStripped
-        then case parseAssetId amountTxt of
+    _ ->case parseAssetId textStr of
           Just asset -> pure (asset, Quantity 1)
           _ -> do
             let (newAmountTxt, postfix) = T.span isDigit amountTxt
             case readMaybe (T.unpack newAmountTxt) of
               Just iAmount -> convertAdaOrLovelace postfix iAmount parseFail
               _            -> parseFail
-        else parseFail
   where
     convertAdaOrLovelace str iAmount _otherwise = case T.unpack (T.toLower str) of
       "ada"      -> lovelaceAmount (iAmount * 1_000_000)

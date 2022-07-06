@@ -48,11 +48,13 @@ function copyExecutable(){
         cp -u --preserve=timestamps,mode "$dep" "$WORKDIR$dep"
   done
 }
+
 function findExecutable() {
   find "$DIST_NEWSTYLE_DIR/build" -type f -name "$1" | grep "$(getVersion $1)"
 }
+
 function getVersion(){
-  grep -i '^version' ./$1/$1.cabal  | grep -Eo '[[:digit:]]+(\.[[:digit:]]+)*'
+  grep -i '^version' $1.cabal  | grep -Eo '[[:digit:]]+(\.[[:digit:]]+)*'
 }
 
 #Get the library dependencies
