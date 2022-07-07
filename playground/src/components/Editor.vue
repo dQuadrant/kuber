@@ -158,7 +158,7 @@ ace.config.setModuleUrl('ace/mode/json_worker', workerJsonUrl);
 
           <div id="myDropdown" class="dropdown-content">
             <button @click="displayKeyHashModal">Get Key Hash</button>
-            <button @click="displayPolicyModal">Get policy Id</button>
+            <button @click="displayPolicyModal">Get Policy Id</button>
           </div>
           </div>
 
