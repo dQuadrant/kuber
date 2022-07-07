@@ -4,7 +4,7 @@ import ace from "ace-builds";
 
 import workerJsonUrl from 'ace-builds/src-noconflict/worker-json?url';
 
-import { callKuberAndSubmit, listProviders } from "@/scripts/wallet";
+import { callKuberAndSubmit, getKeyHashOfAddressFromKuber, getPolicyIdOfScriptFromKuber, listProviders } from "@/scripts/wallet";
 import type { CIP30Instace, CIP30Provider } from "@/types";
 
 import 'ace-builds/src-noconflict/mode-json';
@@ -18,6 +18,116 @@ ace.require('ace/ext/language_tools');
 
 ace.config.setModuleUrl('ace/mode/json_worker', workerJsonUrl);
 </script>
+
+<style scoped>
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: #f1f1f1;
+  min-width: 160px;
+  overflow: auto;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 1;
+}
+
+.dropdown-content button {
+  color: black;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+}
+
+.dropdown a:hover {background-color: #ddd;}
+
+.show {display: block;}
+
+.modal {
+  position: absolute;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  margin: auto;
+  text-align: center;
+  width: fit-content;
+  height: fit-content;
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 5px 5px rgba(0, 0, 0, 0.2);
+  background: #FFF;
+  z-index: 999;
+  transform: none;
+}
+.modal h1 {
+  margin: 0 0 1rem;
+}
+
+.modal-overlay {
+  content: '';
+  position: absolute;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 998;
+  background: #2c3e50;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+/* ---------------------------------- */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity .4s linear;
+}
+
+.fade-enter,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.pop-enter-active,
+.pop-leave-active {
+  transition: transform 0.4s cubic-bezier(0.5, 0, 0.5, 1), opacity 0.4s linear;
+}
+
+.pop-enter,
+.pop-leave-to {
+  opacity: 0;
+  transform: scale(0.3) translateY(-50%);
+}
+
+
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.button {
+  border: none;
+  color: #FFF;
+  background: green;
+  appearance: none;
+  font: inherit;
+  padding: .5em;
+  border-radius: .3em;
+  cursor: pointer;
+}
+
+.input {
+  height: 50px;
+  width: 500px;
+  padding: 5px;
+}
+
+.textarea {
+  height: 200px;
+  width: 500px;
+  padding: 5px;
+}
+</style>
 
 <template>
   <div class="container items-center">
@@ -37,6 +147,87 @@ ace.config.setModuleUrl('ace/mode/json_worker', workerJsonUrl);
             <img style="display: inline; height: 1em; width: 1em" :src="provider.icon" />
             <span class="ml-1"> {{ provider.name }}</span>
           </button>
+
+        <div class="dropdown">
+          <button
+            class="ml-3 bg-transparent text-blue-700 font-semibold py-0.5 px-1.5"
+            @click="extraButtonClick"
+          >
+            <p class="rotate-90">...</p>
+          </button>
+
+          <div id="myDropdown" class="dropdown-content">
+            <button @click="displayKeyHashModal">Get Key Hash</button>
+            <button @click="displayPolicyModal">Get policy Id</button>
+          </div>
+          </div>
+
+          <transition name="fade" appear>
+            <div class="modal-overlay" 
+                v-if="showKeyHashModal" 
+                @click="showKeyHashModal = false"></div>
+          </transition>
+          <transition name="pop" appear>
+            <div class="modal" 
+                role="dialog" 
+                v-if="showKeyHashModal"
+                >
+                <div class="mb-2 text-gray-500">Enter Address</div>
+                <input 
+                class="input border border-gray-300" 
+                type="text"
+                v-model="address"
+                />
+                <div class="mt-4 mb-4" v-if="keyHash != ''" >
+                  <div class="text-gray-500 mb-1">Your keyhash</div>
+                  <div>
+                  <button class="flex" @click="performKeyHashCopy">
+                    <div>{{keyHash}}</div>
+                    <div class="mt-1"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-files" viewBox="0 0 16 16">
+                      <path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/>
+                    </svg></div>
+                  </button>
+                  </div>
+                </div>
+                <div class="mt-3">
+                  <button @click="getKeyHash" class="button hover:bg-green-600">Get Key Hash</button>
+                  <button @click="showKeyHashModal = false" class="ml-4 border border-red-200 pt-2 pb-2 pl-4 pr-4 rounded text-gray-500 hover:bg-red-400 hover:text-white">Close</button>
+                </div>
+            </div>
+          </transition>
+
+          <transition name="fade" appear>
+            <div class="modal-overlay" 
+                v-if="showPolicyModal" 
+                @click="showPolicyModal = false"></div>
+          </transition>
+          <transition name="pop" appear>
+            <div class="modal" 
+                role="dialog" 
+                v-if="showPolicyModal"
+                >
+                <div class="mb-2 text-gray-500">Enter script json</div>
+                <textarea 
+                class="textarea border border-gray-300"
+                v-model="scriptJson"
+                />
+                <div class="mt-4 mb-4" v-if="policyId != ''" >
+                  <div class="text-gray-500 mb-1">Script policy id</div>
+                  <div>
+                  <button class="flex" @click="performPolicyIdCopy">
+                    <div>{{policyId}}</div>
+                    <div class="mt-1"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-files" viewBox="0 0 16 16">
+                      <path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/>
+                    </svg></div>
+                  </button>
+                  </div>
+                </div>
+                <div class="mt-3">
+                  <button @click="getScriptPolicy" class="button hover:bg-green-600">Get Policy Id</button>
+                  <button @click="showPolicyModal = false" class="ml-4 border border-red-200 pt-2 pb-2 pl-4 pr-4 rounded text-gray-500 hover:bg-red-400 hover:text-white">Close</button>
+                </div>
+            </div>
+          </transition>
 
           <div class="ml-2 mt-1 form-check form-check text-sm">
             <input
@@ -68,6 +259,9 @@ ace.config.setModuleUrl('ace/mode/json_worker', workerJsonUrl);
 </template>
 <script lang="ts">
 import * as _notification from "@dafcoe/vue-notification";
+import AppVue from "@/App.vue";
+import {useToast} from 'vue-toast-notification';
+
 
 const notification = _notification.useNotificationStore();
 export default {
@@ -92,6 +286,12 @@ export default {
       editor: null,
       interval: 0,
       timeout: 0,
+      showKeyHashModal: false,
+      showPolicyModal: false,
+      address: '',
+      keyHash: '',
+      scriptJson: '',
+      policyId: ''
     };
   },
   beforeUnmount() {
@@ -99,6 +299,37 @@ export default {
     this.timeout && clearTimeout(this.timeout);
   },
   methods: {
+    performKeyHashCopy(){
+      useToast().success('Copied Key Hash');
+      navigator.clipboard.writeText(this.keyHash)
+    },
+    performPolicyIdCopy(){
+      useToast().success('Copied Key Hash');
+      navigator.clipboard.writeText(this.policyId)
+    },
+    displayKeyHashModal(){
+        this.showKeyHashModal=true;
+        this.address='';
+        this.keyHash='';
+    },
+    displayPolicyModal(){
+        this.showPolicyModal=true;
+        this.scriptJson='';
+        this.policyId='';
+    },
+    getKeyHash(){
+      getKeyHashOfAddressFromKuber(this.address).catch(err=>alert(err)).then(res=>{
+        this.keyHash = res.keyHash
+      });
+    },
+    getScriptPolicy(){
+      getPolicyIdOfScriptFromKuber(this.scriptJson).catch(err=>alert(err)).then((res: string) =>{
+        this.policyId = res
+      });
+    },
+    extraButtonClick(){
+      document.getElementById("myDropdown").classList.toggle("show");
+    },
     submitTx(provider: CIP30Provider) {
       const editorContent = this.editor.getValue();
       this.save(editorContent);
