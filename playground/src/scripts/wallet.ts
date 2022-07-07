@@ -19,6 +19,7 @@ export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
       if (tx.auxiliary_data()) {
         const _txBody = tx.body()
         const txBody = TransactionBody.new(_txBody.inputs(),_txBody.outputs(),_txBody.fee(),_txBody.ttl())
+          txBody.set_mint(_txBody.mint())
         txBody.set_auxiliary_data_hash(hash_auxiliary_data(tx.auxiliary_data()))
         tx = Transaction.new(txBody, tx.witness_set(), tx.auxiliary_data())
 
@@ -105,6 +106,94 @@ export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
   }
 
 
+  export  async function getKeyHashOfAddressFromKuber(address: string) {
+    let kuberUrlByNetwork= "https://testnet.cnftregistry.io/kuber"
+    // let kuberUrlByNetwork= 'http://localhost:8081'
+
+    return fetch(
+      // eslint-disable-next-line max-len
+      `${kuberUrlByNetwork}/api/v1/keyhash`,
+      {
+        mode: 'cors',
+        method: 'POST',
+        body: JSON.stringify(address),
+        headers: new Headers({'content-type': 'application/json'}),
+      },
+    ).catch(e=>{
+      console.error(`${kuberUrlByNetwork}/api/v1/tx`, e)
+      throw Error(`Kubær API call : `+e.message)
+      
+    }).then(res=>{
+      if (res.status===200) {
+        return res.json()
+          .then(json => {
+            console.log(json)
+            return json;
+          })
+      } else {
+        return res.text().then(txt=>{
+            let json :any
+               try {
+                json = JSON.parse(txt)
+               }catch(e){
+                   return Promise.reject(Error(`KubærApi [Status ${res.status}] : ${txt}`)
+                   )
+               }
+            if (json) {
+                return Promise.reject( Error(`KubærApi [Status ${res.status}] : ${json.message ? json.message : txt}`) )
+            } else {
+                return Promise.reject( Error(`KubærApi [Status ${res.status}] : ${txt}`) )
+            }
+        })
+      }
+    })
+  }
+
+  export  async function getPolicyIdOfScriptFromKuber(scriptJsonStr: string) {
+    let kuberUrlByNetwork= "https://testnet.cnftregistry.io/kuber"
+    // let kuberUrlByNetwork= 'http://localhost:8081'
+
+    let scriptJson = JSON.parse(scriptJsonStr)
+
+    return fetch(
+      // eslint-disable-next-line max-len
+      `${kuberUrlByNetwork}/api/v1/scriptPolicy`,
+      {
+        mode: 'cors',
+        method: 'POST',
+        body: JSON.stringify(scriptJson),
+        headers: new Headers({'content-type': 'application/json'}),
+      },
+    ).catch(e=>{
+      console.error(`${kuberUrlByNetwork}/api/v1/tx`, e)
+      throw Error(`Kubær API call : `+e.message)
+      
+    }).then(res=>{
+      if (res.status===200) {
+        return res.text()
+          .then(json => {
+            console.log(json)
+            return json;
+          })
+      } else {
+        return res.text().then(txt=>{
+            let json :any
+               try {
+                json = JSON.parse(txt)
+               }catch(e){
+                   return Promise.reject(Error(`KubærApi [Status ${res.status}] : ${txt}`)
+                   )
+               }
+            if (json) {
+                return Promise.reject( Error(`KubærApi [Status ${res.status}] : ${json.message ? json.message : txt}`) )
+            } else {
+                return Promise.reject( Error(`KubærApi [Status ${res.status}] : ${txt}`) )
+            }
+        })
+      }
+    })
+  }
+
   export  async function callKuberAndSubmit(provider: CIP30Instace,data: string) {
     let network = await provider.getNetworkId()
     console.log("Current Network :", network)
@@ -130,6 +219,7 @@ export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
             console.log(json)
             return signAndSubmit(provider, json.tx).catch(e=>{
               if(e.info && e.code){
+                  console.log(e)
                   throw Error(`Code : ${e.code} :: \n ${e.info}`)
               }
               else throw e
