@@ -15,6 +15,7 @@
     "buffer": "^6.0.3",
     "vue": "^3.2.33",
     "vue-router": "^4.0.14",
+    "vue-toast-notification": "^3.0.4",
     "vue3-ace-editor": "^2.2.2"
   },
   "devDependencies": {
