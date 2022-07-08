@@ -15,23 +15,27 @@ export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
     let tx;
     try {
         const txArray=Uint8Array.from(Buffer.from(_tx, 'hex'))
-      tx = Transaction.from_bytes(txArray)
-      if (tx.auxiliary_data()) {
+        tx = Transaction.from_bytes(txArray)
         const _txBody = tx.body()
         const txBody = TransactionBody.new(_txBody.inputs(),_txBody.outputs(),_txBody.fee(),_txBody.ttl())
-          txBody.set_mint(_txBody.mint())
-        txBody.set_auxiliary_data_hash(hash_auxiliary_data(tx.auxiliary_data()))
+        if (_txBody.mint()) {
+            txBody.set_mint(_txBody.mint())
+        }
+        if (tx.auxiliary_data()) {
+            txBody.set_auxiliary_data_hash(hash_auxiliary_data(tx.auxiliary_data()))
+        }
         tx = Transaction.new(txBody, tx.witness_set(), tx.auxiliary_data())
 
-      }
-      // @ts-ignore
+        // @ts-ignore
     } catch (e) {
       throw new Error("Invalid transaction string :"+ e.message)
     }
 
+    let txString = Buffer.from(tx.to_bytes()).toString('hex')
+
     const witnesesRaw = await provider.signTx(
-      Buffer.from(tx.to_bytes()).toString('hex'),
-      true
+        txString,
+        true
     )
       const newWitnesses = TransactionWitnessSet.from_bytes(Buffer.from(witnesesRaw, "hex"))
       const newWitnessSet = TransactionWitnessSet.new();
@@ -198,7 +202,7 @@ export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
     let network = await provider.getNetworkId()
     console.log("Current Network :", network)
     let kuberUrlByNetwork= (network ==0? "https://testnet.cnftregistry.io/kuber":"https://cnftregistry.io/kuber")
-    //let kuberUrlByNetwork= 'http://localhost:8081'
+    // let kuberUrlByNetwork= 'http://localhost:8081'
 
     return fetch(
       // eslint-disable-next-line max-len
