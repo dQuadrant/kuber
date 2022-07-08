@@ -21,6 +21,7 @@ module Cardano.Kuber.Api(
     ,   txRedeemUtxoWithInlineDatum
     ,   txRedeemUtxoWithInlineDatumWithReferenceScript
     ,   txRedeemTxin
+    ,   txRedeemTxinWithInlineDatum
 
     -- tx reference input
     ,   txReferenceTxIn
