@@ -452,7 +452,7 @@ instance FromJSON TxOutput where
 
 
     datumHashE <- parseData
-    shouldEmbed <- v .:? "inline" .!= True
+    shouldEmbed <- v .:? "inline" .!= False
     let dHashConfigConsidered=if shouldEmbed
                                 then datumHashE
                                 else (case datumHashE of
