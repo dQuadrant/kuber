@@ -17,6 +17,21 @@ ace.require('ace/ext/language_tools');
 
 
 ace.config.setModuleUrl('ace/mode/json_worker', workerJsonUrl);
+
+
+window.onclick = function(event) {
+  if (!event.target.matches('.dropbtn')) {
+    var dropdowns = document.getElementsByClassName("dropdown-content");
+    var i;
+    for (i = 0; i < dropdowns.length; i++) {
+      var openDropdown = dropdowns[i];
+      if (openDropdown.classList.contains('show')) {
+        openDropdown.classList.remove('show');
+      }
+    }
+  }
+}
+
 </script>
 
 <style scoped>
@@ -148,12 +163,12 @@ ace.config.setModuleUrl('ace/mode/json_worker', workerJsonUrl);
             <span class="ml-1"> {{ provider.name }}</span>
           </button>
 
-        <div class="dropdown">
+        <div class="dropdown ml-3">
           <button
-            class="ml-3 bg-transparent text-blue-700 font-semibold py-0.5 px-1.5"
+            class="dropbtn text-blue-700 font-semibold rotate-90"
             @click="extraButtonClick"
           >
-            <p class="rotate-90">...</p>
+            ...
           </button>
 
           <div id="myDropdown" class="dropdown-content">
