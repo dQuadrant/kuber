@@ -15,6 +15,7 @@ TxOut address txOutValue datum ReferenceScriptNone
 TxOut address txOutValue datum (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra script)
 ```
 4. Changes to `ScriptWitness` strucutre now the Script section is replaced by `PlutusScriptOrReferenceInput` for plutus while for simple script it is `SimpleScriptOrReferenceInput`. So accoriding to uses if you need script witness with Reference Script or you intend to pass the script itself like
+
 For plutus script witness
 ```haskell
 PlutusScriptWitness langInEra version (PScript pscript) datumForTxin redeemer exUnits
