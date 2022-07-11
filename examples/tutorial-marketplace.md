@@ -23,9 +23,12 @@ The script json is
     Click on Get Key Hash
     Enter your address if you don't know it you can copy it from NAMI -> Click on Receive -> Copy address below QR
     Click on Get Key Hash then key hash will apear below it copy it and paste it in above script json keyHash key's value
+    ![extra menu kuber](https://user-images.githubusercontent.com/18091631/178193764-516df8d2-dc35-48ce-90ef-6a1e52b8ebd8.png)
+![key hash kuber](https://user-images.githubusercontent.com/18091631/178193799-e52abe1a-2891-44c9-99b3-eab36cf15127.png)
 
 4. Prepare metadata for your token if you want
-5. Final transaction builder json for kuber will be :
+5. If you don't have policy id you can get it from the same menu as above click on the Get Policy Id. Enter your script json there. And click on Get Policy Id it will print  policy id there.  
+6. Final transaction builder json for kuber will be :
 ```json
 {
     "mint": [
