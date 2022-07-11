@@ -7,7 +7,7 @@ Kuber is an open-source library and easy-to-use API created by Dquadrant which m
 
 We are using cardano testnet and kuber playground hosted in https://dquadrant.github.io/kuber/
 
-Part 1 - Minting a Cardano Native Token with metadata using kuber playground and NAMI wallet
+### **Part 1 - Minting a Cardano Native Token with metadata using kuber playground and NAMI wallet**
 1. Setup NAMI wallet and fund it if not already
 2. Here, We are going to use simple script  to mint a single token named mytoken
 The script json is
@@ -54,7 +54,7 @@ The script json is
 }
 ```
 
-Part 2 - Placing token on sell using kuber playground
+### **Part 2 - Placing token on sell using kuber playground**
 
 Here the address is a simple marketplace contract address
 The simple contract is located on 
@@ -85,7 +85,7 @@ So the final transaction builder json for placing on sell using kuber will be :
 }
 ```
 
-Part 3 - Buying token placed on sell using kuber playground
+### **Part 3 - Buying token placed on sell using kuber playground**
 1. Sample script json for the contract above
 ```json
 {
