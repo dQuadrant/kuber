@@ -15,7 +15,7 @@ import Cardano.Contrib.Easy.Error
 import Plutus.V1.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), PubKeyHash (PubKeyHash))
 import System.FilePath (joinPath)
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr)
-import qualified Cardano.Ledger.Alonzo.Tx as LedgerBody
+import qualified Cardano.Ledger.Babbage.Tx as LedgerBody
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(SubmitSuccess, SubmitFail))
 import Data.Text.Conversions (convertText, Base16 (unBase16), FromText (fromText), ToText (toText))
 import Data.Functor ((<&>))
@@ -25,7 +25,7 @@ import qualified Data.Aeson as Aeson
 import Data.Text.Encoding
 import Data.ByteString.Lazy (fromStrict, toStrict)
 import qualified Data.Text.IO as TextIO
-import qualified Cardano.Ledger.Alonzo.Rules.Utxo as Alonzo
+import qualified Cardano.Ledger.Alonzo.Rules.Utxo as Babbage
 import Plutus.V1.Ledger.Value (AssetClass(AssetClass))
 import Data.String (fromString)
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
@@ -69,7 +69,7 @@ skeyToAddr skey network =
   where
     credential=PaymentCredentialByKey  $ verificationKeyHash   $ getVerificationKey  skey
 
-skeyToAddrInEra ::  SigningKey PaymentKey -> NetworkId -> AddressInEra AlonzoEra
+skeyToAddrInEra ::  SigningKey PaymentKey -> NetworkId -> AddressInEra BabbageEra
 skeyToAddrInEra skey network=makeShelleyAddressInEra network   credential NoStakeAddress
   where
     credential=PaymentCredentialByKey  $ verificationKeyHash   $ getVerificationKey  skey
@@ -84,7 +84,7 @@ sKeyToPkh skey= PubKeyHash (toBuiltin  $  serialiseToRawBytes  vkh)
 sKeyToVkH:: SigningKey PaymentKey ->  Hash PaymentKey 
 sKeyToVkH  skey = verificationKeyHash   $ getVerificationKey  skey
 
-pkhToMaybeAddr:: NetworkId -> PubKeyHash -> Maybe (AddressInEra  AlonzoEra)
+pkhToMaybeAddr:: NetworkId -> PubKeyHash -> Maybe (AddressInEra  BabbageEra)
 pkhToMaybeAddr network (PubKeyHash pkh) =do
     key <- vKey
     Just $ makeShelleyAddressInEra  network (PaymentCredentialByKey key)  NoStakeAddress
@@ -103,7 +103,7 @@ addrToMaybePkh (ShelleyAddress net cre sr) = do
     unHex ::  ToText a => a -> Maybe  ByteString
     unHex v = convertText (toText v) <&> unBase16
 
-addrInEraToPkh :: MonadFail m =>AddressInEra AlonzoEra -> m PubKeyHash
+addrInEraToPkh :: MonadFail m =>AddressInEra BabbageEra -> m PubKeyHash
 addrInEraToPkh a = case a of { AddressInEra atie ad -> case ad of
                                       ByronAddress ad' -> fail "Byron address is not supported"
                                       ShelleyAddress net cre sr -> case cre of
@@ -117,12 +117,12 @@ addrInEraToPkh a = case a of { AddressInEra atie ad -> case ad of
     unHex ::  ToText a => a -> Maybe  ByteString
     unHex v = convertText (toText v) <&> unBase16
 
-unstakeAddr :: AddressInEra AlonzoEra -> AddressInEra AlonzoEra
+unstakeAddr :: AddressInEra BabbageEra -> AddressInEra BabbageEra
 unstakeAddr a = case a of { AddressInEra atie ad -> case ad of
                                       ByronAddress ad' ->a
                                       ShelleyAddress net cre sr ->  shelleyAddressInEra $ ShelleyAddress net cre StakeRefNull }
 
-queryUtxos :: LocalNodeConnectInfo CardanoMode-> AddressAny -> IO (UTxO AlonzoEra)
+queryUtxos :: LocalNodeConnectInfo CardanoMode-> AddressAny -> IO (UTxO BabbageEra)
 queryUtxos conn addr=do
   a <-queryNodeLocalState conn Nothing $ utxoQuery [addr]
   case a of
@@ -132,10 +132,10 @@ queryUtxos conn addr=do
       Right uto -> return uto
 
   where
-  utxoQuery qfilter= QueryInEra AlonzoEraInCardanoMode
-                    $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo (QueryUTxO (QueryUTxOByAddress (Set.fromList qfilter)) )
+  utxoQuery qfilter= QueryInEra BabbageEraInCardanoMode
+                    $ QueryInShelleyBasedEra ShelleyBasedEraBabbage (QueryUTxO (QueryUTxOByAddress (Set.fromList qfilter)) )
 
-resolveTxins :: LocalNodeConnectInfo CardanoMode -> Set TxIn -> IO (UTxO AlonzoEra)
+resolveTxins :: LocalNodeConnectInfo CardanoMode -> Set TxIn -> IO (UTxO BabbageEra)
 resolveTxins conn ins= do
   a <- queryNodeLocalState conn Nothing (utxoQuery ins)
   case a of
@@ -145,8 +145,8 @@ resolveTxins conn ins= do
       Right uto -> return uto
 
     where
-      utxoQuery qfilter = QueryInEra  AlonzoEraInCardanoMode
-        $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo (QueryUTxO  $ QueryUTxOByTxIn qfilter )
+      utxoQuery qfilter = QueryInEra  BabbageEraInCardanoMode
+        $ QueryInShelleyBasedEra ShelleyBasedEraBabbage (QueryUTxO  $ QueryUTxOByTxIn qfilter )
 
 getDefaultConnection :: String -> NetworkId ->  IO (LocalNodeConnectInfo CardanoMode)
 getDefaultConnection networkName networkId= do
@@ -175,8 +175,8 @@ getNetworkFromEnv envKey =  do
 queryProtocolParam :: LocalNodeConnectInfo CardanoMode -> IO ProtocolParameters
 queryProtocolParam conn=do
   paramQueryResult<-queryNodeLocalState conn Nothing $
-            QueryInEra AlonzoEraInCardanoMode
-                  $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo QueryProtocolParameters
+            QueryInEra BabbageEraInCardanoMode
+                  $ QueryInShelleyBasedEra ShelleyBasedEraBabbage QueryProtocolParameters
   case paramQueryResult of
     Left af -> throw $ SomeError  "QueryProtocolParam: Acquire Failure"
     Right e -> case e of
@@ -217,18 +217,18 @@ dataToScriptData :: (ToData a1) => a1 -> ScriptData
 dataToScriptData sData =  fromPlutusData $ toData sData
 
 signAndSubmitTxBody :: LocalNodeConnectInfo CardanoMode
-  -> TxBody AlonzoEra -> [SigningKey PaymentKey] -> IO (Tx AlonzoEra)
+  -> TxBody BabbageEra -> [SigningKey PaymentKey] -> IO (Tx BabbageEra)
 signAndSubmitTxBody conn txBody skeys= do
-      let (ins,outs)=case txBody of { ShelleyTxBody sbe (LedgerBody.TxBody ins outs _ _ _ _ _ _ _ _ _ _ _ ) scs tbsd m_ad tsv -> (ins,outs) }
+      let (ins,outs)=case txBody of { ShelleyTxBody sbe (LedgerBody.TxBody ins outs _ _ _ _ _ _ _ _ _ _ _ _ _ _) scs tbsd m_ad tsv -> (ins,outs) }
           tx = makeSignedTransaction (map toWitness skeys) txBody -- witness and txBody
       executeSubmitTx conn tx
       pure tx
   where
     toWitness skey = makeShelleyKeyWitness txBody (WitnessPaymentKey skey)
 
-executeSubmitTx :: LocalNodeConnectInfo CardanoMode -> Tx AlonzoEra -> IO ()
+executeSubmitTx :: LocalNodeConnectInfo CardanoMode -> Tx BabbageEra -> IO ()
 executeSubmitTx conn  tx= do 
-      res <-submitTxToNodeLocal conn $  TxInMode tx AlonzoEraInCardanoMode
+      res <-submitTxToNodeLocal conn $  TxInMode tx BabbageEraInCardanoMode
       case res of
         SubmitSuccess ->  pure ()
         SubmitFail reason ->
@@ -236,7 +236,7 @@ executeSubmitTx conn  tx= do
             TxValidationErrorInMode err _eraInMode ->  throw$ SomeError $ "SubmitTx: " ++ show  err
             TxValidationEraMismatch mismatchErr -> throw $ SomeError $ "SubmitTx: " ++ show  mismatchErr
 
-queryTxins :: LocalNodeConnectInfo CardanoMode-> [TxIn] -> IO (UTxO AlonzoEra)
+queryTxins :: LocalNodeConnectInfo CardanoMode-> [TxIn] -> IO (UTxO BabbageEra)
 queryTxins conn txin=do
   a <-queryNodeLocalState conn Nothing $ utxoQuery txin
   case a of
@@ -246,8 +246,8 @@ queryTxins conn txin=do
       Right uto -> return uto
 
   where
-  utxoQuery qfilter= QueryInEra AlonzoEraInCardanoMode
-                    $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo (QueryUTxO (QueryUTxOByTxIn  (Set.fromList qfilter)) )
+  utxoQuery qfilter= QueryInEra BabbageEraInCardanoMode
+                    $ QueryInShelleyBasedEra ShelleyBasedEraBabbage (QueryUTxO (QueryUTxOByTxIn  (Set.fromList qfilter)) )
 
 
 nullValue :: Value -> Bool
@@ -256,25 +256,25 @@ nullValue v = not $ any (\(aid,Quantity q) -> q>0) (valueToList v)
 positiveValue :: Value -> Bool
 positiveValue v = not $ any (\(aid,Quantity q) -> q<0) (valueToList v)
 
-calculateTxoutMinLovelace :: TxOut CtxUTxO  AlonzoEra -> ProtocolParameters -> Maybe Lovelace
+calculateTxoutMinLovelace :: TxOut CtxUTxO  BabbageEra -> ProtocolParameters -> Maybe Lovelace
 calculateTxoutMinLovelace txout pParams=do
   Lovelace costPerWord <- protocolParamUTxOCostPerWord pParams
-  Just $ Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo  txout) * costPerWord
+  Just $ Lovelace  $ Babbage.utxoEntrySize (toShelleyTxOut ShelleyBasedEraBabbage  txout) * costPerWord
 
-calculateTxoutMinLovelaceFunc :: ProtocolParameters  -> Maybe ( TxOut CtxTx   AlonzoEra -> Lovelace)
+calculateTxoutMinLovelaceFunc :: ProtocolParameters  -> Maybe ( TxOut CtxTx BabbageEra -> Lovelace)
 calculateTxoutMinLovelaceFunc pParams = do
   Lovelace costPerWord <- protocolParamUTxOCostPerWord pParams
   pure $ f costPerWord
   where
-    f cpw txout =Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo  $  toCtxUTxOTxOut txout) * cpw
+    f cpw txout =Lovelace  $ Babbage.utxoEntrySize (toShelleyTxOut ShelleyBasedEraBabbage  $  toCtxUTxOTxOut txout) * cpw
 
 toPlutusAssetClass :: AssetId -> AssetClass
 toPlutusAssetClass (AssetId (PolicyId hash) (AssetName name)) = AssetClass (CurrencySymbol $ toBuiltin $ serialiseToRawBytes hash , TokenName $ toBuiltin name)
 toPlutusAssetClass AdaAssetId  =AssetClass (CurrencySymbol $ fromString "", TokenName $ fromString "")
 
 
-utxoValueSum :: UTxO AlonzoEra  -> Value
+utxoValueSum :: UTxO BabbageEra  -> Value
 utxoValueSum (UTxO uMap)= foldMap toValue $ Map.elems uMap
   where
-    toValue (TxOut _ val _)= case val of
+    toValue (TxOut _ val _ _)= case val of
       TxOutValue masie va -> va

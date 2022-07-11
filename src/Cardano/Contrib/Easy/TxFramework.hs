@@ -14,7 +14,7 @@ import Cardano.Api.Shelley
 import Cardano.Contrib.Easy.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
-import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
+import qualified Cardano.Ledger.Babbage.TxBody as LedgerBody
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Map (Map)
@@ -32,16 +32,16 @@ import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
 import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript)
 
-data TxCtxInput  = UtxoCtxIn (UTxO AlonzoEra) | TxInCtxIn TxIn | ScriptCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,TxIn) | ScriptUtxoCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,UTxO AlonzoEra)deriving (Show)
+data TxCtxInput  = UtxoCtxIn (UTxO BabbageEra) | TxInCtxIn TxIn | ScriptCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,TxIn) | ScriptUtxoCtxTxIn(PlutusScript PlutusScriptV1,ScriptData,ScriptData,UTxO BabbageEra)deriving (Show)
 data TxCtxOutput =
-    AddrCtxOut (AddressInEra AlonzoEra,Value)
+    AddrCtxOut (AddressInEra BabbageEra,Value)
   | PkhCtxOut (PubKeyHash,Value)
   | ScriptCtxOut (PlutusScript PlutusScriptV1,Value, Hash ScriptData)  deriving (Show)
 
 newtype TxCtxCollateral = TxInCollateral TxIn deriving (Show)
 
 -- select a utxo and add change to it.
-data TxCtxChange = TxCtxChangeUnset | TxCtxChange TxCtxOutput | TxCtxChangeAddr (AddressInEra AlonzoEra) deriving (Show)
+data TxCtxChange = TxCtxChangeUnset | TxCtxChange TxCtxOutput | TxCtxChangeAddr (AddressInEra BabbageEra) deriving (Show)
 -- Context Builder for test transaction
 -- You will not use this directly, instead use builder functions
 -- to compose this structure.
@@ -93,10 +93,10 @@ txValidUntilPosixTime end = TxOperationBuilder TxCtxChangeUnset [] [] [] [] (0,e
 
 -- In this transaction, pay some value to the wallet.
 -- It will be included in the tx_out of this transaction
-txPayTo:: AddressInEra AlonzoEra ->Value ->TxOperationBuilder
+txPayTo:: AddressInEra BabbageEra ->Value ->TxOperationBuilder
 txPayTo addr v= ctxOutput $ AddrCtxOut  (addr, v)
 
-txConsumeUtxos :: UTxO AlonzoEra -> TxOperationBuilder
+txConsumeUtxos :: UTxO BabbageEra -> TxOperationBuilder
 txConsumeUtxos utxo =  ctxInput $ UtxoCtxIn  utxo
 
 
@@ -104,7 +104,7 @@ txPayToPkh:: PubKeyHash  ->Value ->TxOperationBuilder
 txPayToPkh pkh v= ctxOutput $   PkhCtxOut  (pkh, v)
 -- In this transaction send  x lovelace to an wallet.
 -- It will appear in tx_out
-txPayLovelaceTo :: AddressInEra AlonzoEra  -> Integer -> TxOperationBuilder
+txPayLovelaceTo :: AddressInEra BabbageEra  -> Integer -> TxOperationBuilder
 txPayLovelaceTo w v=txPayTo w (lovelaceToValue $quantityToLovelace $ Quantity v)
 
 
@@ -130,7 +130,7 @@ txRedeem txin script _data _redeemer = ctxInput $ ScriptCtxTxIn (script,dataToSc
 
 -- Redeem from Script Address.
 txRedeemUtxo :: (ToData a2, ToData a3) =>
-  UTxO AlonzoEra
+  UTxO BabbageEra
   -> PlutusScript PlutusScriptV1 -> a2 -> a3 -> TxOperationBuilder
 txRedeemUtxo utxo script _data _redeemer = ctxInput $ ScriptUtxoCtxTxIn (script,dataToScriptData _data,dataToScriptData _redeemer,utxo)
 
@@ -142,7 +142,7 @@ txAddCollateral v =  ctxCollateral (TxInCollateral v)
 
 -- Redeem from Script Address.
 txRedeemUtxoWithValidator :: (ToData a2, ToData a3) =>
-  UTxO AlonzoEra
+  UTxO BabbageEra
   -> Validator -> a2 -> a3 -> TxOperationBuilder
 txRedeemUtxoWithValidator utxo validator _data _redeemer =
     ctxInput $ ScriptUtxoCtxTxIn (PlutusScriptSerialised  serialisedScript ,dataToScriptData _data,dataToScriptData _redeemer,utxo)
@@ -153,16 +153,16 @@ txRedeemUtxoWithValidator utxo validator _data _redeemer =
 
 data TxResult=TxResult {
    txResultFee :: Lovelace ,
-   txResultIns::[(TxIn, Cardano.Api.Shelley.TxOut CtxUTxO  AlonzoEra)],
-   txResultBodyCotent::TxBodyContent BuildTx AlonzoEra,
-   txResultBody:: TxBody AlonzoEra
+   txResultIns::[(TxIn, Cardano.Api.Shelley.TxOut CtxUTxO  BabbageEra)],
+   txResultBodyCotent::TxBodyContent BuildTx BabbageEra,
+   txResultBody:: TxBody BabbageEra
 } deriving (Show)
 
 mkTx ctx builder walletAddr =mkTxWithChange ctx builder walletAddr walletAddr
 
 mkTxWithChange :: IsNetworkCtx v =>v ->TxOperationBuilder
-  -> AddressInEra AlonzoEra
-  ->  AddressInEra AlonzoEra
+  -> AddressInEra BabbageEra
+  ->  AddressInEra BabbageEra
   -> IO TxResult
 mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPcollaterals  (validityStart,validityEnd)) payerAddrInEra changeAddrInEra   = do
   (NetworkContext conn  pParam) <- toNetworkContext networkCtx
@@ -186,7 +186,7 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
         else do
           let collateralSet = Set.fromList mappedOpCollateral
           pure (mappedOpCollateral,Map.filterWithKey (\k _ -> k `notElem` collateralSet) unUnsedWalletUtos)
-    let txInsCollateral=TxInsCollateral CollateralInAlonzoEra   collaterals
+    let txInsCollateral=TxInsCollateral CollateralInBabbageEra   collaterals
     let bodyRevsion0 =   mkBody _txins mappedOutput txInsCollateral pParam
     _result<-case
         mkBalancedBody
@@ -199,12 +199,12 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
     let usedUtxos=UTxO (Map.fromList usedWalletUtxos <> operationUtxos)
     let (orderedIns,orderedOuts)=case balancedRevision0 of {
           ShelleyTxBody sbe
-          (LedgerBody.TxBody ins _ outs _ _ _ _ _ _ _ _ _ _) scs tbsd m_ad tsv
+          (LedgerBody.TxBody ins _ outs _ _ _ _ _ _ _ _ _ _ _ _ _) scs tbsd m_ad tsv
           -> (map fromShelleyTxIn  $ Set.toList ins,outs)
     }
     pure $ TxResult fee usedWalletUtxos balancedRevisionContent0 balancedRevision0)
 
-    -- let eExunits= evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
+    -- let eExunits= evaluateTransactionExecutionUnits BabbageEraInCardanoMode systemStart eraHistory pParam usedUtxos balancedRevision0
     -- case eExunits of
     --   Left tvie ->do 
     --       putStrLn  "[WARNING] :: exUnit calculation failed. Using default"  -- throw $ SomeError $ "ExecutionUnitCalculation :" ++ show tvie
@@ -224,11 +224,11 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
                               ScriptUtxoCtxTxIn x0 -> True
                               _ -> False )  input
     applyTxInExecutionUnits ::
-         [(TxIn,BuildTxWith  BuildTx (Witness WitCtxTxIn AlonzoEra))]
-      -> [(TxIn,BuildTxWith  BuildTx (Witness WitCtxTxIn AlonzoEra))]
+         [(TxIn,BuildTxWith  BuildTx (Witness WitCtxTxIn BabbageEra))]
+      -> [(TxIn,BuildTxWith  BuildTx (Witness WitCtxTxIn BabbageEra))]
       -> [TxIn]
       -> Map ScriptWitnessIndex (Either ScriptExecutionError ExecutionUnits)
-      -> Either SomeError [(TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))]
+      -> Either SomeError [(TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn BabbageEra))]
     applyTxInExecutionUnits originalIns ins orderedIns execUnitMap = do
       resolvedIns <- mapM   doMap (zip [0..] orderedIns)
       pure $ filter (\v -> fst v   `elem` oldSet) resolvedIns
@@ -272,60 +272,63 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
           unresolved=fst all
           vs=map toInput inputs
     mappedOpCollateral  =   map (\(TxInCollateral _in) -> _in) oPcollaterals
-    txOutValue (TxOut _ v _) = case v of
+    txOutValue (TxOut _ v _ _) = case v of
       TxOutAdaOnly oasie lo -> lovelaceToValue lo
       TxOutValue masie va -> va
 
     toInput ( inCtx ::TxCtxInput)= case inCtx of
       UtxoCtxIn (UTxO mp) -> Right $  map (\item-> (item,(fst item,BuildTxWith $ KeyWitness KeyWitnessForSpending)))   (Map.toList mp)
       TxInCtxIn ti -> Left (ti,BuildTxWith $ KeyWitness KeyWitnessForSpending)
-      ScriptCtxTxIn (script,_data,_redeemer,txin) -> Left (txin,BuildTxWith $  ScriptWitness ScriptWitnessForSpending $ plutusWitness script _data _redeemer defaultExunits)
-      ScriptUtxoCtxTxIn (script, _data,_redeemer,UTxO mp) -> Right $ map (\item-> (item,(fst  item,BuildTxWith $  ScriptWitness ScriptWitnessForSpending $ plutusWitness script _data _redeemer defaultExunits)))  (Map.toList mp)
+      ScriptCtxTxIn (script,_data,_redeemer,txin) -> Left (txin,BuildTxWith $  ScriptWitness ScriptWitnessForSpending $ plutusWitness (PScript script) _data _redeemer defaultExunits)
+      ScriptUtxoCtxTxIn (script, _data,_redeemer,UTxO mp) -> Right $ map (\item-> (item,(fst  item,BuildTxWith $  ScriptWitness ScriptWitnessForSpending $ plutusWitness (PScript script) _data _redeemer defaultExunits)))  (Map.toList mp)
 
     toOuotput network (outCtx :: TxCtxOutput) =  do
       case outCtx of
-        AddrCtxOut (addr,value) -> pure $ TxOut addr (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumNone
-        ScriptCtxOut (script,value,dataHash) -> pure $ TxOut (makeShelleyAddressInEra network (PaymentCredentialByScript  $  hashScript   (PlutusScript PlutusScriptV1   script)) NoStakeAddress) (TxOutValue MultiAssetInAlonzoEra  value ) (TxOutDatumHash ScriptDataInAlonzoEra dataHash)
+        AddrCtxOut (addr,value) -> pure $ TxOut addr (TxOutValue MultiAssetInBabbageEra value) TxOutDatumNone ReferenceScriptNone
+        ScriptCtxOut (script,value,dataHash) -> pure $ TxOut (makeShelleyAddressInEra network (PaymentCredentialByScript  $  hashScript   (PlutusScript PlutusScriptV1   script)) NoStakeAddress) (TxOutValue MultiAssetInBabbageEra  value ) (TxOutDatumHash ScriptDataInBabbageEra dataHash) ReferenceScriptNone
         PkhCtxOut (pkh,value)-> case pkhToMaybeAddr network pkh of
           Nothing -> throw $ SomeError "PubKeyHash couldn't be converted to address"
-          Just aie -> pure $ TxOut aie (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumNone
+          Just aie -> pure $ TxOut aie (TxOutValue MultiAssetInBabbageEra value) TxOutDatumNone ReferenceScriptNone
     mkBody ins outs collateral pParam =
           (TxBodyContent {
             txIns=ins ,
             txInsCollateral=collateral,
+            txInsReference=TxInsReference ReferenceTxInsScriptsInlineDatumsInBabbageEra [],
             txOuts=outs,
-            txFee=TxFeeExplicit TxFeesExplicitInAlonzoEra $ Lovelace 1000000,
+            txFee=TxFeeExplicit TxFeesExplicitInBabbageEra $ Lovelace 1000000,
             -- txValidityRange = (
-            --     TxValidityLowerBound ValidityLowerBoundInAlonzoEra 0
-            --     , TxValidityUpperBound ValidityUpperBoundInAlonzoEra 6969),
+            --     TxValidityLowerBound ValidityLowerBoundInBabbageEra 0
+            --     , TxValidityUpperBound ValidityUpperBoundInBabbageEra 6969),
             txValidityRange= if validityStart == 0
                               then  if  validityEnd == 0
-                                      then  (TxValidityNoLowerBound,TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra )
-                                      else (TxValidityNoLowerBound , TxValidityUpperBound  ValidityUpperBoundInAlonzoEra $toSlot validityEnd)
+                                      then  (TxValidityNoLowerBound,TxValidityNoUpperBound ValidityNoUpperBoundInBabbageEra )
+                                      else (TxValidityNoLowerBound , TxValidityUpperBound  ValidityUpperBoundInBabbageEra $toSlot validityEnd)
                               else  if validityEnd == 0
-                                      then (TxValidityLowerBound ValidityLowerBoundInAlonzoEra  $ toSlot validityStart,TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra )
-                                      else (TxValidityLowerBound  ValidityLowerBoundInAlonzoEra $ toSlot validityStart,TxValidityUpperBound ValidityUpperBoundInAlonzoEra $ toSlot validityEnd)
+                                      then (TxValidityLowerBound ValidityLowerBoundInBabbageEra  $ toSlot validityStart,TxValidityNoUpperBound ValidityNoUpperBoundInBabbageEra )
+                                      else (TxValidityLowerBound  ValidityLowerBoundInBabbageEra $ toSlot validityStart,TxValidityUpperBound ValidityUpperBoundInBabbageEra $ toSlot validityEnd)
               ,
             txMetadata=TxMetadataNone ,
             txAuxScripts=TxAuxScriptsNone,
             txExtraKeyWits= if  null signature        
                               then TxExtraKeyWitnessesNone 
-                              else TxExtraKeyWitnesses ExtraKeyWitnessesInAlonzoEra  (map sKeyToVkH signature),
+                              else TxExtraKeyWitnesses ExtraKeyWitnessesInBabbageEra  (map sKeyToVkH signature),
             txProtocolParams=BuildTxWith (Just  pParam),
             txWithdrawals=TxWithdrawalsNone,
             txCertificates=TxCertificatesNone,
             txUpdateProposal=TxUpdateProposalNone,
             txMintValue=TxMintNone,
-            txScriptValidity=TxScriptValidityNone
+            txScriptValidity=TxScriptValidityNone,
+            txTotalCollateral= TxTotalCollateralNone,
+            txReturnCollateral= TxReturnCollateralNone
           })
-    plutusWitness script _data redeemer exUnits = PlutusScriptWitness PlutusScriptV1InAlonzo
+    plutusWitness script _data redeemer exUnits = PlutusScriptWitness PlutusScriptV1InBabbage
                             PlutusScriptV1
                             script
                             (ScriptDatumForTxIn _data) -- script data
                             redeemer -- script redeemer
                             exUnits
     defaultExunits=ExecutionUnits {executionSteps= 6000000000, executionMemory=14000000}
-    isOnlyAdaTxOut (TxOut a v d) = case v of
+    isOnlyAdaTxOut (TxOut a v d _) = case v of
                                         -- only ada then it's ok
                                         TxOutAdaOnly oasie (Lovelace lo) -> lo>=2500000
                                         -- make sure that it has only one asset and that one is ada asset.
@@ -344,10 +347,10 @@ mkTxWithChange networkCtx (TxOperationBuilder change input output signature oPco
     testnetSlot timestamp= ((timestamp -1607199617000) `div` 1000 )+ 12830401 -- using epoch 100 as refrence
     mainnetSlot timestamp = ((timestamp -1596491091000 ) `div` 1000 )+ 4924800 -- using epoch 209 as reference
 mkBalancedBody :: ProtocolParameters
-  -> UTxO AlonzoEra
-  -> TxBodyContent BuildTx AlonzoEra
+  -> UTxO BabbageEra
+  -> TxBodyContent BuildTx BabbageEra
   -> Value
-  -> AddressInEra AlonzoEra
+  -> AddressInEra BabbageEra
   -> Word
   -> Either
       TxBodyError
@@ -418,19 +421,19 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
 
   negLovelace v=negateValue $ lovelaceToValue v
 
-  txouts :: [(TxIn,TxOut CtxUTxO AlonzoEra )]
+  txouts :: [(TxIn,TxOut CtxUTxO BabbageEra )]
   txouts = sortBy sortingFunc ( Map.toList utxoMap)
 
   -- sort the txouts based on following condition
   -- - the ones with multiple assets comes first
   -- - then the ones with lower lovelace amount come
   -- - then the ones with higher lovelace amount come
-  sortingFunc :: (TxIn,TxOut CtxUTxO AlonzoEra) -> (TxIn,TxOut CtxUTxO AlonzoEra)-> Ordering
-  sortingFunc (_,TxOut _ (TxOutAdaOnly _ v1) _) (_, TxOut _ (TxOutAdaOnly _ v2)  _) = v1 `compare` v2
-  sortingFunc (_,TxOut _ (TxOutAdaOnly _ (Lovelace v))  _) (_, TxOut _ (TxOutValue _ v2) _) = LT 
-  sortingFunc (_,TxOut _ (TxOutValue _ v1) _) (_, TxOut _ (TxOutAdaOnly _ v2) _) =  GT
-  sortingFunc (_,TxOut _ (TxOutValue _ v1) _) (_, TxOut _ (TxOutValue _ v2) _) =  let l1= length ( valueToList v1)
-                                                                                      l2= length (valueToList v2) in
+  sortingFunc :: (TxIn,TxOut CtxUTxO BabbageEra) -> (TxIn,TxOut CtxUTxO BabbageEra)-> Ordering
+  sortingFunc (_,TxOut _ (TxOutAdaOnly _ v1) _ _) (_, TxOut _ (TxOutAdaOnly _ v2)  _ _) = v1 `compare` v2
+  sortingFunc (_,TxOut _ (TxOutAdaOnly _ (Lovelace v))  _ _) (_, TxOut _ (TxOutValue _ v2) _ _) = LT 
+  sortingFunc (_,TxOut _ (TxOutValue _ v1) _ _) (_, TxOut _ (TxOutAdaOnly _ v2) _ _) =  GT
+  sortingFunc (_,TxOut _ (TxOutValue _ v1) _ _) (_, TxOut _ (TxOutValue _ v2) _ _) =  let l1= length ( valueToList v1)
+                                                                                          l2= length (valueToList v2) in
                                                                                   if l1==l2
                                                                                     then selectAsset v1 AdaAssetId `compare` selectAsset v2  AdaAssetId
                                                                                     else l2 `compare` l1
@@ -466,12 +469,12 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
       existingLove = case  selectAsset (snd  matched) AdaAssetId   of
         Quantity n -> n
       --minimun Lovelace required in the change utxo
-      minLove = case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumNone of
+      minLove = case  f $ TxOut walletAddr (TxOutValue MultiAssetInBabbageEra change) TxOutDatumNone ReferenceScriptNone of
           Lovelace l -> l
       -- extra lovelace in this txout over the txoutMinLovelace
       extraLove txout = selectLove - minLoveInThisTxout
           where
-            minLoveInThisTxout=case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra $ val <>change) TxOutDatumNone of
+            minLoveInThisTxout=case  f $ TxOut walletAddr (TxOutValue MultiAssetInBabbageEra $ val <>change) TxOutDatumNone ReferenceScriptNone of
                 Lovelace l -> l
             val= txOutValueToValue $ txOutValue txout
             selectLove = case selectAsset val AdaAssetId of { Quantity n -> n }
@@ -481,7 +484,7 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
       existingLove = case  selectAsset change AdaAssetId   of
         Quantity n -> n
       --minimun Lovelace required in the change utxo
-      minLove = case  f $ TxOut walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumNone of
+      minLove = case  f $ TxOut walletAddr (TxOutValue MultiAssetInBabbageEra change) TxOutDatumNone ReferenceScriptNone of
           Lovelace l -> l
 
 
@@ -511,22 +514,22 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
       TxOutAdaOnly _ l -> lovelaceToValue l
       TxOutValue _ v -> v
 
-  txOutValue (TxOut _ v _) = v
+  txOutValue (TxOut _ v _ _) = v
 
   -- modify the outputs to make sure that the min ada is included in them if it only contains asset.
   modifiedOuts calculator = map (includeMin calculator) (txOuts  txbody)
-  includeMin calculator txOut= do case txOut of {TxOut addr v hash-> case v of
+  includeMin calculator txOut= do case txOut of {TxOut addr v hash _-> case v of
                                      TxOutAdaOnly oasie lo ->  txOut
                                      TxOutValue masie va ->
                                        if selectAsset va AdaAssetId == Quantity  0
                                        then performMinCalculation addr va hash
                                        else  txOut }
     where
-      performMinCalculation addr val hash =TxOut  addr (TxOutValue MultiAssetInAlonzoEra  (val <> lovelaceToValue minLovelace)) hash
+      performMinCalculation addr val hash =TxOut  addr (TxOutValue MultiAssetInBabbageEra  (val <> lovelaceToValue minLovelace)) hash ReferenceScriptNone
         where
          minLovelace = minval addr (val <> lovelaceToValue (Lovelace 1_000_000)) hash
 
-      minval add v hash= calculator (TxOut add (TxOutValue MultiAssetInAlonzoEra v) hash )
+      minval add v hash= calculator (TxOut add (TxOutValue MultiAssetInBabbageEra v) hash ReferenceScriptNone)
 
   modifiedBody initialOuts txins change fee= content
     where
@@ -536,15 +539,17 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
           ordered=   Set.toList $  Set.fromList (map (toShelleyTxIn . fst) txIns)
           mapped= Map.fromList txIns
           forceJust (Just a) = a
+          forceJust Nothing = error "Unexpected forceJust encountered NOthing"
 
       content=(TxBodyContent  {
             txIns= reorderInputs$ txins ++ txIns txbody,
             txInsCollateral=txInsCollateral txbody,
+            txInsReference= TxInsReference ReferenceTxInsScriptsInlineDatumsInBabbageEra [],
             txOuts=  if nullValue change
                   then initialOuts
-                  else initialOuts ++ [ TxOut  walletAddr (TxOutValue MultiAssetInAlonzoEra change) TxOutDatumNone]  ,
-            txFee=TxFeeExplicit TxFeesExplicitInAlonzoEra  fee,
-            -- txValidityRange=(TxValidityNoLowerBound,TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra),
+                  else initialOuts ++ [ TxOut  walletAddr (TxOutValue MultiAssetInBabbageEra change) TxOutDatumNone ReferenceScriptNone]  ,
+            txFee=TxFeeExplicit TxFeesExplicitInBabbageEra  fee,
+            -- txValidityRange=(TxValidityNoLowerBound,TxValidityNoUpperBound ValidityNoUpperBoundInBabbageEra),
             txValidityRange = txValidityRange txbody,
             txMetadata=txMetadata txbody ,
             txAuxScripts=txAuxScripts txbody,
@@ -554,17 +559,19 @@ mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCoun
             txCertificates=txCertificates txbody,
             txUpdateProposal=txUpdateProposal txbody,
             txMintValue=txMintValue txbody,
-            txScriptValidity=txScriptValidity txbody
+            txScriptValidity=txScriptValidity txbody,
+            txTotalCollateral= TxTotalCollateralNone,
+            txReturnCollateral= TxReturnCollateralNone
           })
 
 
 
 executeMkBalancedBody :: Applicative f =>
   ProtocolParameters
-  -> UTxO AlonzoEra
-  -> TxBodyContent BuildTx AlonzoEra
+  -> UTxO BabbageEra
+  -> TxBodyContent BuildTx BabbageEra
   -> Value
-  -> AddressInEra AlonzoEra
+  -> AddressInEra BabbageEra
   -> Word
   -> f TxResult
 executeMkBalancedBody  pParams utxos  txbody inputSum walletAddr signatureCount=do
@@ -601,7 +608,7 @@ submitEitherBalancedBody ::
   LocalNodeConnectInfo CardanoMode
   ->  Either TxBodyError TxResult
   -> [SigningKey PaymentKey]
-  -> IO (Tx AlonzoEra)
+  -> IO (Tx BabbageEra)
 submitEitherBalancedBody conn eitherBalancedBody skeys =
       --End Balance transaction body with fee
   case  eitherBalancedBody of
