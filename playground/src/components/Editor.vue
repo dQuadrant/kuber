@@ -191,7 +191,8 @@ window.onclick = function(event) {
                 <input 
                 class="input border border-gray-300" 
                 type="text"
-                v-model="address"
+                :value="address"
+                @input="onAddressInput"
                 />
                 <div class="mt-4 mb-4" v-if="keyHash != ''" >
                   <div class="text-gray-500 mb-1">Your keyhash</div>
@@ -224,7 +225,8 @@ window.onclick = function(event) {
                 <div class="mb-2 text-gray-500">Enter script json</div>
                 <textarea 
                 class="textarea border border-gray-300"
-                v-model="scriptJson"
+                :value="scriptJson"
+                @input="onScriptJsonInput"
                 />
                 <div class="mt-4 mb-4" v-if="policyId != ''" >
                   <div class="text-gray-500 mb-1">Script policy id</div>
@@ -280,6 +282,16 @@ import {useToast} from 'vue-toast-notification';
 
 const notification = _notification.useNotificationStore();
 export default {
+  model: {
+    prop: 'address',
+    event: 'update'
+  },
+  props: {
+    address: {
+      type: String,
+      default: ''
+    }
+  },
   mounted() {
     let counter = 8;
     const __this = this;
@@ -314,6 +326,12 @@ export default {
     this.timeout && clearTimeout(this.timeout);
   },
   methods: {
+    onAddressInput(event){
+      this.address=event.target.value
+    },
+    onScriptJsonInput(event){
+      this.scriptJson=event.target.value
+    },
     performKeyHashCopy(){
       useToast().success('Copied Key Hash');
       navigator.clipboard.writeText(this.keyHash)
