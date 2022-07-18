@@ -24,3 +24,5 @@ For simple script witness
 ```haskell
 SimpleScriptWitness langInEra version (SScript sscript)
 ```
+
+5. Function for parsing,  `deserialiseFromRawBytesHex` now returns `Either` instead of `Just`
