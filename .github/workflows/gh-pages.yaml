@@ -16,7 +16,7 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
     - name: Build
-      run: cd playground && npm ci && npm run build
+      run: cd playground && npm ci && BASE_PATH=/kuber npm run build
     
     - name: Deploy to GitHub Pages
       uses: Cecilapp/GitHub-Pages-deploy@v3
