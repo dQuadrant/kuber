@@ -106,7 +106,7 @@ export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
     })
     const providers=Array.from(pluginMap.values())
     console.log("Provides",providers)
-    return providers
+    return providers.filter(x => x.name !="yoroi")
   }
 
 

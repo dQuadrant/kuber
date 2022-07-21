@@ -15,14 +15,6 @@
     "meta":"metadata"
 },
 {
-    "value": "0",
-    "meta":"metadata"
-},
-{
-    "value": "library",
-    "meta":"metadata"
-},
-{
     "value": "version",
     "meta":"metadata"
 },
@@ -76,10 +68,6 @@
 },
 {
     "value": "txId",
-    "meta":"Collaterals"
-},
-{
-    "value": "cborHex",
     "meta":"Collaterals"
 }
 ]

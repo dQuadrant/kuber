@@ -12,7 +12,6 @@ RUN apt-get update -y && apt-get install -y \
   git \
   jq \
   libffi-dev \
-  libghc-postgresql-libpq-dev \
   libgmp-dev \
   libncursesw5 \
   libpq-dev \
