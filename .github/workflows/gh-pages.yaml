@@ -24,4 +24,4 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         email: sudipbhattarai100@gmail.com
-        build_dir: dist/
+        build_dir: playground/dist/
