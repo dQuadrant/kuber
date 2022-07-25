@@ -50,9 +50,6 @@ function showCommand() {
 }
 
 
-## Build the build image. It contains cabal, ghc and libsodium
-showCommand docker build -t cardano-buildimage -f ./.ci/build.Dockerfile  "$(dirname $0)"
-
 ## execute a command inside the build image
 function execute-isolated() {
   echo "+ execute-isolated $*"
@@ -66,7 +63,7 @@ function execute-isolated() {
 	-e HOME=$HOME \
 	--entrypoint /bin/bash \
 	--workdir $WORKDIR \
-	cardano-buildimage -c  "$*"
+	dquadrant/cardano-ci -c  "$*"
 }
 
 if [[ "$1" == cabal* ]] ; then
@@ -82,8 +79,8 @@ else
       showCommand docker build --build-arg  OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/ -f ./.ci/Dockerfile  "$@" .
     elif git describe --tags | grep  -qE '^[0-9]+(\.[0-9]+)*$'
     then
-      showCommand docker build --build-arg  OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/  -f ./.ci/Dockerfile  -t "sireto/kuber:$(git describe --tags)" .
+      showCommand docker build --build-arg  OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/  -f ./.ci/Dockerfile  -t "dquadrant/kuber:$(git describe --tags)" .
     else
-      showCommand docker build --build-arg  OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/  -f ./.ci/Dockerfile -t "sireto/kuber:$(git rev-parse HEAD)" .
+      showCommand docker build --build-arg  OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/  -f ./.ci/Dockerfile -t "dquadrant/kuber:$(git rev-parse HEAD)" .
     fi
 fi
