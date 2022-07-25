@@ -70,48 +70,6 @@ library
     , vector
     , unordered-containers
 
-executable kuber
-  default-language: Haskell2010
-  main-is:  Main.hs
-  hs-source-dirs: server
-  other-modules:
-    Kuber.Server.Core
-    Kuber.Server.Spec
-    Kuber.Server.MediaType
-
-  build-depends:
-      base >= 4.9 && <5
-    , containers
-    , bytestring
-    , serialise
-    , text
-    , filepath
-    , directory
-    , aeson
-    , text-conversions
-    , cardano-api
-    , cardano-ledger-alonzo
-    , cardano-ledger-shelley
-    , cardano-slotting
-    , plutus-ledger-api
-    , plutus-tx
-    , ouroboros-network
-    , kuber
-    , servant
-    , servant-server
-    , servant-errors
-    , servant-exceptions
-    , wai
-    , servant-exceptions-server
-    , warp
-    , cborg
-    , http-types
-    , http-media
-    , wai-cors
-    , cardano-binary
-    , cardano-ledger-core
-
-
 test-suite test
   default-language: Haskell2010
   type: exitcode-stdio-1.0

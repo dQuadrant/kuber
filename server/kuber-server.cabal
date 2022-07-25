@@ -58,6 +58,8 @@ library
     , servant-exceptions-server
     , servant-exceptions
     , warp
+    , wai-middleware-static
+    , wai-extra
 
 
 executable kuber

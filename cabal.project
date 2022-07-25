@@ -207,7 +207,7 @@ package snap-server
   flags: +openssl
 
 package comonad
-  flags: -test-doctests
+  flags: -test-doctestsq
 
 package cardano-ledger-alonzo-test
   tests: False

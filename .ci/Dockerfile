@@ -1,7 +1,6 @@
 FROM ubuntu:20.04 as layer1
 ARG OVERRIDE_CHROOT_DIR=./chroot-env
 COPY --chown=root:root ${OVERRIDE_CHROOT_DIR} /layer1
-COPY ./.ci/docker-entrypoint.sh /layer1/docker-entrypoint.sh
 COPY  ./.ci/merge-root.sh /merge-root
 RUN bash -e /merge-root /layer1 \
  && rm -rf /layer1 \
@@ -18,13 +17,21 @@ RUN bash -e /merge-root /layer1 \
 # FROM  ubuntu:20.04 as layer2
 # COPY --from=layer1 /layer1  /layer1
 
+FROM node:16 as ui-layer
+WORKDIR /app
+COPY ./playground/package.json ./playground/package-lock.json ./
+RUN npm ci
+COPY ./playground .
+RUN npm run build
 
 FROM ubuntu:20.04
 LABEL "co.elastic.logs/enable"="false" \
         "maintainer"="Sudip Bhattarai" \
         "organization"="Sireto Technology" \
-        "support"="sudip@sireto.io"
+        "support"="sudip@sxireto.io"
 COPY --from=layer1  / /
+WORKDIR /app
+COPY  --from=ui-layer /app/dist/ .
 EXPOSE 8081
 ENTRYPOINT  /bin/kuber
 

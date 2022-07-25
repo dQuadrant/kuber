@@ -48,7 +48,7 @@ The steps are described in detailed in the documentation of [building-cardano-no
  Once everything is installed and is ready, kuber is ready to run
  ```
 cabal update
-CARDANO_NODE_SOCKET_PATH=/home/user/.cardano/testnet/node.socket cabal run kuber
+CARDANO_NODE_SOCKET_PATH=/home/user/.cardano/testnet/node.socket cabal run exe:kuber
  ```
 
  This will start kuber on port `8081`.

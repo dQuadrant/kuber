@@ -51,6 +51,8 @@ import qualified Data.ByteString.Lazy
 import Network.Wai.Middleware.Cors (simpleCors, CorsResourcePolicy (..), cors)
 import qualified Data.ByteString.Char8 as BS
 import Network.Wai (Request(requestMethod), Response, ResponseReceived, mapResponseHeaders)
+import Network.Wai.Middleware.Static (static)
+import Network.Wai.Middleware.Rewrite (rewriteRoot)
 import Cardano.Kuber.Api
 import Kuber.Server.MediaType
 
@@ -181,7 +183,7 @@ corsMiddlewarePolicy = CorsResourcePolicy {
     , corsIgnoreFailures = True
     }
 app :: DetailedChainInfo ->  Application
-app dcinfo = cors (\r ->  Just corsMiddlewarePolicy ) $ serve proxyAPI $ server dcinfo
+app dcinfo = rewriteRoot (T.pack "index.html") $ static $ cors (\r ->  Just corsMiddlewarePolicy ) $ serve proxyAPI $ server dcinfo
 
 instance ToServantErr FrameworkError where
   status (FrameworkError _ _) = status400
