@@ -134,7 +134,11 @@ So the final transaction builder json for placing on sell using kuber will be :
                 "fields": [],
                 "constructor": 0
             },
-            "datum":{"constructor":0,"fields":[{"constructor":0,"fields":[{"constructor":0,"fields":[{"bytes":"f59e2f825567acf2a526f89cc7ce41cb3fc28e39e55d0a5c7945c626"}]},{"constructor":1,"fields":[]}]},{"int":2000000}]}
+            "datum":{
+                "constructor":0,
+                "fields":[
+                    {"constructor":0,"fields":[{"constructor":0,"fields":[{"bytes":"f59e2f825567acf2a526f89cc7ce41cb3fc28e39e55d0a5c7945c626"}]},{"constructor":1,"fields":[]}]},
+                    {"int":2000000}]}
         }
     ]
 }
