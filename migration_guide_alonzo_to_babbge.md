@@ -1,20 +1,27 @@
-##### Migration required to make older transaction builder code work that utlizes cardano-api library:
+# Migration: Alonzo -> Babbage 
+The following are the required changes to make Alonzo transaction builder code to work on Babbage Era. These changes are significant if you're using `cardano-api` library.
 
-1. Changes of Era if `AlonzoEra` is explicitly used then it needs to be updated to `BabbageEra` like 
+## 1. Change Era 
+If `AlonzoEra` is explicitly used then it needs to be updated to `BabbageEra` like 
 ```haskell
 UTxO AlonzoEra -> UTxO BabbageEra
 ```
-2. Changes of `EraInCardanoMode BabbageEraInCardanoMode` like
+
+## 2. Change `EraInCardanoMode`
+Change `EraInCardanoMode BabbageEraInCardanoMode` like
 ```haskell
 AlonozoEraInCardanoMode -> BabbageEraInCardanoMode
 ```
-3. Add either `ReferenceScript` or `ReferenceScriptNone` additoinal field on TxOut like
+
+## 3. Add either `ReferenceScript` or `ReferenceScriptNone` additional field on TxOut
 ```haskell
 TxOut address txOutValue datum ReferenceScriptNone
 -- or
 TxOut address txOutValue datum (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra script)
 ```
-4. Changes to `ScriptWitness` strucutre now the Script section is replaced by `PlutusScriptOrReferenceInput` for plutus while for simple script it is `SimpleScriptOrReferenceInput`. So accoriding to usages if you need script witness with Reference Script or you intend to pass the script itself like
+
+## 4. Change `ScriptWitness` structure
+The Script section is replaced by `PlutusScriptOrReferenceInput` for plutus scripts and for simple script it is `SimpleScriptOrReferenceInput`. So according to usages if you need script witness with Reference Script or you intend to pass the script itself.
 
 For plutus script witness
 ```haskell
@@ -25,4 +32,5 @@ For simple script witness
 SimpleScriptWitness langInEra version (SScript sscript)
 ```
 
-5. Function for parsing,  `deserialiseFromRawBytesHex` now returns `Either` instead of `Just`
+## 5. Function for parsing  
+`deserialiseFromRawBytesHex` now returns `Either` instead of `Just`
