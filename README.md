@@ -34,6 +34,8 @@ If you're using Kuber as an API, you'll need to add `selections` field to indica
 
 For more examples, check [here](./docs/).
 
+## Example Project using Kuber
+[cardano-marketplace](https://github.com/dQuadrant/cardano-marketplace)
 
 # Building locally
 The system packages and dependencies required for building Kuber is the same as that of [cardano-node](https://github.com/input-output-hk/cardano-node).
