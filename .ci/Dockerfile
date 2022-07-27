@@ -22,16 +22,13 @@ WORKDIR /app
 COPY ./playground/package.json ./playground/package-lock.json ./
 RUN npm ci
 COPY ./playground .
-RUN npm run build
+RUN VITE_API_URL= npm run build
 
 FROM ubuntu:20.04
 LABEL "co.elastic.logs/enable"="false" \
-        "maintainer"="Sudip Bhattarai" \
-        "organization"="Sireto Technology" \
-        "support"="sudip@sxireto.io"
+        "maintainer"="Sudip Bhattarai"
 COPY --from=layer1  / /
 WORKDIR /app
 COPY  --from=ui-layer /app/dist/ .
 EXPOSE 8081
 ENTRYPOINT  /bin/kuber
-
