@@ -16,6 +16,7 @@
 [View Resulting transaction](https://testnet.cardanoscan.io/transaction/ce15765c0a5ee850905cf576723ef80d9489270b44a952ad748dfa58c4a93973)
 
 ### 2. Transferring assets
+In this example we are transferring `10 Ada` along with  `1000 MINt` tokens to an address. 
 ```json
 {
     "selections": ["addr_test1qqmwpnc72ts9a7fw2trmc2syfy7khtjgrw9vh2cja3psp4lee858y3kj7qmn3pvfdtfgqjmj99nnypx2eysgx3wpafds78dunz"],
@@ -28,7 +29,7 @@
 [View Resulting transaction](https://testnet.cardanoscan.io/transaction/43dbfaf7ada3b123cd4009377cb9dd13a90eead66032fe7c19ba23d32f43eefb)
 
 ### 3. Using  deductFee option
-**Note**  when using 'deduct fee' option, we only lose the exact amount we intended to spend. The fee is paid by the receiver.
+**Note**  when using 'deduct fee' option, we only lose the exact amount we intended to spend. The fee is deducted from receiver output value.
 
 ```json
 {

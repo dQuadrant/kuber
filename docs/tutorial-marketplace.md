@@ -113,7 +113,7 @@ So the final transaction builder json for placing on sell using kuber will be :
     "value": "2Ada"
 }
 ```
-6. So the final transaction builder json for placing on sell using kuber will be :
+6. So the final transaction builder json for buying the nft using kuber will be :
 ```json
 {
     "outputs": [

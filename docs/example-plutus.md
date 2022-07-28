@@ -2,6 +2,7 @@
 
 
 ### 1. Locking ada or tokens to an script.
+In this example, we are loking our token with inline datum to script address `addr_test1wq40nfjurthn364rvhhzu2y8z3t0d53s2z9sz0303hya3us9a490f`.
 ```json
 {
     "selections" :["addr_test1vq66k7sxqef27nwkr4htffs6lgr4pyg5aut4s7ugfclqt5qgxpnz9"],
