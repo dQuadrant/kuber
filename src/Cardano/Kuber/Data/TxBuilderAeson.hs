@@ -204,7 +204,7 @@ instance ToJSON TxBuilder where
               <+>  "collaterals"    >= collaterals
               <+>  "mint"           >= mintData
               <+>  "output"         >= outputs
-              <+>  "validityStart"  >= validityEnd
+              <+>  "validityStart"  >= validityStart
               <+>  "validityEnd"    >= validityEnd
               <+>  "signatures"     >= signatures
               <+>  "fee"            >= fee

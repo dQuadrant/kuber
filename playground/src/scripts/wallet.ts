@@ -25,6 +25,21 @@ export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
         if (tx.auxiliary_data()) {
             txBody.set_auxiliary_data_hash(hash_auxiliary_data(tx.auxiliary_data()))
         }
+        if(_txBody.collateral())
+        txBody.set_collateral(_txBody.collateral())
+        if(_txBody.mint())
+            txBody.set_mint(_txBody.mint())
+        if(_txBody.required_signers()){
+            txBody.set_required_signers(_txBody.required_signers())
+        }
+        if (_txBody.ttl_bignum()){
+            txBody.set_ttl_bignum(_txBody.ttl_bignum())
+        }
+        if(_txBody.validity_start_interval_bignum())
+          txBody.set_validity_start_interval_bignum(_txBody.validity_start_interval_bignum())
+        if(_txBody.network_id && _txBody.network_id()){
+            txBody.set_network_id(_txBody.network_id())
+        }
         tx = Transaction.new(txBody, tx.witness_set(), tx.auxiliary_data())
 
         // @ts-ignore
