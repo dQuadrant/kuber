@@ -3,6 +3,7 @@
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Cardano.Kuber.Data.TxBuilderAeson
 where
 
@@ -23,7 +24,7 @@ import Data.Functor ((<&>), ($>))
 import Codec.Serialise (serialise)
 
 import Data.Set (Set)
-import Data.Maybe (mapMaybe, catMaybes, isNothing)
+import Data.Maybe (mapMaybe, catMaybes, isNothing, fromMaybe)
 import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
 import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, TxOut, CurrencySymbol)
@@ -61,26 +62,43 @@ import qualified Data.ByteString.Char8 as BS8
 instance FromJSON TxBuilder where
   parseJSON (A.Object v) =
     TxBuilder
-      <$> (v .:? "selections" .!=[])
-      <*> (v .:? "inputs" .!=[])
-      <*> (v.:?"referenceInputs".!=[])
-      <*> (v .:? "outputs" .!= [])
-      <*> (v .:? "collaterals" .!= [])
+      <$> (v .?< "selection")
+      <*> v .?<  "input"
+      <*> v .?< "referenceInput"
+      <*> v .?< "output"
+      <*> v .?< "collateral"
       <*> v .:? "validityStart"
       <*> v .:? "validityEnd"
-      <*> (v .:? "mint" .!= [])
-      <*> (v .:? "signatures" .!= [])
+      <*> v .?< "mint"
+      <*> v .?< "signature"
       <*> v .:? "fee"
       <*> (v .:? "changeAddress" <&> fmap unAddressModal)
       <*> (v.:? "metadata" .!= Map.empty)
+    where
+      (.?<) :: FromJSON v=> A.Object -> T.Text -> Parser [v]
+      (.?<) obj key = do
+        mVal1<- obj .:? A.fromText key
+        case mVal1 of
+          Nothing -> do 
+            mVal2<- obj .:? A.fromText  (key <>"s")
+            case mVal2 of 
+              Nothing -> pure []
+              Just any -> returnVal any
+          Just val  -> returnVal val
+
+      returnVal  val =  case val of
+            A.Array vec -> mapM parseJSON $ V.toList vec
+            _ ->  do
+              v<- parseJSON  val
+              pure [v]
+
   parseJSON _ = fail "TxBuilder must be an object"
 
 instance FromJSON TxMintData where
   parseJSON (A.Object v) = do
     mintAmountJson <- v .: "amount"
-    scriptJson:: A.Object <- v .: "script"
-    scriptAny <- parseAnyScript $ B.concat $ LBS.toChunks $ A.encode scriptJson
-
+    scriptJson:: A.Value <- v .: "script"
+    scriptAny <- parseAnyScript scriptJson
     mintRedeemer <- v .:? "redeemer"
     exUnitsM <- v .:? "executionUnits"
     mintScript <- case mintRedeemer of
@@ -203,7 +221,7 @@ instance ToJSON TxBuilder where
               <+>  "referenceInputs">= map (\(TxInputReference tin) ->renderTxIn tin) refInputs
               <+>  "collaterals"    >= collaterals
               <+>  "mint"           >= mintData
-              <+>  "output"         >= outputs
+              <+>  "outputs"         >= outputs
               <+>  "validityStart"  >= validityStart
               <+>  "validityEnd"    >= validityEnd
               <+>  "signatures"     >= signatures
@@ -263,64 +281,63 @@ instance ToJSON TxInputResolved_  where
     TxInputReferenceScriptUtxo refTxin mData r mExunit utxo -> utxoToAeson utxo
 
 instance ToJSON TxValidatorScript where
-  toJSON (TxValidatorScript script) = A.String $ T.pack $ show script
+  toJSON (TxValidatorScript script) = case toJSON script of
+                     val@(A.Object km) -> fromMaybe val (A.lookup "script" km)
+                     val -> val
 
 instance ToJSON ScriptData where
   toJSON scriptData = scriptDataToJson ScriptDataJsonNoSchema scriptData
 
-instance ToJSON TxOutput where
-  toJSON (TxOutput _content  _deductFee _addChange) =
-    A.object
-      [
-        "content" .= _content
-      , "addChange" .= _addChange
-      , "deductFee" .= _deductFee
-      ]
 
-instance ToJSON TxOutputContent where
-  toJSON (TxOutAddress _address value) =
-    A.object
-      [
-        "address" .= _address
-      , "value" .= value
-      ]
-  toJSON (TxOutScript _script value dataHash) =
-    A.object
-      [
-        "script" .= _script
-      , "value" .= value
-      , "dataHash" .= dataHash
-      ]
-  toJSON (TxOutScriptAddress address value dataHash) =
-    A.object
-      [
-        "address" .= address
-      , "value" .= value
-      , "dataHash" .= dataHash
-      ]
-  toJSON (TxOutScriptAddressWithData address value   sd) =
-    A.object [
-        "address" .= address
-      , "value" .= value
-      , "data" .= sd
+instance ToJSON (TxOutput TxOutputContent)  where
+  toJSON (TxOutput _content  _deductFee _addChange onMinAda ) =
+    A.object  $
+      outputContentJsonPair _content
+      ++ ["addChange" .= _addChange | _addChange]
+      ++ (["deductFee" .= _deductFee | _deductFee])
+      ++ (case onMinAda of
+    DropOnUtxoInsufficientUtxoAda -> ["insuffientUtxoAda" .= A.fromString "drop"]
+    IncreaseOnUtxoInsufficientUtxoAda -> ["insuffientUtxoAda" .= A.fromString "increase"]
+    ErrorOnInsufficientUtxoAda -> ["insuffientUtxoAda" .= A.fromString "error"]
+    OnInsufficientUtxoAdaUnset -> []
+
+    )
+outputContentJsonPair :: KeyValue a => TxOutputContent -> [a]
+outputContentJsonPair (TxOutAddress _address value) =[
+      "address" .= _address
+    , "value" .= value
     ]
-  toJSON (TxOutScriptWithData script value   sData) =
-    A.object[
-        "scriptCode" .= T.pack "present"
-      , "value" .= value
-      , "data" .= sData
-
+outputContentJsonPair (TxOutScript _script value dataHash) =[
+      "script" .= _script
+    , "value" .= value
+    , "dataHash" .= dataHash
     ]
-  toJSON (TxOutPkh pkh value) =
-    A.object[
-        "pkh" .= show pkh
-      , "value" .= value
-
+outputContentJsonPair (TxOutScriptAddress address value dataHash) =[
+      "address" .= address
+    , "value" .= value
+    , "dataHash" .= dataHash
     ]
+outputContentJsonPair (TxOutScriptAddressWithData address value   sd) =[
+      "address" .= address
+    , "value" .= value
+    , "data" .= sd
+  ]
+outputContentJsonPair (TxOutScriptWithData script value   sData) =[
+      "script" .= script
+    , "value" .= value
+    , "data" .= sData
 
+  ]
+outputContentJsonPair (TxOutPkh pkh value) =[
+      "pkh" .= show pkh
+    , "value" .= value
 
-
-
+  ]
+outputContentJsonPair (TxOutAddressWithReference addr value script) =  [
+      "address" .= addr,
+      "value"   .= value,
+      "script"  .= script
+  ]
 
 instance ToJSON TxMintingScript where
   toJSON (TxSimpleScript _script) =
@@ -388,7 +405,7 @@ instance FromJSON TxInput where
       Just scriptJson -> do
         inputFunc<-case scriptJson of
           A.String txt -> parseTxIn txt <&> TxInputReferenceScriptTxin
-          _  ->  parseAnyScript ( B.concat $ LBS.toChunks $ A.encode scriptJson )
+          _  ->  parseAnyScript scriptJson
                   <&> TxValidatorScript
                   <&> TxInputScriptTxin
         mData <- v .:? "datum"
@@ -423,7 +440,19 @@ instance FromJSON TxInputReference where
   parseJSON (A.String v)  =parseTxIn v <&> TxInputReference
   parseJSON _             = fail "Expected InputReference string"
 
-instance FromJSON TxOutput where
+instance FromJSON InsufficientUtxoAdaAction where
+  parseJSON (A.String _v)
+        | v == "drop"                   = pure DropOnUtxoInsufficientUtxoAda
+        | v == "increase" || v == "fix" = pure IncreaseOnUtxoInsufficientUtxoAda
+        | v == "error"                  = pure ErrorOnInsufficientUtxoAda
+        | otherwise  = fail $ "Expected one of drop, increase or error, got: " ++ T.unpack v
+        where
+          v = T.toLower _v
+  parseJSON A.Null = pure OnInsufficientUtxoAdaUnset
+  parseJSON _             = fail "Expected InsufficientUtxoAdaAction string : 'drop', 'increase' or 'error'"
+
+
+instance FromJSON (TxOutput TxOutputContent ) where
   parseJSON (A.Object v) = do
     -- Parse TxOutput according to address type if simple
     -- then use address with value TxOutAddress otherwise use TxOutScriptAddress or TxOutScript
@@ -432,22 +461,23 @@ instance FromJSON TxOutput where
     -- if there is script given then use that script and datahash
     addChange' <- v .:? "addChange" .!= False
     deductFee' <- v .:? "deductFee" .!= False
-
+    insuffientUtxoAda <- v.:? "insuffientUtxoAda" .!=OnInsufficientUtxoAdaUnset
     addressTextM <- v .:? "address"
     addressM <- case addressTextM of
       Nothing -> pure Nothing
       Just addrText -> parseAddress addrText <&> Just
-    valueText :: A.Value <- v .: "value"
+    valueText :: Maybe  A.Value <- v .:? "value"
     value <- case valueText of
-      A.String txt ->  parseValueText txt
-      A.Number sci -> pure $ valueFromList [(AdaAssetId, Quantity $ round  sci)]
-      _ -> fail "Expected string or number"
+        Just (A.String txt) ->  parseValueText txt
+        Just (A.Number sci) -> pure $ valueFromList [(AdaAssetId, Quantity $ round  sci)]
+        Just _ -> fail "Expected string or number"
+        _ -> pure $ valueFromList []
 
     scriptM <- v .:? "script"
     scriptAnyM <- case scriptM of
       Nothing -> pure Nothing
       Just scriptJson -> do
-        script <- parseAnyScript (T.encodeUtf8  scriptJson)
+        script <- parseAnyScript scriptJson
         pure $ Just script
 
 
@@ -467,6 +497,8 @@ instance FromJSON TxOutput where
         Left sd -> pure $ TxOutScriptAddressWithData address value sd
         Right ha -> pure $ TxOutScriptAddress address value ha
       -- If there is no datum hash but there is script then it is not supported
+      (Nothing, Just scriptAny,Just addr) -> pure $ TxOutAddressWithReference addr value (TxValidatorScript scriptAny)
+
       (Nothing, Just scriptAny,_) -> fail "TxOutput must have a data or dataHash if it has a script"
       -- If there is datum hash and script then use script and datahash
       (Just datum, Just scriptAny, Nothing) -> case datum of
@@ -474,7 +506,8 @@ instance FromJSON TxOutput where
         Right ha -> pure $ TxOutScript (TxValidatorScript scriptAny) value ha
       (_,_,_) -> fail "Unsupported output object format it must be address, value, optional datumhash for scriptaddress or script, value, datumHash"
 
-    pure $ TxOutput txOutputContent deductFee' addChange'
+
+    pure $ TxOutput txOutputContent deductFee' addChange' insuffientUtxoAda
 
     where
 

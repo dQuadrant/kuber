@@ -15,6 +15,7 @@ data ErrorType =  ConnectionError
                 | PlutusScriptError
                 | ExUnitCalculationError
                 | FeatureNotSupported
+                | TxValidationError
                 | BadMetadata
                 | TxSubmissionError
                 | WrongScriptType deriving Show 

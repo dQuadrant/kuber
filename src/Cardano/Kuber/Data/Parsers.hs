@@ -14,12 +14,12 @@ import           Cardano.Ledger.DescribeEras  (StandardCrypto, Witness (Alonzo))
 import qualified Cardano.Ledger.Mary.Value    as Mary
 import qualified Cardano.Ledger.Shelley.API   as Shelley
 import           Control.Exception            (SomeException, catch, throw)
-import           Data.Aeson                   ((.:), (.:?))
+import           Data.Aeson                   ((.:), (.:?), FromJSON (parseJSON), eitherDecode)
 import qualified Data.Aeson                   as A
 import qualified Data.Aeson.KeyMap            as A
 import qualified Data.Aeson.Key as A
 
-import           Data.Aeson.Types             (parseMaybe)
+import           Data.Aeson.Types             (parseMaybe, parse)
 import qualified Data.Aeson.Types             as Aeson
 import           Data.ByteString              (ByteString)
 import           Data.ByteString.Lazy         (fromStrict)
@@ -41,6 +41,8 @@ import           GHC.IO.Exception             (IOErrorType (UserError),
                                                IOException (IOError))
 import           Text.Read                    (readMaybe)
 import qualified Debug.Trace as Debug
+import qualified Data.Aeson.Types as A
+import Data.Aeson.Parser (eitherDecodeWith)
 
 
 parseSignKey :: MonadFail m => Text -> m (SigningKey PaymentKey)
@@ -140,19 +142,17 @@ parseScriptData jsonText = do
   where
     decodeJson = A.decode $ fromStrict $ TSE.encodeUtf8 jsonText
 
+parseAnyScriptBs :: MonadFail m => LBS.ByteString -> m ScriptInAnyLang
+parseAnyScriptBs jsonText = case eitherDecode jsonText of
+  Left s -> fail s
+  Right any -> case parse parseAnyScript any of 
+    A.Error s -> fail s
+    A.Success any' -> pure any'
 
-parseAnyScript :: MonadFail m => ByteString -> m ScriptInAnyLang
-parseAnyScript jsonText =
-  case deserialiseFromJSON AsTextEnvelope jsonText of
-    Left _ ->
-      case deserialiseFromJSON (AsSimpleScript AsSimpleScriptV2) jsonText of
-        Left err -> do
-          case deserialiseFromCBOR (AsScript AsPlutusScriptV1) jsonText of
-            Left de -> fail "Cannot parse the script hex as script"
-            Right sc -> pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1) sc
-        Right script -> pure $ toMinimumSimpleScriptVersion script
-    Right te ->
-      case deserialiseFromTextEnvelopeAnyOf textEnvTypes te of
+parseAnyScript ::  A.Value  -> A.Parser ScriptInAnyLang
+parseAnyScript val =do 
+  te <- parseJSON  val
+  case deserialiseFromTextEnvelopeAnyOf textEnvTypes te of
         Left err     -> fail "Error while decoding script text envelope"
         Right script -> pure script
   where

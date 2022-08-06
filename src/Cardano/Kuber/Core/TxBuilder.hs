@@ -5,6 +5,8 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 module Cardano.Kuber.Core.TxBuilder
 
 where
@@ -50,6 +52,7 @@ import Data.Word (Word64)
 import qualified Data.HashMap.Internal.Strict as H
 import Data.Bifunctor
 import Cardano.Kuber.Utility.ScriptUtil (plutusScriptToScriptAny)
+import GHC.Generics (Generic)
 
 
 data TxMintingScript = TxSimpleScript ScriptInAnyLang
@@ -85,11 +88,18 @@ data TxOutputContent =
   |  TxOutScript TxValidatorScript Value  (Hash ScriptData)
   |  TxOutScriptWithData TxValidatorScript Value ScriptData deriving (Show)
 
-data TxOutput = TxOutput {
-  content :: TxOutputContent,
+data TxOutput content =TxOutput {
+  content :: content,
   deductFee :: Bool,
-  addChange :: Bool
+  addChange :: Bool,
+  onMinAda :: InsufficientUtxoAdaAction
 } deriving (Show)
+
+transfrormOutput :: TxOutput content1 -> content2 -> TxOutput content2
+transfrormOutput (TxOutput con fee change minAda) v =TxOutput v fee change minAda
+
+data InsufficientUtxoAdaAction = DropOnUtxoInsufficientUtxoAda | IncreaseOnUtxoInsufficientUtxoAda|ErrorOnInsufficientUtxoAda | OnInsufficientUtxoAdaUnset deriving (Show,Eq,Generic, ToJSON )
+
 
 data TxCollateral =  TxCollateralTxin TxIn
                   |  TxCollateralUtxo (UTxO BabbageEra) deriving (Show)
@@ -120,7 +130,7 @@ data TxBuilder=TxBuilder{
     txSelections :: [TxInputSelection],
     txInputs:: [TxInput],
     txInputReferences:: [TxInputReference],
-    txOutputs :: [TxOutput],
+    txOutputs :: [TxOutput TxOutputContent],
     txCollaterals :: [TxCollateral],  -- collateral for the transaction
     txValidityStart :: Maybe Integer,
     txValidityEnd :: Maybe Integer,
@@ -184,7 +194,7 @@ txMints :: [TxMintData] -> TxBuilder
 txMints md= TxBuilder  [] [] [] [] [] Nothing Nothing md [] Nothing Nothing Map.empty
 
 
-txOutput :: TxOutput -> TxBuilder
+txOutput :: TxOutput TxOutputContent -> TxBuilder
 txOutput v =  TxBuilder  [] [] [] [v] [] Nothing Nothing [] [] Nothing Nothing Map.empty
 
 txCollateral :: TxCollateral -> TxBuilder
@@ -223,32 +233,32 @@ txMintSimpleScript simpleScript amounts = txMint $ TxMintData policyId  witness 
 
 -- pay to an Address
 txPayTo:: AddressInEra BabbageEra ->Value ->TxBuilder
-txPayTo addr v=  txOutput $  TxOutput (TxOutAddress  addr v) False False
+txPayTo addr v=  txOutput $  TxOutput (TxOutAddress  addr v) False False OnInsufficientUtxoAdaUnset
 
 txPayToWithReference:: Plutus.Script -> AddressInEra BabbageEra ->Value ->TxBuilder
-txPayToWithReference pScript addr v=  txOutput $  TxOutput (TxOutAddressWithReference addr v (TxValidatorScript (plutusScriptToScriptAny pScript))) False False
+txPayToWithReference pScript addr v=  txOutput $  TxOutput (TxOutAddressWithReference addr v (TxValidatorScript (plutusScriptToScriptAny pScript))) False False OnInsufficientUtxoAdaUnset
 
 -- pay to an Address by pubKeyHash. Note that the resulting address will be an enterprise address
 txPayToPkh:: PubKeyHash  ->Value ->TxBuilder
-txPayToPkh pkh v= txOutput $  TxOutput ( TxOutPkh  pkh  v ) False False
+txPayToPkh pkh v= txOutput $  TxOutput ( TxOutPkh  pkh  v ) False False OnInsufficientUtxoAdaUnset
 
 -- pay to Script address
 txPayToScript :: AddressInEra BabbageEra -> Value -> Hash ScriptData -> TxBuilder
-txPayToScript addr v d = txOutput $  TxOutput (TxOutScriptAddress  addr v d) False False
+txPayToScript addr v d = txOutput $  TxOutput (TxOutScriptAddress  addr v d  ) False False OnInsufficientUtxoAdaUnset
 
 --Babbage era functions
 -- pay to script Address with datum added to the transaction
 txPayToScriptWithData :: AddressInEra BabbageEra -> Value -> ScriptData -> TxBuilder
-txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutScriptAddressWithData addr v  d) False False
+txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutScriptAddressWithData addr v  d) False False OnInsufficientUtxoAdaUnset
 
 -- pay to script with reference script attached to the output
 txPayToScriptWithReference :: Plutus.Script -> Value -> Hash ScriptData -> TxBuilder
-txPayToScriptWithReference pScript v d = txOutput $ TxOutput (TxOutScript (TxValidatorScript (plutusScriptToScriptAny pScript)) v d) False False
+txPayToScriptWithReference pScript v d = txOutput $ TxOutput (TxOutScript (TxValidatorScript (plutusScriptToScriptAny pScript)) v d) False False OnInsufficientUtxoAdaUnset
 
 -- pay to script with reference script attached to the output and datum inlined
 txPayToScriptWithDataAndReference :: Plutus.Script -> Value -> ScriptData -> TxBuilder
 txPayToScriptWithDataAndReference pScript v d  =
-  txOutput $ TxOutput (TxOutScriptWithData (TxValidatorScript $ plutusScriptToScriptAny pScript) v d) False False
+  txOutput $ TxOutput (TxOutScriptWithData (TxValidatorScript $ plutusScriptToScriptAny pScript) v d) False False OnInsufficientUtxoAdaUnset
 
 -- input consmptions
 
