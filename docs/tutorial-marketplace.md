@@ -32,6 +32,7 @@ payment from your wallet address on which you received your tADA.
 
 
 **Mint a Cardano Native Token**
+
 In order to mint a Cardano Native Token we have to follow the CIP-25 NFT metadata
 standard https://cips.cardano.org/cips/cip25/.
 
@@ -43,6 +44,7 @@ raw format.
 
 
 **Key Hash**
+
 Kuber provides a utility to generate a unique Key hash on the basis of your Nami wallet
 address. Copy your Nami wallet address by pushing Receive and copy and go to Utilities in
 the right top menu of the Kuber playground and choose Compute PubKey Hash.
@@ -57,6 +59,7 @@ Copy the generated Key hash to be used in your metadata according to the CIP-25
 specification.
 
 **Asset name**
+
 To generate an asset name in raw format we are using
 https://onlineutf8tools.com/convert-utf8-to-bytes, make use of disable spaces between bytes
 and in the utf8 field we are typing our asset name, for example Kuber token.
@@ -68,6 +71,7 @@ Both the asset name in raw format and text format conform CIP-25 should be the s
 
 
 **Digital representation of the Cardano native token (image)**
+
 To represent the Cardano native token we need to upload an image to IPFS (InterPlanetair
 File System).
 
@@ -82,6 +86,7 @@ and use it to define our metadata file.
 
 
 **Policy Id**
+
 To mint a native token we need a unique Policy id that needs to be generated on the basis of
 a policy script. Below you will find an example of such a script that contains the keyHash we
 generated before for our Nami wallet.
@@ -133,6 +138,7 @@ Next push on the Get Policy Id button.��
 Copy the Script policy id to be used in your metadata file.
 
 **Metadata File Definition**
+
 Now that we have all information we can define the metadata file to mint the Cardano Native
 Token via the Kuber Playground.
 The prepared json for the minting with metadata is
