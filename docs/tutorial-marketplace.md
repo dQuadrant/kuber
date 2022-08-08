@@ -107,12 +107,13 @@ generated before for our Nami wallet.
 }
 ```
 Further it specifies a slot number and type. In this case the Cardano Native Token is
-expected to be minted before slot 65163944
+expected to be minted before slot 65163944. And cannot be minted after the slot.
 
 You can find the current slot on testnet either via testnet.cardanoscan.io or via the
 cardano-cli.
 
-Below an example of the testnet slot to be found on testnet.cardanoscan.io
+Below an example of the testnet slot to be found on https://testnet.cardanoscan.io and
+https://explorer.cardano-testnet.iohkdev.io/en for testnet.
 ![image](https://user-images.githubusercontent.com/18091631/183342939-1357df7c-d7b2-4e8b-a56f-3c00a872fa4b.png)
 
 Cardano-cli command on testnet to receive the current slot:
