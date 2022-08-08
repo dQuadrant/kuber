@@ -1,4 +1,5 @@
 **Inline Datum**
+
 Inline datum is a newly introduced feature after vasil hardfork. It basically allows datum to be attached to outputs instead of datum hashes which allows much simpler communication of datum values between users. You can use inline datum feature with placing the required datum in "datum" field and making "inline" true.
 Read more about it here
 https://developers.cardano.org/docs/governance/cardano-improvement-proposals/cip-0032/
