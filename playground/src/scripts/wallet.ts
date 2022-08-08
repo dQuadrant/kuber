@@ -1,13 +1,30 @@
 // @ts-nocheck
 import {
-    Address, AssetName,
-    BaseAddress, BigNum, Ed25519KeyHash, EnterpriseAddress,
-    hash_auxiliary_data, MultiAsset, PointerAddress, ScriptHash, ScriptHashes, StakeCredential,
+    Address,
+    AssetName,
+    BaseAddress,
+    BigNum,
+    Ed25519KeyHash,
+    Ed25519KeyHashes,
+    EnterpriseAddress,
+    hash_auxiliary_data,
+    MultiAsset,
+    NetworkId,
+    PointerAddress,
+    ScriptDataHash,
+    ScriptHash,
+    ScriptHashes,
+    StakeCredential,
     Transaction,
-    TransactionBody, TransactionUnspentOutput, TransactionWitnessSet, Value, Vkeywitnesses
-  } from '@emurgo/cardano-serialization-lib-asmjs';
+    TransactionBody,
+    TransactionInputs, TransactionOutput,
+    TransactionUnspentOutput,
+    TransactionWitnessSet,
+    Value,
+    Vkeywitnesses
+} from '@emurgo/cardano-serialization-lib-asmjs';
 
-const kuberUrl= import.meta.env.VITE_API_URL===undefined? "https://testnet.cnftregistry.io/kuber":import.meta.env.VITE_API_URL
+const kuberUrl= import.meta.env.VITE_API_URL===undefined? "http://testnet.cnftregistry.io/kuber":import.meta.env.VITE_API_URL
 
 import type {CIP30Instace} from "@/types";
 import {Buffer} from 'buffer'
@@ -18,7 +35,7 @@ export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
         const txArray=Uint8Array.from(Buffer.from(_tx, 'hex'))
         tx = Transaction.from_bytes(txArray)
         const _txBody = tx.body()
-        const txBody = TransactionBody.new(_txBody.inputs(),_txBody.outputs(),_txBody.fee(),_txBody.ttl())
+        const txBody = TransactionBody.new_tx_body(_txBody.inputs(),_txBody.outputs(),_txBody.fee())
         if (_txBody.mint()) {
             txBody.set_mint(_txBody.mint())
         }
@@ -29,18 +46,29 @@ export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
         txBody.set_collateral(_txBody.collateral())
         if(_txBody.mint())
             txBody.set_mint(_txBody.mint())
-        if(_txBody.required_signers()){
+        if(_txBody.required_signers()) {
             txBody.set_required_signers(_txBody.required_signers())
         }
         if (_txBody.ttl_bignum()){
-            txBody.set_ttl_bignum(_txBody.ttl_bignum())
+            txBody.set_ttl(_txBody.ttl_bignum())
         }
         if(_txBody.validity_start_interval_bignum())
           txBody.set_validity_start_interval_bignum(_txBody.validity_start_interval_bignum())
         if(_txBody.network_id && _txBody.network_id()){
             txBody.set_network_id(_txBody.network_id())
         }
-        tx = Transaction.new(txBody, tx.witness_set(), tx.auxiliary_data())
+        if(_txBody.reference_inputs())  {
+            txBody.set_reference_inputs(_txBody.reference_inputs())
+        }
+        if(_txBody.script_data_hash()){
+            txBody.set_script_data_hash(_txBody.script_data_hash())
+        }
+        if(_txBody.collateral_return()){
+            txBody.set_collateral_return(_txBody.collateral_return())
+        }
+        if(_txBody.total_collateral()){
+            txBody.set_total_collateral(_txBody.total_collateral())
+        }
 
         // @ts-ignore
     } catch (e) {

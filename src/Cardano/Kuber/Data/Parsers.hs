@@ -145,47 +145,48 @@ parseScriptData jsonText = do
 parseAnyScriptBs :: MonadFail m => LBS.ByteString -> m ScriptInAnyLang
 parseAnyScriptBs jsonText = case eitherDecode jsonText of
   Left s -> fail s
-  Right any -> case parse parseAnyScript any of 
+  Right any -> case parse parseAnyScript any of
     A.Error s -> fail s
     A.Success any' -> pure any'
 
 parseAnyScript ::  A.Value  -> A.Parser ScriptInAnyLang
-parseAnyScript val =do 
-  te <- parseJSON  val
-  case deserialiseFromTextEnvelopeAnyOf textEnvTypes te of
-        Left err     -> fail "Error while decoding script text envelope"
-        Right script -> pure script
-  where
-    textEnvTypes :: [FromSomeType HasTextEnvelope ScriptInAnyLang]
-    textEnvTypes =
-      [ FromSomeType
-          (AsScript AsSimpleScriptV1)
-          (ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV1)),
-        FromSomeType
-          (AsScript AsSimpleScriptV2)
-          (ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV2)),
-        FromSomeType
-          (AsScript AsPlutusScriptV1)
-          (ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1)),
-        FromSomeType
-          (AsScript AsPlutusScriptV2)
-          (ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2))
-      ]
-
-    toMinimumSimpleScriptVersion ::
-      SimpleScript SimpleScriptV2 ->
-      ScriptInAnyLang
-    toMinimumSimpleScriptVersion s =
-      case adjustSimpleScriptVersion SimpleScriptV1 s of
-        Nothing ->
-          ScriptInAnyLang
-            (SimpleScriptLanguage SimpleScriptV2)
-            (SimpleScript SimpleScriptV2 s)
-        Just s' ->
-          ScriptInAnyLang
-            (SimpleScriptLanguage SimpleScriptV1)
-            (SimpleScript SimpleScriptV1 s')
-
+parseAnyScript v@(A.Object o) =do
+  _type :: T.Text <- o  .: "type"
+  case _type of
+    "PlutusScriptV1" -> do
+       txt <- o.: "cborHex"
+       case deserialiseFromRawBytesHex (AsPlutusScript AsPlutusScriptV1) (T.encodeUtf8 txt) of
+         Left rbhe ->fail "cborHex couldn't be parsed into PlutusScriptV1"
+         Right sc -> pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1) (PlutusScript PlutusScriptV1 sc)
+    "PlutusScriptV2" -> do
+       txt <- o.: "cborHex"
+       case deserialiseFromRawBytesHex (AsPlutusScript AsPlutusScriptV2) (T.encodeUtf8 txt) of
+         Left rbhe ->fail "cborHex couldn't be parsed into PlutusScriptV2"
+         Right sc -> do 
+          pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2) (PlutusScript PlutusScriptV2 sc)
+    _ -> do 
+      v ::(SimpleScript SimpleScriptV2 ) <- parseJSON v
+      pure $ ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV2) (SimpleScript (SimpleScriptV2) v )
+  -- case deserialiseFromTextEnvelopeAnyOf textEnvTypes te of
+  --       Left err     -> fail "Error while decoding script text envelope"
+  --       Right script -> pure script
+  -- where
+  --   textEnvTypes :: [FromSomeType HasTextEnvelope ScriptInAnyLang]
+  --   textEnvTypes =
+  --     [ FromSomeType
+  --         (AsScript AsSimpleScriptV1)
+  --         (ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV1)),
+  --       FromSomeType
+  --         (AsScript AsSimpleScriptV2)
+  --         (ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV2))
+  --       -- FromSomeType
+  --       --   (AsScript AsPlutusScriptV1)
+  --       --   (ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1)),
+  --       -- FromSomeType
+  --       --   (AsScript AsPlutusScriptV2)
+  --       --   (ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2))
+  --     ]
+parseAnyScript _ = fail "Expected json object type"
 parseAddressBinary :: MonadFail m => ByteString -> m (AddressInEra BabbageEra )
 parseAddressBinary bs = case parseAddressCbor (LBS.fromStrict bs) of
   Just addr -> pure addr
