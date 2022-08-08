@@ -41,7 +41,7 @@ f75cdb5143473e94ef9d11221909c0d69187e4ac97039474fa526091
     "selections": [
         "addr_test1qq3nr3rngpd0uxe5mlypvnc3ayg0ps56v9t5rpjjej9sd250kew3mfvytehnlda2k2v7c4upv4jqjn9pfr7j9a826n2q0mdh8u"
     ],
-    "output":[
+    "outputs":[
        {
             "address": "addr_test1qq3nr3rngpd0uxe5mlypvnc3ayg0ps56v9t5rpjjej9sd250kew3mfvytehnlda2k2v7c4upv4jqjn9pfr7j9a826n2q0mdh8u",
             "value": "1 f75cdb5143473e94ef9d11221909c0d69187e4ac97039474fa526091.Token1"
@@ -68,7 +68,7 @@ It is same as above except it contains script using time lock policy in mint fie
     "selections": [
         "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n"
     ],
-    "output":[
+    "outputs":[
        {
             "address": "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n",
             "value": "1 31b0b0702f5d5432053586adfa15f3d1bdf83f57152ba7f371addf00.546f6b656e32"
@@ -97,7 +97,7 @@ Here the policy script contains key hash and time lock both.
     "selections": [
         "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n"
     ],
-    "output": [
+    "outputs": [
         {
             "address": "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n",
             "value": "1 31b0b0702f5d5432053586adfa15f3d1bdf83f57152ba7f371addf00.546f6b656e32"
@@ -135,7 +135,7 @@ Here the script used in plutus script in the format given below on mint field. P
     "selections": [
         "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n"
     ],
-    "output":[
+    "outputs":[
        {
             "address": "addr_test1vp42v5cge967qqq3rsqx77cmh8avuyx7d53der7pzhlmcsck2gc6n",
             "value": "1 31b0b0702f5d5432053586adfa15f3d1bdf83f57152ba7f371addf00.546f6b656e32"
