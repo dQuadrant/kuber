@@ -42,8 +42,8 @@ Kuber Json Api Reference
    ___eg___:&#160;"828258202ff238f64b773435d6f626aafe56073f251b52281c50a3872951905fbc597e560082583901ab1d01c80b7ef656194c4af4a682f2d55d714379bde1afe72dc5d348f9c9e87246d2f0373885896ad2804b7229673204cac9208345c1ea5b1a0037e4d2"  
 
 
-- Address bench32\
-   Wallet address in bench32 format. when address is used, all the utxos in the address is queried from the node and then the utxos are used in the transaction if required.\
+- Address bech32\
+   Wallet address in bech32 format. when address is used, all the utxos in the address is queried from the node and then the utxos are used in the transaction if required.\
    ___eg___:&#160;"addr_test1vzzc9nx2lxmu9r7gyd8cyd0dcx0ynh729rpv4c553exs7kgyu9cxl"
             
 
@@ -72,8 +72,8 @@ input can have following fields  depending on the context in which it's being us
    ___eg___:&#160;"3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8#1"
 
 
-- Address bench32\
-   Wallet address in bench32 format. when address is used, all the utxos in the address will be used as input and spent in the transaction.\
+- Address bech32\
+   Wallet address in bech32 format. when address is used, all the utxos in the address will be used as input and spent in the transaction.\
    __eg__:&#160;"addr_test1vzzc9nx2lxmu9r7gyd8cyd0dcx0ynh729rpv4c553exs7kgyu9cxl"
                             
   
@@ -127,7 +127,7 @@ Specify Execution units values. If not provided, Kuber automatically calculates 
 
 ##### Output object can have following common fields
 
-- `address` \"String" [Optional if script is present] :  Receiver address. Receiver address may be script or public key address. Address may be in bench32 or cborHex format. If `address` is not provided and script is present, address is automatically calculated.
+- `address` \"String" [Optional if script is present] :  Receiver address. Receiver address may be script or public key address. Address may be in bech32 or cborHex format. If `address` is not provided and script is present, address is automatically calculated.
 
     ___e.g___: "addr_test1vzzc9nx2lxmu9r7gyd8cyd0dcx0ynh729rpv4c553exs7kgyu9cxl"
 
@@ -183,8 +183,8 @@ Each Item in the list can be in one of the following form.
   ___eg___:&#160;"3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8#1"        c
 
 
-- _Address bench32_
-  Wallet address in bench32 format. when address is used, all the utxos int the address will be used as an input and spent in the transaction.
+- _Address bech32_
+  Wallet address in bech32 format. when address is used, all the utxos int the address will be used as an input and spent in the transaction.
 
   ___eg___:&#160;"addr_test1vzzc9nx2lxmu9r7gyd8cyd0dcx0ynh729rpv4c553exs7kgyu9cxl"
                         
