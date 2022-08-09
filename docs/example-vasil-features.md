@@ -16,7 +16,3 @@ https://developers.cardano.org/docs/governance/cardano-improvement-proposals/cip
     ]
 }
 ```
-**Reference Script**
-
-
-**Reference Input**
