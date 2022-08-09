@@ -9,7 +9,7 @@ where
 
 
 import Cardano.Api hiding(txMetadata, txFee)
-import Cardano.Api.Shelley hiding (txMetadata, txFee)
+import Cardano.Api.Shelley ()
 import Cardano.Kuber.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
@@ -479,7 +479,7 @@ instance FromJSON (TxOutput TxOutputContent ) where
       Just scriptJson -> do
         script <- parseAnyScript scriptJson
         pure $ Just script
-
+    scriptM <- v.:? "inlineScript"
 
     datumHashE <- parseData
     shouldEmbed <- v .:? "inline" .!= False

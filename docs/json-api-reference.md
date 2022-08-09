@@ -7,14 +7,15 @@ Kuber Json Api Reference
 
 - [**selections**](#1-selections---string--object--array-of-utxos-that-can-be-used-to-balance-the-transaction) : List of utxos/addresses that can be used for balancing transaction
 - [**inputs**](#2-inputs---string--object---inputs-utxos-being-spent-in-the-transaction) : List inputs in transactions
-- [**outputs**](#3-outputs--object--outputs-created-in-the-transaction) : List Output utxos in the transaction
-- [**collaterals**](#4-collaterals-string-optional--collateral-inputs-in-the-transaction) : [optional] List of collaterals in the transaction (It is automatically selected if missing) 
+- [**referenceInputs**](#3-referenceinputs--string--referenceinputs-transction-field) : Reference Inputs
+- [**outputs**](#4-outputs--object--outputs-created-in--the-transaction) : List Output utxos in the transaction
+- [**collaterals**](#5-collaterals-string-optional--collateral-inputs-in-the-transaction) : [optional] List of collaterals in the transaction (It is automatically selected if missing) 
 - **validityStart** : [Integer: UnixTimestamp millisecond] Transaction validFrom
 - **validityEnd** : [Integer : UnixTimestamp millisecond] Transaction validUntil 
-- [**mint**](#5-mint--object--minting-script-and-amount-in-the-transaction) : Minting Scripts and value in the transaction
+- [**mint**](#6-mint--object--minting-script-and-amount-in-the-transaction) : Minting Scripts and value in the transaction
 - **fee** : [Integer : Lovelace]  Fee  is calculated automatically, but setting this will set  transaction fee explicitly.
 - **changeAddress** [Optional ] : Default change address. If it's missing, it's selected from one of the selection address. Setting `addChange`  in any one output will disable this option
-- [**metadata**](#6-metadata--object--transaction-metadata) : Transaction metadata
+- [**metadata**](#7-metadata--object--transaction-metadata) : Transaction metadata
 
 ### 1. `selections` : [ string | object ] Array of utxos that can be used to balance the transaction
  
@@ -95,12 +96,15 @@ When spending/redeeming form script utxo, Input value should be an object with a
     TxIn in readable format. Kuber will use this utxo in the transaction 
 
     ___eg___:&#160;"3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8#1"   
-             
+
+- `script` : TxIn [TxHash#index]   
+    Utxo where the reference script is present. The utxo will be added to referenceInputs automatically.      
 
  - `script` [Object] :  Serialized script wrapped in text evelope. `script` object must have the following fields
 
        {
           "type": "String" Script type [ "PlutuScrpitV1" | "PlutusScriptV2" ]
+          "description": "String"  Description for the script. Can be set to empty
           "cborHex": "String" Scrialized cbor hex representation of the script.
        }
                          
@@ -110,7 +114,7 @@ When spending/redeeming form script utxo, Input value should be an object with a
      ___eg___: `{ "constructor": 0, "fields": []}`
                                                    
 
- - `datum` [Object] [Optional] : Datum matching the datumHash in the utxo. If Inline Datum feature is used, datum is not required and is directly fetched from the datum. Datum 
+ - `datum` [Object] [Optional] : Datum matching the datumHash in the utxo. If Inline Datum is present in utxo, datum is not required and is directly fetched from the datum. Datum 
 
     ___eg___: `{"constructor": 0, "fields": [{"bytes":"3500e13b06e8b5c628064cba7bb4637520d2b59acfeee216961362b3919e1ca8"}]}`
                 
@@ -123,7 +127,14 @@ Specify Execution units values. If not provided, Kuber automatically calculates 
            "memory": "String" Execution units memory
        }
 
-### 3. `outputs` : [Object] : Outputs created in  the transaction
+### 3. `referenceInputs` : [String] : ReferenceInputs transction field
+
+Reference inputs are used for referenceData or referenceScripts feature. When referenceInput contains datum, it can be accesed from plutus contract, and when referenceInput contains script, the script need not be provided in the input. When referenceScript is provided in the inputs, the utxo will be automatically added to referenceInputs
+
+ -`Txid#index` \"String" : Utxo to be used as reference input in the transaction.
+ - _Utxo CborHex_ \"HexString": Serialized utxo in the format used by cip30 wallets to be added in referenceInputs
+
+### 4. `outputs` : [Object] : Outputs created in  the transaction
 
 ##### Output object can have following common fields
 
@@ -132,39 +143,43 @@ Specify Execution units values. If not provided, Kuber automatically calculates 
     ___e.g___: "addr_test1vzzc9nx2lxmu9r7gyd8cyd0dcx0ynh729rpv4c553exs7kgyu9cxl"
 
     ___e.g___: "6136e0cf1e52e05ef92e52c7bc2a04493d6bae481b8acbab12ec4300d7" 
-                                                                                          
 
 - `value` [String | Integer] : \
 Amount to be sent. In case of native tokens, they can be joined by `+` like in cardano-cli response\
     ___e.g___: _ada amount_ :  "3A", "3.2Ada", "3.3a", "3ada"\
     ___e.g___: _lovelace amount_ : 3000000 or "3000000"\
-    ___e.g___: _with native token_ : "3a + b14005d41c24863c570edc85e180cde5eda45bff6c9117ea70856b04.546f6b656e2331"\
-    ___e.g___: _with native token_ : "3000000 + 3 21666f85344ad0f92b47ad3b359d91edc369e51031cb80e649a43434d058bd6a.546f6b656e2331"
-                                                                                 
+    ___e.g___: _with single Nft_ : "3a + b14005d41c24863c570edc85e180cde5eda45bff6c9117ea70856b04.546f6b656e2331"\
+    ___e.g___: _with native token_ : "3000000 + 3 21666f85344ad0f92b47ad3b359d91edc369e51031cb80e649a43434d058bd6a.546f6b656e2332"
 
-- `deductFee`  [_Optional_] :  If set to true, Fee will be deducted from this output
+- `deductFee`  [_Optional_] :  If set to true, Fee will be deducted from this output.
 
 
 - `addChange` [_Optional_] : If set to true, Change is added to this output. This can be used to make sure that at least `value` amount  is sent to this output.
-                                                                                                                                                          
+
+- `insuffientUtxoAda` [_String_] [_Optional_] : Specify action to perform when output doesn't have min output ada required, as per the protocol parameters. Possible values are
+   - "`error`" [Default] : throw error when utxo doesn't have sufficient ada.
+   - "`increase`" : Increase the ada amount in output to meet the minAda requirement
+   - "`drop`" : Don't include the output in transaction if it doesn't meet the minAda requirement
+                       
 
 ##### Following fields can be present **if the Output address is scriptAddress**
 
-- `script` | `inlineScript` : [Object] : Serialized script wrapped in text evelope. When `inlineScript` is provided, the script is inlined in the Utxo.  It's object must have following fields
+- `script` |  : [Object] : Serialized script wrapped in text evelope. If address is not provided, it is used to compute the outputAddress.
     {
         "type": "String" Script type [ "PlutuScrpitV1" | "PlutusScriptV2" ]
+        "description": "String"  Description for the script. Can be set to empty
         "cborHex": "String" Scrialized cbor hex representation of the script.
     }
+ - `inlineScript` : [Object] : Script to be inlined in the utxo. The output utxo can be used as referenceScript in future transactions.
 
+- `datumHash` \"String" \[Optional when is provided]  : DatumHash in cbor format.
 
-- `datumHash` \"String" \[Optional]  : DatumHash in cbor format.
+- `datum` \"String" \[Optional]  : Datum of the script output. The datum is by default inlined, It can also be used to calculate datumHash only
+- `inlineDatum` Boolean [Default : True] : when datum is provided, instead of datumHash, but it should not be inlined, then `inlineDatum: false` can be set. 
 
-
-- `datum` | `inlineDatum` \"String" \[Optional]  : Datum of the script output. `datum` is added in the transaction as Auxiliary Data whereas `inlineDatum` is inlined in the utxo
-
-### 4 `collaterals` "String" [Optional] : Collateral inputs in the transaction.
+### 5 `collaterals` "String" [Optional] : Collateral inputs in the transaction.
 Collaterals are selected automatically by Kuber using one of the utxos in the `selections` .
-If desired, collaterals list can be set explicitly .
+If required, collaterals list can be set explicitly .
 
 Each Item in the list can be in one of the following form.
 
@@ -195,7 +210,7 @@ Each Item in the list can be in one of the following form.
    ___eg___:&#160;"828258202ff238f64b773435d6f626aafe56073f251b52281c50a3872951905fbc597e560082583901ab1d01c80b7ef656194c4af4a682f2d55d714379bde1afe72dc5d348f9c9e87246d2f0373885896ad2804b7229673204cac9208345c1ea5b1a0037e4d2"
        
 
-### 5 mint : [Object] : Minting script and amount in the transaction
+### 6 mint : [Object] : Minting script and amount in the transaction
 Each object in the mint list must have following keys
 
 - `amount` {Object} : in amount object, keys represent the tokenName in hexFromat and value is the amount of that token to be minted. 
@@ -259,7 +274,7 @@ Each object in the mint list must have following keys
         }
 
 
-### 6. metadata : Object : Transaction Metadata
+### 7. metadata : Object : Transaction Metadata
 Transaction metadata must be a json object with top level integer key label.
 
 Keys in the json shouldn't be longer than 64 bytes length. If the string value in the metadata is longer than 64 bytes length, Kuber will split the string and replace it with array of smaller chunks of the string.

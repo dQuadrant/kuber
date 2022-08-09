@@ -24,7 +24,7 @@ import {
     Vkeywitnesses
 } from '@emurgo/cardano-serialization-lib-asmjs';
 
-const kuberUrl= import.meta.env.VITE_API_URL===undefined? "http://testnet.cnftregistry.io/kuber":import.meta.env.VITE_API_URL
+const kuberUrl= import.meta.env.VITE_API_URL===undefined? "https://testnet.cnftregistry.io/kuber":import.meta.env.VITE_API_URL
 
 import type {CIP30Instace} from "@/types";
 import {Buffer} from 'buffer'
