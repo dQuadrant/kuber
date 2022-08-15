@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               kuber
-version:            2.0.0.0
+version:            2.1.0.0
 
 -- A short (one-line) description of the package.
 -- synopsis:
@@ -66,9 +66,12 @@ library
 --    , shelley-spec-ledger
     , plutus-ledger-api
     , plutus-tx
+    , ouroboros-consensus
     , ouroboros-network
     , vector
+    , transformers
     , unordered-containers
+    , time
 
 test-suite test
   default-language: Haskell2010

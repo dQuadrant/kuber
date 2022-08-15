@@ -71,6 +71,14 @@ import Cardano.Ledger.Coin (Coin(Coin))
 import qualified Data.Aeson.KeyMap as A
 import qualified Data.Aeson.Key as A
 import qualified Data.HashMap.Lazy as HMap
+import Data.Time (nominalDiffTimeToSeconds)
+import Cardano.Ledger.Alonzo.TxInfo (slotToPOSIXTime)
+import qualified Data.Text as Text
+import Cardano.Ledger.Slot (EpochInfo, epochInfoFirst)
+import Cardano.Slotting.EpochInfo (hoistEpochInfo, epochInfoSlotToUTCTime)
+import Ouroboros.Consensus.HardFork.History.EpochInfo (interpreterToEpochInfo)
+import           Control.Monad.Trans.Except(runExcept)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 
 type BoolChange   = Bool
 type BoolFee = Bool
@@ -161,6 +169,12 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
                     (UTxO availableUtxo)
                     (TxBuilder selections _inputs _inputRefs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata )
   = do
+  --     (toLedgerPParams era pparams)
+            --  tx
+            --  (toLedgerUTxO era utxo)
+            --  (toLedgerEpochInfo history)
+            --  systemstart
+            --  cModelArray
   let network = getNetworkId  dCinfo
   (resolvedMints, unresolvedMints) <- classifyMints (UTxO availableUtxo) mintData <&> partitionEithers
   let mergedMetadata = foldl injectMetadataPolicy (foldl  injectMetadataPolicy metadata resolvedMints) unresolvedMints
@@ -242,7 +256,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
           in  iteratedBalancing  10 txBody1 fee1
         )
     )
-  
+
   respond  finalBody finalSignatories
   where
     applyMintExUnits :: Map PolicyId ExecutionUnits
@@ -757,11 +771,14 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
 
         txOutValue_ txout= case txout of { TxOut aie tov tod _-> txOutValueToValue tov }
     txLowerBound = case validityStart of
-                                Nothing -> TxValidityNoLowerBound
-                                Just v -> TxValidityLowerBound ValidityLowerBoundInBabbageEra   (toSlot v)
+      NoValidityTime -> TxValidityNoLowerBound
+      ValidityPosixTime ndt ->  TxValidityLowerBound ValidityLowerBoundInBabbageEra   (toSlot ndt)
+      ValiditySlot sn -> TxValidityLowerBound ValidityLowerBoundInBabbageEra sn
     txUpperBound = case validityEnd of
-      Nothing -> TxValidityNoUpperBound ValidityNoUpperBoundInBabbageEra
-      Just n -> TxValidityUpperBound ValidityUpperBoundInBabbageEra (toSlot n)
+      NoValidityTime ->  TxValidityNoUpperBound ValidityNoUpperBoundInBabbageEra
+      ValidityPosixTime ndt -> TxValidityUpperBound ValidityUpperBoundInBabbageEra (toSlot ndt)
+      ValiditySlot sn -> TxValidityUpperBound ValidityUpperBoundInBabbageEra sn
+     
     plutusWitness script _data redeemer exUnits = PlutusScriptWitness PlutusScriptV2InBabbage
                             PlutusScriptV2
                             script
@@ -781,11 +798,11 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       -- case  x  of
       --  Left tbe -> throw $ SomeError $ "First Balance :" ++ show tbe
       --  Right res -> pure res
-    toSlot tStamp= case getNetworkId  dCinfo of
-      Mainnet -> SlotNo $ fromIntegral $  mainnetSlot tStamp
-      Testnet nm -> SlotNo $ fromIntegral $ testnetSlot tStamp
-    testnetSlot timestamp= ((timestamp -1607199617000) `div` 1000 )+ 12830401 -- using epoch 100 as refrence
-    mainnetSlot timestamp = ((timestamp -1596491091000 ) `div` 1000 )+ 4924800 -- using epoch 209 as reference
+    toSlot tStamp = case getNetworkId  dCinfo of
+        Mainnet -> SlotNo $ fromIntegral $  mainnetSlot $ round tStamp
+        Testnet nm -> SlotNo $ fromIntegral $ testnetSlot $ round tStamp
+    testnetSlot timestamp= (timestamp -1607199617 )+ 12830401 -- using epoch 100 as refrence
+    mainnetSlot timestamp = (timestamp -1596491091 )+ 4924800 -- using epoch 209 as reference
 
 -- mkBalancedBody :: ProtocolParameters
 --   -> UTxO BabbageEra
@@ -954,3 +971,8 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
 -- gatherInfo cInfo  txBuilder@TxBuilder{txSelections, txInputs} = do
 --   error "sad"
 --   where
+
+toLedgerEpochInfo :: EraHistory mode -> EpochInfo (Either Text.Text)
+toLedgerEpochInfo (EraHistory _ interpreter) =
+    hoistEpochInfo (first (Text.pack . show) . runExcept) $
+      interpreterToEpochInfo interpreter

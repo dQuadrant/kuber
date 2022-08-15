@@ -8,15 +8,18 @@ Kuber Json Api Reference
 - [**selections**](#1-selections---string--object--array-of-utxos-that-can-be-used-to-balance-the-transaction) : List of utxos/addresses that can be used for balancing transaction
 - [**inputs**](#2-inputs---string--object---inputs-utxos-being-spent-in-the-transaction) : List inputs in transactions
 - [**referenceInputs**](#3-referenceinputs--string--referenceinputs-transction-field) : Reference Inputs
-- [**outputs**](#4-outputs--object--outputs-created-in--the-transaction) : List Output utxos in the transaction
+- [**outputs**](#4-outputs--object--outputs-created-in-the-transaction) : List Output utxos in the transaction
 - [**collaterals**](#5-collaterals-string-optional--collateral-inputs-in-the-transaction) : [optional] List of collaterals in the transaction (It is automatically selected if missing) 
-- **validityStart** : [Integer: UnixTimestamp millisecond] Transaction validFrom
-- **validityEnd** : [Integer : UnixTimestamp millisecond] Transaction validUntil 
+- **validityStart** : [Integer: PosixTimestamp seconds] (convinence field for usage instead of `validityStartSlot`) Transaction validFrom
+- **validityStartSlot** : [Integer: Slot Number] Transaction validFrom
+- **validityEnd** : [Integer : PosixTimestamp seconds] (convinence field for usage instead of `validityEndSlot`) Transaction validUntil 
+- **validityEndSlot** : [Integer : Slot Numbers] Transaction validUntil 
+
 - [**mint**](#6-mint--object--minting-script-and-amount-in-the-transaction) : Minting Scripts and value in the transaction
-- [**signatures**](#7 -)
+- [**signatures**](#7-signatures-string)
 - **fee** : [Integer : Lovelace]  Fee  is calculated automatically, but setting this will set  transaction fee explicitly.
 - **changeAddress** [Optional ] : Default change address. If it's missing, it's selected from one of the selection address. Setting `addChange`  in any one output will disable this option
-- [**metadata**](#7-metadata--object--transaction-metadata) : Transaction metadata
+- [**metadata**](#8-metadata--object--transaction-metadata) : Transaction metadata
 
 ### 1. `selections` : [ string | object ] Array of utxos that can be used to balance the transaction
  
@@ -274,8 +277,12 @@ Each object in the mint list must have following keys
             "scripts": [ BasicScript | MultiScript ] : when required number of script condition is met, token can be minted.
         }
 
+### 7. Signatures: "String"
+ PubKey Signatures required for usage by Plutus Contract. It must be set when `txSignedBy` function constraint is used in Plutus script.
 
-### 7. metadata : Object : Transaction Metadata
+ It can be either  bench32  or cborHex format Address. 
+
+### 8. metadata : Object : Transaction Metadata
 Transaction metadata must be a json object with top level integer key label.
 
 Keys in the json shouldn't be longer than 64 bytes length. If the string value in the metadata is longer than 64 bytes length, Kuber will split the string and replace it with array of smaller chunks of the string.

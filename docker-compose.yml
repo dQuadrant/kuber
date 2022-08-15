@@ -1,7 +1,7 @@
 version: "3.5"
 services:
   cardano-node:
-    image: inputoutput/cardano-node:${CARDANO_NODE_VERSION:-1.35.0}
+    image: inputoutput/cardano-node:${CARDANO_NODE_VERSION:-1.35.3}
     environment:
       NETWORK: ${NETWORK:-testnet}
     volumes:
@@ -13,7 +13,7 @@ services:
         max-size: "200k"
         max-file: "10"
   kuber:
-    image: dquadrant/kuber:${KUBER_VERSION:-2.0.0}
+    image: dquadrant/kuber:${KUBER_VERSION:-2.1.0}
     environment:
       NETWORK: ${NETWORK:- testnet}
     volumes:

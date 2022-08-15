@@ -38,10 +38,12 @@ module Cardano.Kuber.Api(
     ,   txSign
 
     -- transaction validity
-    , txValidFromPosixMs
-    , txValidUntilPosixMs
-    , txValidPosixTimeRangeMs
-
+    , txValidFromPosix
+    , txValidUntilPosix
+    , txValidPosixTimeRange
+    , txValidFromSlot
+    , txValidUntilSlot
+    , txValidSlotRange
     -- Core Tx builder object and it's transformation functions
     ,   TxBuilder
     ,   txBuilderToTxBody

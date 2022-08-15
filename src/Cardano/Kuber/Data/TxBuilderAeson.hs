@@ -63,22 +63,36 @@ import qualified Data.ByteString.Char8 as BS8
 import Control.Applicative ((<|>))
 import Data.Bifunctor (second)
 
+
+
+
+
 instance FromJSON TxBuilder where
-  parseJSON (A.Object v) =
+  parseJSON (A.Object v) =do
     TxBuilder
       <$> (v .?< "selection")
       <*> v .?<  "input"
       <*> v .?< "referenceInput"
       <*> v .?< "output"
       <*> v .?< "collateral"
-      <*> v .:? "validityStart"
-      <*> v .:? "validityEnd"
+      <*> v  `parseValidity` "validityStart"
+      <*> v `parseValidity` "validityEnd"
       <*> v .?< "mint"
       <*> v .?< "signature"
       <*> v .:? "fee"
       <*> (v .:? "changeAddress" <&> fmap unAddressModal)
       <*> (v.:? "metadata" .!= Map.empty)
     where
+      parseValidity obj key = do
+            mPosixTime <- obj .:? key
+            case mPosixTime of
+              Just posixTime -> pure $ ValidityPosixTime posixTime
+              Nothing -> do
+                mSlot <-  obj .:? (key <> "Slot")
+                case mSlot of
+                  Just slot -> pure $ ValiditySlot $ SlotNo $ slot
+                  _         -> pure $ NoValidityTime
+
       (.?<) :: FromJSON v=> A.Object -> T.Text -> Parser [v]
       (.?<) obj key = do
         mVal1<- obj .:? A.fromText key
@@ -162,20 +176,24 @@ instance ToJSON TxBuilder where
     appendNonEmpty :: (Foldable t, KeyValue a1, ToJSON (t a2)) => A.Key -> t a2 -> [a1] -> [a1]
     appendNonEmpty  key  val obj   =  if null val then obj else (key .= val) : obj
 
+    appendValidity key val obj = case val of 
+      NoValidityTime -> obj
+      ValidityPosixTime ndt -> (key .= ndt) : obj
+      ValiditySlot sn -> ((key <> "Slot" ) .= sn) : obj
+
     nonEmpyPair :: [A.Pair]
     nonEmpyPair =  "selections"     >= selections
               <+>  "inputs"         >= inputs
               <+>  "referenceInputs">= map (\(TxInputReference tin) ->renderTxIn tin) refInputs
               <+>  "collaterals"    >= collaterals
               <+>  "mint"           >= mintData
-              <+>  "outputs"         >= outputs
-              <+>  "validityStart"  >= validityStart
-              <+>  "validityEnd"    >= validityEnd
+              <+>  "outputs"        >= outputs
+              <+>  "validityStart"  `appendValidity` validityStart 
+              <+>  "validityEnd"    `appendValidity` validityEnd 
               <+>  "signatures"     >= signatures
               <+>  "fee"            >= fee
               <+>  "changeAddress"  >= defaultChangeAddr
               <#>  "metadata"       >= metadata
-
     infixl 8 >=
     (>=) a b = appendNonEmpty a b
     infixr 7 <#>

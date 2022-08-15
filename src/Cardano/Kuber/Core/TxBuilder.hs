@@ -6,6 +6,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeApplications #-}
 module Cardano.Kuber.Core.TxBuilder
 
 where
@@ -19,6 +20,7 @@ import Cardano.Slotting.Time
 import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Data.Time.Clock
 import Data.Map (Map)
 import Control.Exception
 import Data.Either
@@ -52,6 +54,8 @@ import qualified Data.HashMap.Internal.Strict as H
 import Data.Bifunctor
 import Cardano.Kuber.Utility.ScriptUtil ( fromPlutusV2Script)
 import GHC.Generics (Generic)
+import Data.Time.Clock.POSIX
+import Foreign.C (CTime)
 
 
 data TxSimpleScript = TxSimpleScriptV1 (SimpleScript  SimpleScriptV1 )
@@ -139,6 +143,33 @@ data TxMintingScriptSource =
 
 data TxMintData  s = TxMintData  s  [(AssetName ,Quantity)]  (Map Word64 (Map AssetName Aeson.Value)) deriving (Show)
 
+data ValidityTimestamp = NoValidityTime 
+  | ValidityPosixTime POSIXTime 
+  | ValiditySlot  SlotNo deriving (Show,Eq)
+
+instance Semigroup ValidityTimestamp where
+  (<>) = maxValidity
+  
+instance Monoid ValidityTimestamp where
+  mempty = NoValidityTime
+
+minValidity :: ValidityTimestamp -> ValidityTimestamp -> ValidityTimestamp
+minValidity NoValidityTime v2 = v2
+minValidity v1 NoValidityTime = v1
+minValidity (ValidityPosixTime t1) (ValidityPosixTime t2) = ValidityPosixTime (min t1 t2)
+minValidity (ValiditySlot s1) (ValiditySlot s2) = ValiditySlot (min s1 s2)
+minValidity v1@(ValiditySlot _) _ = v1
+minValidity _ v2 = v2
+
+
+maxValidity :: ValidityTimestamp -> ValidityTimestamp -> ValidityTimestamp
+maxValidity NoValidityTime v2 = v2
+maxValidity v1 NoValidityTime = v1
+maxValidity (ValidityPosixTime t1) (ValidityPosixTime t2) = ValidityPosixTime (max t1 t2)
+maxValidity (ValiditySlot s1) (ValiditySlot s2) = ValiditySlot (max s1 s2)
+maxValidity v1@(ValiditySlot _) _ = v1
+maxValidity _ v2 = v2
+
 -- TxBuilder object
 -- It is a semigroup and monoid instance, so it can be constructed using helper function
 -- and merged to construct a transaction specification
@@ -148,8 +179,8 @@ data TxBuilder=TxBuilder{
     txInputReferences:: [TxInputReference],
     txOutputs :: [TxOutput TxOutputContent],
     txCollaterals :: [TxCollateral],  -- collateral for the transaction
-    txValidityStart :: Maybe Integer,
-    txValidityEnd :: Maybe Integer,
+    txValidityStart :: ValidityTimestamp,
+    txValidityEnd :: ValidityTimestamp,
     txMintData :: [TxMintData TxMintingScriptSource],
     txSignatures :: [TxSignature],
     txFee :: Maybe Integer,
@@ -158,7 +189,7 @@ data TxBuilder=TxBuilder{
   } deriving (Show)
 
 instance Monoid TxBuilder where
-  mempty = TxBuilder  [] [] [] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
+  mempty = TxBuilder  [] [] [] [] [] mempty mempty [] [] Nothing Nothing Map.empty
 
 instance Semigroup TxBuilder where
   (<>)  txb1 txb2 =TxBuilder{
@@ -167,16 +198,8 @@ instance Semigroup TxBuilder where
     txInputReferences = txInputReferences txb1 ++ txInputReferences txb2,
     txOutputs = txOutputs txb1 ++ txOutputs txb2,
     txCollaterals  = txCollaterals txb1 ++ txCollaterals txb2,  -- collateral for the transaction
-    txValidityStart = case txValidityStart txb1 of
-          Just v1 -> case txValidityStart txb2 of
-            Just v2 -> Just $ min v1 v2
-            Nothing -> Just v1
-          Nothing -> txValidityStart txb2,
-    txValidityEnd = case txValidityEnd txb1 of
-      Just v1 -> case txValidityEnd txb2 of
-        Just v2 -> Just $ max v1 v2
-        _ -> Just v1
-      _ -> txValidityEnd txb2,
+    txValidityStart = minValidity (txValidityStart txb1) (txValidityStart txb2),
+    txValidityEnd = maxValidity (txValidityStart txb1) (txValidityStart txb2),
     txMintData = txMintData txb1 <> txMintData txb2,
     txSignatures = txSignatures txb1 ++ txSignatures txb2,
     txFee  = case txFee txb1 of
@@ -190,50 +213,61 @@ instance Semigroup TxBuilder where
     txMetadata = txMetadata txb1 <> txMetadata txb2
   }
 
-
 data TxContext = TxContext {
   ctxAvailableUtxo :: UTxO BabbageEra,
   ctxBuiler :: [TxBuilder]
 }
 
 txSelection :: TxInputSelection -> TxBuilder
-txSelection v = TxBuilder  [v] [] [] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
+txSelection v = TxBuilder  [v] [] [] [] [] mempty mempty [] [] Nothing Nothing Map.empty
 
 txInput :: TxInput -> TxBuilder
-txInput v = TxBuilder  [] [v] [] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
+txInput v = TxBuilder  [] [v] [] [] [] mempty mempty [] [] Nothing Nothing Map.empty
 
 txInputReference :: TxInputReference -> TxBuilder
-txInputReference v = TxBuilder  [] [] [v] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
+txInputReference v = TxBuilder  [] [] [v] [] [] mempty mempty [] [] Nothing Nothing Map.empty
 
 
 txMints :: [TxMintData TxMintingScriptSource] -> TxBuilder
-txMints md= TxBuilder  [] [] [] [] [] Nothing Nothing md [] Nothing Nothing Map.empty
+txMints md= TxBuilder  [] [] [] [] [] mempty mempty md [] Nothing Nothing Map.empty
 
 
 txOutput :: TxOutput TxOutputContent -> TxBuilder
-txOutput v =  TxBuilder  [] [] [] [v] [] Nothing Nothing [] [] Nothing Nothing Map.empty
+txOutput v =  TxBuilder  [] [] [] [v] [] mempty mempty [] [] Nothing Nothing Map.empty
 
 txCollateral :: TxCollateral -> TxBuilder
-txCollateral v =  TxBuilder  [] [] [] [] [v] Nothing Nothing [] [] Nothing Nothing Map.empty
+txCollateral v =  TxBuilder  [] [] [] [] [v] mempty mempty [] [] Nothing Nothing Map.empty
 
 txSignature :: TxSignature -> TxBuilder
-txSignature v =  TxBuilder  [] [] [] [] [] Nothing Nothing [] [v] Nothing Nothing Map.empty
+txSignature v =  TxBuilder  [] [] [] [] [] mempty mempty [] [v] Nothing Nothing Map.empty
 
 
 
 -- Transaction validity
 
--- Set validity Start and end time in posixMilliseconds
-txValidPosixTimeRangeMs :: Integer -> Integer -> TxBuilder
-txValidPosixTimeRangeMs start end = TxBuilder  [] [] [] [] [] (Just start) (Just end) [] [] Nothing Nothing Map.empty
+-- Set validity Start and end time in posix seconds
+txValidPosixTimeRange :: POSIXTime  -> POSIXTime -> TxBuilder
+txValidPosixTimeRange start end = TxBuilder  [] [] [] [] [] (ValidityPosixTime start ) (ValidityPosixTime end) [] [] Nothing Nothing Map.empty
 
--- set  validity statart time in posixMilliseconds
-txValidFromPosixMs:: Integer -> TxBuilder
-txValidFromPosixMs start =  TxBuilder  [] [] [] [] [] (Just start) Nothing [] [] Nothing Nothing Map.empty
+-- set  validity statart time in posix seconds
+txValidFromPosix:: POSIXTime -> TxBuilder
+txValidFromPosix start =  TxBuilder  [] [] [] [] [] (ValidityPosixTime start) mempty [] [] Nothing Nothing Map.empty
 
--- set transaction validity end time in posixMilliseconds
-txValidUntilPosixMs :: Integer -> TxBuilder
-txValidUntilPosixMs end =  TxBuilder  [] [] [] [] [] Nothing (Just end) [] [] Nothing Nothing Map.empty
+-- set transaction validity end time in posix seconds
+txValidUntilPosix :: POSIXTime -> TxBuilder
+txValidUntilPosix end =  TxBuilder  [] [] [] [] [] mempty (ValidityPosixTime  end) [] [] Nothing Nothing Map.empty
+
+-- Set validity Start and end slot 
+txValidSlotRange :: SlotNo  -> SlotNo -> TxBuilder
+txValidSlotRange start end = TxBuilder  [] [] [] [] [] (ValiditySlot  start ) (ValiditySlot end) [] [] Nothing Nothing Map.empty
+
+-- set  validity statart time in posix seconds
+txValidFromSlot:: SlotNo -> TxBuilder
+txValidFromSlot start =  TxBuilder  [] [] [] [] [] (ValiditySlot start) mempty [] [] Nothing Nothing Map.empty
+
+-- set transaction validity end time in posix seconds
+txValidUntilSlot :: SlotNo  -> TxBuilder
+txValidUntilSlot end =  TxBuilder  [] [] [] [] [] mempty (ValiditySlot  end) [] [] Nothing Nothing Map.empty
 
 --- minting
 _txMint  v = txMints [v]
