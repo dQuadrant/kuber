@@ -2,22 +2,22 @@
 The following are the required changes to make Alonzo transaction builder code to work on Babbage Era. These changes are significant if you're using `cardano-api` library.
 
 ## 1. Change Era 
-If `AlonzoEra` is explicitly used then it needs to be updated to `AlonzoEra` like 
+If `AlonzoEra` is explicitly used then it needs to be updated to `BabbageEra` like 
 ```haskell
-UTxO AlonzoEra -> UTxO AlonzoEra
+UTxO AlonzoEra -> UTxO BabbageEra
 ```
 
 ## 2. Change `EraInCardanoMode`
 Change `EraInCardanoMode AlonzoEraInCardanoMode` like
 ```haskell
-AlonozoEraInCardanoMode -> AlonzoEraInCardanoMode
+AlonozoEraInCardanoMode -> BabbageEraInCardanoMode
 ```
 
 ## 3. Add either `ReferenceScript` or `ReferenceScriptNone` additional field on TxOut
 ```haskell
 TxOut address txOutValue datum ReferenceScriptNone
 -- or
-TxOut address txOutValue datum (ReferenceScript ReferenceTxInsScriptsInlineDatumsInAlonzoEra script)
+TxOut address txOutValue datum (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra script)
 ```
 
 ## 4. Change `ScriptWitness` structure
