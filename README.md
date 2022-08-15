@@ -5,9 +5,13 @@ Haskell library and API server for composing balanced Cardano transactions.
 
 You can test Kuber on Cardano testnet via this playground interface :  [Kuber-Playground](https://dquadrant.github.io/kuber/). No installation required.
 
+| :exclamation:  Kuber Server won't work on mainnet  before vasil-hardfork |
+|-----------------------------------------|
+
 ## Docs
  - [JSON API Reference](./docs/json-api-reference.md)
  - [Examples](./docs/)
+
 
 
 # An example (JSON API)
@@ -34,8 +38,26 @@ If you're using Kuber as an API, you'll need to add `selections` field to indica
 
 For more examples, check [here](./docs/).
 
+
 ## Example Project using Kuber
 [cardano-marketplace](https://github.com/dQuadrant/cardano-marketplace)
+
+# Run Kuber server with docker-compose
+
+Kuber can be stared easily with [docker-compose.yml](./docker-compose.yml) file. But you will have to wait for cardano-node to sync to latest block
+
+```bash
+git clone https://github.com/dquadrant/kuber.git
+git checkout 2.1.0
+docker-compose up -d
+```
+
+
+If you want to build docker image locally, you can use the helper script
+```bash
+$ ./.ci/build
+```
+
 
 # Building locally
 The system packages and dependencies required for building Kuber is the same as that of [cardano-node](https://github.com/input-output-hk/cardano-node).
