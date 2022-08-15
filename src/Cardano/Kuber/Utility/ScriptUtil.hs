@@ -5,7 +5,7 @@ import Cardano.Api.Shelley (fromPlutusData, PlutusScriptOrReferenceInput (PScrip
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Short as SBS
 import Codec.Serialise (serialise)
-import qualified Plutus.V1.Ledger.Api as Plutus
+import qualified Plutus.V2.Ledger.Api as Plutus
 
 createTxInScriptWitness :: ScriptInAnyLang -> Maybe ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn BabbageEra)
 createTxInScriptWitness anyScript mDatum redeemer exUnits = do
@@ -46,6 +46,5 @@ validateScriptSupportedInEra' era script@(ScriptInAnyLang lang _) =
     Nothing -> Left $ FrameworkError WrongScriptType   (show lang ++ " not supported in " ++ show era ++ " era")
     Just script' -> pure script'
 
-
-plutusScriptToScriptAny :: Plutus.Script -> ScriptInAnyLang
-plutusScriptToScriptAny plutusScript = ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2) $ PlutusScript PlutusScriptV2 $ PlutusScriptSerialised . SBS.toShort . LBS.toStrict $ serialise plutusScript
+fromPlutusV2Script :: Plutus.Script -> Script PlutusScriptV2
+fromPlutusV2Script plutusScript = PlutusScript PlutusScriptV2 $ PlutusScriptSerialised . SBS.toShort . LBS.toStrict $ serialise plutusScript

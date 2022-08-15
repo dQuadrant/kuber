@@ -7,9 +7,8 @@ import Cardano.Kuber.Util hiding (toHexString)
 import Data.Text.Conversions
 import Data.ByteString (ByteString)
 import Test.Tasty (TestTree, testGroup, defaultMain)
-import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash))
 import Data.Functor ((<&>))
-import Plutus.V2.Ledger.Api (fromBuiltin)
+import Plutus.V2.Ledger.Api (fromBuiltin, PubKeyHash (PubKeyHash))
 import Test.Tasty.HUnit (testCase, (@?=))
 import Cardano.Kuber.Data.Parsers
 import qualified Debug.Trace as Debug

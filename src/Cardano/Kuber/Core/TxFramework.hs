@@ -4,8 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TupleSections #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# LANGUAGE DataKinds #-}
 module Cardano.Kuber.Core.TxFramework where
 
 
@@ -36,14 +35,13 @@ import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes, fromMaybe, maybeToList)
 import Data.List (intercalate, sortBy, minimumBy, find)
 import qualified Data.Foldable as Foldable
-import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, fromBuiltin)
+import Plutus.V2.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, fromBuiltin)
 import Cardano.Kuber.Core.TxBuilder
 import Cardano.Kuber.Core.ChainInfo (DetailedChainInfo (DetailedChainInfo, dciConn), ChainInfo (getNetworkId, getConnectInfo, withDetails))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Cardano.Api.Crypto.Ed25519Bip32 (xPrvFromBytes)
 import Debug.Trace (trace, traceM)
 import qualified Data.Aeson as A
-import Cardano.Ledger.Shelley.UTxO (txins)
 import GHC.Num (wordToInteger)
 import qualified Data.Map.Strict as StrictMap
 import qualified Debug.Trace as Debug
@@ -68,6 +66,11 @@ import Cardano.Kuber.Utility.QueryHelper (queryUtxos, queryTxins)
 import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable(toConsoleTextNoPrefix))
 import Cardano.Kuber.Utility.DataTransformation (skeyToPaymentKeyHash, pkhToPaymentKeyHash)
 import Data.Foldable (foldlM)
+import Data.Bifunctor (first)
+import Cardano.Ledger.Coin (Coin(Coin))
+import qualified Data.Aeson.KeyMap as A
+import qualified Data.Aeson.Key as A
+import qualified Data.HashMap.Lazy as HMap
 
 type BoolChange   = Bool
 type BoolFee = Bool
@@ -154,17 +157,33 @@ txBuilderToTxBodyIO' cInfo builder = do
 -- Construct TxBody from TxBuilder specification.
 -- Utxos map must be provided for the utxos that are available in wallet and used in input
 txBuilderToTxBody'::DetailedChainInfo ->  UTxO BabbageEra -> TxBuilder   -> Either FrameworkError  (TxBody BabbageEra,Tx BabbageEra )
-txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHistory )
+txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam systemStart eraHistory )
                     (UTxO availableUtxo)
                     (TxBuilder selections _inputs _inputRefs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata )
   = do
   let network = getNetworkId  dCinfo
-  meta<- if null metadata
-          then  Right TxMetadataNone
-          else  do
-            case metadataFromJson TxMetadataJsonNoSchema (toJSON $ splitMetadataStrings  metadata) of
-              Left tmje -> Left $ FrameworkError BadMetadata  (show tmje)
-              Right tm -> Right $ TxMetadataInEra  TxMetadataInBabbageEra tm
+  (resolvedMints, unresolvedMints) <- classifyMints (UTxO availableUtxo) mintData <&> partitionEithers
+  let mergedMetadata = foldl injectMetadataPolicy (foldl  injectMetadataPolicy metadata resolvedMints) unresolvedMints
+      injectMetadataPolicy :: Map Word64 A.Value -> TxMintData (PolicyId,a) -> Map Word64  A.Value
+      injectMetadataPolicy _metaMap (TxMintData (policy,_) _ mp )
+        = Map.foldlWithKey (\finalMap tag tokenNameMap -> Map.insert tag  (case Map.lookup tag finalMap of
+                Nothing -> toJSON  (HMap.singleton policyHex tokenNameMap)
+                Just (A.Object o) ->
+                        toJSON ( HMap.insert (A.fromText policyHex) (toJSON tokenNameMap) (A.toHashMap o))
+                _ ->    toJSON  (HMap.singleton policyHex tokenNameMap) )  finalMap)  _metaMap mp
+        where
+          policyHex = serialiseToRawBytesHexText policy
+      insert m1 m2' = foldl (\m2 (k,v) -> case Map.lookup k m2 of
+        Nothing -> m2
+        Just any -> Map.insert k (any <> v) m2  ) m2'  $   Map.toList m1
+  Debug.traceM ("MergedMetadata" ++ show mergedMetadata)
+  Debug.traceM ("injectedMetadataPolicy" ++ show mergedMetadata)
+  meta<- if null mergedMetadata
+        then  Right TxMetadataNone
+        else  do
+          case metadataFromJson TxMetadataJsonNoSchema (toJSON $ splitMetadataStrings  metadata) of
+            Left tmje -> Left $ FrameworkError BadMetadata  (show tmje)
+            Right tm -> Right $ TxMetadataInEra  TxMetadataInBabbageEra tm
   resolvedInputs <- mapM resolveInputs _inputs
   fixedInputs <- usedInputs Map.empty (Right defaultExunits) resolvedInputs
   parsedOutputs <- mapM (parseOutputs network) _outputs
@@ -177,26 +196,30 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
                     Just tis -> pure tis
                     )
                   else pure []
-  let mintValue = foldMap (\(TxMintData _ _ value)->value) mintData
-      witnessProvidedMap = Map.fromList $ map (\(TxMintData policyId sw _)->(policyId,sw)) mintData
-      txMintValue' = if null (valueToList mintValue) then TxMintNone  else  TxMintValue MultiAssetInBabbageEra mintValue $ BuildTxWith witnessProvidedMap
+  let
+      mintValue =  valueFromList $  foldl (\ l (TxMintData (p,_) amount _) -> l ++   map (first (AssetId p))  amount ) mempty  resolvedMints
+      resolvedMintsMp = Map.fromList $ map (\(TxMintData (policyId,sw) _ _)->(policyId,sw)) resolvedMints
+      txMintValue' postResolved = if null (valueToList mintValue) then TxMintNone  else  TxMintValue MultiAssetInBabbageEra mintValue $ BuildTxWith (resolvedMintsMp <> postResolved)
       fixedInputSum =  usedInputSum fixedInputs <> mintValue
-      fee= Lovelace 3_000_000
+      fee= Lovelace 300_000
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin fixedInputs) spendableUtxos
-      calculator= computeBody meta (Lovelace cpw) compulsarySignatories txMintValue'  fixedInputSum availableInputs (map fst collaterals) fixedOutputs
+      calculator= computeBody meta (Lovelace cpw) compulsarySignatories  fixedInputSum availableInputs (map fst collaterals) fixedOutputs
       colalteralSignatories = Set.fromList ( map snd collaterals)
+      withExtraSigs = appendExtraSignatures extraSignatures colalteralSignatories
+      withMintSignatures = appendMintingScriptSignatures withExtraSigs (map (\(TxMintData (_,wit) _ _)-> wit) resolvedMints)
       compulsarySignatories = foldl (\acc x -> case x of
                           Left (_,TxOut a _ _ _) -> case addressInEraToPaymentKeyHash  a of
                                                     Nothing -> acc
                                                     Just pkh -> Set.insert pkh acc
-                          Right _ -> acc ) (appendMintingScriptSignatures mintData $ appendExtraSignatures extraSignatures colalteralSignatories)   $ Map.elems  fixedInputs
-  (txBody1,signatories,fee1) <-  calculator  fixedInputs   fee
+                          Right _ -> acc ) withMintSignatures   $ Map.elems  fixedInputs
+  mintWithDefaultExunits <- applyMintExUnits Map.empty  (\p -> pure defaultExunits) unresolvedMints
+  (txBody1,signatories,fee1) <-  calculator  (txMintValue' mintWithDefaultExunits) fixedInputs   fee
   (finalBody,finalSignatories,finalFee) <- (
-    if  not requiresExUnitCalculation
+    if  not requiresExUnitCalculation && null  unresolvedMints
       then  (
         let iteratedBalancing 0 _ = Left $ FrameworkError LibraryError "Transaction not balanced even in 7 iterations"
             iteratedBalancing n lastFee= do
-              case calculator fixedInputs  lastFee  of
+              case calculator (txMintValue' mempty) fixedInputs  lastFee  of
                 Right  v@(txBody',signatories',fee') ->
                   if fee' ==  lastFee
                     then pure v
@@ -205,24 +228,30 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
         in iteratedBalancing  7  fee1
       )
       else (
-          let iteratedBalancing 0 _ _ = Left $ FrameworkError LibraryError "Transaction not balanced even in 10 iterations"
-              iteratedBalancing n lastBody lastFee= do
-                exUnits <- evaluateExUnitMap dCinfo ( UTxO availableUtxo) lastBody
-                inputs' <- usedInputs  (Map.map Right exUnits ) (Right defaultExunits)  resolvedInputs
-                calculator inputs' lastFee
-                case calculator inputs'  lastFee  of
+          let iteratedBalancing 0 _ _ =   Left $ FrameworkError LibraryError "Transaction not balanced even in 10 iterations"
+              iteratedBalancing n lastBody lastFee=do
+                (inputExmap,mintExmap) <- evaluateExUnitMap dCinfo ( UTxO availableUtxo) lastBody
+                inputs' <- usedInputs  (Map.map Right inputExmap ) (Right defaultExunits)  resolvedInputs
+                exUnitAppliedMints <- applyMintExUnits mintExmap (\p -> Left $ FrameworkError BalancingError ("Missing Exunits for minting" ++ show p)) unresolvedMints
+                case calculator (txMintValue' exUnitAppliedMints) inputs'  lastFee  of
                   Right  v@(txBody',signatories',fee') ->
                     if fee' ==  lastFee
                       then pure v
                       else iteratedBalancing (n-1) txBody'  fee'
                   Left e -> Left e
-
           in  iteratedBalancing  10 txBody1 fee1
         )
     )
+  
   respond  finalBody finalSignatories
-
   where
+    applyMintExUnits :: Map PolicyId ExecutionUnits
+        -> (PolicyId -> Either FrameworkError ExecutionUnits)
+        -> [TxMintData (PolicyId, ExecutionUnits -> ScriptWitness WitCtxMint BabbageEra)]
+        -> Either FrameworkError (Map PolicyId (ScriptWitness WitCtxMint BabbageEra))
+    applyMintExUnits mp onMissing unresolvedMints =  mapM  (\(TxMintData (p,f) _ _ ) -> case Map.lookup p mp of
+      Nothing ->  onMissing p >>= (\x -> pure (p,f x))
+      Just eu -> pure (p,f eu)   ) unresolvedMints <&> Map.fromList
     iterateFeeCalculation 0 _ _ _ = Left $ FrameworkError LibraryError "Transaction not balanced even in 7 iterations"
     iterateFeeCalculation n f txbody lastFee= do
       case f txbody  of
@@ -255,8 +284,8 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
       TxSignatureSkey sk -> Just sk
       _ -> Nothing) extraSignatures
 
-    mapPolicyIdAndWitness :: TxMintData -> (PolicyId, ScriptWitness WitCtxMint BabbageEra)
-    mapPolicyIdAndWitness (TxMintData pId sw _)= (pId, sw)
+    -- mapPolicyIdAndWitness :: TxMintData -> (PolicyId, ScriptWitness WitCtxMint BabbageEra)
+    -- mapPolicyIdAndWitness (TxMintData pId sw _)= (pId, sw)
 
     hasScriptInput = any (\case
       TxInputResolved TxInputScriptUtxo {}-> True
@@ -287,12 +316,48 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
         TxSignatureSkey sk -> Set.insert (skeyToPaymentKeyHash   sk) _set
       ) _set signatures
 
-    appendMintingScriptSignatures :: [TxMintData] -> Set (Hash PaymentKey) -> Set (Hash PaymentKey)
-    appendMintingScriptSignatures mints _set = foldl (\set (TxMintData pi sw va) -> case sw of
-      SimpleScriptWitness _ _ ss -> case ss of
-        SScript ss' -> getScriptSignatures ss' <> set
-        SReferenceScript ti m_sh -> set
-      _ -> set  ) _set mints
+    classifyMints mp  = mapM  (classifyMint mp)
+
+    classifyMint :: UTxO era
+      -> TxMintData TxMintingScriptSource
+      -> Either FrameworkError
+              (Either (TxMintData (PolicyId, ScriptWitness WitCtxMint BabbageEra))
+                      (TxMintData (PolicyId,  ExecutionUnits -> ScriptWitness WitCtxMint BabbageEra)))
+    classifyMint (UTxO mp)  (TxMintData source amount meta) = case source of
+      TxMintingSimpleScript tss ->pure $ Left $ transform $ case tss of
+        TxSimpleScriptV1 ss -> (PolicyId $ hashScript ( SimpleScript SimpleScriptV1 ss ), SimpleScriptWitness SimpleScriptV1InBabbage SimpleScriptV1 (SScript  ss))
+        TxSimpleScriptV2 ss -> (PolicyId $ hashScript ( SimpleScript SimpleScriptV2 ss ), SimpleScriptWitness SimpleScriptV2InBabbage SimpleScriptV2 (SScript  ss))
+      TxMintingPlutusScript tps m_eu sd ->
+        let f = case tps of
+              TxPlutusScriptV1 ps -> PlutusScriptWitness PlutusScriptV1InBabbage PlutusScriptV1 (PScript ps) NoScriptDatumForMint sd
+              TxPlutusScriptV2 ps -> PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2 (PScript ps) NoScriptDatumForMint sd
+            policy = PolicyId $ hashPlutusScript tps
+        in case m_eu of
+          Nothing -> pure $ Right $ transform (policy,f)
+          Just eu -> pure $ Left $ transform (policy, f eu)
+      TxMintingReferenceScript ti m_eu m_sd -> case Map.lookup ti mp of
+              Nothing -> Left $ FrameworkError BalancingError  "Reference Script Utxo is missing"
+              Just (TxOut _ _ _ (ReferenceScript _ anySc@(ScriptInAnyLang sl sc'))) ->do
+                ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anySc
+                case script' of
+                  SimpleScript ssv ss -> pure $ Left $ transform (PolicyId $ hashScript script' , SimpleScriptWitness langInEra ssv (SReferenceScript  ti Nothing))
+                  PlutusScript psv ps -> case m_sd of
+                    Nothing -> Left $ FrameworkError WrongScriptType "Plutus script referenced but ScriptData is missing"
+                    Just sd -> let  f =  PlutusScriptWitness langInEra psv (PReferenceScript ti Nothing) NoScriptDatumForMint sd
+                                    policy = PolicyId $ hashScript script'
+                                in pure $ case m_eu of
+                                 Nothing -> Right $ transform (policy,f)
+                                 Just eu -> Left $ transform (policy,f eu)
+              Just _ -> Left $ FrameworkError BalancingError "Reference script Utxo used in minting doesn't have the script"
+      where
+        transform :: v -> TxMintData v
+        transform v = TxMintData v amount meta
+
+
+    appendMintingScriptSignatures :: Set (Hash PaymentKey) -> [ScriptWitness witctx BabbageEra]  ->   Set (Hash PaymentKey)
+    appendMintingScriptSignatures    = foldl (\_set mints -> case mints of
+        SimpleScriptWitness slie ssv (SScript ss) -> getScriptSignatures ss <> _set
+        _ -> _set)
       where
         getScriptSignatures s = case  s of
           RequireSignature pkh -> Set.singleton pkh
@@ -330,7 +395,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
           | v2 < 4 = LT
           | otherwise = v1 `compare` v2
 
-    txContextCollaterals =foldl getCollaterals [] _collaterals 
+    txContextCollaterals =foldl getCollaterals [] _collaterals
     getCollaterals  accum  x = case x  of
         TxCollateralTxin txin -> accum++ (case Map.lookup txin availableUtxo of
           Nothing -> error "Collateral input missing in utxo map"
@@ -345,14 +410,14 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
     isJust (Just x)  = True
     isJust _ = False
 
-    computeBody meta cpw signatories  txMintValue' fixedInputSum availableInputs collaterals fixedOutputs fixedInputs fee = do
+    computeBody meta cpw signatories   fixedInputSum availableInputs collaterals fixedOutputs txMintValue' fixedInputs fee = do
       changeTxOut <-case findChange fixedOutputs of
         Nothing -> do
           changeaddr <- monadFailChangeAddr
           pure (TxOut changeaddr  ( TxOutValue MultiAssetInBabbageEra  (valueFromList [(AdaAssetId ,0)])) TxOutDatumNone ReferenceScriptNone )
         Just to -> pure to
 
-      (extraUtxos,change) <- selectUtxosConsideringChange (calculateTxoutMinLovelaceWithcpw cpw) (toCtxUTxOTxOut  changeTxOut) availableInputs startingChange
+      (extraUtxos,change) <- selectUtxosConsideringChange (babbageMinLovelace ledgerPParam) (toCtxUTxOTxOut  changeTxOut) availableInputs startingChange
       let
         maxChange = utxoListSum availableInputs <> startingChange
         missing = filterNegativeQuantity maxChange
@@ -408,7 +473,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
       Right (e,a,b) -> (i,BuildTxWith  ( ScriptWitness ScriptWitnessForSpending a )  )
     mkBodyContent meta fixedInputs extraUtxos outs collateral  txMintValue' fee =  bodyContent --   Debug.trace ("Body Content :\n" ++ show bodyContent) bodyContent
       where
-      references =  Set.fromList (map (\(TxInputReference a) -> a) _inputRefs) <>   referenceInputsFromScriptReference
+      references =  Set.fromList (map (\(TxInputReference a) -> a) _inputRefs) <>   referenceInputsFromScriptReference <> referenceInputsFromMint
       bodyContent=(TxBodyContent {
         txIns= getTxin fixedInputs extraUtxos ,
         txInsCollateral= if null collateral then TxInsCollateralNone  else TxInsCollateral CollateralInBabbageEra collateral,
@@ -455,10 +520,15 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
     --                                 TxOutScriptWithData _ va _ -> va
     --                             }
     zeroValue = valueFromList []
+
     referenceInputsFromScriptReference = foldl (\coll input  -> case input of
           TxInputResolved (TxInputReferenceScriptUtxo txin _ _ _ _)-> Set.insert txin coll
           TxInputUnResolved (TxInputReferenceScriptTxin txin _ _ _ _) -> Set.insert txin coll
           _ -> coll ) Set.empty  _inputs
+    referenceInputsFromMint = foldl (\s (TxMintData tmss _ _) -> case tmss of
+      TxMintingPlutusScript tps m_eu sd -> s
+      TxMintingReferenceScript ti m_eu m_sd -> Set.insert ti s
+      TxMintingSimpleScript tss -> s   ) Set.empty mintData
     findChange :: [ParsedOutput] -> Maybe (TxOut CtxTx BabbageEra )
     findChange ous =   find (\(TxOutput _ _ c _)  -> c ) ous <&> (\(TxOutput v _ _ _)-> v)
     updateOutputs cpw fee change outputs' = updateOutput cpw False False (getNetworkId  dCinfo) fee change outputs'
@@ -496,42 +566,68 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
     addMinAdaIfNecessary  cpw collector  (i,t@(TxOutput txout@(TxOut add v@(TxOutValue era val) datum refScript) addFee addChange action))
       | addFee = doAdd t
       | addChange = doAdd t
-      | otherwise  = let  Lovelace minLovelace = calculateTxoutMinLovelaceWithcpw cpw (toCtxUTxOTxOut txout)
+      | otherwise  = let  Coin minLovelace =  babbageMinLovelace ledgerPParam (toCtxUTxOTxOut txout)
+                          updatedTxout = updateLovelace newTxoutAda
+                          Coin newMinLovelace = babbageMinLovelace ledgerPParam (toCtxUTxOTxOut updatedTxout)
+                          newTxoutAda = (minLovelace- txOutAda)
                           Quantity txOutAda = selectAsset val AdaAssetId
-                          Lovelace minAdaWithAda = calculateTxoutMinLovelaceWithcpw cpw (toCtxUTxOTxOut (TxOut add (TxOutValue era (val<> valueFromList [(AdaAssetId, Quantity (2))])) datum refScript ))
+                          doubleUpdate = transfrormOutput  t $  if newTxoutAda == newMinLovelace
+                                                then updatedTxout
+                                                else updateLovelace newMinLovelace
                       in  if txOutAda >= minLovelace
                             then doAdd t
                             else
                               case action of
                                   DropOnUtxoInsufficientUtxoAda -> Right collector
-                                  IncreaseOnUtxoInsufficientUtxoAda -> doAdd $ transfrormOutput t (TxOut add (TxOutValue era (val<> valueFromList [(AdaAssetId, Quantity (minLovelace-txOutAda))]) ) datum refScript)
+                                  IncreaseOnUtxoInsufficientUtxoAda -> doAdd  doubleUpdate
                                   ErrorOnInsufficientUtxoAda -> Left (i,t, txOutAda,minLovelace)
                                   OnInsufficientUtxoAdaUnset ->
                                     if txOutAda >0
                                       then  Left (i,t, txOutAda,minLovelace)
-                                      else doAdd $ transfrormOutput t (TxOut add (TxOutValue era (val<> valueFromList [(AdaAssetId, Quantity (minLovelace-txOutAda))]) ) datum refScript)
+                                      else doAdd $ doubleUpdate
       where
+
+        updateLovelace adaAmount =  TxOut add (TxOutValue era (val<> valueFromList [(AdaAssetId, Quantity adaAmount)]) ) datum refScript
         doAdd t = Right $ collector ++ [t]
+    addMinAdaIfNecessary _ _ _ = error "Unexpected"
 
     parseOutputs ::  NetworkId -> TxOutput TxOutputContent -> Either FrameworkError   ParsedOutput
     parseOutputs  networkId output = case output of { TxOutput toc b b' _ -> case toc of
-      TxOutAddress aie va-> transformer $ TxOut aie  (TxOutValue MultiAssetInBabbageEra va ) TxOutDatumNone ReferenceScriptNone
-      TxOutAddressWithReference aie va (TxValidatorScript sa)-> transformer $ TxOut aie  (TxOutValue MultiAssetInBabbageEra va ) TxOutDatumNone (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra sa)
-      TxOutScriptAddress aie va ha -> transformer $ TxOut aie (TxOutValue MultiAssetInBabbageEra va) (TxOutDatumHash ScriptDataInBabbageEra ha) ReferenceScriptNone
-      TxOutScriptAddressWithData aie va sd -> transformer $ TxOut aie (TxOutValue MultiAssetInBabbageEra va ) (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra sd) ReferenceScriptNone
+      TxOutScriptWithScript sc va sd tms ->
+          transformer $ TxOut (plutusScriptAddr sc networkId)
+                      (TxOutValue MultiAssetInBabbageEra va)
+                      (TxOutDatumHash ScriptDataInBabbageEra sd)
+                      (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra $ txScriptToScriptAny   tms)
+      TxOutScriptWithDataAndScript sc va sd tms ->
+          transformer $ TxOut (plutusScriptAddr sc networkId)
+                      (TxOutValue MultiAssetInBabbageEra va)
+                      (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra   sd )
+                      (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra $ txScriptToScriptAny  tms)
+      TxOutScriptWithDataAndReference sc va sd ->
+          transformer $ TxOut (plutusScriptAddr sc networkId)
+                      (TxOutValue MultiAssetInBabbageEra va)
+                      (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra   sd )
+                      (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra $ plutusScriptToScriptAny sc)
+      TxOutNative to -> pure $ transfrormOutput output to
       TxOutPkh pkh va -> case pkhToMaybeAddr (getNetworkId  dCinfo) pkh of
-              Nothing -> Left  $ FrameworkError ParserError  ("Cannot convert PubKeyHash to Address : "++ show pkh)
-              Just aie ->  transformer $ TxOut aie  (TxOutValue MultiAssetInBabbageEra va ) TxOutDatumNone ReferenceScriptNone
-      TxOutScript (TxValidatorScript sa@(ScriptInAnyLang lang script)) va ha ->
-        let payCred = PaymentCredentialByScript (hashScript script)
-            addr = makeShelleyAddress networkId payCred NoStakeAddress
-            addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) addr
-        in transformer $ TxOut addrInEra (TxOutValue MultiAssetInBabbageEra va) (TxOutDatumHash ScriptDataInBabbageEra ha ) (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra sa)
-      TxOutScriptWithData  (TxValidatorScript sa@(ScriptInAnyLang lang script)) va sd ->
-        let payCred = PaymentCredentialByScript (hashScript script)
-            addr = makeShelleyAddress networkId payCred NoStakeAddress
-            addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) addr
-        in transformer $ TxOut addrInEra (TxOutValue MultiAssetInBabbageEra  va) (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra  sd) (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra sa)}
+        Nothing -> Left  $ FrameworkError ParserError  ("Cannot convert PubKeyHash to Address : "++ show pkh)
+        Just aie ->  transformer $ TxOut aie  (TxOutValue MultiAssetInBabbageEra va ) TxOutDatumNone ReferenceScriptNone
+      TxOutScript sc va ha ->
+        transformer $ TxOut (plutusScriptAddr sc networkId)
+                            (TxOutValue MultiAssetInBabbageEra va)
+                            (TxOutDatumHash ScriptDataInBabbageEra ha )
+                            ReferenceScriptNone
+      TxOutScriptInline sc va ha ->
+        transformer $ TxOut (plutusScriptAddr sc networkId)
+                            (TxOutValue MultiAssetInBabbageEra va)
+                            (TxOutDatumHash ScriptDataInBabbageEra ha )
+                            (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra $ plutusScriptToScriptAny sc)
+      TxOutScriptWithData  sc va sd ->
+        transformer $ TxOut (plutusScriptAddr sc networkId)
+                            (TxOutValue MultiAssetInBabbageEra  va)
+                            (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra  sd)
+                            ReferenceScriptNone
+                            }
       where
         transformer v = pure $ transfrormOutput output v
     resolveInputs ::  TxInput -> Either FrameworkError    TxInputResolved_
@@ -552,10 +648,13 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
     toInput ::  Map TxIn (Either ScriptExecutionError ExecutionUnits)  -> Either FrameworkError ExecutionUnits-> TxInputResolved_  -> Either FrameworkError   [(TxIn,ParsedInput)]
     toInput exUnitLookup onMissing inCtx = case inCtx of
       TxInputUtxo (UTxO txin) ->  pure $ map (\(_in,val) -> (_in,Left (  KeyWitness KeyWitnessForSpending, val) ))  $ Map.toList txin
-      TxInputScriptUtxo (TxValidatorScript s) mData r mExunit (UTxO txin) ->mapM (\(_in,val) -> do
-        exUnit <- getExUnit _in mExunit
-        witness <-  createTxInScriptWitness s  mData r exUnit
-        pure (_in,Right (mExunit, witness,val )) ) $ Map.toList txin
+      TxInputScriptUtxo sc mData r mExunit (UTxO txin) ->mapM (\(_in,val) ->  do
+          exUnit <- getExUnit _in mExunit
+          let witnessFunc = case sc of
+                TxPlutusScriptV1 ps -> PlutusScriptWitness PlutusScriptV1InBabbage PlutusScriptV1 (PScript ps)
+                TxPlutusScriptV2 ps -> PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2 (PScript ps)
+          -- TODO check if the utxo in case of inline datum
+          pure (_in,Right (mExunit, witnessFunc  (datumForTxin mData) r exUnit,val )) ) $ Map.toList txin
       TxInputReferenceScriptUtxo scriptRefTin mData r mExunit (UTxO txin) -> mapM (\(_in,val) -> do
         exUnit <- getExUnit _in mExunit
         case Map.lookup scriptRefTin availableUtxo of
@@ -567,7 +666,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
               ) $ Map.toList txin
 
       where
-
+        datumForTxin d = maybe InlineScriptDatum ScriptDatumForTxIn d
         getExUnit tin ex =case  ex of
           Just ex -> Right ex
           Nothing -> case Map.lookup tin exUnitLookup of
@@ -599,9 +698,11 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
         -- - then the ones with higher lovelace amount come
         sortingFunc :: (TxIn,TxOut CtxUTxO BabbageEra) -> (TxIn,TxOut CtxUTxO BabbageEra)-> Ordering
         sortingFunc (_,TxOut _ (TxOutAdaOnly _ v1) _ _) (_, TxOut _ (TxOutAdaOnly _ v2)  _ _)         = v1 `compare` v2
-        sortingFunc (_,TxOut _ (TxOutValue _ v1) _ (ReferenceScript _ _)) (_, TxOut _ (TxOutAdaOnly _ v2) _ _)            =  GT
-        sortingFunc (_,TxOut _ (TxOutValue _ v1) (TxOutDatumInline _ _) _) (_, TxOut _ (TxOutAdaOnly _ v2) _ _)            =  GT
         sortingFunc (_,TxOut _ (TxOutAdaOnly _ (Lovelace v))  _ _) (_, TxOut _ (TxOutValue _ v2) _ _) = LT
+        sortingFunc (_,TxOut _ _ _ (ReferenceScript _ _)) (_, _)                                      =  LT
+        sortingFunc (_,TxOut _ _ (TxOutDatumInline _ _) _) (_, _)                                     =  LT
+        sortingFunc (_,_) (_, TxOut _ _ _ (ReferenceScript _ _))                                      =  GT
+        sortingFunc (_, _) (_, TxOut _ _ (TxOutDatumInline _ _) _)                                    =  GT
         sortingFunc (_,TxOut _ (TxOutValue _ v1) _ _) (_, TxOut _ (TxOutAdaOnly _ v2) _ _)            =  GT
         sortingFunc (_,TxOut _ (TxOutValue _ v1) _ _) (_, TxOut _ (TxOutValue _ v2) _ _) =  let l1= length ( valueToList v1)
                                                                                                 l2= length (valueToList v2) in
@@ -642,12 +743,12 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam systemStart eraHis
           Quantity n -> n
         --minimun Lovelace required in the change utxo
         minLove = case  f $ txoutWithChange (change <> valueFromList [(AdaAssetId,2_000_000_000)]) of
-            Lovelace l -> l
+            Coin l -> l
         -- extra lovelace in this txout over the txoutMinLovelace
         extraLove utxo  = selectLove - minLoveInThisTxout
             where
               minLoveInThisTxout=case  f $ txoutWithChange val of
-                  Lovelace l -> l
+                  Coin l -> l
               val= txOutValue_ utxo
               selectLove = case selectAsset val AdaAssetId of { Quantity n -> n }
         txoutWithChange c = case txout of { TxOut addr v md _-> case v of

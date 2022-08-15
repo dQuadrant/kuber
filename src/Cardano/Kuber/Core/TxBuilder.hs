@@ -1,12 +1,11 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Cardano.Kuber.Core.TxBuilder
 
 where
@@ -33,8 +32,8 @@ import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes)
 import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
-import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, TxOut, CurrencySymbol, MintingPolicy)
-import qualified Plutus.V1.Ledger.Api as Plutus
+import Plutus.V2.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, CurrencySymbol, MintingPolicy)
+import qualified Plutus.V2.Ledger.Api as Plutus hiding (TxOut)
 import Data.Aeson.Types (FromJSON(parseJSON), (.:), Parser)
 import qualified Data.Aeson as A
 import qualified Data.Text as T
@@ -51,18 +50,27 @@ import qualified Data.Aeson as Aeson
 import Data.Word (Word64)
 import qualified Data.HashMap.Internal.Strict as H
 import Data.Bifunctor
-import Cardano.Kuber.Utility.ScriptUtil (plutusScriptToScriptAny)
+import Cardano.Kuber.Utility.ScriptUtil ( fromPlutusV2Script)
 import GHC.Generics (Generic)
 
 
-data TxMintingScript = TxSimpleScript ScriptInAnyLang
-              | TxPlutusScript ScriptInAnyLang ScriptData (Maybe ExecutionUnits)
+data TxSimpleScript = TxSimpleScriptV1 (SimpleScript  SimpleScriptV1 )
+              |        TxSimpleScriptV2 (SimpleScript  SimpleScriptV2 )
                             deriving(Show)
 
-newtype TxValidatorScript = TxValidatorScript ScriptInAnyLang deriving (Show)
+data TxScript = TxScriptSimple TxSimpleScript
+        |   TxScriptPlutus   TxPlutusScript 
+        deriving (Show) 
+
+
+data  TxPlutusScript  =
+    TxPlutusScriptV1 (PlutusScript  PlutusScriptV1)
+  | TxPlutusScriptV2 (PlutusScript  PlutusScriptV2)
+                          deriving (Show)
+
 
 data TxInputResolved_ = TxInputUtxo (UTxO BabbageEra)
-              | TxInputScriptUtxo TxValidatorScript (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
+              | TxInputScriptUtxo TxPlutusScript (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
               | TxInputReferenceScriptUtxo TxIn (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
 
               deriving (Show)
@@ -70,7 +78,7 @@ data TxInputResolved_ = TxInputUtxo (UTxO BabbageEra)
 
 data TxInputUnResolved_ = TxInputTxin TxIn
               | TxInputAddr (AddressInEra BabbageEra)
-              | TxInputScriptTxin TxValidatorScript (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) TxIn
+              | TxInputScriptTxin TxPlutusScript (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) TxIn
               | TxInputReferenceScriptTxin TxIn (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) TxIn
 
               deriving (Show)
@@ -80,13 +88,15 @@ data TxInput  = TxInputResolved TxInputResolved_ | TxInputUnResolved TxInputUnRe
 newtype TxInputReference  = TxInputReference TxIn deriving (Show)
 
 data TxOutputContent =
-     TxOutAddress (AddressInEra BabbageEra) Value
-  |  TxOutAddressWithReference (AddressInEra BabbageEra) Value TxValidatorScript
-  |  TxOutScriptAddress (AddressInEra BabbageEra) Value (Hash ScriptData)
-  |  TxOutScriptAddressWithData (AddressInEra BabbageEra) Value   ScriptData
-  |  TxOutPkh PubKeyHash Value
-  |  TxOutScript TxValidatorScript Value  (Hash ScriptData)
-  |  TxOutScriptWithData TxValidatorScript Value ScriptData deriving (Show)
+     TxOutPkh PubKeyHash Value
+  |  TxOutScript TxPlutusScript Value  (Hash ScriptData)
+  |  TxOutScriptInline TxPlutusScript Value (Hash ScriptData)
+  |  TxOutScriptWithScript TxPlutusScript Value (Hash ScriptData) TxScript
+  |  TxOutScriptWithData TxPlutusScript Value ScriptData
+  |  TxOutScriptWithDataAndScript TxPlutusScript Value ScriptData TxScript
+  |  TxOutScriptWithDataAndReference TxPlutusScript Value ScriptData
+  |  TxOutNative (TxOut  CtxTx BabbageEra)
+   deriving (Show)
 
 data TxOutput content =TxOutput {
   content :: content,
@@ -121,7 +131,13 @@ data TxInputSelection = TxSelectableAddresses [AddressInEra BabbageEra]
                   deriving(Show)
 
 
-data TxMintData = TxMintData PolicyId (ScriptWitness WitCtxMint BabbageEra) Value deriving (Show)
+data TxMintingScriptSource = 
+            TxMintingPlutusScript TxPlutusScript  (Maybe ExecutionUnits ) ScriptData
+          | TxMintingReferenceScript TxIn (Maybe ExecutionUnits ) (Maybe ScriptData)
+          | TxMintingSimpleScript TxSimpleScript 
+            deriving  (Show)
+
+data TxMintData  s = TxMintData  s  [(AssetName ,Quantity)]  (Map Word64 (Map AssetName Aeson.Value)) deriving (Show)
 
 -- TxBuilder object
 -- It is a semigroup and monoid instance, so it can be constructed using helper function
@@ -134,7 +150,7 @@ data TxBuilder=TxBuilder{
     txCollaterals :: [TxCollateral],  -- collateral for the transaction
     txValidityStart :: Maybe Integer,
     txValidityEnd :: Maybe Integer,
-    txMintData :: [TxMintData],
+    txMintData :: [TxMintData TxMintingScriptSource],
     txSignatures :: [TxSignature],
     txFee :: Maybe Integer,
     txDefaultChangeAddr :: Maybe (AddressInEra BabbageEra),
@@ -190,7 +206,7 @@ txInputReference :: TxInputReference -> TxBuilder
 txInputReference v = TxBuilder  [] [] [v] [] [] Nothing Nothing [] [] Nothing Nothing Map.empty
 
 
-txMints :: [TxMintData] -> TxBuilder
+txMints :: [TxMintData TxMintingScriptSource] -> TxBuilder
 txMints md= TxBuilder  [] [] [] [] [] Nothing Nothing md [] Nothing Nothing Map.empty
 
 
@@ -220,23 +236,30 @@ txValidUntilPosixMs :: Integer -> TxBuilder
 txValidUntilPosixMs end =  TxBuilder  [] [] [] [] [] Nothing (Just end) [] [] Nothing Nothing Map.empty
 
 --- minting
-txMint  v = txMints [v]
+_txMint  v = txMints [v]
 
 -- mint Simple Script
-txMintSimpleScript :: SimpleScript SimpleScriptV2   ->   [(AssetName,Integer)] -> TxBuilder
-txMintSimpleScript simpleScript amounts = txMint $ TxMintData policyId  witness (valueFromList  $ map (bimap (AssetId policyId) Quantity )  amounts )
-  where
-    witness=   SimpleScriptWitness SimpleScriptV2InBabbage SimpleScriptV2 (SScript simpleScript)
-    script = SimpleScript SimpleScriptV2 simpleScript
-    policyId = scriptPolicyId script
+txMintPlutusScript :: IsPlutusScript script =>script  ->  ScriptData -> [(AssetName,Quantity)] -> TxBuilder
+txMintPlutusScript script sData amounts = _txMint $ TxMintData (TxMintingPlutusScript  (toTxPlutusScript script) Nothing sData) amounts Map.empty
 
+txMintSimpleScript :: IsSimpleScript script =>script  -> [(AssetName,Quantity)] -> TxBuilder
+txMintSimpleScript script amounts = _txMint $ TxMintData (TxMintingSimpleScript  (toTxSimpleScript script)) amounts Map.empty
+
+
+-- txMintWithMetadata :: IsMintingScript script =>script  ->   [(AssetName,Integer)] -> Map Word64 (Map AssetName Aeson.Value)  -> TxBuilder
+-- txMintWithMetadata script amounts mp = _txMint $ TxMintData (TxMintingScriptCode $ toTxMintingScript script) amounts mp
+--  witness (valueFromList  $ map (bimap (AssetId policyId) Quantity )  amounts )
+--   where
+--     witness=   SimpleScriptWitness SimpleScriptV2InBabbage SimpleScriptV2 (SScript simpleScript)
+--     script = SimpleScript SimpleScriptV2 simpleScript
+--     policyId = scriptPolicyId script
 
 -- pay to an Address
 txPayTo:: AddressInEra BabbageEra ->Value ->TxBuilder
-txPayTo addr v=  txOutput $  TxOutput (TxOutAddress  addr v) False False OnInsufficientUtxoAdaUnset
+txPayTo addr v=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) TxOutDatumNone ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
 
-txPayToWithReference:: Plutus.Script -> AddressInEra BabbageEra ->Value ->TxBuilder
-txPayToWithReference pScript addr v=  txOutput $  TxOutput (TxOutAddressWithReference addr v (TxValidatorScript (plutusScriptToScriptAny pScript))) False False OnInsufficientUtxoAdaUnset
+txPayToWithReference:: AddressInEra BabbageEra ->Value -> Plutus.Script  ->TxBuilder
+txPayToWithReference  addr v pScript=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) TxOutDatumNone (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra (ScriptInAnyLang (PlutusScriptLanguage  PlutusScriptV2) $ fromPlutusV2Script  pScript) ))False False OnInsufficientUtxoAdaUnset
 
 -- pay to an Address by pubKeyHash. Note that the resulting address will be an enterprise address
 txPayToPkh:: PubKeyHash  ->Value ->TxBuilder
@@ -244,21 +267,21 @@ txPayToPkh pkh v= txOutput $  TxOutput ( TxOutPkh  pkh  v ) False False OnInsuff
 
 -- pay to Script address
 txPayToScript :: AddressInEra BabbageEra -> Value -> Hash ScriptData -> TxBuilder
-txPayToScript addr v d = txOutput $  TxOutput (TxOutScriptAddress  addr v d  ) False False OnInsufficientUtxoAdaUnset
+txPayToScript addr v d = txOutput $TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) (TxOutDatumHash ScriptDataInBabbageEra d) ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
 
 --Babbage era functions
 -- pay to script Address with datum added to the transaction
 txPayToScriptWithData :: AddressInEra BabbageEra -> Value -> ScriptData -> TxBuilder
-txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutScriptAddressWithData addr v  d) False False OnInsufficientUtxoAdaUnset
+txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValue MultiAssetInBabbageEra v)  (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
 
 -- pay to script with reference script attached to the output
 txPayToScriptWithReference :: Plutus.Script -> Value -> Hash ScriptData -> TxBuilder
-txPayToScriptWithReference pScript v d = txOutput $ TxOutput (TxOutScript (TxValidatorScript (plutusScriptToScriptAny pScript)) v d) False False OnInsufficientUtxoAdaUnset
+txPayToScriptWithReference pScript v d = txOutput $ TxOutput (TxOutScript (toTxPlutusScript (fromPlutusV2Script pScript)) v d) False False OnInsufficientUtxoAdaUnset
 
 -- pay to script with reference script attached to the output and datum inlined
 txPayToScriptWithDataAndReference :: Plutus.Script -> Value -> ScriptData -> TxBuilder
 txPayToScriptWithDataAndReference pScript v d  =
-  txOutput $ TxOutput (TxOutScriptWithData (TxValidatorScript $ plutusScriptToScriptAny pScript) v d) False False OnInsufficientUtxoAdaUnset
+  txOutput $ TxOutput (TxOutScriptWithData (toTxPlutusScript $ fromPlutusV2Script pScript) v d) False False OnInsufficientUtxoAdaUnset
 
 -- input consmptions
 
@@ -300,19 +323,139 @@ txSign p = txSignature $ TxSignatureSkey p
 
 
 -- Redeem from a Script. The script address and value in the TxIn is determined automatically by querying the utxo from cardano node
-txRedeemTxin:: TxIn -> ScriptInAnyLang ->ScriptData -> ScriptData  -> TxBuilder
-txRedeemTxin txin script _data _redeemer = txInput $ TxInputUnResolved $ TxInputScriptTxin  ( TxValidatorScript $ script)  (Just  _data)  _redeemer  Nothing txin
+-- txRedeemTxin:: TxIn ->  ->ScriptData -> ScriptData  -> TxBuilder
+-- txRedeemTxin txin script _data _redeemer = txInput $ TxInputUnResolved $ TxInputScriptTxin  ( TxValidatorScript $ script)  (Just  _data)  _redeemer  Nothing txin
 
 -- Redeem from Script Address.
 -- TxOut is provided so the address and value need not be queried from the caradno-node
-txRedeemUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> ScriptInAnyLang  -> ScriptData  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemUtxo txin txout script _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (  TxValidatorScript $ script)  (Just _data)  _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
 
-txRedeemUtxoWithInlineDatum :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> ScriptInAnyLang  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemUtxoWithInlineDatum txin txout script _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (TxValidatorScript script)  Nothing _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
+class IsPlutusVersion v where
+  toTxPlutusScriptInstance :: PlutusScript v -> TxPlutusScript
 
-txRedeemTxinWithInlineDatum :: TxIn  -> ScriptInAnyLang  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemTxinWithInlineDatum txin  script _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxInputScriptTxin  (TxValidatorScript script)  Nothing _redeemer  exUnitsM  txin
+instance IsPlutusVersion PlutusScriptV1  where
+   toTxPlutusScriptInstance = TxPlutusScriptV1
+
+instance IsPlutusVersion PlutusScriptV2  where
+   toTxPlutusScriptInstance = TxPlutusScriptV2
+
+class IsSScriptVersion v where
+  toTxSimpleScriptInstance :: SimpleScript v -> TxSimpleScript
+
+instance IsSScriptVersion SimpleScriptV1  where
+   toTxSimpleScriptInstance = TxSimpleScriptV1
+
+instance IsSScriptVersion SimpleScriptV2  where
+   toTxSimpleScriptInstance = TxSimpleScriptV2
+
+class IsPlutusScript sc where
+  toTxPlutusScript :: sc -> TxPlutusScript
+
+class IsSimpleScript sc where
+  toTxSimpleScript :: sc -> TxSimpleScript
+
+
+instance (IsSScriptVersion ver =>  IsSimpleScript (SimpleScript ver)) where
+  toTxSimpleScript  = toTxSimpleScriptInstance
+
+instance (IsSScriptVersion ver =>  IsSimpleScript (Script ver)) where
+  toTxSimpleScript  (SimpleScript _ sc) = toTxSimpleScriptInstance sc
+  toTxSimpleScript _ = error "Impossible"
+
+
+hashPlutusScript :: TxPlutusScript -> ScriptHash
+hashPlutusScript sc = case sc of
+  TxPlutusScriptV1 ps -> hashScript (PlutusScript  PlutusScriptV1 ps)
+  TxPlutusScriptV2 ps -> hashScript (PlutusScript  PlutusScriptV2 ps)
+
+plutusScriptAddr :: TxPlutusScript -> NetworkId -> AddressInEra BabbageEra
+plutusScriptAddr sc networkId =
+    let payCred = PaymentCredentialByScript (hashPlutusScript sc)
+        addr = makeShelleyAddress networkId payCred NoStakeAddress
+        addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) addr
+    in addrInEra
+    
+plutusScriptToScriptAny :: TxPlutusScript -> ScriptInAnyLang
+plutusScriptToScriptAny sc = case sc of
+    TxPlutusScriptV1 ps -> ScriptInAnyLang (PlutusScriptLanguage  PlutusScriptV1) (PlutusScript PlutusScriptV1 ps)
+    TxPlutusScriptV2 ps -> ScriptInAnyLang (PlutusScriptLanguage  PlutusScriptV2) (PlutusScript PlutusScriptV2 ps)
+
+instance (IsPlutusVersion ver =>  IsPlutusScript (PlutusScript ver)) where
+  toTxPlutusScript  = toTxPlutusScriptInstance
+
+instance (IsPlutusVersion ver =>  IsPlutusScript (Script ver)) where
+  toTxPlutusScript  (PlutusScript psv ps) = toTxPlutusScript ps
+  toTxPlutusScript _ = error "Impossible"
+
+
+class IsSimpleScriptVersion v where
+  toTxMintingScriptInstance :: SimpleScript v -> TxScript
+
+class IsMintingScript sc where
+  toTxMintingScript:: sc -> TxScript
+
+txScriptPolicyId :: TxScript -> PolicyId
+txScriptPolicyId sc = PolicyId (hashTxScript sc)
+
+
+hashTxScript :: TxScript -> ScriptHash
+hashTxScript sc = case sc of
+  TxScriptSimple tss -> case tss of 
+      TxSimpleScriptV1 ss -> hashScript $ SimpleScript SimpleScriptV1 ss
+      TxSimpleScriptV2 ss -> hashScript $ SimpleScript SimpleScriptV2 ss
+  TxScriptPlutus tps -> hashPlutusScript tps
+
+
+
+txScriptToScriptAny :: TxScript -> ScriptInAnyLang
+txScriptToScriptAny sc = case sc of
+  TxScriptSimple tss ->  case tss of   
+    TxSimpleScriptV1 ss -> ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV1) (SimpleScript SimpleScriptV1 ss)
+    TxSimpleScriptV2 ss -> ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV2) (SimpleScript SimpleScriptV2 ss)
+  TxScriptPlutus tps -> plutusScriptToScriptAny tps
+
+ -- TxPlutusMintingScript tps -> plutusScriptToScriptAny tps
+
+
+class IsScriptVersion v where
+  translationFunc :: Script v -> TxScript
+
+instance IsScriptVersion PlutusScriptV1  where
+  translationFunc (PlutusScript psv ps)= TxScriptPlutus $ toTxPlutusScript  ps
+
+instance IsScriptVersion PlutusScriptV2  where
+  translationFunc (PlutusScript psv ps)= TxScriptPlutus $ toTxPlutusScript  ps
+
+instance IsScriptVersion SimpleScriptV1   where
+  translationFunc (SimpleScript psv ps)=  toTxMintingScript  ps
+
+instance IsScriptVersion SimpleScriptV2   where
+  translationFunc (SimpleScript psv ps)=  toTxMintingScript  ps
+
+instance IsScriptVersion v  => IsMintingScript (Script v) where
+  toTxMintingScript sc = translationFunc sc
+
+instance IsSimpleScriptVersion SimpleScriptV1  where
+  toTxMintingScriptInstance  i = TxScriptSimple $  TxSimpleScriptV1  i
+
+instance IsSimpleScriptVersion SimpleScriptV2  where
+  toTxMintingScriptInstance i = TxScriptSimple $  TxSimpleScriptV2  i
+
+
+instance (IsSimpleScriptVersion ver) =>  IsMintingScript (SimpleScript ver)  where
+  toTxMintingScript = toTxMintingScriptInstance
+
+instance (IsPlutusVersion ver =>  IsMintingScript (PlutusScript ver)) where
+  toTxMintingScript  v = TxScriptPlutus (toTxPlutusScript v)
+
+
+txRedeemUtxo :: IsPlutusScript sc =>  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra ->   sc   -> ScriptData  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxo txin txout sc _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (toTxPlutusScript sc)  Nothing _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
+
+txRedeemUtxoWithInlineDatum :: IsPlutusScript sc => TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> sc  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxoWithInlineDatum txin txout script _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (toTxPlutusScript script)  Nothing _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
+
+txRedeemTxinWithInlineDatum :: IsPlutusScript sc => TxIn  -> sc  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemTxinWithInlineDatum txin  script _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxInputScriptTxin  (toTxPlutusScript script)  Nothing _redeemer  exUnitsM  txin
 
 type ScriptReferenceTxIn = TxIn
 

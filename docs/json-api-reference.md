@@ -13,6 +13,7 @@ Kuber Json Api Reference
 - **validityStart** : [Integer: UnixTimestamp millisecond] Transaction validFrom
 - **validityEnd** : [Integer : UnixTimestamp millisecond] Transaction validUntil 
 - [**mint**](#6-mint--object--minting-script-and-amount-in-the-transaction) : Minting Scripts and value in the transaction
+- [**signatures**](#7 -)
 - **fee** : [Integer : Lovelace]  Fee  is calculated automatically, but setting this will set  transaction fee explicitly.
 - **changeAddress** [Optional ] : Default change address. If it's missing, it's selected from one of the selection address. Setting `addChange`  in any one output will disable this option
 - [**metadata**](#7-metadata--object--transaction-metadata) : Transaction metadata

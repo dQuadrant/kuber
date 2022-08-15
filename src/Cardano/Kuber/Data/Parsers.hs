@@ -2,6 +2,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Cardano.Kuber.Data.Parsers where
 
@@ -90,6 +91,15 @@ parseAssetId assetText
                   Nothing -> fail "ParserError : Invalid token name"
                   Just an -> pure $ AssetId pi an
 
+parseAssetName :: MonadFail f =>Text -> f AssetName
+parseAssetName txt =case deserialiseFromRawBytesHex AsAssetName utf8
+      of
+        Left _  -> case deserialiseFromRawBytes AsAssetName utf8 of
+          Nothing -> fail $  "Invalid assetname :" ++ T.unpack txt
+          Just an -> pure an
+        Right an -> pure an
+  where
+    utf8 =encodeUtf8 txt
 parseValueText :: MonadFail f => Text -> f Value
 parseValueText valueTxt =
   mapM parseAssetNQuantity (T.split (== '+') $ T.strip valueTxt)
@@ -145,49 +155,25 @@ parseScriptData jsonText = do
 parseAnyScript :: MonadFail m => LBS.ByteString -> m ScriptInAnyLang
 parseAnyScript jsonText = case eitherDecode jsonText of
   Left s -> fail s
-  Right any -> case parse parseAnyScriptParser any of
+  Right any -> case parse anyScriptParser any of
     A.Error s -> fail s
     A.Success any' -> pure any'
 
 
-parseAnyScriptParser ::  A.Value  -> A.Parser ScriptInAnyLang
-parseAnyScriptParser v@(A.Object o) =do
+anyScriptParser ::  A.Value  -> A.Parser ScriptInAnyLang
+anyScriptParser v@(A.Object o) =do
   _type :: T.Text <- o  .: "type"
   case _type of
     "PlutusScriptV1" -> do
-       txt <- o.: "cborHex"
-       case deserialiseFromRawBytesHex (AsPlutusScript AsPlutusScriptV1) (T.encodeUtf8 txt) of
-         Left rbhe ->fail "cborHex couldn't be parsed into PlutusScriptV1"
-         Right sc -> pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1) (PlutusScript PlutusScriptV1 sc)
+      sc <- o.: "cborHex"  >>= parseCborHex @T.Text
+      pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1) (PlutusScript PlutusScriptV1 sc)
     "PlutusScriptV2" -> do
-       txt <- o.: "cborHex"
-       case deserialiseFromRawBytesHex (AsPlutusScript AsPlutusScriptV2) (T.encodeUtf8 txt) of
-         Left rbhe ->fail "cborHex couldn't be parsed into PlutusScriptV2"
-         Right sc -> do
-          pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2) (PlutusScript PlutusScriptV2 sc)
+      sc <- o.: "cborHex"  >>= parseCborHex @T.Text
+      pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2) (PlutusScript PlutusScriptV2 sc)
     _ -> do
       v ::(SimpleScript SimpleScriptV2 ) <- parseJSON v
-      pure $ ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV2) (SimpleScript (SimpleScriptV2) v )
-  -- case deserialiseFromTextEnvelopeAnyOf textEnvTypes te of
-  --       Left err     -> fail "Error while decoding script text envelope"
-  --       Right script -> pure script
-  -- where
-  --   textEnvTypes :: [FromSomeType HasTextEnvelope ScriptInAnyLang]
-  --   textEnvTypes =
-  --     [ FromSomeType
-  --         (AsScript AsSimpleScriptV1)
-  --         (ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV1)),
-  --       FromSomeType
-  --         (AsScript AsSimpleScriptV2)
-  --         (ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV2))
-  --       -- FromSomeType
-  --       --   (AsScript AsPlutusScriptV1)
-  --       --   (ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1)),
-  --       -- FromSomeType
-  --       --   (AsScript AsPlutusScriptV2)
-  --       --   (ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2))
-  --     ]
-parseAnyScriptParser _ = fail "Expected json object type"
+      pure $ ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV2) (SimpleScript SimpleScriptV2 v )
+anyScriptParser _ = fail "Expected json object type"
 
 parseAddressBinary :: MonadFail m => ByteString -> m (AddressInEra BabbageEra )
 parseAddressBinary bs = case parseAddressCbor (LBS.fromStrict bs) of
@@ -231,7 +217,7 @@ scriptDataParser v = doParsing v
         ScriptDataJsonSchemaError va sdjse -> fail $  "Wrong schema" ++ show sdjse
         ScriptDataRangeError va sdre -> fail $  "Invalid data " ++ show sdre
        Right sd -> pure  sd
-    doParsing _  = fail "Script data Must be either string or object"
+    doParsing val  = fail $ "Script data Must be either string or object: got:" ++  (show val)
 
 
 txInParser :: Aeson.Value -> Aeson.Parser TxIn

@@ -4,12 +4,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 module Cardano.Kuber.Data.TxBuilderAeson
 where
 
 
 import Cardano.Api hiding(txMetadata, txFee)
-import Cardano.Api.Shelley ()
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra), ReferenceScript (ReferenceScript, ReferenceScriptNone))
 import Cardano.Kuber.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
@@ -27,7 +29,7 @@ import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes, isNothing, fromMaybe)
 import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
-import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, TxOut, CurrencySymbol)
+import Plutus.V2.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, TxOut, CurrencySymbol)
 import Data.Aeson.Types (FromJSON(parseJSON), (.:), Parser, parseMaybe, parseEither)
 import qualified Data.Aeson as A
 import qualified Data.Aeson.KeyMap as A
@@ -36,9 +38,9 @@ import qualified Data.Aeson.Types as A
 
 import qualified Data.Text as T
 import Cardano.Kuber.Data.Models ( unAddressModal)
-import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBench32, parseAddressCbor, parseUtxoCbor)
+import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBench32, parseAddressCbor, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex)
 import Control.Monad.IO.Class (MonadIO(liftIO))
-import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey))
+import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey), fromJSON)
 import qualified Data.Vector as V
 import qualified Data.Text.Encoding as T
 import qualified Data.ByteString            as B
@@ -58,6 +60,8 @@ import Cardano.Kuber.Utility.ScriptUtil
 import Data.Text.Internal.Fusion.CaseMapping (upperMapping)
 import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable(toConsoleTextNoPrefix, toConsoleText))
 import qualified Data.ByteString.Char8 as BS8
+import Control.Applicative ((<|>))
+import Data.Bifunctor (second)
 
 instance FromJSON TxBuilder where
   parseJSON (A.Object v) =
@@ -79,9 +83,9 @@ instance FromJSON TxBuilder where
       (.?<) obj key = do
         mVal1<- obj .:? A.fromText key
         case mVal1 of
-          Nothing -> do 
+          Nothing -> do
             mVal2<- obj .:? A.fromText  (key <>"s")
-            case mVal2 of 
+            case mVal2 of
               Nothing -> pure []
               Just any -> returnVal any
           Just val  -> returnVal val
@@ -94,114 +98,57 @@ instance FromJSON TxBuilder where
 
   parseJSON _ = fail "TxBuilder must be an object"
 
-instance FromJSON TxMintData where
+instance FromJSON (TxMintData TxMintingScriptSource) where
   parseJSON (A.Object v) = do
-    mintAmountJson <- v .: "amount"
-    scriptJson:: A.Value <- v .: "script"
-    scriptAny <- parseAnyScript scriptJson
-    mintRedeemer <- v .:? "redeemer"
+    mintAmountm <- v .:? "amount"
+    mintAmount_ <-case mintAmountm of
+      Nothing ->  v .: "tokens"
+      Just any -> pure any
+
     exUnitsM <- v .:? "executionUnits"
-    mintScript <- case mintRedeemer of
-      Nothing -> do
-        case validateScriptSupportedInEra' BabbageEra scriptAny of
-          Left fe -> throw fe
-          Right (ScriptInEra langInEra script') -> case script' of
-            SimpleScript ssv ss -> pure $ TxSimpleScript scriptAny
-            PlutusScript psv ps -> fail "Plutus Minting Script must have redeemer present."
-      Just (A.String s) -> case parseScriptData s of
-        Nothing -> fail $ "Invalid script data string: " ++ T.unpack s
-        Just sData -> pure $ TxPlutusScript scriptAny sData exUnitsM
-      Just _ -> fail "TxMintingScript redeemer must be a string"
+    mintAmount <-  mapM (\(n,a :: A.Value) -> (do
+              v<- parseAssetName n
+              (q,meta) <- case a of
+                A.Object km -> do
+                  mintAmount <- km .:? "amount" .!=1
+                  meta_ <- km .:? "meta"
+                  meta <-case meta_ of
+                    Nothing -> km .:? "metadata" .!=mempty
+                    Just any -> pure any
+                  pure (mintAmount,meta)
+                A.Number sci ->
+                  pure (Quantity $ round sci,mempty)
+                _ -> fail "expected token value to be mint amount or object"
+              pure (v,q,meta)
+               )) $ Map.toList mintAmount_
+    let quantities = map (\(t,q,_)-> (t,q)) mintAmount
+        metaList ::  [Map Word64  (Map AssetName A.Value)]
+        metaList =  map (\(t,_,m) -> morphMetaMap t m ) mintAmount
+        metaMap =   foldl (Map.unionWith (<>))   mempty metaList
+        morphMetaMap token mp =Map.fromList $  map (second (Map.singleton token))  (Map.toList  mp)
+    let doReturn c = pure $ TxMintData  c  quantities  metaMap
+    scriptAny <- v .: "script"
 
-    scriptWitnessE <- case mintScript of
-      TxSimpleScript sial -> pure $ createSimpleMintingWitness sial
-      TxPlutusScript sAny sd eM -> do
-        exUnits <- case eM of
-          Nothing -> pure $ ExecutionUnits 700000000 700000000
-          Just eu -> pure eu
-        pure $ createPlutusMintingWitness sAny sd exUnits
-
-    (sw,policyId) <- case scriptWitnessE of
-      Left fe -> throw fe
-      Right sw -> pure $ (sw, getPolicyIdFromScriptWitness sw)
-
-
-    case mintAmountJson of
-      A.Object o -> do
-        let amountList = A.toList o
-
-        mintValue <- mapM (mapToValue policyId) amountList
-
-        pure $ TxMintData policyId sw (valueFromList mintValue)
-      _ -> fail "Mint amount must be a object with key as token name and value as integer."
-    where
-      mapToValue :: MonadFail m => PolicyId -> (A.Key,A.Value) -> m (AssetId, Quantity)
-      mapToValue policyId (tName, amountT) = do
-        amount <- parseAmount amountT
-        let assetName = AssetName $  BS8.pack  $  A.toString  tName
-        pure (AssetId policyId assetName, Quantity amount)
-
-      parseAmount :: MonadFail m => A.Value -> m Integer
-      parseAmount v = case v of
-        A.Number sci -> pure $ floor sci
-        _ -> fail "Error amount value must be in integer"
-
-
-      getPolicyIdFromScriptWitness :: ScriptWitness WitCtxMint  BabbageEra  -> PolicyId
-      getPolicyIdFromScriptWitness witness = case scriptWitnessScript witness of
-        Nothing -> error "Unexpected in era babbage or soemthing"
-        Just (ScriptInEra _ script) -> scriptPolicyId  script
-
+    case scriptAny of
+      A.String  s-> do
+        txin <- parseTxIn s
+        mintRedeemerObj <- v .:? "redeemer"
+        mintRedeemer <- case mintRedeemerObj of
+              Nothing -> pure Nothing
+              Just any -> do
+                d<- scriptDataParser any
+                pure $ pure d
+        doReturn $ TxMintingReferenceScript txin  exUnitsM mintRedeemer
+      A.Object  obj ->do
+          txScript<- parseJSON scriptAny
+          case   txScript of
+            TxScriptPlutus psc ->do
+              mintRedeemer <- v .: "redeemer" >>= scriptDataParser
+              doReturn $ TxMintingPlutusScript psc exUnitsM mintRedeemer
+            TxScriptSimple simpleSc -> doReturn $ TxMintingSimpleScript simpleSc
+      _  -> fail "Either ReferenceInput or Script Object expected "
 
   parseJSON _ = fail "TxMintData must be an object"
-        --   case mintValueJson of
-        --     Just (A.Array mintValueArray) -> do
-        --       let mintValueList = V.toList mintValueArray
-        --       valueList <- mapM parseMintObject mintValueList
-        --       pure $ valueFromList $ Prelude.concat valueList
-        --     Just (A.String mintValueText) -> parseValueText mintValueText
-        --     Just v@(A.Object mintValueObject) -> do
-        --       value <- parseMintObject v
-        --       pure $ valueFromList value
-        --     Just _ -> fail "Failed to parse mintValue must be value object or array or value text"
-        --     Nothing -> pure $ valueFromList []
-
-        -- parseMintObject :: A.Value ->  Parser [(AssetId,Quantity)]
-        -- parseMintObject (A.Object v) = do
-        --   policyId <- v .: "policy"
-        --   assetName <- v .: "name"
-        --   assetId <- parseAssetId policyId assetName
-        --   value <- v .: "amount"
-        --   pure [(assetId, Quantity value)]
-        -- parseMintObject (A.String mintValueText) = parseValueToAsset mintValueText
-        -- parseMintObject _ = fail "Failed to parse mintValue must be value object"
-
-        -- parseMintValue :: Parser Value
-        -- parseMintValue = do
-        --   mintValueJson <- v .:? "mint"
-        --   case mintValueJson of
-        --     Just (A.Array mintValueArray) -> do
-        --       let mintValueList = V.toList mintValueArray
-        --       valueList <- mapM parseMintObject mintValueList
-        --       pure $ valueFromList $ Prelude.concat valueList
-        --     Just (A.String mintValueText) -> parseValueText mintValueText
-        --     Just v@(A.Object mintValueObject) -> do
-        --       value <- parseMintObject v
-        --       pure $ valueFromList value
-        --     Just _ -> fail "Failed to parse mintValue must be value object or array or value text"
-        --     Nothing -> pure $ valueFromList []
-
-        -- parseMintObject :: A.Value ->  Parser [(AssetId,Quantity)]
-        -- parseMintObject (A.Object v) = do
-        --   policyId <- v .: "policy"
-        --   assetName <- v .: "name"
-        --   assetId <- parseAssetId policyId assetName
-        --   value <- v .: "amount"
-        --   pure [(assetId, Quantity value)]
-        -- parseMintObject (A.String mintValueText) = parseValueToAsset mintValueText
-        -- parseMintObject _ = fail "Failed to parse mintValue must be value object"
-
-
 
 instance IsString a =>  MonadFail (Either a ) where
   fail msg = Left $ fromString msg
@@ -236,13 +183,16 @@ instance ToJSON TxBuilder where
     infixr 6 <+>
     (<+>) f  v = f v
 
-instance ToJSON TxMintData where
-  toJSON (TxMintData policyId mintScript mintValue) =
+instance ToJSON (TxMintData TxMintingScriptSource) where
+  toJSON (TxMintData script value metadata) =
     A.object
       [
-      "policyId" .= policyId
-      ,"script" .= show mintScript
-      , "amount" .= mintValue
+      "script" .= (case script of
+        TxMintingPlutusScript tps m_eu sd ->toJSON  tps
+        TxMintingReferenceScript ti m_eu m_sd -> A.String $  renderTxIn ti
+        TxMintingSimpleScript tss -> toJSON tss)
+      ,"amount" .=  Map.fromList value
+      , "metadata" .= metadata
       ]
 
 instance ToJSON TxInputSelection where
@@ -280,10 +230,41 @@ instance ToJSON TxInputResolved_  where
     TxInputScriptUtxo tvs sd sd' m_eu utxo ->  utxoToAeson  utxo
     TxInputReferenceScriptUtxo refTxin mData r mExunit utxo -> utxoToAeson utxo
 
-instance ToJSON TxValidatorScript where
-  toJSON (TxValidatorScript script) = case toJSON script of
-                     val@(A.Object km) -> fromMaybe val (A.lookup "script" km)
-                     val -> val
+instance ToJSON TxPlutusScript where
+  toJSON tps =case tps of
+      TxPlutusScriptV1 ps -> toJSON  $ serialiseToTextEnvelope Nothing  ps
+      TxPlutusScriptV2 ps -> toJSON  $ serialiseToTextEnvelope Nothing  ps
+
+instance FromJSON  TxPlutusScript where
+  parseJSON (A.Object o) = do
+    _type :: T.Text <- o  .: "type"
+    case _type of
+      "PlutusScriptV1" -> o.: "cborHex"  >>= parseCborHex @T.Text <&> TxPlutusScriptV1
+      "PlutusScriptV2" -> o.: "cborHex"  >>= parseCborHex @T.Text <&> TxPlutusScriptV2
+      _ -> fail "Expected either PlutsScriptV1 or PlutusScriptV2 type"
+  parseJSON  _ = error "Expected Object"
+
+instance FromJSON  TxScript where
+  parseJSON v@(A.Object o) =do
+    tryPlutus <|> trySimple
+    where
+      tryPlutus = parseJSON v <&> TxScriptPlutus
+      trySimple = do
+        v ::(SimpleScript SimpleScriptV2 ) <- parseJSON v
+        pure $ TxScriptSimple $TxSimpleScriptV2 v
+
+  parseJSON  _ = error "Expected Object"
+
+instance ToJSON TxSimpleScript where
+  toJSON tss = case tss of
+    TxSimpleScriptV1 ss -> toJSON ss
+    TxSimpleScriptV2 ss -> toJSON ss
+
+instance ToJSON TxScript where
+  toJSON script = case script of
+    TxScriptSimple tss -> toJSON tss
+    TxScriptPlutus tps -> toJSON tps
+
 
 instance ToJSON ScriptData where
   toJSON scriptData = scriptDataToJson ScriptDataJsonNoSchema scriptData
@@ -300,58 +281,52 @@ instance ToJSON (TxOutput TxOutputContent)  where
     IncreaseOnUtxoInsufficientUtxoAda -> ["insuffientUtxoAda" .= A.fromString "increase"]
     ErrorOnInsufficientUtxoAda -> ["insuffientUtxoAda" .= A.fromString "error"]
     OnInsufficientUtxoAdaUnset -> []
-
     )
 outputContentJsonPair :: KeyValue a => TxOutputContent -> [a]
-outputContentJsonPair (TxOutAddress _address value) =[
-      "address" .= _address
-    , "value" .= value
-    ]
-outputContentJsonPair (TxOutScript _script value dataHash) =[
-      "script" .= _script
-    , "value" .= value
-    , "dataHash" .= dataHash
-    ]
-outputContentJsonPair (TxOutScriptAddress address value dataHash) =[
-      "address" .= address
-    , "value" .= value
-    , "dataHash" .= dataHash
-    ]
-outputContentJsonPair (TxOutScriptAddressWithData address value   sd) =[
-      "address" .= address
-    , "value" .= value
-    , "data" .= sd
-  ]
-outputContentJsonPair (TxOutScriptWithData script value   sData) =[
-      "script" .= script
-    , "value" .= value
-    , "data" .= sData
 
-  ]
-outputContentJsonPair (TxOutPkh pkh value) =[
+outputContentJsonPair v = case v of
+  TxOutPkh pkh va -> [
       "pkh" .= show pkh
-    , "value" .= value
-
-  ]
-outputContentJsonPair (TxOutAddressWithReference addr value script) =  [
-      "address" .= addr,
-      "value"   .= value,
-      "script"  .= script
-  ]
-
-instance ToJSON TxMintingScript where
-  toJSON (TxSimpleScript _script) =
-    A.object
-      [
-        "script" .= _script
-      ]
-  toJSON (TxPlutusScript _script _redeemer _exUnits) =
-    A.object
-      [
-        "script" .= _script
-      , "redeemer" .= _redeemer
-      , "exUnits" .= _exUnits
-      ]
+    , "value" .= va]
+  TxOutScript tps va ha -> [
+      "script" .= tps
+    , "value" .= va
+    , "dataHash" .= ha
+    ]
+  TxOutScriptInline tps va ha -> [
+      "script" .= tps
+    , "value" .= va
+    , "data" .= ha]
+  TxOutScriptWithScript tps va ha ts -> [
+      "address" .= tps,
+      "script"  .= ts
+    , "value" .= va
+    , "data" .= ts]
+  TxOutScriptWithData script va sd -> [
+      "script" .= script
+    , "value" .= va
+    , "data" .= sd]
+  TxOutScriptWithDataAndScript tps va sd ts -> [
+      "address" .= tps,
+      "script" .= ts
+    , "value" .= va
+    , "data" .= sd]
+  TxOutScriptWithDataAndReference tps va sd -> [
+      "script" .= tps
+    , "value" .= va
+    , "data" .= sd]
+  TxOutNative (TxOut addr (TxOutValue _ v) txoutData refScript) ->
+        ["address" .= addr]
+    ++  ["value" .= v]
+    ++ (case txoutData of
+      TxOutDatumHash sdsie ha -> ["datumHash" .= serialiseToRawBytesHexText ha ]
+      TxOutDatumInline rtisidsie sd -> ["datum" .= sd]
+      _ -> []
+      )
+    ++ (case refScript of
+     ReferenceScript rtisidsie sial -> ["referenceScript" .= sial ]
+     ReferenceScriptNone -> [])
+  TxOutNative _ -> error "Unexpected"
 
 instance ToJSON TxCollateral where
   toJSON (TxCollateralTxin _collateral) = toJSON _collateral
@@ -369,7 +344,7 @@ instance FromJSON TxInputSelection where
       Just str -> case parseAddressCbor  str of
         Nothing -> case parseUtxoCbor str of
           Just utxo ->  pure $ TxSelectableUtxos  utxo
-          Nothing -> fail $ "Invalid InputSelection Hex:  It must be  address, txHash#index or  utxoCbor"
+          Nothing -> fail "Invalid InputSelection Hex:  It must be  address, txHash#index or  utxoCbor"
         Just addr -> pure $ TxSelectableAddresses  [addr]
       Nothing -> case parseAddressBench32 s  of
         Just addr -> pure $ TxSelectableAddresses  [addr]
@@ -377,20 +352,7 @@ instance FromJSON TxInputSelection where
           Just txin -> pure $ TxSelectableTxIn  [txin]
           Nothing -> case parseSignKey s of
             Just s -> pure $ TxSelectableSkey [s]
-            Nothing -> fail $ "Invalid InputSelection String : It must be  address, txHash#index,  or  utxoCbor"
-
-    -- if "addr" `T.isPrefixOf` s
-    --   then do
-    --     case deserialiseAddress (AsAddressInEra AsAlonzoEra) s of
-    --       Nothing -> fail $ "Invalid address string: " ++ T.unpack s
-    --       Just aie -> pure $ TxSelectableAddresses [aie]
-    --   else do
-    --       case  parseTxIn  s of
-    --         Just txin -> pure $ TxSelectableTxIn [txin]
-    --         Nothing -> case parseUtxo  s of
-    --           Just utxo -> pure $ TxSelectableUtxos utxo
-    --           Nothing -> fail $ "
-
+            Nothing -> fail "Invalid InputSelection String : It must be  address, txHash#index,  or  utxoCbor"
   parseJSON v = do
     txIn <- txInParser  v
     pure $ TxSelectableTxIn [txIn]
@@ -405,8 +367,7 @@ instance FromJSON TxInput where
       Just scriptJson -> do
         inputFunc<-case scriptJson of
           A.String txt -> parseTxIn txt <&> TxInputReferenceScriptTxin
-          _  ->  parseAnyScript scriptJson
-                  <&> TxValidatorScript
+          _  ->  parseJSON   scriptJson
                   <&> TxInputScriptTxin
         mData <- v .:? "datum"
         redeemer <- v .: "redeemer" >>= scriptDataParser
@@ -453,7 +414,7 @@ instance FromJSON InsufficientUtxoAdaAction where
 
 
 instance FromJSON (TxOutput TxOutputContent ) where
-  parseJSON (A.Object v) = do
+  parseJSON json@(A.Object v) = do
     -- Parse TxOutput according to address type if simple
     -- then use address with value TxOutAddress otherwise use TxOutScriptAddress or TxOutScript
     -- which has script and data if there is no script given then take address
@@ -462,53 +423,80 @@ instance FromJSON (TxOutput TxOutputContent ) where
     addChange' <- v .:? "addChange" .!= False
     deductFee' <- v .:? "deductFee" .!= False
     insuffientUtxoAda <- v.:? "insuffientUtxoAda" .!=OnInsufficientUtxoAdaUnset
-    addressTextM <- v .:? "address"
-    addressM <- case addressTextM of
+    addressTextM  :: Maybe A.Value <- v .:? "address"
+
+    destination :: Maybe (Either (AddressInEra  BabbageEra) TxPlutusScript) <- case addressTextM of
       Nothing -> pure Nothing
-      Just addrText -> parseAddress addrText <&> Just
-    valueText :: Maybe  A.Value <- v .:? "value"
-    value <- case valueText of
+      Just v@(A.Object  o) -> do
+        v<- parseJSON  v
+        pure$ pure $ pure v
+      Just (A.String addrTxt) -> do
+        val <- parseAddress addrTxt
+        pure $ pure $ Left val
+      _ -> error "Unexpected value"
+    maybeVal :: Maybe  A.Value <- v .:? "value"
+
+    value <- case maybeVal of
         Just (A.String txt) ->  parseValueText txt
         Just (A.Number sci) -> pure $ valueFromList [(AdaAssetId, Quantity $ round  sci)]
-        Just _ -> fail "Expected string or number"
+        Just val -> parseJSON  val
         _ -> pure $ valueFromList []
-
-    scriptM <- v .:? "script"
-    scriptAnyM <- case scriptM of
-      Nothing -> pure Nothing
-      Just scriptJson -> do
-        script <- parseAnyScript scriptJson
-        pure $ Just script
-    scriptM <- v.:? "inlineScript"
-
     datumHashE <- parseData
-    shouldEmbed <- v .:? "inline" .!= False
-    let dHashConfigConsidered=if shouldEmbed
-                                then datumHashE
+    shouldEmbed <- v .:? "inline" .!= True
+    let txOutDatum=if shouldEmbed
+                                then case datumHashE of
+                                  Nothing -> TxOutDatumNone
+                                  Just (Left sd) -> TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra sd
+                                  Just (Right dh) -> TxOutDatumHash ScriptDataInBabbageEra dh
                                 else (case datumHashE of
-                                  Just (Left datum) -> pure $ pure $ hashScriptData datum
-                                  _ -> datumHashE
+                                  Just (Left datum) -> TxOutDatumHash ScriptDataInBabbageEra (hashScriptData datum)
+                                  Just (Right dh)   -> TxOutDatumHash ScriptDataInBabbageEra dh
+                                  _ -> TxOutDatumNone
                                 )
-    txOutputContent <- case (dHashConfigConsidered, scriptAnyM, addressM) of
-      -- If there is no datum hash and no script then use address as script address
-      (Nothing, Nothing, Just address) -> pure $ TxOutAddress address value
-      -- If there is datum hash but no script then use address as script address
-      (Just datum, Nothing, Just address) -> case datum of
-        Left sd -> pure $ TxOutScriptAddressWithData address value sd
-        Right ha -> pure $ TxOutScriptAddress address value ha
-      -- If there is no datum hash but there is script then it is not supported
-      (Nothing, Just scriptAny,Just addr) -> pure $ TxOutAddressWithReference addr value (TxValidatorScript scriptAny)
-
-      (Nothing, Just scriptAny,_) -> fail "TxOutput must have a data or dataHash if it has a script"
-      -- If there is datum hash and script then use script and datahash
-      (Just datum, Just scriptAny, Nothing) -> case datum of
-        Left sd -> pure $ TxOutScriptWithData  (TxValidatorScript scriptAny) value sd
-        Right ha -> pure $ TxOutScript (TxValidatorScript scriptAny) value ha
-      (_,_,_) -> fail "Unsupported output object format it must be address, value, optional datumhash for scriptaddress or script, value, datumHash"
-
-
-    pure $ TxOutput txOutputContent deductFee' addChange' insuffientUtxoAda
-
+    mScript_ <- v .:? "script"
+    mScript <- case mScript_ of
+      Nothing ->  v .:? "inlineScript"
+      Just va -> pure mScript_
+    -- based on outputAddress and inlineScript determine what to do. (Automatic calculation  of destination address
+    -- from script code has increased the code drastically )
+    output <-  case destination of
+          Nothing -> case mScript of
+            Nothing -> fail "missing  both inlineScript and address"
+            Just obj -> do
+              sc <- parseJSON   obj
+              case txOutDatum of
+                TxOutDatumNone -> fail "Missing datum in script output"
+                TxOutDatumHash sdsie ha ->  pure $ TxOutScriptInline sc value ha
+                TxOutDatumInline rtisidsie sd ->pure $  TxOutScriptWithDataAndReference sc  value sd
+                _  -> error "Unexpected"
+          Just (Left addr) -> case mScript of
+            Nothing ->  pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInBabbageEra value) txOutDatum ReferenceScriptNone
+            Just (A.Bool _) ->  pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInBabbageEra value) txOutDatum ReferenceScriptNone
+            Just obj -> do
+              sc <- anyScriptParser  obj
+              pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInBabbageEra value) txOutDatum (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra sc)
+          Just (Right script) ->
+            let defaultAct = case txOutDatum of
+                  TxOutDatumNone -> fail "Missing datum in script output"
+                  TxOutDatumHash sdsie ha ->  pure $ TxOutScript script value ha
+                  TxOutDatumInline rtisidsie sd ->pure $  TxOutScriptWithData script  value sd
+                  _  -> error "Unexpected"
+            in case mScript of
+              Nothing -> defaultAct
+              Just (A.Bool False) -> defaultAct
+              Just (A.Bool True) ->  case txOutDatum of
+                  TxOutDatumNone -> fail "Missing datum in script output"
+                  TxOutDatumHash sdsie ha ->  pure $ TxOutScriptInline script value ha
+                  TxOutDatumInline rtisidsie sd ->pure $  TxOutScriptWithDataAndReference script  value sd
+                  _  -> error "Unexpected"
+              Just va -> do
+                sc <- parseJSON   va
+                case txOutDatum of
+                  TxOutDatumNone -> fail "Missing datum in script output"
+                  TxOutDatumHash sdsie ha ->  pure $ TxOutScriptWithScript script value ha sc
+                  TxOutDatumInline rtisidsie sd ->pure $  TxOutScriptWithDataAndScript script  value sd sc
+                  _  -> error "Unexpected"
+    pure $ TxOutput output deductFee' addChange' insuffientUtxoAda
     where
 
       parseData :: Parser  (Maybe (Either ScriptData (Hash ScriptData)))
@@ -519,7 +507,10 @@ instance FromJSON (TxOutput TxOutputContent ) where
                   val <- scriptDataParser datum
                   pure $ pure $ Left $  val
           Nothing ->do
-            datumHashM <- v .:? "datumHash"
+            datumHashM_ <- v .:? "datumHash"
+            datumHashM <-case datumHashM_ of
+              Nothing ->  v .:? "dataHash"
+              Just any -> pure datumHashM_
             case datumHashM of
               Just dHash ->case deserialiseFromRawBytesHex (AsHash AsScriptData) (T.encodeUtf8 dHash) of
                   Left e -> fail "Expected hex string "
@@ -529,44 +520,6 @@ instance FromJSON (TxOutput TxOutputContent ) where
 
   parseJSON _ = fail "TxOutput must be an object"
 
-
--- instance FromJSON TxOutputContent where
---   parseJSON (A.Object v) = do
---     addressText <- v .: "address"
---     address <- case deserialiseAddress (AsAddressInEra AsAlonzoEra) addressText of
---       Nothing -> fail $ "Invalid address string: " ++ T.unpack addressText
---       Just aie -> pure aie
-
---     valueText <- v .: "value"
---     value <- parseValueText valueText
-
---     datumText <- v .:? "datum"
---     datumHashM <- case datumText of
---       Nothing -> pure Nothing
---       Just dt -> case deserialiseFromRawBytes (AsHash AsScriptData) dt of
---         Nothing -> pure Nothing
---         Just d -> pure $ Just d
---     case datumHashM of
---       Nothing -> pure $ TxOutAddress address value
---       Just dh -> pure $ TxOutScriptAddress address value dh
---     pure $ TxOutAddress address value
-
---   parseJSON _ = fail "TxOutputContent must be an object"
-
--- instance FromJSON TxMintingScript where
---   parseJSON (A.Object v) = do
---     scriptJson:: A.Object <- v .: "script"
---     scriptAny <- parseAnyScript $ B.concat $ BL.toChunks $ A.encode scriptJson
-
---     mintRedeemer <- v .:? "redeemer"
---     exUnits <- v .:? "executionUnits"
---     case mintRedeemer of
---       Nothing -> pure $ TxSimpleScript scriptAny
---       Just (A.String s) -> case parseScriptData s of
---         Nothing -> fail $ "Invalid script data string: " ++ T.unpack s
---         Just d -> pure $ TxPlutusScript scriptAny d exUnits
---       Just _ -> fail "TxMintingScript redeemer must be a string"
---   parseJSON _ = fail "TxMintingScript must be an object"
 
 instance FromJSON TxCollateral where
   parseJSON v@(A.Object o) =do

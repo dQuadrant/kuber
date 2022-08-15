@@ -9,8 +9,7 @@ module Cardano.Kuber.Api(
     ,   txPayToScriptWithDataAndReference
     ,   txPayToWithReference
 
--- minting related
-    ,   txMint
+    -- minting related
     ,   txMintSimpleScript
 
     -- inputs to the transaction
@@ -20,7 +19,6 @@ module Cardano.Kuber.Api(
     ,   txRedeemUtxo
     ,   txRedeemUtxoWithInlineDatum
     ,   txRedeemUtxoWithInlineDatumWithReferenceScript
-    ,   txRedeemTxin
     ,   txRedeemTxinWithInlineDatum
 
     -- tx reference input
@@ -46,7 +44,6 @@ module Cardano.Kuber.Api(
 
     -- Core Tx builder object and it's transformation functions
     ,   TxBuilder
-    ,   TxMintData(..)
     ,   txBuilderToTxBody
     ,   txBuilderToTxBodyIO
     ,   txBuilderToTx
@@ -68,7 +65,6 @@ module Cardano.Kuber.Api(
     ,   getWorkPath
     ,   getWorkPathFunc
 
-
     -- Error Class
     ,   ErrorType(..)
     ,   FrameworkError(..)
@@ -77,20 +73,6 @@ module Cardano.Kuber.Api(
     , submitTx
     , signTxBody
     , txAddTxInCollateral
-
-    -- TxBuilderConstructors
-    , TxBuilder(..)
-    , TxInputUnResolved_(..)
-    , TxInputResolved_(..)
-    , TxInput(..)
-    , TxOutput(..)
-    , TxOutputContent(..)
-    , TxMintData (..)
-    , TxInputSelection(..)
-    , TxSignature(..)
-    , TxCollateral(..)
-    ,TxValidatorScript(..)
-    , TxMintingScript(..)
 )
 
 where

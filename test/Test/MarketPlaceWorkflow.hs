@@ -1,4 +1,5 @@
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE TypeApplications #-}
 module Test.MarketPlaceWorkflow where
 import Cardano.Kuber.Api
 import Data.Functor ((<&>))
@@ -16,7 +17,7 @@ main= do
     signKey <- getEnv "SIGN_KEY_PATH" >>= T.readFile >>= parseSignKey  
      
 
-    let script = RequireSignature vkey 
+    let script = RequireSignature  @SimpleScriptV2 vkey 
         mintOp = txMintSimpleScript script  [(AssetName $ BS8.pack "one", 1)]
                     <> txWalletSignKey signKey
         network= getNetworkId info
@@ -24,7 +25,7 @@ main= do
         policy= scriptPolicyId $  SimpleScript SimpleScriptV2 script
         
     tx <- txBuilderToTxIO info mintOp  >>= orThrow
-    executeSubmitTx (getConnectInfo  info) tx >>= orThrow
+    submitTx  (getConnectInfo  info) tx >>= orThrow
     putStrLn $ "[TxSubmit][Mint]  "++ binaryToString policy ++".one   tx : " ++ BS8.unpack (  serialiseToRawBytesHex $  getTxId $ getTxBody  tx)
     
     where 

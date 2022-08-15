@@ -4,10 +4,13 @@ where
 import Cardano.Api
 import Cardano.Api.Shelley
 import Cardano.Slotting.Time
-
+import Debug.Trace as Debug
 import Data.Functor ((<&>))
 import Cardano.Kuber.Utility.QueryHelper
 import Data.ByteString.Char8 (unpack)
+import qualified Cardano.Ledger.Babbage.PParams as Babbage
+import Cardano.Ledger.Crypto (StandardCrypto)
+import qualified Cardano.Ledger.Core as Ledger
 
 
 -- ChainInfo class represents a class of objects that wraps cardano node connection information 
@@ -33,10 +36,11 @@ instance ChainInfo ChainConnectInfo where
         systemStart <-querySystemStart conn
         protocolPrams <-queryProtocolParam conn
         print $ "CardanoNode " ++ show systemStart 
-        Lovelace costPerWord <-case protocolParamUTxOCostPerWord protocolPrams of
+        Lovelace costPerWord <-case protocolParamUTxOCostPerByte protocolPrams of
           Nothing -> fail "Missing Cost per bytes of Transaction in protocol Parameters"
           Just lo -> pure lo
-        pure  $ DetailedChainInfo costPerWord conn  protocolPrams  systemStart eHistory
+        let ledgerPparam = toLedgerPParams  ShelleyBasedEraBabbage  protocolPrams
+        pure  $ DetailedChainInfo costPerWord conn  protocolPrams  ledgerPparam  systemStart eHistory
   getConnectInfo (ChainConnectInfo conn )= conn 
   getNetworkId (ChainConnectInfo conn )=localNodeNetworkId conn 
 
@@ -53,7 +57,8 @@ instance ChainInfo ChainInfoWithProtocolParams where
         Lovelace costPerWord <-case protocolParamUTxOCostPerWord pParams of
           Nothing -> fail "Missing Cost per bytes of transaction in protocol paremeters"
           Just lo -> pure lo
-        pure  $ DetailedChainInfo costPerWord conn   pParams  systemStart eHistory
+        let ledgerPparam = toLedgerPParams  ShelleyBasedEraBabbage  pParams
+        pure  $ DetailedChainInfo costPerWord conn   pParams (ledgerPparam)  systemStart eHistory
   getConnectInfo (ChainInfoWithProtocolParams conn  _)= conn 
 
 
@@ -63,12 +68,13 @@ data  DetailedChainInfo=DetailedChainInfo  {
       dciCostPerWord ::  Integer,
       dciConn :: LocalNodeConnectInfo CardanoMode,
       dciProtocolParams:: ProtocolParameters,
+      dciPparm ::Ledger.PParams (ShelleyLedgerEra BabbageEra) ,
       dciSystemStart :: SystemStart,
       dciEraHistory :: EraHistory CardanoMode
     } 
 
 
 instance ChainInfo DetailedChainInfo where
-  withProtocolParam  (DetailedChainInfo  fctxcpw conn  pParam _ _ ) = pure $ ChainInfoWithProtocolParams conn  pParam
+  withProtocolParam  (DetailedChainInfo  fctxcpw conn  pParam _ _ _ ) = pure $ ChainInfoWithProtocolParams conn  pParam
   withDetails =pure
-  getConnectInfo (DetailedChainInfo fctxcpw conn _  _ _)= conn 
+  getConnectInfo (DetailedChainInfo fctxcpw conn _ _  _ _)= conn 

@@ -1,2 +1,6 @@
 /dist-newstyle
 .idea
+
+# vscode related
+.vscode
+.history

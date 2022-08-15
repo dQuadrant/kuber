@@ -79,7 +79,7 @@ server dcInfo =
    errorGuard2 (txBuilder dcInfo)
   :<|> errorGuard (submitTx' dcInfo)
   :<|> errorGuard (evaluateExecutionUnits dcInfo )
-  :<|> errorGuard (\sc -> parseAnyScriptBs (Aeson.encode sc)<&> (\(ScriptInAnyLang sl sc') ->serialiseToRawBytesHexText ( scriptPolicyId sc')) )
+  :<|> errorGuard (\sc -> parseAnyScript (Aeson.encode sc)<&> (\(ScriptInAnyLang sl sc') ->serialiseToRawBytesHexText ( scriptPolicyId sc')) )
   :<|> errorGuard (getKeyHash)
   where
 

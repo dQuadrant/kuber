@@ -6,11 +6,10 @@ import Cardano.Api
 import qualified Cardano.Api.Shelley as Shelley
 import Cardano.Api.Byron (Address(ByronAddress))
 import Cardano.Api.Shelley (Address(ShelleyAddress), fromPlutusData, fromShelleyPaymentCredential, shelleyPayAddrToPlutusPubKHash, StakeCredential (StakeCredentialByKey, StakeCredentialByScript), fromShelleyStakeReference, Hash (PaymentKeyHash))
-import Plutus.V1.Ledger.Api (PubKeyHash(PubKeyHash, getPubKeyHash), ToData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), toBuiltin, toData, fromBuiltin)
+import Plutus.V2.Ledger.Api (PubKeyHash(PubKeyHash, getPubKeyHash), ToData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), toBuiltin, toData, fromBuiltin)
 import Data.ByteString
 import qualified Cardano.Binary as Cborg
 import Cardano.Ledger.Shelley.API (Credential(KeyHashObj, ScriptHashObj), StakeReference (StakeRefNull, StakeRefBase, StakeRefPtr), ScriptHash (ScriptHash), Ptr (Ptr))
-import Plutus.V1.Ledger.Value (AssetClass (AssetClass))
 import Data.String (fromString)
 import Cardano.Ledger.Alonzo.TxInfo (transKeyHash)
 import qualified Plutus.V2.Ledger.Api as Plutus
@@ -20,6 +19,7 @@ import qualified Cardano.Ledger.BaseTypes  as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import Data.Functor ((<&>))
+import Plutus.V1.Ledger.Value (AssetClass (AssetClass))
 
 
 

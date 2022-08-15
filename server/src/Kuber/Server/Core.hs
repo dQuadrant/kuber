@@ -28,6 +28,7 @@ import qualified Data.ByteString.Char8 as BS8
 import Data.Functor ((<&>))
 import Cardano.Kuber.Api (TxBuilder)
 import Cardano.Kuber.Data.Parsers (parseTxIn)
+import qualified Debug.Trace as Debug
 
 
 getKeyHash :: AddressModal -> IO KeyHashResponse
@@ -73,17 +74,17 @@ submitTx' ctx (SubmitTxModal tx mWitness) = do
 
 txBuilder :: DetailedChainInfo  ->  Maybe Bool -> TxBuilder -> IO TxResponse
 txBuilder dcinfo submitM txBuilder = do
-  putStrLn $ BS8.unpack $  prettyPrintJSON $ txBuilder
+  putStrLn $ BS8.unpack $  prettyPrintJSON txBuilder
   txE <- txBuilderToTxIO dcinfo txBuilder
   case txE of
     Left fe -> throw fe
     Right tx -> case submitM of
-      Nothing ->   pure $ TxResponse tx
-      Just submit -> do
+      Just True -> do
         txE <- submitTx (getConnectInfo dcinfo) tx
         case txE of
           Left fe -> throw fe
           Right _ ->   pure $ TxResponse tx
+      _ ->   pure $ TxResponse tx
 
 
 evaluateExecutionUnits' :: DetailedChainInfo ->  String -> IO [Either String ExecutionUnits]

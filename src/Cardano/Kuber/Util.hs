@@ -16,13 +16,13 @@ module Cardano.Kuber.Util
     , addrToMaybePkh
     , addrInEraToPkh
     , addressInEraToPaymentKeyHash
-    
+
 
     -- TypeCast/Conversion Utilities (PlutusTypes)
     , dataToScriptData
     , toPlutusAssetClass
     , fromPlutusData
-    , fromPlutusAddress 
+    , fromPlutusAddress
     , toPlutusAddress
     , toPlutusCredential
     , addrInEraToPlutusAddress
@@ -40,18 +40,20 @@ module Cardano.Kuber.Util
     , txoutListSum
 
     -- calculation functions
+    , calculateTxoutMinLovelaceOrErr
     , calculateTxoutMinLovelaceWithcpw
     , calculateTxoutMinLovelaceFunc
     , calculateTxoutMinLovelace
     , evaluateExecutionUnits
     , evaluateExUnitMap
+    , babbageMinLovelace
 
     -- query helpers
     , performQuery
     , queryUtxos
     , queryTxins
     , queryAddressInEraUtxos
-    
+
     -- metadata utility
     , splitMetadataStrings
 
@@ -78,9 +80,9 @@ import Control.Exception (try, throw)
 import System.Environment (getEnv)
 import System.Directory (doesFileExist)
 import Cardano.Kuber.Error ( FrameworkError(FrameworkError), ErrorType(WrongScriptType, ExUnitCalculationError, FeatureNotSupported, PlutusScriptError) )
-import Plutus.V1.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), PubKeyHash (PubKeyHash), Address)
+import Plutus.V2.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), PubKeyHash (PubKeyHash), Address)
 import System.FilePath (joinPath)
-import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr, fromShelleyPaymentCredential, fromShelleyTxIn)
+import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr, fromShelleyPaymentCredential, fromShelleyTxIn, fromShelleyScriptHash)
 import qualified Cardano.Ledger.Alonzo.Tx as LedgerBody
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(SubmitSuccess, SubmitFail))
 import Data.Text.Conversions (convertText, Base16 (unBase16, Base16), FromText (fromText), ToText (toText))
@@ -94,7 +96,6 @@ import qualified Cardano.Ledger.Alonzo.Rules.Utxo as Alonzo
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import qualified Cardano.Ledger.Babbage.Rules.Utxo as Babbage
 
-import Plutus.V1.Ledger.Value (AssetClass(AssetClass))
 import Data.String (fromString)
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 -- import Shelley.Spec.Ledger.API (Credential(ScriptHashObj, KeyHashObj), KeyHash (KeyHash), StakeReference (StakeRefNull))
@@ -111,7 +112,7 @@ import qualified Codec.CBOR.Write as Cborg
 import qualified Codec.CBOR.Encoding as Cborg
 import qualified Cardano.Binary as Cborg
 import Cardano.Slotting.Time (SystemStart)
-import Cardano.Ledger.Babbage.TxBody (inputs)
+import Cardano.Ledger.Babbage.TxBody (inputs, mint')
 import Cardano.Ledger.Shelley.UTxO (txins)
 import Cardano.Kuber.Utility.ChainInfoUtil
 import qualified Data.Aeson as A
@@ -131,14 +132,24 @@ import qualified Data.ByteString.Builder as BSL
 import Data.ByteString.Builder (charUtf8)
 import Cardano.Kuber.Utility.WalletUtil (readSignKey, getDefaultSignKey)
 import Cardano.Kuber.Utility.Text
+import qualified Cardano.Ledger.Mary.Value as Ledger
+import Data.Either (partitionEithers)
+import Data.Bifunctor (Bifunctor(bimap))
+import qualified Cardano.Ledger.Shelley.API as Ledger
+import qualified Debug.Trace as Debug
+import Data.List (intercalate)
 
 
+calculateTxoutMinLovelaceOrErr :: TxOut CtxTx  BabbageEra -> ProtocolParameters ->  Lovelace
+calculateTxoutMinLovelaceOrErr  t p= case calculateTxoutMinLovelace t p of
+  Nothing -> error "Error calculating minlovelace"
+  Just lo -> lo
 
-
-calculateTxoutMinLovelace :: TxOut CtxUTxO  BabbageEra -> ProtocolParameters -> Maybe Lovelace
+calculateTxoutMinLovelace :: TxOut CtxTx  BabbageEra -> ProtocolParameters -> Maybe Lovelace
 calculateTxoutMinLovelace txout pParams=do
-  costPerWord <- protocolParamUTxOCostPerWord pParams
-  pure $calculateTxoutMinLovelaceWithcpw costPerWord txout
+  case calculateMinimumUTxO ShelleyBasedEraBabbage txout pParams of
+    Left mutoe -> Nothing
+    Right va -> pure $ (case selectAsset va AdaAssetId of { Quantity n -> Lovelace n })
 
 calculateTxoutMinLovelaceFunc :: ProtocolParameters  -> Maybe ( TxOut CtxUTxO    BabbageEra -> Lovelace)
 calculateTxoutMinLovelaceFunc pParams = do
@@ -148,6 +159,8 @@ calculateTxoutMinLovelaceFunc pParams = do
 -- TODO: fix this for babbage era.
 calculateTxoutMinLovelaceWithcpw :: Lovelace -> TxOut CtxUTxO  BabbageEra -> Lovelace
 calculateTxoutMinLovelaceWithcpw (Lovelace cpw) txout = Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraBabbage   txout) * cpw
+
+babbageMinLovelace pparam txout = Ledger.evaluateMinLovelaceOutput pparam (toShelleyTxOut ShelleyBasedEraBabbage   txout)
 
 
 
@@ -186,7 +199,7 @@ utxoSum (UTxO uMap)= utxoMapSum uMap
 
 
 evaluateExecutionUnits :: DetailedChainInfo ->  Tx BabbageEra -> IO [Either String ExecutionUnits]
-evaluateExecutionUnits (DetailedChainInfo costPerWord conn pParam systemStart eraHistory)  tx = do
+evaluateExecutionUnits (DetailedChainInfo costPerWord conn pParam ledgerPparam systemStart eraHistory)  tx = do
       let txbody =  getTxBody tx
 
           _inputs :: Set.Set TxIn
@@ -201,8 +214,7 @@ evaluateExecutionUnits (DetailedChainInfo costPerWord conn pParam systemStart er
                                         Right eu -> Right eu  )   (Map.elems exUnitMap)
 
 
-
-evaluateExUnitMapIO ::  DetailedChainInfo  ->  TxBody BabbageEra -> IO ( Either FrameworkError   (Map TxIn ExecutionUnits))
+evaluateExUnitMapIO ::  DetailedChainInfo  ->  TxBody BabbageEra -> IO ( Either FrameworkError   (Map TxIn ExecutionUnits,Map PolicyId  ExecutionUnits))
 evaluateExUnitMapIO dcinfo txbody = do
   let
       _inputs :: Set.Set TxIn
@@ -210,22 +222,27 @@ evaluateExUnitMapIO dcinfo txbody = do
   txins <- queryTxins  (dciConn dcinfo)  _inputs
   case txins of
     Left fe -> throw $ FrameworkError  ExUnitCalculationError  (show fe)
-    Right uto ->  pure $  evaluateExUnitMap dcinfo uto txbody
+    Right uto -> pure $  evaluateExUnitMap dcinfo uto txbody
 
-evaluateExUnitMap :: DetailedChainInfo  -> UTxO BabbageEra ->  TxBody BabbageEra ->  Either FrameworkError   (Map TxIn ExecutionUnits)
-evaluateExUnitMap  (DetailedChainInfo cpw conn pParam systemStart eraHistory ) usedUtxos txbody   = case eExUnits of
-  Left tve -> Left $ FrameworkError   ExUnitCalculationError (show tve)
-  Right map ->mapM  doMap ( Map.toList map) <&> Map.fromList
+evaluateExUnitMap :: DetailedChainInfo  -> UTxO BabbageEra ->  TxBody BabbageEra ->  Either FrameworkError   (Map TxIn ExecutionUnits,Map PolicyId  ExecutionUnits )
+evaluateExUnitMap  (DetailedChainInfo cpw conn pParam ledgerPparam systemStart eraHistory ) usedUtxos txbody   = case eExUnits of
+  Left tve -> do
+    Left $ FrameworkError   ExUnitCalculationError (show tve)
+  Right exMap -> do
+    eithers<- mapM  doMap ( Map.toList exMap)
+    pure $ bimap Map.fromList Map.fromList $ partitionEithers eithers
 
   where
     eExUnits=evaluateTransactionExecutionUnits BabbageEraInCardanoMode systemStart eraHistory pParam usedUtxos txbody
     inputList=case txbody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv ->  Set.toList (txins tb) }
+    mints = case txbody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> case mint' tb of { Ledger.Value n mp ->  map (\(Ledger.PolicyID sh) -> PolicyId $ fromShelleyScriptHash sh ) ( Set.toAscList$  Map.keysSet mp) } }
     inputLookup = Map.fromAscList $ zip [0..] inputList
 
-    doMap :: (ScriptWitnessIndex,Either ScriptExecutionError ExecutionUnits) -> Either FrameworkError  (TxIn,ExecutionUnits)
+    doMap :: (ScriptWitnessIndex,Either ScriptExecutionError ExecutionUnits) -> Either FrameworkError  (Either (TxIn,ExecutionUnits) (PolicyId ,ExecutionUnits))
     doMap  (i,mExUnitResult)= case i of
-      ScriptWitnessIndexTxIn wo -> unEitherExUnits (fromShelleyTxIn (inputList !! fromIntegral  wo),) mExUnitResult
-      ScriptWitnessIndexMint wo -> Left  $ FrameworkError FeatureNotSupported "Automatically calculating ex units for mint is not supported"
+      ScriptWitnessIndexTxIn wo -> do
+        unEitherExUnits (fromShelleyTxIn (inputList !! fromIntegral  wo),) mExUnitResult <&> Left
+      ScriptWitnessIndexMint wo -> unEitherExUnits (mints !! fromIntegral wo,) mExUnitResult <&> Right
       ScriptWitnessIndexCertificate wo ->  Left  $ FrameworkError FeatureNotSupported "Witness for Certificates is not supported"
       ScriptWitnessIndexWithdrawal wo ->  Left  $ FrameworkError FeatureNotSupported "Plutus script for withdrawl is not supported"
 
@@ -246,12 +263,12 @@ splitMetadataStrings = Map.map morphValue
   where
     morphValue :: A.Value -> A.Value
     morphValue  val = case val of
-      A.Object (hm) ->  A.Object $ A.map  morphValue    hm
+      A.Object hm ->  A.Object $ A.map  morphValue    hm
       A.Array vec ->A.Array (Vector.map  morphValue vec )
       A.String txt -> let txtList = stringToList Vector.empty txt in if length txtList <2 then A.String txt  else A.Array  txtList
       _ -> val
 
-    -- Given a vecotr of Strings and Text, split the text into chunks of 64 bytes and append it into the vector as aeson String value. 
+    -- Given a vector of Strings and Text, split the text into chunks of 64 bytes and append it into the vector as aeson String value. 
     stringToList :: Vector.Vector A.Value ->  T.Text -> Vector.Vector A.Value
     stringToList accum  txt = let
       splitted=splitString 0 T.empty txt
