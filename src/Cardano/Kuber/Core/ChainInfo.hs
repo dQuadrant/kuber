@@ -8,7 +8,7 @@ import Debug.Trace as Debug
 import Data.Functor ((<&>))
 import Cardano.Kuber.Utility.QueryHelper
 import Data.ByteString.Char8 (unpack)
-import qualified Cardano.Ledger.Babbage.PParams as Babbage
+import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Core as Ledger
 
@@ -36,10 +36,10 @@ instance ChainInfo ChainConnectInfo where
         systemStart <-querySystemStart conn
         protocolPrams <-queryProtocolParam conn
         print $ "CardanoNode " ++ show systemStart 
-        Lovelace costPerWord <-case protocolParamUTxOCostPerByte protocolPrams of
+        Lovelace costPerWord <-case protocolParamUTxOCostPerWord protocolPrams of
           Nothing -> fail "Missing Cost per bytes of Transaction in protocol Parameters"
           Just lo -> pure lo
-        let ledgerPparam = toLedgerPParams  ShelleyBasedEraBabbage  protocolPrams
+        let ledgerPparam = toLedgerPParams  ShelleyBasedEraAlonzo  protocolPrams
         pure  $ DetailedChainInfo costPerWord conn  protocolPrams  ledgerPparam  systemStart eHistory
   getConnectInfo (ChainConnectInfo conn )= conn 
   getNetworkId (ChainConnectInfo conn )=localNodeNetworkId conn 
@@ -57,7 +57,7 @@ instance ChainInfo ChainInfoWithProtocolParams where
         Lovelace costPerWord <-case protocolParamUTxOCostPerWord pParams of
           Nothing -> fail "Missing Cost per bytes of transaction in protocol paremeters"
           Just lo -> pure lo
-        let ledgerPparam = toLedgerPParams  ShelleyBasedEraBabbage  pParams
+        let ledgerPparam = toLedgerPParams  ShelleyBasedEraAlonzo  pParams
         pure  $ DetailedChainInfo costPerWord conn   pParams (ledgerPparam)  systemStart eHistory
   getConnectInfo (ChainInfoWithProtocolParams conn  _)= conn 
 
@@ -68,7 +68,7 @@ data  DetailedChainInfo=DetailedChainInfo  {
       dciCostPerWord ::  Integer,
       dciConn :: LocalNodeConnectInfo CardanoMode,
       dciProtocolParams:: ProtocolParameters,
-      dciPparm ::Ledger.PParams (ShelleyLedgerEra BabbageEra) ,
+      dciPparm ::Ledger.PParams (ShelleyLedgerEra AlonzoEra) ,
       dciSystemStart :: SystemStart,
       dciEraHistory :: EraHistory CardanoMode
     } 

@@ -46,7 +46,7 @@ module Cardano.Kuber.Util
     , calculateTxoutMinLovelace
     , evaluateExecutionUnits
     , evaluateExUnitMap
-    , babbageMinLovelace
+    , alonzoMinLovelace
 
     -- query helpers
     , performQuery
@@ -82,7 +82,7 @@ import System.Directory (doesFileExist)
 import Cardano.Kuber.Error ( FrameworkError(FrameworkError), ErrorType(WrongScriptType, ExUnitCalculationError, FeatureNotSupported, PlutusScriptError) )
 import Plutus.V2.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), PubKeyHash (PubKeyHash), Address)
 import System.FilePath (joinPath)
-import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr, fromShelleyPaymentCredential, fromShelleyTxIn, fromShelleyScriptHash)
+import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord, protocolParamUTxOCostPerByte), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr, fromShelleyPaymentCredential, fromShelleyTxIn, fromShelleyScriptHash)
 import qualified Cardano.Ledger.Alonzo.Tx as LedgerBody
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(SubmitSuccess, SubmitFail))
 import Data.Text.Conversions (convertText, Base16 (unBase16, Base16), FromText (fromText), ToText (toText))
@@ -94,7 +94,7 @@ import Data.ByteString.Lazy (fromStrict, toStrict)
 import qualified Data.Text.IO as TextIO
 import qualified Cardano.Ledger.Alonzo.Rules.Utxo as Alonzo
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
-import qualified Cardano.Ledger.Babbage.Rules.Utxo as Babbage
+import qualified Cardano.Ledger.Alonzo.Rules.Utxo as Alonzo
 
 import Data.String (fromString)
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
@@ -112,7 +112,7 @@ import qualified Codec.CBOR.Write as Cborg
 import qualified Codec.CBOR.Encoding as Cborg
 import qualified Cardano.Binary as Cborg
 import Cardano.Slotting.Time (SystemStart)
-import Cardano.Ledger.Babbage.TxBody (inputs, mint')
+import Cardano.Ledger.Alonzo.TxBody (inputs, mint')
 import Cardano.Ledger.Shelley.UTxO (txins)
 import Cardano.Kuber.Utility.ChainInfoUtil
 import qualified Data.Aeson as A
@@ -138,29 +138,33 @@ import Data.Bifunctor (Bifunctor(bimap))
 import qualified Cardano.Ledger.Shelley.API as Ledger
 import qualified Debug.Trace as Debug
 import Data.List (intercalate)
+import qualified Cardano.Ledger.Alonzo as Alonzo
+import Cardano.Ledger.Crypto (StandardCrypto)
 
 
-calculateTxoutMinLovelaceOrErr :: TxOut CtxTx  BabbageEra -> ProtocolParameters ->  Lovelace
+calculateTxoutMinLovelaceOrErr :: TxOut CtxTx  AlonzoEra -> ProtocolParameters ->  Lovelace
 calculateTxoutMinLovelaceOrErr  t p= case calculateTxoutMinLovelace t p of
   Nothing -> error "Error calculating minlovelace"
   Just lo -> lo
 
-calculateTxoutMinLovelace :: TxOut CtxTx  BabbageEra -> ProtocolParameters -> Maybe Lovelace
+calculateTxoutMinLovelace :: TxOut CtxTx  AlonzoEra -> ProtocolParameters -> Maybe Lovelace
 calculateTxoutMinLovelace txout pParams=do
-  case calculateMinimumUTxO ShelleyBasedEraBabbage txout pParams of
+  case calculateMinimumUTxO ShelleyBasedEraAlonzo txout pParams of
     Left mutoe -> Nothing
     Right va -> pure $ (case selectAsset va AdaAssetId of { Quantity n -> Lovelace n })
 
-calculateTxoutMinLovelaceFunc :: ProtocolParameters  -> Maybe ( TxOut CtxUTxO    BabbageEra -> Lovelace)
+calculateTxoutMinLovelaceFunc :: ProtocolParameters  -> Maybe ( TxOut CtxUTxO    AlonzoEra -> Lovelace)
 calculateTxoutMinLovelaceFunc pParams = do
-  costPerWord <- protocolParamUTxOCostPerWord pParams
+  costPerWord <- protocolParamUTxOCostPerByte  pParams
   pure $ calculateTxoutMinLovelaceWithcpw costPerWord
 
 -- TODO: fix this for babbage era.
-calculateTxoutMinLovelaceWithcpw :: Lovelace -> TxOut CtxUTxO  BabbageEra -> Lovelace
-calculateTxoutMinLovelaceWithcpw (Lovelace cpw) txout = Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraBabbage   txout) * cpw
+calculateTxoutMinLovelaceWithcpw :: Lovelace -> TxOut CtxUTxO  AlonzoEra -> Lovelace
+calculateTxoutMinLovelaceWithcpw (Lovelace cpw) txout = Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraAlonzo   txout) * cpw
 
-babbageMinLovelace pparam txout = Ledger.evaluateMinLovelaceOutput pparam (toShelleyTxOut ShelleyBasedEraBabbage   txout)
+alonzoMinLovelace :: Alonzo.PParams (Alonzo.AlonzoEra StandardCrypto) 
+  -> TxOut CtxUTxO AlonzoEra -> Ledger.Coin
+alonzoMinLovelace pparam txout = Ledger.evaluateMinLovelaceOutput pparam (toShelleyTxOut ShelleyBasedEraAlonzo   txout)
 
 
 
@@ -194,11 +198,11 @@ utxoListSum l = txoutListSum (map snd l)
 utxoMapSum :: Map a (TxOut ctx era) -> Value
 utxoMapSum x = txoutListSum  $ Map.elems x
 
-utxoSum :: UTxO BabbageEra  -> Value
+utxoSum :: UTxO AlonzoEra  -> Value
 utxoSum (UTxO uMap)= utxoMapSum uMap
 
 
-evaluateExecutionUnits :: DetailedChainInfo ->  Tx BabbageEra -> IO [Either String ExecutionUnits]
+evaluateExecutionUnits :: DetailedChainInfo ->  Tx AlonzoEra -> IO [Either String ExecutionUnits]
 evaluateExecutionUnits (DetailedChainInfo costPerWord conn pParam ledgerPparam systemStart eraHistory)  tx = do
       let txbody =  getTxBody tx
 
@@ -207,14 +211,14 @@ evaluateExecutionUnits (DetailedChainInfo costPerWord conn pParam ledgerPparam s
       txins <- queryTxins  conn  _inputs
       case txins of
         Left fe -> throw $ FrameworkError  ExUnitCalculationError  (show fe)
-        Right uto -> case evaluateTransactionExecutionUnits BabbageEraInCardanoMode systemStart eraHistory pParam uto txbody of
+        Right uto -> case evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam uto txbody of
             Left tve -> throw $ FrameworkError ExUnitCalculationError $ show tve
             Right exUnitMap -> pure $ Prelude.map (\case
                                         Left see -> Left (show see)
                                         Right eu -> Right eu  )   (Map.elems exUnitMap)
 
 
-evaluateExUnitMapIO ::  DetailedChainInfo  ->  TxBody BabbageEra -> IO ( Either FrameworkError   (Map TxIn ExecutionUnits,Map PolicyId  ExecutionUnits))
+evaluateExUnitMapIO ::  DetailedChainInfo  ->  TxBody AlonzoEra -> IO ( Either FrameworkError   (Map TxIn ExecutionUnits,Map PolicyId  ExecutionUnits))
 evaluateExUnitMapIO dcinfo txbody = do
   let
       _inputs :: Set.Set TxIn
@@ -224,7 +228,7 @@ evaluateExUnitMapIO dcinfo txbody = do
     Left fe -> throw $ FrameworkError  ExUnitCalculationError  (show fe)
     Right uto -> pure $  evaluateExUnitMap dcinfo uto txbody
 
-evaluateExUnitMap :: DetailedChainInfo  -> UTxO BabbageEra ->  TxBody BabbageEra ->  Either FrameworkError   (Map TxIn ExecutionUnits,Map PolicyId  ExecutionUnits )
+evaluateExUnitMap :: DetailedChainInfo  -> UTxO AlonzoEra ->  TxBody AlonzoEra ->  Either FrameworkError   (Map TxIn ExecutionUnits,Map PolicyId  ExecutionUnits )
 evaluateExUnitMap  (DetailedChainInfo cpw conn pParam ledgerPparam systemStart eraHistory ) usedUtxos txbody   = case eExUnits of
   Left tve -> do
     Left $ FrameworkError   ExUnitCalculationError (show tve)
@@ -233,7 +237,7 @@ evaluateExUnitMap  (DetailedChainInfo cpw conn pParam ledgerPparam systemStart e
     pure $ bimap Map.fromList Map.fromList $ partitionEithers eithers
 
   where
-    eExUnits=evaluateTransactionExecutionUnits BabbageEraInCardanoMode systemStart eraHistory pParam usedUtxos txbody
+    eExUnits=evaluateTransactionExecutionUnits AlonzoEraInCardanoMode systemStart eraHistory pParam usedUtxos txbody
     inputList=case txbody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv ->  Set.toList (txins tb) }
     mints = case txbody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> case mint' tb of { Ledger.Value n mp ->  map (\(Ledger.PolicyID sh) -> PolicyId $ fromShelleyScriptHash sh ) ( Set.toAscList$  Map.keysSet mp) } }
     inputLookup = Map.fromAscList $ zip [0..] inputList

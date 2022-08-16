@@ -10,7 +10,7 @@
 module Kuber.Server.Spec where
 
 import Cardano.Api
-import Cardano.Api.Shelley (BabbageEra)
+import Cardano.Api.Shelley (AlonzoEra)
 import Cardano.Kuber.Data.Models
 
 import Control.Exception
@@ -68,7 +68,7 @@ type TransactionAPI =
     :> (
             "api" :> "v1" :> "tx" :> QueryParam "submit" Bool :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "submit" :> ReqBody '[JSON ,CBORBinary,CBORText  ] (SubmitTxModal ) :> Post '[JSON] (TxResponse )
-      :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx BabbageEra) :> Post '[JSON] ([Either String ExecutionUnits ])
+      :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx AlonzoEra) :> Post '[JSON] ([Either String ExecutionUnits ])
       :<|> "api" :> "v1" :> "scriptPolicy"        :> ReqBody '[JSON] (Aeson.Value ) :> Post '[PlainText ] (Text)
       :<|> "api" :> "v1" :> "keyhash"        :> ReqBody '[JSON] (AddressModal) :> Post '[JSON ] (KeyHashResponse)
 

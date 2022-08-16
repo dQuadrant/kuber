@@ -7,9 +7,9 @@ import qualified Data.ByteString.Short as SBS
 import Codec.Serialise (serialise)
 import qualified Plutus.V2.Ledger.Api as Plutus
 
-createTxInScriptWitness :: ScriptInAnyLang -> Maybe ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn BabbageEra)
+createTxInScriptWitness :: ScriptInAnyLang -> Maybe ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn AlonzoEra)
 createTxInScriptWitness anyScript mDatum redeemer exUnits = do
-  ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anyScript
+  ScriptInEra langInEra script' <- validateScriptSupportedInEra' AlonzoEra anyScript
   case script' of
     PlutusScript version pscript ->
       pure $ PlutusScriptWitness langInEra version (PScript pscript) datumForTxin redeemer exUnits
@@ -18,23 +18,23 @@ createTxInScriptWitness anyScript mDatum redeemer exUnits = do
     datumForTxin = maybe InlineScriptDatum ScriptDatumForTxIn mDatum
 
 
-createTxInReferenceScriptWitness :: TxIn -> Maybe ScriptHash -> Maybe ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError (ScriptWitness WitCtxTxIn BabbageEra)
-createTxInReferenceScriptWitness scTxIn mScriptHash mDatum redeemer exUnits = pure $ PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2 (PReferenceScript scTxIn mScriptHash) datumForTxin redeemer exUnits
+createTxInReferenceScriptWitness :: TxIn -> Maybe ScriptHash -> Maybe ScriptData -> ScriptData -> ExecutionUnits -> Either FrameworkError (ScriptWitness WitCtxTxIn AlonzoEra)
+createTxInReferenceScriptWitness scTxIn mScriptHash mDatum redeemer exUnits = pure $ PlutusScriptWitness PlutusScriptV1InAlonzo PlutusScriptV1 (PReferenceScript scTxIn mScriptHash) datumForTxin redeemer exUnits
   where
     datumForTxin = maybe InlineScriptDatum ScriptDatumForTxIn mDatum
 
 
-createPlutusMintingWitness :: ScriptInAnyLang ->ScriptData ->ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxMint BabbageEra)
+createPlutusMintingWitness :: ScriptInAnyLang ->ScriptData ->ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxMint AlonzoEra)
 createPlutusMintingWitness anyScript redeemer exUnits = do
-  ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anyScript
+  ScriptInEra langInEra script' <- validateScriptSupportedInEra' AlonzoEra anyScript
   case script' of
     PlutusScript version pscript ->
       pure $ PlutusScriptWitness langInEra version (PScript pscript) NoScriptDatumForMint redeemer exUnits
     SimpleScript version sscript -> Left $ FrameworkError WrongScriptType "Simple script not supported on creating plutus script witness."
 
-createSimpleMintingWitness :: ScriptInAnyLang -> Either FrameworkError (ScriptWitness WitCtxMint BabbageEra)
+createSimpleMintingWitness :: ScriptInAnyLang -> Either FrameworkError (ScriptWitness WitCtxMint AlonzoEra)
 createSimpleMintingWitness anyScript = do
-  ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anyScript
+  ScriptInEra langInEra script' <- validateScriptSupportedInEra' AlonzoEra anyScript
   case script' of
     PlutusScript version pscript -> Left $ FrameworkError  WrongScriptType "Plutus script not supported on creating simple script witness"
     SimpleScript version sscript -> pure $ SimpleScriptWitness langInEra version (SScript sscript)

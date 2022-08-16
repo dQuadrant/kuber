@@ -16,7 +16,7 @@ import Cardano.Api
 import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData)
 import Cardano.Binary (ToCBOR (toCBOR), decodeFull, fromCBOR)
 import Cardano.Ledger.Alonzo.Data (Data)
-import Cardano.Ledger.Babbage.Tx (TxBody (txfee))
+import Cardano.Ledger.Alonzo.Tx (TxBody (txfee))
 import Codec.CBOR.Write (toLazyByteString)
 import Data.Aeson (KeyValue ((.=)), encode, object)
 import Data.Aeson.Types (FromJSON (parseJSON), Parser, ToJSON (toJSON), Value (Object, String), (.:), (.:?))
@@ -36,15 +36,15 @@ import Cardano.Kuber.Data.Parsers (signKeyParser)
 
 newtype AssetModal = AssetModal AssetId deriving (Show)
 
-newtype AddressModal = AddressModal (AddressInEra BabbageEra) deriving (Show)
+newtype AddressModal = AddressModal (AddressInEra AlonzoEra) deriving (Show)
 
 newtype SignKeyModal = SignKeyModal (SigningKey PaymentKey) deriving (Show)
 
 newtype UtxoIdModal = UtxoIdModal (TxId, TxIx) deriving (Show)
 
-newtype WitnessModal = WitnessModal (KeyWitness BabbageEra) deriving (Show)
+newtype WitnessModal = WitnessModal (KeyWitness AlonzoEra) deriving (Show)
 
-newtype TxModal = TxModal (Tx BabbageEra) deriving (Show)
+newtype TxModal = TxModal (Tx AlonzoEra) deriving (Show)
 
 unAssetModal (AssetModal a) = a
 
@@ -60,7 +60,7 @@ unUtxoIdModal (UtxoIdModal x) = x
 
 
 data BalanceResponse = BalanceResponse
-  { utxos :: UTxO BabbageEra
+  { utxos :: UTxO AlonzoEra
   }
   deriving (Generic, Show, ToJSON)
 
@@ -71,8 +71,8 @@ data KeyHashResponse = KeyHashResponse
 
 
 data SubmitTxModal = SubmitTxModal
-  { rawTx :: Tx BabbageEra,
-    witness :: Maybe (KeyWitness BabbageEra)
+  { rawTx :: Tx AlonzoEra,
+    witness :: Maybe (KeyWitness AlonzoEra)
   }
 
 instance FromJSON SubmitTxModal where
@@ -90,7 +90,7 @@ instance FromJSON WitnessModal where
           Just txt -> T.concat ["8200", txt]
     case convertText cborHexText of
       Nothing -> fail "Witness string is not hex encoded"
-      Just (Base16 bs) -> case deserialiseFromCBOR (AsKeyWitness AsBabbageEra) bs of
+      Just (Base16 bs) -> case deserialiseFromCBOR (AsKeyWitness AsAlonzoEra) bs of
         Left e -> fail $ "Witness string: Invalid CBOR format : " ++ show e
         Right witness -> pure $ WitnessModal witness
   parseJSON _ = fail "Expecte Witness Modal cbor hex string"
@@ -99,13 +99,13 @@ instance FromJSON TxModal where
   parseJSON (String txStr) = do
     case convertText txStr of
       Nothing -> fail "Tx string is not hex encoded"
-      Just (Base16 bs) -> case deserialiseFromCBOR (AsTx AsBabbageEra) bs of
+      Just (Base16 bs) -> case deserialiseFromCBOR (AsTx AsAlonzoEra) bs of
         Left e -> fail $ "Tx string: Invalid CBOR format : " ++ show e
         Right tx -> pure $ TxModal tx
   parseJSON _ = fail "Expected Tx cbor hex string"
 
 data TxResponse = TxResponse
-  { txRaw :: Tx BabbageEra
+  { txRaw :: Tx AlonzoEra
   }
   deriving (Generic, Show)
 
@@ -122,7 +122,7 @@ instance ToJSON TxResponse where
       txHex = toHexString $ serialiseToCBOR tx
 
 instance FromJSON AddressModal where
-  parseJSON (String s)=  case deserialiseAddress (AsAddressInEra AsBabbageEra) s of
+  parseJSON (String s)=  case deserialiseAddress (AsAddressInEra AsAlonzoEra) s of
       Nothing -> fail "Invalid address string. Couldn't be parsed as valid address for babbage era"
       Just aie -> pure $ AddressModal aie
   parseJSON _ = fail "Expected Address to be String"

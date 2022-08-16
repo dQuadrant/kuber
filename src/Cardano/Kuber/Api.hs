@@ -5,9 +5,6 @@ module Cardano.Kuber.Api(
     ,   txPayToPkh
     ,   txPayToScript
     ,   txPayToScriptWithData
-    ,   txPayToScriptWithReference
-    ,   txPayToScriptWithDataAndReference
-    ,   txPayToWithReference
 
     -- minting related
     ,   txMintSimpleScript
