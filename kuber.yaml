@@ -9,7 +9,7 @@ volumes:
     name: cardano-db-sync_node-ipc
 services :
   testnet : 
-    image: dquadrant/kuber:2.0.0
+    image: dquadrant/kuber:2.1.0
     environment:
       VIRTUAL_HOST : https://testnet.cnftregistry.io/kuber/api -> :8081/api
     networks:
@@ -17,7 +17,7 @@ services :
     volumes:
       - ipc-testnet:/root/.cardano/testnet
   mainnet : 
-    image: dquadrant/kuber:2.0.0
+    image: registry.sireto.io/kuber/api:1169f48e466bfad388779ac7a1f6c217669764e1
     environment:
       NETWORK: mainnet
       VIRTUAL_HOST : https://cnftregistry.io/kuber/api -> :8081/api

@@ -25,8 +25,7 @@ COPY ./playground .
 RUN VITE_API_URL= npm run build
 
 FROM ubuntu:20.04
-LABEL "co.elastic.logs/enable"="false" \
-        "maintainer"="Sudip Bhattarai"
+LABEL "maintainer"="Sudip Bhattarai"
 COPY --from=layer1  / /
 WORKDIR /app
 COPY  --from=ui-layer /app/dist/ .
