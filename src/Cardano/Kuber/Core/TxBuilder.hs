@@ -81,6 +81,7 @@ data TxInputResolved_ = TxInputUtxo (UTxO BabbageEra)
 
 
 data TxInputUnResolved_ = TxInputTxin TxIn
+              | TxInputSkey (SigningKey PaymentKey) 
               | TxInputAddr (AddressInEra BabbageEra)
               | TxInputScriptTxin TxPlutusScript (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) TxIn
               | TxInputReferenceScriptTxin TxIn (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) TxIn
@@ -530,3 +531,6 @@ txWalletSignKeys s= txSelection $ TxSelectableSkey s
 
 txAddTxInCollateral :: TxIn -> TxBuilder
 txAddTxInCollateral colTxIn = txCollateral $ TxCollateralTxin colTxIn
+
+txChangeAddress :: AddressInEra BabbageEra -> TxBuilder
+txChangeAddress addr = TxBuilder  [] [] [] [] [] mempty mempty [] [] Nothing (Just addr) Map.empty

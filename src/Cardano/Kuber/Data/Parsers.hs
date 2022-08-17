@@ -63,6 +63,17 @@ parseSignKey txt
       Right sk' -> pure sk'
     Left err -> fail err
 
+signKeyParser ::  A.Value -> A.Parser (SigningKey PaymentKey)
+signKeyParser v@(A.Object _) = do
+  textEnvelope <- parseJSON v
+  case deserialiseFromTextEnvelope (AsSigningKey AsPaymentKey) textEnvelope of
+      Left tee -> case tee of
+        TextEnvelopeTypeError tets tet -> fail  $ "Invalid text envelope type for "++ show tet
+        TextEnvelopeDecodeError de -> fail $ "Failed to decode signKey " ++ show de
+        TextEnvelopeAesonDecodeError s -> fail $ "Json ParseError : " ++ s
+      Right sk -> pure sk
+signKeyParser (A.String str) = parseSignKey str
+signKeyParser _ = fail "Expected signKey to be either string or textEnvelope object"
 
  -- parse plain text for assetName
 parseAssetId :: MonadFail m => T.Text -> m AssetId

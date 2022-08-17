@@ -31,6 +31,7 @@ import qualified Data.Text.Encoding as TSE
 import GHC.Generics (Generic)
 import Text.Read (readMaybe)
 import Cardano.Kuber.Utility.Text (toHexString)
+import Cardano.Kuber.Data.Parsers (signKeyParser)
 
 
 newtype AssetModal = AssetModal AssetId deriving (Show)
@@ -125,6 +126,9 @@ instance FromJSON AddressModal where
       Nothing -> fail "Invalid address string. Couldn't be parsed as valid address for babbage era"
       Just aie -> pure $ AddressModal aie
   parseJSON _ = fail "Expected Address to be String"
+
+instance FromJSON SignKeyModal where
+  parseJSON v = signKeyParser v <&> SignKeyModal
 
 instance ToJSON AddressModal where
   toJSON (AddressModal addr)= String $ serialiseAddress  addr

@@ -132,6 +132,7 @@ txBuilderToTxBodyIO' cInfo builder = do
     getInputAddresses :: TxInput -> Maybe AddressAny
     getInputAddresses x = case x of
       TxInputUnResolved (TxInputAddr aie) -> Just $ addressInEraToAddressAny aie
+      TxInputUnResolved (TxInputSkey  skey) -> Just $ toAddressAny $ skeyToAddr skey  (getNetworkId cInfo) 
       _ -> Nothing
 
     mergeInputs = foldl  getInputTxins  (Set.empty,Map.empty) (txInputs  builder)
@@ -146,7 +147,7 @@ txBuilderToTxBodyIO' cInfo builder = do
         TxInputAddr aie -> v
         TxInputScriptTxin tvs sd sd' m_eu ti -> (Set.insert ti ins, utxo)
         TxInputReferenceScriptTxin  ref sd sd' m_eu  ti -> (Set.insert ref $ Set.insert ti ins, utxo)
-
+        TxInputSkey skey -> v
     mergeColaterals :: (Set TxIn,Map TxIn (TxOut CtxUTxO BabbageEra) )
     mergeColaterals  =foldl (\(s,m) collateral -> case collateral of
                     TxCollateralTxin ti -> (Set.insert ti s,m)
@@ -291,8 +292,10 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
 
     respond txBody signatories = pure (txBody,makeSignedTransaction (map (toWitness txBody) $ mapMaybe (`Map.lookup` availableSkeys) $ Set.toList signatories) txBody)
     toWitness body skey = makeShelleyKeyWitness body (WitnessPaymentKey skey)
-
-    availableSkeys =  Map.fromList $  map (\x -> (skeyToPaymentKeyHash x, x)) $  concat (mapMaybe (\case
+    availableSkeys = foldl (\set v  -> case v of
+      TxInputUnResolved (TxInputSkey sk) -> Map.insert  (skeyToPaymentKeyHash sk) sk set
+      _ -> set ) selectableSkeys _inputs
+    selectableSkeys =  Map.fromList $  map (\x -> (skeyToPaymentKeyHash x, x)) $  concat (mapMaybe (\case
         TxSelectableSkey sks -> Just sks
         _ -> Nothing )  selections) ++ mapMaybe (\case
       TxSignatureSkey sk -> Just sk
@@ -651,7 +654,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       TxInputUnResolved (TxInputAddr addr) ->   filterAddrUtxo addr <&> TxInputUtxo
       TxInputUnResolved (TxInputScriptTxin s d r exunit txin) -> doLookup txin <&>  TxInputScriptUtxo s d r exunit
       TxInputUnResolved (TxInputReferenceScriptTxin ref d r exunit txin) -> doLookup txin <&>  TxInputReferenceScriptUtxo ref d r exunit
-
+      TxInputUnResolved (TxInputSkey sk) -> filterAddrUtxo (skeyToAddrInEra sk  (getNetworkId dCinfo)  ) <&> TxInputUtxo  
 
       where
         filterAddrUtxo addr =pure $ UTxO $ Map.filter (ofAddress addr) availableUtxo
@@ -778,7 +781,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       NoValidityTime ->  TxValidityNoUpperBound ValidityNoUpperBoundInBabbageEra
       ValidityPosixTime ndt -> TxValidityUpperBound ValidityUpperBoundInBabbageEra (toSlot ndt)
       ValiditySlot sn -> TxValidityUpperBound ValidityUpperBoundInBabbageEra sn
-     
+
     plutusWitness script _data redeemer exUnits = PlutusScriptWitness PlutusScriptV2InBabbage
                             PlutusScriptV2
                             script

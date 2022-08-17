@@ -37,6 +37,9 @@ module Cardano.Kuber.Api(
     ,   txSignByPkh
     ,   txSign
 
+    -- change address
+    , txChangeAddress
+
     -- transaction validity
     , txValidFromPosix
     , txValidUntilPosix

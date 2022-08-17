@@ -38,7 +38,7 @@ import qualified Data.Aeson.Types as A
 
 import qualified Data.Text as T
 import Cardano.Kuber.Data.Models ( unAddressModal)
-import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBench32, parseAddressCbor, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex)
+import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBench32, parseAddressCbor, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex, parseCbor)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey), fromJSON)
 import qualified Data.Vector as V
@@ -240,6 +240,12 @@ instance ToJSON TxInputUnResolved_ where
       , "exUnits" .= _exUnits
       , "txin" .= _txin
       ]
+  toJSON (TxInputSkey pkh) =
+
+    A.object
+      [
+        "skey" .= show pkh
+      ]
   toJSON (TxInputAddr _addr) = toJSON _addr
 
 instance ToJSON TxInputResolved_  where
@@ -357,23 +363,28 @@ instance ToJSON TxSignature where
   toJSON _ = "TxSignaturePkh Not implemented."
 
 instance FromJSON TxInputSelection where
-  parseJSON v@(A.String s) = do
-    case parseHexString s of
+  parseJSON v@(A.String txt) = do
+    case parseHexString txt of
       Just str -> case parseAddressCbor  str of
         Nothing -> case parseUtxoCbor str of
           Just utxo ->  pure $ TxSelectableUtxos  utxo
           Nothing -> fail "Invalid InputSelection Hex:  It must be  address, txHash#index or  utxoCbor"
         Just addr -> pure $ TxSelectableAddresses  [addr]
-      Nothing -> case parseAddressBench32 s  of
+      Nothing -> case parseAddressBench32 txt  of
         Just addr -> pure $ TxSelectableAddresses  [addr]
-        Nothing -> case parseTxIn s of
+        Nothing -> case parseTxIn txt of
           Just txin -> pure $ TxSelectableTxIn  [txin]
-          Nothing -> case parseSignKey s of
-            Just s -> pure $ TxSelectableSkey [s]
+          Nothing -> case parseSignKey txt of
+            Just sk -> pure $ TxSelectableSkey [sk]
             Nothing -> fail "Invalid InputSelection String : It must be  address, txHash#index,  or  utxoCbor"
-  parseJSON v = do
-    txIn <- txInParser  v
-    pure $ TxSelectableTxIn [txIn]
+  parseJSON v@(A.Object o) = do
+    envelope <- parseJSON  v
+    case deserialiseFromTextEnvelope (AsSigningKey AsPaymentKey) envelope of
+      Left tee -> do 
+          txIn <- txInParser  v
+          pure $ TxSelectableTxIn [txIn]
+      Right sk -> pure $ TxSelectableSkey [sk]
+  parseJSON  _ = fail "Expected json or object"
 
 instance FromJSON TxInput where
   parseJSON o@(A.Object v) = do
@@ -405,13 +416,18 @@ instance FromJSON TxInput where
       Just str -> case parseAddressCbor  str of
         Nothing -> case parseUtxoCbor str of
           Just utxo ->  pure $ TxInputResolved $ TxInputUtxo utxo
-          Nothing -> fail $ "Invalid Inpu HexString : It must be  address, txHash#index or  utxoCbor"
+          Nothing -> do 
+            case parseCbor str of 
+              Nothing -> fail $ "Invalid Input HexString : It must be  address, txHash#index or  utxoCbor"
+              Just sk -> pure $ TxInputUnResolved $ TxInputSkey  sk
         Just addr -> pure $ TxInputUnResolved $ TxInputAddr  addr
       Nothing -> case parseAddressBench32 s  of
         Just addr -> pure $ TxInputUnResolved $ TxInputAddr  addr
         Nothing -> case parseTxIn s of
           Just txin -> pure $ TxInputUnResolved $ TxInputTxin txin
-          Nothing -> fail $ "Invalid Input String : It must be  address, txHash#index or  utxoCbor"
+          Nothing -> case parseSignKey s of
+            Just sk -> pure $ TxInputUnResolved $ TxInputSkey sk
+            Nothing -> fail "Invalid Input String : It must be  address, txHash#index or  utxoCbor"
 
   parseJSON _ = fail "TxInput must be an object or string"
 
