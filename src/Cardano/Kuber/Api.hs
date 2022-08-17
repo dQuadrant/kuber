@@ -77,7 +77,8 @@ module Cardano.Kuber.Api(
     -- tx submission
     , submitTx
     , signTxBody
-    , txAddTxInCollateral
+    , txCollateralUtxo
+    , txCollateral
 )
 
 where

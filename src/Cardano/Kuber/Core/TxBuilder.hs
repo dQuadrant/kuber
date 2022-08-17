@@ -236,8 +236,8 @@ txMints md= TxBuilder  [] [] [] [] [] mempty mempty md [] Nothing Nothing Map.em
 txOutput :: TxOutput TxOutputContent -> TxBuilder
 txOutput v =  TxBuilder  [] [] [] [v] [] mempty mempty [] [] Nothing Nothing Map.empty
 
-txCollateral :: TxCollateral -> TxBuilder
-txCollateral v =  TxBuilder  [] [] [] [] [v] mempty mempty [] [] Nothing Nothing Map.empty
+txCollateral' :: TxCollateral -> TxBuilder
+txCollateral' v =  TxBuilder  [] [] [] [] [v] mempty mempty [] [] Nothing Nothing Map.empty
 
 txSignature :: TxSignature -> TxBuilder
 txSignature v =  TxBuilder  [] [] [] [] [] mempty mempty [] [v] Nothing Nothing Map.empty
@@ -529,8 +529,11 @@ txWalletSignKey s= txWalletSignKeys [s]
 txWalletSignKeys :: [SigningKey PaymentKey] -> TxBuilder
 txWalletSignKeys s= txSelection $ TxSelectableSkey s
 
-txAddTxInCollateral :: TxIn -> TxBuilder
-txAddTxInCollateral colTxIn = txCollateral $ TxCollateralTxin colTxIn
+txCollateral :: TxIn -> TxBuilder
+txCollateral colTxIn = txCollateral' $ TxCollateralTxin colTxIn
+
+txCollateralUtxo :: TxIn -> TxOut CtxUTxO BabbageEra -> TxBuilder
+txCollateralUtxo tin tout =  txCollateral' $ TxCollateralUtxo  $ UTxO $ Map.singleton  tin tout
 
 txChangeAddress :: AddressInEra BabbageEra -> TxBuilder
 txChangeAddress addr = TxBuilder  [] [] [] [] [] mempty mempty [] [] Nothing (Just addr) Map.empty
