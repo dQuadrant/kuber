@@ -191,8 +191,6 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       insert m1 m2' = foldl (\m2 (k,v) -> case Map.lookup k m2 of
         Nothing -> m2
         Just any -> Map.insert k (any <> v) m2  ) m2'  $   Map.toList m1
-  Debug.traceM ("MergedMetadata" ++ show mergedMetadata)
-  Debug.traceM ("injectedMetadataPolicy" ++ show mergedMetadata)
   meta<- if null mergedMetadata
         then  Right TxMetadataNone
         else  do

@@ -303,8 +303,8 @@ txPayToScript addr v d = txOutput $TxOutput (TxOutNative $TxOut addr  (TxOutValu
 
 --Alonzo era functions
 -- pay to script Address with datum added to the transaction
-txPayToScriptWithData :: AddressInEra AlonzoEra -> Value -> ScriptData -> TxBuilder
-txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValue MultiAssetInAlonzoEra v)  (TxOutDatumHash  ScriptDataInAlonzoEra $ hashScriptData  d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
+txPayToScriptDatumInline :: AddressInEra AlonzoEra -> Value -> ScriptData -> TxBuilder
+txPayToScriptDatumInline addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValue MultiAssetInAlonzoEra v)  (TxOutDatumHash  ScriptDataInAlonzoEra $ hashScriptData  d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
 
 -- input consmptions
 
@@ -471,28 +471,28 @@ instance (IsPlutusVersion ver =>  IsMintingScript (PlutusScript ver)) where
   toTxMintingScript  v = TxScriptPlutus (toTxPlutusScript v)
 
 
-txRedeemUtxo :: IsPlutusScript sc =>  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra ->   sc   -> ScriptData  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemUtxo txin txout sc _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (toTxPlutusScript sc)  Nothing _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
+txRedeemUtxoWithDatum :: IsPlutusScript sc =>  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra ->   sc   -> ScriptData  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxoWithDatum  txin txout sc _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (toTxPlutusScript sc)  (Just _data) _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
 
-txRedeemUtxoWithInlineDatum :: IsPlutusScript sc => TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> sc  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemUtxoWithInlineDatum txin txout script _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (toTxPlutusScript script)  Nothing _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
+txRedeemUtxo :: IsPlutusScript sc => TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> sc  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxo txin txout script _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (toTxPlutusScript script)  Nothing _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
 
-txRedeemTxinWithInlineDatum :: IsPlutusScript sc => TxIn  -> sc  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemTxinWithInlineDatum txin  script _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxInputScriptTxin  (toTxPlutusScript script)  Nothing _redeemer  exUnitsM  txin
+txRedeemTxin :: IsPlutusScript sc => TxIn  -> sc  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemTxin txin  script _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxInputScriptTxin  (toTxPlutusScript script)  Nothing _redeemer  exUnitsM  txin
 
 type ScriptReferenceTxIn = TxIn
 
-txRedeemUtxoWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra  -> ScriptData ->  ScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemUtxoWithReferenceScript scRefTxIn txin txout _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputReferenceScriptUtxo scRefTxIn (Just _data) _redeemer exUnitsM (UTxO $ Map.singleton txin  txout)
+txRedeemUtxoWithDatumAndReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra  -> ScriptData ->  ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxoWithDatumAndReferenceScript scRefTxIn txin txout _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputReferenceScriptUtxo scRefTxIn (Just _data) _redeemer exUnitsM (UTxO $ Map.singleton txin  txout)
 
-txRedeemTxinWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra  -> ScriptData ->  ScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemTxinWithReferenceScript scRefTxIn txin txout _data _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxInputReferenceScriptTxin scRefTxIn (Just _data) _redeemer exUnitsM txin
+txRedeemTxinWithDatumAndReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra  -> ScriptData ->  ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemTxinWithDatumAndReferenceScript scRefTxIn txin txout _data _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxInputReferenceScriptTxin scRefTxIn (Just _data) _redeemer exUnitsM txin
 
-txRedeemUtxoWithInlineDatumWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemUtxoWithInlineDatumWithReferenceScript scRefTxIn txin txout  _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputReferenceScriptUtxo scRefTxIn Nothing _redeemer exUnitsM (UTxO $ Map.singleton txin  txout)
+txRedeemUtxoWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxoWithReferenceScript scRefTxIn txin txout  _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputReferenceScriptUtxo scRefTxIn Nothing _redeemer exUnitsM (UTxO $ Map.singleton txin  txout)
 
-txRedeemTxinWithInlineDatumWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemTxinWithInlineDatumWithReferenceScript scRefTxIn txin txout  _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxInputReferenceScriptTxin scRefTxIn Nothing _redeemer exUnitsM txin
+txRedeemTxinWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemTxinWithReferenceScript scRefTxIn txin txout  _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxInputReferenceScriptTxin scRefTxIn Nothing _redeemer exUnitsM txin
 
 
  -- wallet addresses, from which utxos can be spent for balancing the transaction

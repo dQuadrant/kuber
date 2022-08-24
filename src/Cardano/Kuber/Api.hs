@@ -4,7 +4,7 @@ module Cardano.Kuber.Api(
         txPayTo
     ,   txPayToPkh
     ,   txPayToScript
-    ,   txPayToScriptWithData
+    ,   txPayToScriptDatumInline
 
     -- minting related
     ,   txMintSimpleScript
@@ -13,10 +13,11 @@ module Cardano.Kuber.Api(
     ,   txConsumeTxIn
     ,   txConsumeUtxo
     ,   txConsumeUtxos
+    ,   txRedeemUtxoWithDatum
     ,   txRedeemUtxo
-    ,   txRedeemUtxoWithInlineDatum
-    ,   txRedeemUtxoWithInlineDatumWithReferenceScript
-    ,   txRedeemTxinWithInlineDatum
+    ,   txRedeemUtxoWithReferenceScript
+    ,   txRedeemUtxoWithDatumAndReferenceScript
+    ,   txRedeemTxin
 
     -- tx reference input
     ,   txReferenceTxIn
