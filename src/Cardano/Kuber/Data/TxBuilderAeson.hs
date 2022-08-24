@@ -6,6 +6,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Cardano.Kuber.Data.TxBuilderAeson
 where
 
@@ -25,7 +26,7 @@ import Data.Functor ((<&>), ($>))
 import Codec.Serialise (serialise)
 
 import Data.Set (Set)
-import Data.Maybe (mapMaybe, catMaybes, isNothing, fromMaybe)
+import Data.Maybe (mapMaybe, catMaybes, isNothing, fromMaybe, maybeToList)
 import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
 import Plutus.V2.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, TxOut, CurrencySymbol)
@@ -61,7 +62,7 @@ import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable(toConsoleTextNoPre
 import qualified Data.ByteString.Char8 as BS8
 import Control.Applicative ((<|>))
 import Data.Bifunctor (second)
-import Cardano.Api.Shelley (ReferenceScript(ReferenceScript, ReferenceScriptNone))
+import Cardano.Api.Shelley (ReferenceScript(ReferenceScript, ReferenceScriptNone), scriptDataToJsonDetailedSchema)
 
 
 
@@ -176,20 +177,20 @@ instance ToJSON TxBuilder where
     appendNonEmpty :: (Foldable t, KeyValue a1, ToJSON (t a2)) => A.Key -> t a2 -> [a1] -> [a1]
     appendNonEmpty  key  val obj   =  if null val then obj else (key .= val) : obj
 
-    appendValidity key val obj = case val of 
+    appendValidity key val obj = case val of
       NoValidityTime -> obj
       ValidityPosixTime ndt -> (key .= ndt) : obj
       ValiditySlot sn -> ((key <> "Slot" ) .= sn) : obj
 
     nonEmpyPair :: [A.Pair]
-    nonEmpyPair =  "selections"     >= selections
-              <+>  "inputs"         >= inputs
+    nonEmpyPair =  "selections"     >= concatMap collectSelection selections
+              <+>  "inputs"         >= concatMap  collectInputs inputs
               <+>  "referenceInputs">= map (\(TxInputReference tin) ->renderTxIn tin) refInputs
-              <+>  "collaterals"    >= collaterals
+              <+>  "collaterals"    >= concatMap collectColalteral collaterals
               <+>  "mint"           >= mintData
               <+>  "outputs"        >= outputs
-              <+>  "validityStart"  `appendValidity` validityStart 
-              <+>  "validityEnd"    `appendValidity` validityEnd 
+              <+>  "validityStart"  `appendValidity` validityStart
+              <+>  "validityEnd"    `appendValidity` validityEnd
               <+>  "signatures"     >= signatures
               <+>  "fee"            >= fee
               <+>  "changeAddress"  >= defaultChangeAddr
@@ -216,43 +217,71 @@ instance ToJSON (TxMintData TxMintingScriptSource) where
 instance ToJSON TxInputSelection where
   toJSON (TxSelectableAddresses v) = A.Array $ V.fromList $ Prelude.map toJSON v
   toJSON (TxSelectableTxIn v) = A.Array $ V.fromList $ Prelude.map toJSON v
-  toJSON (TxSelectableUtxos  utxo) =  utxoToAeson  utxo
+  toJSON (TxSelectableUtxos  utxo) =  toJSON $ utxoToAeson  utxo
   toJSON (TxSelectableSkey  sk) = A.Array $ V.fromList $ map (A.String . serialiseToBech32)  sk
+
+collectSelection (TxSelectableAddresses v) = map (A.String . serialiseAddress . addressInEraToAddressAny) v
+collectSelection (TxSelectableTxIn v) = map (A.String . renderTxIn ) v
+collectSelection (TxSelectableUtxos  utxo) =  utxoToAeson  utxo
+collectSelection (TxSelectableSkey  sk) =  map (A.String . serialiseToBech32) sk
 
 instance ToJSON TxInput where
   toJSON (TxInputUnResolved txInputTxin) = toJSON txInputTxin
   toJSON (TxInputResolved val) = toJSON val
+
+collectInputs (TxInputUnResolved txInputTxin) = [toJSON txInputTxin]
+collectInputs (TxInputResolved val) = collectResolvedInputs val
+
 instance ToJSON TxInputUnResolved_ where
-  toJSON (TxInputTxin txin) = toJSON txin
+  toJSON (TxInputTxin txin) = A.String  $ renderTxIn txin
   toJSON (TxInputReferenceScriptTxin  _refScript _mData _redeemer _exUnits _txin ) = A.object $ [
+        "script" .= renderTxIn _refScript,
         "inlineDatum" .= isNothing _mData,
-        "txin" .= renderTxIn _txin
+        "utxo" .= renderTxIn _txin,
+        "redeemer" .= scriptDataToJsonDetailedSchema _redeemer
       ] ++ (case _exUnits of
     Nothing -> []
     Just e@(ExecutionUnits mem step) -> ["exUnits" .= e ] )
+    ++ (case _mData of
+    Nothing -> []
+    Just sd -> ["datum" .=  scriptDataToJsonDetailedSchema sd ] )
   toJSON (TxInputScriptTxin _script _data _redeemer _exUnits _txin) =
-
-    A.object
+    A.object $
       [
         "script" .= _script
-      , "data" .= _data
       , "redeemer" .= _redeemer
-      , "exUnits" .= _exUnits
-      , "txin" .= _txin
-      ]
-  toJSON (TxInputSkey pkh) =
+      , "utxo" .= _txin
+      ] ++ (case _data of
+     Nothing -> []
+     Just sd -> ["data" .= scriptDataToJsonDetailedSchema sd]
+     ) ++ (case _exUnits of
+    Nothing -> []
+    Just e@(ExecutionUnits mem step) -> ["exUnits" .= e ] )
 
-    A.object
-      [
-        "skey" .= show pkh
-      ]
-  toJSON (TxInputAddr _addr) = toJSON _addr
+  toJSON (TxInputSkey skey) = A.String $  serialiseToBech32  skey
+
+  toJSON (TxInputAddr _addr) = A.String $  serialiseAddress $ addressInEraToAddressAny  _addr
 
 instance ToJSON TxInputResolved_  where
-  toJSON  v = case v of
-    TxInputUtxo (UTxO umap) ->  Aeson.String $ T.pack $  "WithTxout: " ++ show (map renderTxIn $ Map.keys umap)
-    TxInputScriptUtxo tvs sd sd' m_eu utxo ->  utxoToAeson  utxo
-    TxInputReferenceScriptUtxo refTxin mData r mExunit utxo -> utxoToAeson utxo
+  toJSON  v = A.Array $ V.fromList $  collectResolvedInputs v
+
+collectResolvedInputs :: TxInputResolved_ -> [Aeson.Value]
+collectResolvedInputs  v= case v of
+    TxInputUtxo umap ->   map (A.Object . A.fromList ) (collectUtxoPair umap)
+    TxInputScriptUtxo tvs sd sd' m_eu umap ->  map (\v ->
+        A.Object $ A.fromList $
+              [ "utxo" .= A.Object ( A.fromList v) ]
+          ++  map (\sd -> "datum" .= scriptDataToJsonDetailedSchema sd ) (maybeToList  sd)
+          ++ ["redeemer" .=scriptDataToJsonDetailedSchema sd' ]
+          ++ ["script" .= tvs]
+          ) (collectUtxoPair umap)
+    TxInputReferenceScriptUtxo refSc sd sd' m_eu umap ->  map (\v ->
+        A.Object $ A.fromList $
+              [ "utxo" .= A.Object ( A.fromList v) ]
+          ++  map (\sd -> "datum" .= scriptDataToJsonDetailedSchema sd ) (maybeToList  sd)
+          ++ ["redeemer" .=scriptDataToJsonDetailedSchema sd' ]
+          ++ ["script" .= renderTxIn refSc]
+          ) (collectUtxoPair umap)
 
 instance ToJSON TxPlutusScript where
   toJSON tps =case tps of
@@ -355,7 +384,11 @@ outputContentJsonPair v = case v of
 instance ToJSON TxCollateral where
   toJSON (TxCollateralTxin _collateral) = toJSON _collateral
 
-  toJSON (TxCollateralUtxo utxo) = utxoToAeson  utxo
+  toJSON (TxCollateralUtxo utxo) = toJSON $ utxoToAeson  utxo
+
+collectColalteral (TxCollateralTxin _collateral) = [A.String $ renderTxIn  _collateral]
+
+collectColalteral (TxCollateralUtxo utxo) = utxoToAeson  utxo
 
 
 instance ToJSON TxSignature where
@@ -380,7 +413,7 @@ instance FromJSON TxInputSelection where
   parseJSON v@(A.Object o) = do
     envelope <- parseJSON  v
     case deserialiseFromTextEnvelope (AsSigningKey AsPaymentKey) envelope of
-      Left tee -> do 
+      Left tee -> do
           txIn <- txInParser  v
           pure $ TxSelectableTxIn [txIn]
       Right sk -> pure $ TxSelectableSkey [sk]
@@ -416,8 +449,8 @@ instance FromJSON TxInput where
       Just str -> case parseAddressCbor  str of
         Nothing -> case parseUtxoCbor str of
           Just utxo ->  pure $ TxInputResolved $ TxInputUtxo utxo
-          Nothing -> do 
-            case parseCbor str of 
+          Nothing -> do
+            case parseCbor str of
               Nothing -> fail $ "Invalid Input HexString : It must be  address, txHash#index or  utxoCbor"
               Just sk -> pure $ TxInputUnResolved $ TxInputSkey  sk
         Just addr -> pure $ TxInputUnResolved $ TxInputAddr  addr
@@ -508,7 +541,7 @@ instance FromJSON (TxOutput TxOutputContent ) where
             Just (A.Bool _) ->  pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInAlonzoEra value) txOutDatum ReferenceScriptNone
             Just obj -> do
               sc <- anyScriptParser  obj
-              pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInAlonzoEra value) txOutDatum ReferenceScriptNone 
+              pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInAlonzoEra value) txOutDatum ReferenceScriptNone
           Just (Right script) ->
             let defaultAct = case txOutDatum of
                   TxOutDatumNone -> fail "Missing datum in script output"
@@ -576,11 +609,27 @@ instance FromJSON TxSignature where
   parseJSON _ = fail "TxSignature must be an String Address or PubKeyHash "
 
 
-utxoToAeson (UTxO uMap) = Aeson.object  $ map  (\(k,TxOut addr val dh _ ) ->
-         A.fromString  (toConsoleTextNoPrefix k)
-         .=
-           Aeson.object [ "address" .=  serialiseAddress addr,
-                          "value"   .= toVal val]) $ Map.toList uMap
+collectUtxoPair :: KeyValue a => UTxO era -> [[a]]
+collectUtxoPair (UTxO uMap) =  map txOutToKeyVal $ Map.toList uMap
     where
-      toVal (TxOutValue _ v)= v
-      toVal (TxOutAdaOnly _ l) =lovelaceToValue l
+    txOutToKeyVal (k,TxOut addr val datum sc ) =[
+              "txIn" .=  renderTxIn k ,
+              "address" .=  serialiseAddress (addressInEraToAddressAny  addr),
+              "value" .= toVal val ]
+            ++ scriptToPair sc
+            ++ datumToPair datum
+    toVal (TxOutValue _ v)=  A.String $ renderValue v
+    toVal (TxOutAdaOnly _ l) = toJSON $ lovelaceToValue l
+    scriptToPair sc = case sc of
+          ReferenceScript rtisidsie sial ->  ["inlineScript" .= toHexString @T.Text ( case sial of { ScriptInAnyLang sl sc' -> serialiseToRawBytes $ hashScript sc' } )]
+          ReferenceScriptNone -> []
+    datumToPair :: KeyValue a => TxOutDatum ctx era -> [a]
+    datumToPair datum = case datum of
+              TxOutDatumNone -> []
+              TxOutDatumHash sdsie ha -> [ "datumHash" .= toHexString @T.Text (serialiseToRawBytes ha) ]
+              TxOutDatumInline rtisidsie sd -> ["inlineDatum" .= scriptDataToJsonDetailedSchema sd]
+              _ -> error "Unexpected"
+
+
+utxoToAeson :: UTxO era -> [Aeson.Value]
+utxoToAeson  uMap =  map  (A.Object . A.fromList) $ collectUtxoPair uMap
