@@ -197,16 +197,13 @@ window.onclick = function (event) {
           <transition name="fade" appear>
             <div class="modal" role="dialog" v-if="showHexEncoder">
               <div class="mb-2 text-gray-500">Raw Data</div>
-              <textarea
-                class="textarea border border-gray-300"
-                ref="rawData"
-              />
-              <div class="mt-4 mb-4" v-if="result  || errorMsg">
+              <textarea class="textarea border border-gray-300" ref="rawData" />
+              <div class="mt-4 mb-4" v-if="result || errorMsg">
                 <div v-if="errorMsg" class="text-red-500">
-                  {{errorMsg}}
+                  {{ errorMsg }}
                 </div>
                 <div v-else>
-                  <div class="text-gray-500 mb-1 text-left">Result </div>
+                  <div class="text-gray-500 mb-1 text-left">Result</div>
                   <button class="w-full" @click="copyToClipboard(result)">
                     <span class="">{{ result }}</span>
                     <span class="mt-1 pr-3 float-right">
@@ -308,7 +305,7 @@ export default {
       policyId: "",
       rawData: "",
       result: "",
-      errorMsg: ""
+      errorMsg: "",
     };
   },
   beforeUnmount() {
@@ -340,22 +337,22 @@ export default {
       this.keyHash = "";
     },
     encodeHex() {
-      this.errorMsg="";
+      this.errorMsg = "";
       const encoded = Buffer.from(this.$refs.rawData.value).toString("hex");
       this.result = encoded;
     },
     decodeHex() {
-      this.errorMsg="";
-      let val =this.$refs.rawData.value
-      if(val){
+      this.errorMsg = "";
+      let val = this.$refs.rawData.value;
+      if (val) {
         const decoded = Buffer.from(val, "hex").toString("utf-8");
-        if(decoded && decoded.length * 2 == val.length){
-          console.log("decoded",decoded)
-          this.result=decoded
-        }else{
-          this.errorMsg="Invalid input"
+        if (decoded && decoded.length * 2 == val.length) {
+          console.log("decoded", decoded);
+          this.result = decoded;
+        } else {
+          this.errorMsg = "Invalid input";
         }
-      }else{
+      } else {
         this.result = "";
       }
     },
@@ -368,8 +365,7 @@ export default {
       this.showHexEncoder = true;
       this.rawData = "";
       this.result = "";
-      this.errorMsg="";
-
+      this.errorMsg = "";
     },
     getKeyHash() {
       getKeyHashOfAddressFromKuber(this.address)
