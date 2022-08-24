@@ -28,6 +28,8 @@ module Cardano.Kuber.Util
     , addrInEraToPlutusAddress
     , addressToPlutusCredential
     , toPlutusScriptHash
+    , fromPlutusV1Script
+    , fromPlutusV2Script
 
     -- Value utility and utxoto Value
     , isNullValue
@@ -140,6 +142,7 @@ import qualified Debug.Trace as Debug
 import Data.List (intercalate)
 import qualified Cardano.Ledger.Alonzo as Alonzo
 import Cardano.Ledger.Crypto (StandardCrypto)
+import Cardano.Kuber.Utility.ScriptUtil (fromPlutusV1Script, fromPlutusV2Script)
 
 
 calculateTxoutMinLovelaceOrErr :: TxOut CtxTx  AlonzoEra -> ProtocolParameters ->  Lovelace

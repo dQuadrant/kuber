@@ -45,6 +45,23 @@ module Cardano.Kuber.Api(
     , txValidFromSlot
     , txValidUntilSlot
     , txValidSlotRange
+
+    -- script helpers
+    , IsPlutusScript
+    , IsSimpleScript
+    , TxScript(..)
+    , TxPlutusScript
+    , TxSimpleScript
+    , toTxSimpleScript
+    , toTxPlutusScript
+    , hashPlutusScript 
+    , plutusScriptAddr
+    , plutusScriptToScriptAny
+    , txScriptPolicyId
+    , hashTxScript
+    , txScriptToScriptAny
+
+
     -- Core Tx builder object and it's transformation functions
     ,   TxBuilder
     ,   txBuilderToTxBody

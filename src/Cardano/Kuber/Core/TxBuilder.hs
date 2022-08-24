@@ -376,6 +376,11 @@ class IsPlutusScript sc where
 class IsSimpleScript sc where
   toTxSimpleScript :: sc -> TxSimpleScript
 
+instance IsPlutusScript TxPlutusScript where
+  toTxPlutusScript = id
+
+instance IsSimpleScript TxSimpleScript where
+  toTxSimpleScript = id
 
 instance (IsSScriptVersion ver =>  IsSimpleScript (SimpleScript ver)) where
   toTxSimpleScript  = toTxSimpleScriptInstance
