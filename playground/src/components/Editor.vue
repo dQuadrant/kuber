@@ -270,7 +270,6 @@ window.onclick = function (event) {
 </template>
 <script lang="ts">
 import * as _notification from "@dafcoe/vue-notification";
-import AppVue from "@/App.vue";
 import { useToast } from "vue-toast-notification";
 
 const notification = _notification.useNotificationStore();
@@ -338,12 +337,15 @@ export default {
     },
     encodeHex() {
       this.errorMsg = "";
-      const encoded = Buffer.from(this.$refs.rawData.value).toString("hex");
+      let ref:any = this.$refs.rawData
+
+      const encoded = Buffer.from(ref.value).toString("hex");
       this.result = encoded;
     },
     decodeHex() {
       this.errorMsg = "";
-      let val = this.$refs.rawData.value;
+      let ref:any = this.$refs.rawData
+      let val = ref.value
       if (val) {
         const decoded = Buffer.from(val, "hex").toString("utf-8");
         if (decoded && decoded.length * 2 == val.length) {
