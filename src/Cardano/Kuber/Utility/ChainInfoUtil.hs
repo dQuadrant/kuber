@@ -31,7 +31,7 @@ chainInfoMainnet =  do
 -- Otherwise CARDANO_HOME or "$HOME/.cardano"  is used and the socket path becomes "$CARDANO_HOME/.cardano/testnet/node.socket"
 chainInfoTestnet :: IO ChainConnectInfo
 chainInfoTestnet = do
-  let network=Testnet  (NetworkMagic 1097911063)
+  let network=Testnet  (NetworkMagic 1)
   conn <-getDefaultConnection  "testnet" network
   pure $ ChainConnectInfo conn
 
@@ -51,7 +51,7 @@ chainInfoFromEnv' envKey = do
   v <- getNetworkFromEnv envKey
   case v of
     Mainnet -> chainInfoMainnet
-    (Testnet  (NetworkMagic 1097911063)) -> chainInfoTestnet
+    (Testnet  (NetworkMagic 1)) -> chainInfoTestnet
     net ->  do
       conn <- getDefaultConnection "" net
       pure $ ChainConnectInfo conn

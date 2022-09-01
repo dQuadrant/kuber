@@ -779,10 +779,11 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       --  Right res -> pure res
     toSlot tStamp = case getNetworkId  dCinfo of
         Mainnet -> SlotNo $ fromIntegral $  mainnetSlot $ round tStamp
-        Testnet nm -> SlotNo $ fromIntegral $ testnetSlot $ round tStamp
+        Testnet (NetworkMagic 1) -> SlotNo $ fromIntegral $ preProdSlot $ round tStamp        
+        Testnet _ -> SlotNo $ fromIntegral $ testnetSlot $ round tStamp
     testnetSlot timestamp= (timestamp -1607199617 )+ 12830401 -- using epoch 100 as refrence
     mainnetSlot timestamp = (timestamp -1596491091 )+ 4924800 -- using epoch 209 as reference
-
+    preProdSlot timestamp = (timestamp - 1661817713) + 6134513 -- using epoch 18 as reference
 -- mkBalancedBody :: ProtocolParameters
 --   -> UTxO AlonzoEra
 --   -> TxBodyContent BuildTx AlonzoEra
