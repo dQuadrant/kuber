@@ -4,7 +4,10 @@ module Cardano.Kuber.Api(
         txPayTo
     ,   txPayToPkh
     ,   txPayToScript
-    ,   txPayToScriptDatumInline
+    ,   txPayToScriptWithData 
+    ,   txPayToScriptWithReference
+    ,   txPayToScriptWithDataAndReference
+    ,   txPayToWithReference
 
     -- minting related
     ,   txMintSimpleScript
@@ -54,7 +57,7 @@ module Cardano.Kuber.Api(
     , TxSimpleScript
     , toTxSimpleScript
     , toTxPlutusScript
-    , hashPlutusScript 
+    , hashPlutusScript
     , plutusScriptAddr
     , plutusScriptToScriptAny
     , txScriptPolicyId

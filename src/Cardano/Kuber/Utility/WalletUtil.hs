@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Cardano.Kuber.Utility.WalletUtil where
-import Cardano.Api (SigningKey, PaymentKey, TxBody, AlonzoEra, Tx, makeSignedTransaction, makeShelleyKeyWitness, ShelleyWitnessSigningKey (WitnessPaymentKey))
+import Cardano.Api (SigningKey, PaymentKey, TxBody, BabbageEra, Tx, makeSignedTransaction, makeShelleyKeyWitness, ShelleyWitnessSigningKey (WitnessPaymentKey))
 import qualified Data.Text as T
 import qualified Data.Text.IO as TextIO
 import System.Directory ( doesFileExist )
@@ -34,8 +34,8 @@ getDefaultSignKey :: IO (SigningKey PaymentKey)
 getDefaultSignKey= getWorkPath ["default.skey"] >>= readSignKey
 
 
-signTxBody :: TxBody AlonzoEra -> [SigningKey PaymentKey] -> Tx AlonzoEra
+signTxBody :: TxBody BabbageEra -> [SigningKey PaymentKey] -> Tx BabbageEra
 signTxBody txBody skeys= do
           makeSignedTransaction (map toWitness skeys) txBody
   where
-    toWitness skey = makeShelleyKeyWitness txBody (WitnessPaymentKey skey) 
+    toWitness skey = makeShelleyKeyWitness txBody (WitnessPaymentKey skey)

@@ -11,9 +11,12 @@ import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(SubmitS
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult(SubmitFail))
 import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
 import Cardano.Kuber.Utility.DataTransformation ( addressInEraToAddressAny )
+import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (EraMismatch(EraMismatch))
+import qualified Data.Text as T
+import Control.Exception (throw)
 
 
-performQuery :: LocalNodeConnectInfo CardanoMode -> QueryInShelleyBasedEra AlonzoEra b -> IO (Either FrameworkError b)
+performQuery :: LocalNodeConnectInfo CardanoMode -> QueryInShelleyBasedEra BabbageEra b -> IO (Either FrameworkError b)
 performQuery conn q=
   do
   a <-queryNodeLocalState conn Nothing  qFilter
@@ -24,17 +27,17 @@ performQuery conn q=
       Right uto -> pure $ Right  uto
 
   where
-  qFilter = QueryInEra AlonzoEraInCardanoMode
-                    $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo  q
+  qFilter = QueryInEra BabbageEraInCardanoMode
+                    $ QueryInShelleyBasedEra ShelleyBasedEraBabbage  q
 
 
-queryUtxos :: LocalNodeConnectInfo CardanoMode-> Set AddressAny -> IO (Either FrameworkError  (UTxO AlonzoEra))
+queryUtxos :: LocalNodeConnectInfo CardanoMode-> Set AddressAny -> IO (Either FrameworkError  (UTxO BabbageEra))
 queryUtxos conn addr= performQuery conn (QueryUTxO (QueryUTxOByAddress  addr))
 
-queryAddressInEraUtxos :: LocalNodeConnectInfo CardanoMode -> [AddressInEra AlonzoEra ] -> IO (Either FrameworkError  (UTxO AlonzoEra))
+queryAddressInEraUtxos :: LocalNodeConnectInfo CardanoMode -> [AddressInEra BabbageEra ] -> IO (Either FrameworkError  (UTxO BabbageEra))
 queryAddressInEraUtxos  conn addrs = performQuery conn (QueryUTxO (QueryUTxOByAddress $  Set.fromList (map addressInEraToAddressAny  addrs)))
 
-queryTxins :: LocalNodeConnectInfo CardanoMode -> Set TxIn -> IO (Either FrameworkError (UTxO AlonzoEra))
+queryTxins :: LocalNodeConnectInfo CardanoMode -> Set TxIn -> IO (Either FrameworkError (UTxO BabbageEra))
 queryTxins conn ins= performQuery conn (QueryUTxO ( QueryUTxOByTxIn ins))
 
 
@@ -42,12 +45,12 @@ queryTxins conn ins= performQuery conn (QueryUTxO ( QueryUTxOByTxIn ins))
 queryProtocolParam :: LocalNodeConnectInfo CardanoMode -> IO ProtocolParameters
 queryProtocolParam conn=do
   paramQueryResult<-queryNodeLocalState conn Nothing $
-            QueryInEra AlonzoEraInCardanoMode
-                  $ QueryInShelleyBasedEra ShelleyBasedEraAlonzo QueryProtocolParameters
+            QueryInEra BabbageEraInCardanoMode
+                  $ QueryInShelleyBasedEra ShelleyBasedEraBabbage QueryProtocolParameters
   case paramQueryResult of
     Left af -> error  "QueryProtocolParam: Acquire Failure"
     Right e -> case e of
-      Left em -> error "QueryrotocolParam: Missmatched Era"
+      Left em -> case em of { EraMismatch txt txt' -> throw $ FrameworkError EraMisMatch  $ "Kuber supports only "++ T.unpack txt' ++ "Era. Got era: " ++ T.unpack txt }  
       Right pp -> return pp
 
 querySystemStart :: LocalNodeConnectInfo mode -> IO SystemStart
@@ -65,9 +68,9 @@ queryEraHistory conn=do
     Right eh -> pure eh
 
 
-submitTx :: LocalNodeConnectInfo CardanoMode -> Tx AlonzoEra -> IO  (Either FrameworkError ())
+submitTx :: LocalNodeConnectInfo CardanoMode -> Tx BabbageEra -> IO  (Either FrameworkError ())
 submitTx conn  tx= do
-      res <-submitTxToNodeLocal conn $  TxInMode tx AlonzoEraInCardanoMode
+      res <-submitTxToNodeLocal conn $  TxInMode tx BabbageEraInCardanoMode
       case res of
         SubmitSuccess ->  pure $ pure ()
         SubmitFail reason ->

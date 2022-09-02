@@ -2,13 +2,14 @@
 module Cardano.Kuber.Utility.ChainInfoUtil where
 import Cardano.Kuber.Core.ChainInfo ( ChainConnectInfo(..) )
 import Cardano.Api (NetworkId(Mainnet, Testnet), NetworkMagic (NetworkMagic), LocalNodeConnectInfo (LocalNodeConnectInfo), CardanoMode, ConsensusModeParams (CardanoModeParams), EpochSlots (EpochSlots))
-import Control.Exception (try)
+import Control.Exception (try, throw)
 import System.Environment (getEnv)
 import System.Directory (doesFileExist)
 import Data.Char (toLower)
 import System.FilePath (joinPath)
 import qualified Debug.Trace as Debug
 import Text.Read (readMaybe)
+import Cardano.Kuber.Error (ErrorType(ParserError), FrameworkError (FrameworkError))
 
 -- type wrapper for EnvironmentVariable String
 type EnvVariable = String
@@ -31,8 +32,20 @@ chainInfoMainnet =  do
 -- Otherwise CARDANO_HOME or "$HOME/.cardano"  is used and the socket path becomes "$CARDANO_HOME/.cardano/testnet/node.socket"
 chainInfoTestnet :: IO ChainConnectInfo
 chainInfoTestnet = do
-  let network=Testnet  (NetworkMagic 1)
+  let network=Testnet  (NetworkMagic 1097911063)
   conn <-getDefaultConnection  "testnet" network
+  pure $ ChainConnectInfo conn
+
+chainInfoPreprod :: IO ChainConnectInfo
+chainInfoPreprod = do
+  let network=Testnet  (NetworkMagic 1)
+  conn <-getDefaultConnection  "preprod" network
+  pure $ ChainConnectInfo conn
+
+chainInfoPreview :: IO ChainConnectInfo
+chainInfoPreview = do
+  let network=Testnet  (NetworkMagic 2)
+  conn <-getDefaultConnection  "preview" network
   pure $ ChainConnectInfo conn
 
 
@@ -48,13 +61,9 @@ chainInfoFromEnv = chainInfoFromEnv' "NETWORK"
 -- Otherwise CARDANO_HOME or "$HOME/.cardano"  is used and the socket path becomes "$CARDANO_HOME/node.socket"
 chainInfoFromEnv' :: EnvVariable -> IO ChainConnectInfo
 chainInfoFromEnv' envKey = do
-  v <- getNetworkFromEnv envKey
-  case v of
-    Mainnet -> chainInfoMainnet
-    (Testnet  (NetworkMagic 1)) -> chainInfoTestnet
-    net ->  do
-      conn <- getDefaultConnection "" net
-      pure $ ChainConnectInfo conn
+  (name,network) <- getNetworkFromEnv envKey
+  conn <- getDefaultConnection  name network
+  pure$  ChainConnectInfo conn
 
 
 -- If CARDANO_NODE_SOCKET_PATH environment variable is set,  return ConnectInfo instance with the path
@@ -72,19 +81,21 @@ getDefaultConnection networkName networkId= do
 
 
 -- Given environment variable key, read the environmet variable and return network Id
-getNetworkFromEnv :: EnvVariable -> IO NetworkId
+getNetworkFromEnv :: EnvVariable -> IO (String,NetworkId)
 getNetworkFromEnv envKey =  do
   networkEnv <- try $ getEnv envKey
   case  networkEnv of
     Left (e::IOError) -> do
-          pure (Testnet  (NetworkMagic 1097911063))
-    Right s ->  case map toLower s of
-      "mainnet" -> pure  Mainnet
-      "testnet" -> pure $ Testnet  (NetworkMagic 1097911063)
-      _  -> do
+          pure ("preprod",Testnet  (NetworkMagic 1))
+    Right s ->  pure $ case map toLower s of
+      "mainnet" -> ("mainnet",  Mainnet)
+      "testnet" -> ("testnet", Testnet  (NetworkMagic 1097911063))
+      "preprod" -> ("preprod",Testnet (NetworkMagic 1))
+      "preview" -> ( "preview", Testnet (NetworkMagic 2))
+      val  -> do
         case readMaybe s of
-          Just v -> pure (Testnet  (NetworkMagic  v))
-          _ -> fail "Invalid network id : "
+          Just v ->  ("",Testnet  (NetworkMagic  v))
+          _ -> throw $ FrameworkError   ParserError ( "Invalid network id : " ++ val) 
 
 -- get absolute path given a directoryor file path.
 -- the absolute path is "CARANO_HOME/...paths" value to the path

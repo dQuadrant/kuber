@@ -11,6 +11,8 @@ import Cardano.Api.Shelley ( fromShelleyAddr, fromShelleyTxOut )
 import           Cardano.Binary               (FromCBOR (fromCBOR), decodeFull)
 import           Cardano.Kuber.Utility.Text
 import qualified Cardano.Ledger.Alonzo       as Alonzo
+import qualified Cardano.Ledger.Babbage       as Babbage
+
 import           Cardano.Ledger.DescribeEras  (StandardCrypto, Witness (Alonzo))
 import qualified Cardano.Ledger.Mary.Value    as Mary
 import qualified Cardano.Ledger.Shelley.API   as Shelley
@@ -186,36 +188,36 @@ anyScriptParser v@(A.Object o) =do
       pure $ ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV2) (SimpleScript SimpleScriptV2 v )
 anyScriptParser _ = fail "Expected json object type"
 
-parseAddressBinary :: MonadFail m => ByteString -> m (AddressInEra AlonzoEra )
+parseAddressBinary :: MonadFail m => ByteString -> m (AddressInEra BabbageEra )
 parseAddressBinary bs = case parseAddressCbor (LBS.fromStrict bs) of
   Just addr -> pure addr
   Nothing -> parseAddressRaw bs
 
-parseAddressRaw :: MonadFail m =>  ByteString -> m(AddressInEra AlonzoEra)
-parseAddressRaw addrBs = case deserialiseFromRawBytes (AsAddressInEra AsAlonzoEra) addrBs of
+parseAddressRaw :: MonadFail m =>  ByteString -> m(AddressInEra BabbageEra)
+parseAddressRaw addrBs = case deserialiseFromRawBytes (AsAddressInEra AsBabbageEra) addrBs of
             Nothing -> fail  "Invalid Address Hex "
             Just addr -> pure addr
 
-parseAddress :: MonadFail m => Text -> m (AddressInEra AlonzoEra)
-parseAddress addrText = case deserialiseAddress (AsAddressInEra AsAlonzoEra) addrText of
+parseAddress :: MonadFail m => Text -> m (AddressInEra BabbageEra)
+parseAddress addrText = case deserialiseAddress (AsAddressInEra AsBabbageEra) addrText of
   Nothing -> do
      let hex :: Maybe  ByteString = parseHexString addrText
      case  hex of
       Just hex -> case parseAddressBinary hex of
         Just addr -> pure addr
-        Nothing -> case deserialiseFromRawBytes (AsAddressInEra AsAlonzoEra) hex of
+        Nothing -> case deserialiseFromRawBytes (AsAddressInEra AsBabbageEra) hex of
             Nothing -> fail  $ "Address is neither bench32 nor cborHex : "++ T.unpack addrText
             Just addr -> pure addr
       Nothing -> fail $ "Address is neither bench32 nor cborHex : "++ T.unpack addrText
   Just aie -> pure aie
 
-parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra AlonzoEra)
+parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra BabbageEra)
 parseAddressCbor  cbor = do
   aie <-  parseCbor cbor
-  pure $ fromShelleyAddr ShelleyBasedEraAlonzo   aie
+  pure $ fromShelleyAddr ShelleyBasedEraBabbage  aie
 
-parseAddressBench32 :: MonadFail m => Text -> m (AddressInEra AlonzoEra)
-parseAddressBench32 txt = case deserialiseAddress (AsAddressInEra AsAlonzoEra) txt of
+parseAddressBench32 :: MonadFail m => Text -> m (AddressInEra BabbageEra)
+parseAddressBench32 txt = case deserialiseAddress (AsAddressInEra AsBabbageEra) txt of
   Nothing -> fail $ "Address is not in bench32 format"
   Just aie -> pure aie
 
@@ -260,22 +262,22 @@ parseTxIn txt = do
           Left _ -> fail $ "Failed to parse value as txHash " ++ T.unpack txHash
       _ -> fail $ "Expected to be of format 'txId#index' got :" ++ T.unpack txt
 
-parseUtxo :: MonadFail m => Text -> m (UTxO AlonzoEra )
+parseUtxo :: MonadFail m => Text -> m (UTxO BabbageEra )
 parseUtxo v =parseHexString v >>= parseUtxoCbor
 
-parseUtxoCbor :: MonadFail m => LBS.ByteString -> m (UTxO AlonzoEra)
+parseUtxoCbor :: MonadFail m => LBS.ByteString -> m (UTxO BabbageEra)
 parseUtxoCbor val = do
   ((txHash,index ),txout) <- parseCbor val
   txIn <- case deserialiseFromRawBytes AsTxId txHash of
           Just txid -> pure $ TxIn txid (TxIx index)
           Nothing -> fail $ "Failed to parse value as txHash " ++ toHexString  txHash
-  pure $ UTxO (Map.singleton txIn (fromShelleyTxOut ShelleyBasedEraAlonzo txout))
+  pure $ UTxO (Map.singleton txIn (fromShelleyTxOut ShelleyBasedEraBabbage txout))
 
 
-parseTxOut :: MonadFail m => Text -> m (TxOut CtxTx   AlonzoEra)
-parseTxOut  val = decodeCbor <&> fromShelleyTxOut ShelleyBasedEraAlonzo
+parseTxOut :: MonadFail m => Text -> m (TxOut CtxTx   BabbageEra)
+parseTxOut  val = decodeCbor <&> fromShelleyTxOut ShelleyBasedEraBabbage
   where
-    decodeCbor :: MonadFail m => m (Alonzo.TxOut (Alonzo.AlonzoEra StandardCrypto))
+    decodeCbor :: MonadFail m => m (Babbage.TxOut (Babbage.BabbageEra StandardCrypto))
     decodeCbor = parseHexString  val >>= parseCbor
 
 

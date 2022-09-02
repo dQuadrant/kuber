@@ -12,6 +12,7 @@ where
 
 
 import Cardano.Api hiding(txMetadata, txFee)
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra), ReferenceScript (ReferenceScript, ReferenceScriptNone))
 import Cardano.Kuber.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
@@ -492,7 +493,7 @@ instance FromJSON (TxOutput TxOutputContent ) where
     insuffientUtxoAda <- v.:? "insuffientUtxoAda" .!=OnInsufficientUtxoAdaUnset
     addressTextM  :: Maybe A.Value <- v .:? "address"
 
-    destination :: Maybe (Either (AddressInEra  AlonzoEra) TxPlutusScript) <- case addressTextM of
+    destination :: Maybe (Either (AddressInEra  BabbageEra) TxPlutusScript) <- case addressTextM of
       Nothing -> pure Nothing
       Just v@(A.Object  o) -> do
         v<- parseJSON  v
@@ -513,11 +514,11 @@ instance FromJSON (TxOutput TxOutputContent ) where
     let txOutDatum=if shouldEmbed
                                 then case datumHashE of
                                   Nothing -> TxOutDatumNone
-                                  Just (Left sd) -> TxOutDatumHash ScriptDataInAlonzoEra $ hashScriptData sd
-                                  Just (Right dh) -> TxOutDatumHash ScriptDataInAlonzoEra dh
+                                  Just (Left sd) -> TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra sd
+                                  Just (Right dh) -> TxOutDatumHash ScriptDataInBabbageEra dh
                                 else (case datumHashE of
-                                  Just (Left datum) -> TxOutDatumHash ScriptDataInAlonzoEra (hashScriptData datum)
-                                  Just (Right dh)   -> TxOutDatumHash ScriptDataInAlonzoEra dh
+                                  Just (Left datum) -> TxOutDatumHash ScriptDataInBabbageEra (hashScriptData datum)
+                                  Just (Right dh)   -> TxOutDatumHash ScriptDataInBabbageEra dh
                                   _ -> TxOutDatumNone
                                 )
     mScript_ <- v .:? "script"
@@ -537,11 +538,11 @@ instance FromJSON (TxOutput TxOutputContent ) where
                 TxOutDatumInline rtisidsie sd ->pure $  TxOutScriptWithDataAndReference sc  value sd
                 _  -> error "Unexpected"
           Just (Left addr) -> case mScript of
-            Nothing ->  pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInAlonzoEra value) txOutDatum ReferenceScriptNone
-            Just (A.Bool _) ->  pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInAlonzoEra value) txOutDatum ReferenceScriptNone
+            Nothing ->  pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInBabbageEra value) txOutDatum ReferenceScriptNone
+            Just (A.Bool _) ->  pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInBabbageEra value) txOutDatum ReferenceScriptNone
             Just obj -> do
               sc <- anyScriptParser  obj
-              pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInAlonzoEra value) txOutDatum ReferenceScriptNone
+              pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInBabbageEra value) txOutDatum (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra sc)
           Just (Right script) ->
             let defaultAct = case txOutDatum of
                   TxOutDatumNone -> fail "Missing datum in script output"

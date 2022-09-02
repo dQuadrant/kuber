@@ -73,16 +73,16 @@ data  TxPlutusScript  =
                           deriving (Show)
 
 
-data TxInputResolved_ = TxInputUtxo (UTxO AlonzoEra)
-              | TxInputScriptUtxo TxPlutusScript (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) (UTxO AlonzoEra)
-              | TxInputReferenceScriptUtxo TxIn (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) (UTxO AlonzoEra)
+data TxInputResolved_ = TxInputUtxo (UTxO BabbageEra)
+              | TxInputScriptUtxo TxPlutusScript (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
+              | TxInputReferenceScriptUtxo TxIn (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) (UTxO BabbageEra)
 
               deriving (Show)
 
 
 data TxInputUnResolved_ = TxInputTxin TxIn
               | TxInputSkey (SigningKey PaymentKey)
-              | TxInputAddr (AddressInEra AlonzoEra)
+              | TxInputAddr (AddressInEra BabbageEra)
               | TxInputScriptTxin TxPlutusScript (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) TxIn
               | TxInputReferenceScriptTxin TxIn (Maybe ScriptData) ScriptData (Maybe ExecutionUnits) TxIn
 
@@ -100,7 +100,7 @@ data TxOutputContent =
   |  TxOutScriptWithData TxPlutusScript Value ScriptData
   |  TxOutScriptWithDataAndScript TxPlutusScript Value ScriptData TxScript
   |  TxOutScriptWithDataAndReference TxPlutusScript Value ScriptData
-  |  TxOutNative (TxOut  CtxTx AlonzoEra)
+  |  TxOutNative (TxOut  CtxTx BabbageEra)
    deriving (Show)
 
 data TxOutput content =TxOutput {
@@ -117,9 +117,9 @@ data InsufficientUtxoAdaAction = DropOnUtxoInsufficientUtxoAda | IncreaseOnUtxoI
 
 
 data TxCollateral =  TxCollateralTxin TxIn
-                  |  TxCollateralUtxo (UTxO AlonzoEra) deriving (Show)
+                  |  TxCollateralUtxo (UTxO BabbageEra) deriving (Show)
 
-data TxSignature =  TxSignatureAddr (AddressInEra AlonzoEra)
+data TxSignature =  TxSignatureAddr (AddressInEra BabbageEra)
                   | TxSignaturePkh PubKeyHash
                   | TxSignatureSkey (SigningKey PaymentKey)
                   deriving (Show)
@@ -127,10 +127,10 @@ data TxSignature =  TxSignatureAddr (AddressInEra AlonzoEra)
 
 
 data TxChangeAddr = TxChangeAddrUnset
-                  | TxChangeAddr (AddressInEra AlonzoEra) deriving (Show)
+                  | TxChangeAddr (AddressInEra BabbageEra) deriving (Show)
 
-data TxInputSelection = TxSelectableAddresses [AddressInEra AlonzoEra]
-                  | TxSelectableUtxos  (UTxO AlonzoEra)
+data TxInputSelection = TxSelectableAddresses [AddressInEra BabbageEra]
+                  | TxSelectableUtxos  (UTxO BabbageEra)
                   | TxSelectableTxIn [TxIn]
                   | TxSelectableSkey [SigningKey PaymentKey]
                   deriving(Show)
@@ -185,7 +185,7 @@ data TxBuilder=TxBuilder{
     txMintData :: [TxMintData TxMintingScriptSource],
     txSignatures :: [TxSignature],
     txFee :: Maybe Integer,
-    txDefaultChangeAddr :: Maybe (AddressInEra AlonzoEra),
+    txDefaultChangeAddr :: Maybe (AddressInEra BabbageEra),
     txMetadata :: Map Word64 Aeson.Value
   } deriving (Show)
 
@@ -215,7 +215,7 @@ instance Semigroup TxBuilder where
   }
 
 data TxContext = TxContext {
-  ctxAvailableUtxo :: UTxO AlonzoEra,
+  ctxAvailableUtxo :: UTxO BabbageEra,
   ctxBuiler :: [TxBuilder]
 }
 
@@ -285,31 +285,43 @@ txMintSimpleScript script amounts = _txMint $ TxMintData (TxMintingSimpleScript 
 -- txMintWithMetadata script amounts mp = _txMint $ TxMintData (TxMintingScriptCode $ toTxMintingScript script) amounts mp
 --  witness (valueFromList  $ map (bimap (AssetId policyId) Quantity )  amounts )
 --   where
---     witness=   SimpleScriptWitness SimpleScriptV2InAlonzo SimpleScriptV2 (SScript simpleScript)
+--     witness=   SimpleScriptWitness SimpleScriptV2InBabbage SimpleScriptV2 (SScript simpleScript)
 --     script = SimpleScript SimpleScriptV2 simpleScript
 --     policyId = scriptPolicyId script
 
 -- pay to an Address
-txPayTo:: AddressInEra AlonzoEra ->Value ->TxBuilder
-txPayTo addr v=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInAlonzoEra v) TxOutDatumNone ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
+txPayTo:: AddressInEra BabbageEra ->Value ->TxBuilder
+txPayTo addr v=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) TxOutDatumNone ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
+
+txPayToWithReference:: AddressInEra BabbageEra ->Value -> Plutus.Script  ->TxBuilder
+txPayToWithReference  addr v pScript=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) TxOutDatumNone (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra (ScriptInAnyLang (PlutusScriptLanguage  PlutusScriptV2) $ fromPlutusV2Script  pScript) ))False False OnInsufficientUtxoAdaUnset
 
 -- pay to an Address by pubKeyHash. Note that the resulting address will be an enterprise address
 txPayToPkh:: PubKeyHash  ->Value ->TxBuilder
 txPayToPkh pkh v= txOutput $  TxOutput ( TxOutPkh  pkh  v ) False False OnInsufficientUtxoAdaUnset
 
 -- pay to Script address
-txPayToScript :: AddressInEra AlonzoEra -> Value -> Hash ScriptData -> TxBuilder
-txPayToScript addr v d = txOutput $TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInAlonzoEra v) (TxOutDatumHash ScriptDataInAlonzoEra d) ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
+txPayToScript :: AddressInEra BabbageEra -> Value -> Hash ScriptData -> TxBuilder
+txPayToScript addr v d = txOutput $TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) (TxOutDatumHash ScriptDataInBabbageEra d) ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
 
---Alonzo era functions
+--Babbage era functions
 -- pay to script Address with datum added to the transaction
-txPayToScriptDatumInline :: AddressInEra AlonzoEra -> Value -> ScriptData -> TxBuilder
-txPayToScriptDatumInline addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValue MultiAssetInAlonzoEra v)  (TxOutDatumHash  ScriptDataInAlonzoEra $ hashScriptData  d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
+txPayToScriptWithData :: AddressInEra BabbageEra -> Value -> ScriptData -> TxBuilder
+txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValue MultiAssetInBabbageEra v)  (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
+
+-- pay to script with reference script attached to the output
+txPayToScriptWithReference :: Plutus.Script -> Value -> Hash ScriptData -> TxBuilder
+txPayToScriptWithReference pScript v d = txOutput $ TxOutput (TxOutScript (toTxPlutusScript (fromPlutusV2Script pScript)) v d) False False OnInsufficientUtxoAdaUnset
+
+-- pay to script with reference script attached to the output and datum inlined
+txPayToScriptWithDataAndReference :: Plutus.Script -> Value -> ScriptData -> TxBuilder
+txPayToScriptWithDataAndReference pScript v d  =
+  txOutput $ TxOutput (TxOutScriptWithData (toTxPlutusScript $ fromPlutusV2Script pScript) v d) False False OnInsufficientUtxoAdaUnset
 
 -- input consmptions
 
 -- use Utxo as input in the transaction
-txConsumeUtxos :: UTxO AlonzoEra -> TxBuilder
+txConsumeUtxos :: UTxO BabbageEra -> TxBuilder
 txConsumeUtxos utxo =  txInput $ TxInputResolved $  TxInputUtxo  utxo
 
 -- use the TxIn as input in the transaction
@@ -325,11 +337,11 @@ txReferenceTxIn  v = txInputReference $ TxInputReference v
 
 -- use txIn as input in the transaction
 -- Since TxOut is also given the txIn is not queried from the node.
-txConsumeUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> TxBuilder
+txConsumeUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> TxBuilder
 txConsumeUtxo tin v =txConsumeUtxos $ UTxO $ Map.singleton tin  v
 
 -- Mark this address as txExtraKeyWitness in the transaction object.
-txSignBy :: AddressInEra AlonzoEra -> TxBuilder
+txSignBy :: AddressInEra BabbageEra -> TxBuilder
 txSignBy  a = txSignature (TxSignatureAddr a)
 
 -- Mark this PublicKeyhash as txExtraKeyWitness in the transaction object.
@@ -395,11 +407,11 @@ hashPlutusScript sc = case sc of
   TxPlutusScriptV1 ps -> hashScript (PlutusScript  PlutusScriptV1 ps)
   TxPlutusScriptV2 ps -> hashScript (PlutusScript  PlutusScriptV2 ps)
 
-plutusScriptAddr :: TxPlutusScript -> NetworkId -> AddressInEra AlonzoEra
+plutusScriptAddr :: TxPlutusScript -> NetworkId -> AddressInEra BabbageEra
 plutusScriptAddr sc networkId =
     let payCred = PaymentCredentialByScript (hashPlutusScript sc)
         addr = makeShelleyAddress networkId payCred NoStakeAddress
-        addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraAlonzo) addr
+        addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) addr
     in addrInEra
 
 plutusScriptToScriptAny :: TxPlutusScript -> ScriptInAnyLang
@@ -476,10 +488,10 @@ instance (IsPlutusVersion ver =>  IsMintingScript (PlutusScript ver)) where
   toTxMintingScript  v = TxScriptPlutus (toTxPlutusScript v)
 
 
-txRedeemUtxoWithDatum :: IsPlutusScript sc =>  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra ->   sc   -> ScriptData  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxoWithDatum :: IsPlutusScript sc =>  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra ->   sc   -> ScriptData  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
 txRedeemUtxoWithDatum  txin txout sc _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (toTxPlutusScript sc)  (Just _data) _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
 
-txRedeemUtxo :: IsPlutusScript sc => TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> sc  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxo :: IsPlutusScript sc => TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> sc  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
 txRedeemUtxo txin txout script _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (toTxPlutusScript script)  Nothing _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
 
 txRedeemTxin :: IsPlutusScript sc => TxIn  -> sc  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
@@ -487,33 +499,33 @@ txRedeemTxin txin  script _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxI
 
 type ScriptReferenceTxIn = TxIn
 
-txRedeemUtxoWithDatumAndReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra  -> ScriptData ->  ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxoWithDatumAndReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra  -> ScriptData ->  ScriptData -> Maybe ExecutionUnits ->TxBuilder
 txRedeemUtxoWithDatumAndReferenceScript scRefTxIn txin txout _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputReferenceScriptUtxo scRefTxIn (Just _data) _redeemer exUnitsM (UTxO $ Map.singleton txin  txout)
 
-txRedeemTxinWithDatumAndReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra  -> ScriptData ->  ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemTxinWithDatumAndReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra  -> ScriptData ->  ScriptData -> Maybe ExecutionUnits ->TxBuilder
 txRedeemTxinWithDatumAndReferenceScript scRefTxIn txin txout _data _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxInputReferenceScriptTxin scRefTxIn (Just _data) _redeemer exUnitsM txin
 
-txRedeemUtxoWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemUtxoWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
 txRedeemUtxoWithReferenceScript scRefTxIn txin txout  _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputReferenceScriptUtxo scRefTxIn Nothing _redeemer exUnitsM (UTxO $ Map.singleton txin  txout)
 
-txRedeemTxinWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
+txRedeemTxinWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra  -> ScriptData -> Maybe ExecutionUnits ->TxBuilder
 txRedeemTxinWithReferenceScript scRefTxIn txin txout  _redeemer exUnitsM = txInput $ TxInputUnResolved $ TxInputReferenceScriptTxin scRefTxIn Nothing _redeemer exUnitsM txin
 
 
  -- wallet addresses, from which utxos can be spent for balancing the transaction
-txWalletAddresses :: [AddressInEra AlonzoEra] -> TxBuilder
+txWalletAddresses :: [AddressInEra BabbageEra] -> TxBuilder
 txWalletAddresses v = txSelection $ TxSelectableAddresses  v
 
 -- wallet address, from which utxos can be spent  for balancing the transaction
-txWalletAddress :: AddressInEra AlonzoEra -> TxBuilder
+txWalletAddress :: AddressInEra BabbageEra -> TxBuilder
 txWalletAddress v = txWalletAddresses [v]
 
 -- wallet utxos, that can be spent  for balancing the transaction
-txWalletUtxos :: UTxO AlonzoEra -> TxBuilder
+txWalletUtxos :: UTxO BabbageEra -> TxBuilder
 txWalletUtxos v =  txSelection $  TxSelectableUtxos v
 
 -- wallet utxo, that can be spent  for balancing the transaction
-txWalletUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO AlonzoEra -> TxBuilder
+txWalletUtxo :: TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO BabbageEra -> TxBuilder
 txWalletUtxo tin tout = txWalletUtxos $  UTxO $ Map.singleton tin  tout
 
 txWalletSignKey :: SigningKey PaymentKey -> TxBuilder
@@ -525,8 +537,8 @@ txWalletSignKeys s= txSelection $ TxSelectableSkey s
 txCollateral :: TxIn -> TxBuilder
 txCollateral colTxIn = txCollateral' $ TxCollateralTxin colTxIn
 
-txCollateralUtxo :: TxIn -> TxOut CtxUTxO AlonzoEra -> TxBuilder
+txCollateralUtxo :: TxIn -> TxOut CtxUTxO BabbageEra -> TxBuilder
 txCollateralUtxo tin tout =  txCollateral' $ TxCollateralUtxo  $ UTxO $ Map.singleton  tin tout
 
-txChangeAddress :: AddressInEra AlonzoEra -> TxBuilder
+txChangeAddress :: AddressInEra BabbageEra -> TxBuilder
 txChangeAddress addr = TxBuilder  [] [] [] [] [] mempty mempty [] [] Nothing (Just addr) Map.empty
