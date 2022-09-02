@@ -7,6 +7,8 @@ volumes:
     name : cardano-db-sync_node-ipc-testnet
   ipc-mainnet:
     name: cardano-db-sync_node-ipc
+  ipc-preprod: 
+    name: cardano-preprod_ipc
 services :
   testnet : 
     image: dquadrant/kuber:2.1.0
@@ -17,7 +19,7 @@ services :
     volumes:
       - ipc-testnet:/root/.cardano/testnet
   mainnet : 
-    image: registry.sireto.io/kuber/api:1169f48e466bfad388779ac7a1f6c217669764e1
+    image: dquadrant/kuber:ce4d493784da945cb6a29cb5325b3f969e3924a7
     environment:
       NETWORK: mainnet
       VIRTUAL_HOST : https://cnftregistry.io/kuber/api -> :8081/api
@@ -25,4 +27,13 @@ services :
       - frontend
     volumes:
       - ipc-mainnet:/root/.cardano/mainnet
-
+  preprod : 
+    image: dquadrant/kuber:ce4d493784da945cb6a29cb5325b3f969e3924a7
+    environment:
+      CARDANO_NODE_SOCKET_PATH: /ipc/node.socket
+      NETWORK: 1
+      VIRTUAL_HOST : https://preprod.cnftregistry.io/kuber/api -> :8081/api
+    networks:
+      - frontend
+    volumes:
+      - ipc-preprod:/ipc/
