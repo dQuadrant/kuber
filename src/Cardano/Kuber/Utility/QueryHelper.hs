@@ -9,8 +9,11 @@ import qualified Data.Set as Set
 import Data.Set (Set)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(SubmitSuccess))
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult(SubmitFail))
-import qualified Cardano.Ledger.Babbage.TxBody as LedgerBody
+import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
 import Cardano.Kuber.Utility.DataTransformation ( addressInEraToAddressAny )
+import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (EraMismatch(EraMismatch))
+import qualified Data.Text as T
+import Control.Exception (throw)
 
 
 performQuery :: LocalNodeConnectInfo CardanoMode -> QueryInShelleyBasedEra BabbageEra b -> IO (Either FrameworkError b)
@@ -47,7 +50,7 @@ queryProtocolParam conn=do
   case paramQueryResult of
     Left af -> error  "QueryProtocolParam: Acquire Failure"
     Right e -> case e of
-      Left em -> error "QueryrotocolParam: Missmatched Era"
+      Left em -> case em of { EraMismatch txt txt' -> throw $ FrameworkError EraMisMatch  $ "Kuber supports only "++ T.unpack txt' ++ "Era. Got era: " ++ T.unpack txt }  
       Right pp -> return pp
 
 querySystemStart :: LocalNodeConnectInfo mode -> IO SystemStart

@@ -4,7 +4,7 @@ module Cardano.Kuber.Api(
         txPayTo
     ,   txPayToPkh
     ,   txPayToScript
-    ,   txPayToScriptWithData
+    ,   txPayToScriptWithData 
     ,   txPayToScriptWithReference
     ,   txPayToScriptWithDataAndReference
     ,   txPayToWithReference
@@ -16,10 +16,11 @@ module Cardano.Kuber.Api(
     ,   txConsumeTxIn
     ,   txConsumeUtxo
     ,   txConsumeUtxos
+    ,   txRedeemUtxoWithDatum
     ,   txRedeemUtxo
-    ,   txRedeemUtxoWithInlineDatum
-    ,   txRedeemUtxoWithInlineDatumWithReferenceScript
-    ,   txRedeemTxinWithInlineDatum
+    ,   txRedeemUtxoWithReferenceScript
+    ,   txRedeemUtxoWithDatumAndReferenceScript
+    ,   txRedeemTxin
 
     -- tx reference input
     ,   txReferenceTxIn
@@ -47,6 +48,23 @@ module Cardano.Kuber.Api(
     , txValidFromSlot
     , txValidUntilSlot
     , txValidSlotRange
+
+    -- script helpers
+    , IsPlutusScript
+    , IsSimpleScript
+    , TxScript(..)
+    , TxPlutusScript
+    , TxSimpleScript
+    , toTxSimpleScript
+    , toTxPlutusScript
+    , hashPlutusScript
+    , plutusScriptAddr
+    , plutusScriptToScriptAny
+    , txScriptPolicyId
+    , hashTxScript
+    , txScriptToScriptAny
+
+
     -- Core Tx builder object and it's transformation functions
     ,   TxBuilder
     ,   txBuilderToTxBody

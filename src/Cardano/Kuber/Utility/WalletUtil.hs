@@ -38,4 +38,4 @@ signTxBody :: TxBody BabbageEra -> [SigningKey PaymentKey] -> Tx BabbageEra
 signTxBody txBody skeys= do
           makeSignedTransaction (map toWitness skeys) txBody
   where
-    toWitness skey = makeShelleyKeyWitness txBody (WitnessPaymentKey skey) 
+    toWitness skey = makeShelleyKeyWitness txBody (WitnessPaymentKey skey)

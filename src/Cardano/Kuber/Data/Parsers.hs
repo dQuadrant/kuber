@@ -10,7 +10,9 @@ import           Cardano.Api
 import Cardano.Api.Shelley ( fromShelleyAddr, fromShelleyTxOut )
 import           Cardano.Binary               (FromCBOR (fromCBOR), decodeFull)
 import           Cardano.Kuber.Utility.Text
+import qualified Cardano.Ledger.Alonzo       as Alonzo
 import qualified Cardano.Ledger.Babbage       as Babbage
+
 import           Cardano.Ledger.DescribeEras  (StandardCrypto, Witness (Alonzo))
 import qualified Cardano.Ledger.Mary.Value    as Mary
 import qualified Cardano.Ledger.Shelley.API   as Shelley
@@ -212,7 +214,7 @@ parseAddress addrText = case deserialiseAddress (AsAddressInEra AsBabbageEra) ad
 parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra BabbageEra)
 parseAddressCbor  cbor = do
   aie <-  parseCbor cbor
-  pure $ fromShelleyAddr ShelleyBasedEraBabbage   aie
+  pure $ fromShelleyAddr ShelleyBasedEraBabbage  aie
 
 parseAddressBench32 :: MonadFail m => Text -> m (AddressInEra BabbageEra)
 parseAddressBench32 txt = case deserialiseAddress (AsAddressInEra AsBabbageEra) txt of

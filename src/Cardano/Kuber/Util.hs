@@ -28,6 +28,8 @@ module Cardano.Kuber.Util
     , addrInEraToPlutusAddress
     , addressToPlutusCredential
     , toPlutusScriptHash
+    , fromPlutusV1Script
+    , fromPlutusV2Script
 
     -- Value utility and utxoto Value
     , isNullValue
@@ -41,8 +43,6 @@ module Cardano.Kuber.Util
 
     -- calculation functions
     , calculateTxoutMinLovelaceOrErr
-    , calculateTxoutMinLovelaceWithcpw
-    , calculateTxoutMinLovelaceFunc
     , calculateTxoutMinLovelace
     , evaluateExecutionUnits
     , evaluateExUnitMap
@@ -82,8 +82,8 @@ import System.Directory (doesFileExist)
 import Cardano.Kuber.Error ( FrameworkError(FrameworkError), ErrorType(WrongScriptType, ExUnitCalculationError, FeatureNotSupported, PlutusScriptError) )
 import Plutus.V2.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), PubKeyHash (PubKeyHash), Address)
 import System.FilePath (joinPath)
-import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr, fromShelleyPaymentCredential, fromShelleyTxIn, fromShelleyScriptHash)
-import qualified Cardano.Ledger.Alonzo.Tx as LedgerBody
+import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord, protocolParamUTxOCostPerByte), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr, fromShelleyPaymentCredential, fromShelleyTxIn, fromShelleyScriptHash)
+import qualified Cardano.Ledger.Babbage.Tx as LedgerBody
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(SubmitSuccess, SubmitFail))
 import Data.Text.Conversions (convertText, Base16 (unBase16, Base16), FromText (fromText), ToText (toText))
 import Data.Functor ((<&>))
@@ -92,9 +92,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding
 import Data.ByteString.Lazy (fromStrict, toStrict)
 import qualified Data.Text.IO as TextIO
-import qualified Cardano.Ledger.Alonzo.Rules.Utxo as Alonzo
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
-import qualified Cardano.Ledger.Babbage.Rules.Utxo as Babbage
 
 import Data.String (fromString)
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
@@ -138,6 +136,9 @@ import Data.Bifunctor (Bifunctor(bimap))
 import qualified Cardano.Ledger.Shelley.API as Ledger
 import qualified Debug.Trace as Debug
 import Data.List (intercalate)
+import qualified Cardano.Ledger.Alonzo as Alonzo
+import Cardano.Ledger.Crypto (StandardCrypto)
+import Cardano.Kuber.Utility.ScriptUtil (fromPlutusV1Script, fromPlutusV2Script)
 
 
 calculateTxoutMinLovelaceOrErr :: TxOut CtxTx  BabbageEra -> ProtocolParameters ->  Lovelace
@@ -151,18 +152,8 @@ calculateTxoutMinLovelace txout pParams=do
     Left mutoe -> Nothing
     Right va -> pure $ (case selectAsset va AdaAssetId of { Quantity n -> Lovelace n })
 
-calculateTxoutMinLovelaceFunc :: ProtocolParameters  -> Maybe ( TxOut CtxUTxO    BabbageEra -> Lovelace)
-calculateTxoutMinLovelaceFunc pParams = do
-  costPerWord <- protocolParamUTxOCostPerWord pParams
-  pure $ calculateTxoutMinLovelaceWithcpw costPerWord
-
--- TODO: fix this for babbage era.
-calculateTxoutMinLovelaceWithcpw :: Lovelace -> TxOut CtxUTxO  BabbageEra -> Lovelace
-calculateTxoutMinLovelaceWithcpw (Lovelace cpw) txout = Lovelace  $ Alonzo.utxoEntrySize (toShelleyTxOut ShelleyBasedEraBabbage   txout) * cpw
 
 babbageMinLovelace pparam txout = Ledger.evaluateMinLovelaceOutput pparam (toShelleyTxOut ShelleyBasedEraBabbage   txout)
-
-
 
 isNullValue :: Value -> Bool
 isNullValue v = not $ any (\(aid,Quantity q) -> q>0) (valueToList v)
@@ -268,7 +259,7 @@ splitMetadataStrings = Map.map morphValue
       A.String txt -> let txtList = stringToList Vector.empty txt in if length txtList <2 then A.String txt  else A.Array  txtList
       _ -> val
 
-    -- Given a vector of Strings and Text, split the text into chunks of 64 bytes and append it into the vector as aeson String value. 
+    -- Given a vector of Strings and Text, split the text into chunks of 64 bytes and append it into the vector as aeson String value.
     stringToList :: Vector.Vector A.Value ->  T.Text -> Vector.Vector A.Value
     stringToList accum  txt = let
       splitted=splitString 0 T.empty txt
@@ -282,7 +273,7 @@ splitMetadataStrings = Map.map morphValue
         tHead= T.head txt
         tHeadBS = LBS.length $  BSL.toLazyByteString $ toCharUtf8 tHead
         newSize= size + tHeadBS
-        in  --Debug.trace ("Size of (" ++ (T.unpack prefix ) ++"," ++ if T.null txt then ""  else [tHead] ++  ") : " ++ show (size,newSize)) $ 
+        in  --Debug.trace ("Size of (" ++ (T.unpack prefix ) ++"," ++ if T.null txt then ""  else [tHead] ++  ") : " ++ show (size,newSize)) $
           if T.null txt  then (prefix,txt) else
               ( if  newSize > 64
                   then ( if  C.isSpace tHead  then (prefix,txt)

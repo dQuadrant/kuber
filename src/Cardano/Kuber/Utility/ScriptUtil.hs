@@ -48,3 +48,6 @@ validateScriptSupportedInEra' era script@(ScriptInAnyLang lang _) =
 
 fromPlutusV2Script :: Plutus.Script -> Script PlutusScriptV2
 fromPlutusV2Script plutusScript = PlutusScript PlutusScriptV2 $ PlutusScriptSerialised . SBS.toShort . LBS.toStrict $ serialise plutusScript
+
+fromPlutusV1Script :: Plutus.Script -> Script PlutusScriptV1
+fromPlutusV1Script plutusScript = PlutusScript PlutusScriptV1 $ PlutusScriptSerialised . SBS.toShort . LBS.toStrict $ serialise plutusScript

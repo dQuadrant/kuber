@@ -132,7 +132,7 @@ txBuilderToTxBodyIO' cInfo builder = do
     getInputAddresses :: TxInput -> Maybe AddressAny
     getInputAddresses x = case x of
       TxInputUnResolved (TxInputAddr aie) -> Just $ addressInEraToAddressAny aie
-      TxInputUnResolved (TxInputSkey  skey) -> Just $ toAddressAny $ skeyToAddr skey  (getNetworkId cInfo) 
+      TxInputUnResolved (TxInputSkey  skey) -> Just $ toAddressAny $ skeyToAddr skey  (getNetworkId cInfo)
       _ -> Nothing
 
     mergeInputs = foldl  getInputTxins  (Set.empty,Map.empty) (txInputs  builder)
@@ -191,8 +191,6 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       insert m1 m2' = foldl (\m2 (k,v) -> case Map.lookup k m2 of
         Nothing -> m2
         Just any -> Map.insert k (any <> v) m2  ) m2'  $   Map.toList m1
-  Debug.traceM ("MergedMetadata" ++ show mergedMetadata)
-  Debug.traceM ("injectedMetadataPolicy" ++ show mergedMetadata)
   meta<- if null mergedMetadata
         then  Right TxMetadataNone
         else  do
@@ -495,7 +493,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
         txIns= getTxin fixedInputs extraUtxos ,
         txInsCollateral= if null collateral then TxInsCollateralNone  else TxInsCollateral CollateralInBabbageEra collateral,
         txOuts=outs,
-        txInsReference = if Set.null references then TxInsReferenceNone   else  TxInsReference ReferenceTxInsScriptsInlineDatumsInBabbageEra $  Set.toList references  ,
+        txInsReference = TxInsReferenceNone  ,
         txTotalCollateral= TxTotalCollateralNone  ,
         txReturnCollateral = TxReturnCollateralNone ,
         Cardano.Api.Shelley.txFee=TxFeeExplicit TxFeesExplicitInBabbageEra  fee,
@@ -654,7 +652,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       TxInputUnResolved (TxInputAddr addr) ->   filterAddrUtxo addr <&> TxInputUtxo
       TxInputUnResolved (TxInputScriptTxin s d r exunit txin) -> doLookup txin <&>  TxInputScriptUtxo s d r exunit
       TxInputUnResolved (TxInputReferenceScriptTxin ref d r exunit txin) -> doLookup txin <&>  TxInputReferenceScriptUtxo ref d r exunit
-      TxInputUnResolved (TxInputSkey sk) -> filterAddrUtxo (skeyToAddrInEra sk  (getNetworkId dCinfo)  ) <&> TxInputUtxo  
+      TxInputUnResolved (TxInputSkey sk) -> filterAddrUtxo (skeyToAddrInEra sk  (getNetworkId dCinfo)  ) <&> TxInputUtxo
 
       where
         filterAddrUtxo addr =pure $ UTxO $ Map.filter (ofAddress addr) availableUtxo
@@ -782,12 +780,6 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       ValidityPosixTime ndt -> TxValidityUpperBound ValidityUpperBoundInBabbageEra (toSlot ndt)
       ValiditySlot sn -> TxValidityUpperBound ValidityUpperBoundInBabbageEra sn
 
-    plutusWitness script _data redeemer exUnits = PlutusScriptWitness PlutusScriptV2InBabbage
-                            PlutusScriptV2
-                            script
-                            (ScriptDatumForTxIn _data) -- script data
-                            redeemer -- script redeemer
-                            exUnits
     defaultExunits=ExecutionUnits {executionMemory=10000000,executionSteps= 6000000000 }
     -- isOnlyAdaTxOut (TxOut a v d) = case v of
     --                                     -- only ada then it's ok
@@ -803,177 +795,11 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       --  Right res -> pure res
     toSlot tStamp = case getNetworkId  dCinfo of
         Mainnet -> SlotNo $ fromIntegral $  mainnetSlot $ round tStamp
-        Testnet nm -> SlotNo $ fromIntegral $ testnetSlot $ round tStamp
+        Testnet (NetworkMagic 1) -> SlotNo $ fromIntegral $ preProdSlot $ round tStamp
+        Testnet _ -> SlotNo $ fromIntegral $ testnetSlot $ round tStamp
     testnetSlot timestamp= (timestamp -1607199617 )+ 12830401 -- using epoch 100 as refrence
     mainnetSlot timestamp = (timestamp -1596491091 )+ 4924800 -- using epoch 209 as reference
-
--- mkBalancedBody :: ProtocolParameters
---   -> UTxO BabbageEra
---   -> TxBodyContent BuildTx BabbageEra
---   -> Value
---   -> AddressInEra BabbageEra
---   -> Word
---   -> Either
---       TxBodyError
---       TxResult
--- mkBalancedBody  pParams (UTxO utxoMap)  txbody inputSum walletAddr signatureCount =
---     do
---       minLovelaceCalc <-case calculateTxoutMinLovelaceFunc pParams of
---         Nothing -> Left TxBodyMissingProtocolParams
---         Just f -> Right f
-
---       -- first iteration
---       let sanitizedOutputs = modifiedOuts minLovelaceCalc
---           (inputs1,change1) =minimize txouts  $ startingChange txouts sanitizedOutputs startingFee
---           txIns1=map utxoToTxBodyIn inputs1
---           bodyContent1=modifiedBody sanitizedOutputs (map utxoToTxBodyIn inputs1) change1 startingFee
---     --  error $ show $ map (txOutValueToValue  . txOutValue .snd) txouts
---       if not (positiveValue change1)
---         then
---           error $ "Insufficient balance : missing " ++ show change1
---         else
---           pure ()
---       txBody1 <- unEither $ case makeTransactionBody bodyContent1 of
---         Left tbe -> Left $ SomeError $ show tbe
---         Right tb -> Right  tb
---       let modifiedChange1=change1 <> negLovelace  fee1 <> lovelaceToValue startingFee
---           fee1= evaluateTransactionFee pParams txBody1 signatureCount 0
---           (inputs2,change2)= minimizeConsideringChange minLovelaceCalc txouts (startingChange txouts sanitizedOutputs fee1)
---           txIns2=map utxoToTxBodyIn inputs2
---           bodyContent2 =modifiedBody sanitizedOutputs txIns2 change2 fee1
---        -- if selected utxos are  sufficient to pay transaction fees, just use the fee and make txBody
---        -- otherwide, reselect txins and recalculate fee. it's very improbable that the we will need more txouts now
---       if positiveValue modifiedChange1 && isProperChange minLovelaceCalc modifiedChange1
---         then do
---           let  modifiedBody'=modifiedBody sanitizedOutputs txIns1 modifiedChange1 fee1
---           txBody<-makeTransactionBody modifiedBody'
---           Right (TxResult fee1 inputs1  modifiedBody'  txBody)
---         else do
---           txbody2 <- makeTransactionBody bodyContent2
---           let fee2=evaluateTransactionFee pParams txbody2 signatureCount 0
---               modifiedChange2 = change2 <> negLovelace fee2 <> lovelaceToValue fee1
---           if fee2 == fee1
---             then Right  (TxResult fee2 inputs2 bodyContent2 txbody2)
---             else do
---               if positiveValue modifiedChange2
---                 then (do
---                   let body3=modifiedBody sanitizedOutputs txIns2 modifiedChange2 fee2
---                   txBody3 <- makeTransactionBody body3
---                   Right (TxResult fee2 inputs2 body3 txBody3))
---                 else (do
---                    error $ "Insufficient balance : missing " ++ show modifiedChange2)
-
-
---   where
---   performBalance sanitizedOuts  change fee= do
---             let (inputs,change') =minimize txouts (change <> negLovelace fee)
---                 bodyContent=modifiedBody sanitizedOuts (map utxoToTxBodyIn inputs) change' fee
---             txBody1<-makeTransactionBody bodyContent
-
---             let modifiedChange1=change' <> negLovelace  fee' <> lovelaceToValue fee
---                 fee'= evaluateTransactionFee pParams txBody1 signatureCount 0
---                 (inputs2,change2)= minimize txouts modifiedChange1
---                 newBody =modifiedBody sanitizedOuts (map utxoToTxBodyIn inputs2) change2 fee'
---             if fee' == fee
---               then Right (bodyContent,change,fee)
---               else Right (newBody, modifiedChange1,fee')
-
---   startingFee=Lovelace $ toInteger $ protocolParamTxFeeFixed pParams
-
---   negLovelace v=negateValue $ lovelaceToValue v
-
---   utxosWithWitness (txin,txout) = (txin, BuildTxWith  $ KeyWitness KeyWitnessForSpending)
-
-
---   isProperChange f change = existingLove >  minLove
---     where
---       existingLove = case  selectAsset change AdaAssetId   of
---         Quantity n -> n
---       --minimun Lovelace required in the change utxo
---       minLove = case  f $ TxOut walletAddr (TxOutValue MultiAssetInBabbageEra change) TxOutDatumNone of
---           Lovelace l -> l
-
-
---   utxoToTxBodyIn (txIn,_) =(txIn,BuildTxWith $ KeyWitness KeyWitnessForSpending)
-
---   -- minimize' utxos remainingChange = (doMap,remainingChange)
---   --   where
---   --     doMap=map (\(txin,txout) -> tobodyIn txin) utxos
---   --     tobodyIn _in=(_in,BuildTxWith $ KeyWitness KeyWitnessForSpending)
---   --     val  out= txOutValueToValue $ txOutValue  out
-
-
-
---   -- change is whatever will remain after making payment.
---   -- At the beginning, we will assume that we will all the available utxos,
---   -- so it should be a +ve value, otherwise it means we don't have sufficient balance to fulfill the transaction
---   startingChange available outputs  fee=
---         negateValue (foldMap (txOutValueToValue  . txOutValue ) outputs)  --already existing outputs
---     <>   inputSum -- already existing inputs
---     <>  Foldable.foldMap (txOutValueToValue  . txOutValue . snd) available -- sum of all the available utxos
---     <>  negateValue (lovelaceToValue fee)
---   utxoToTxOut (UTxO map)=Map.toList map
-
---   txOutValueToValue :: TxOutValue era -> Value
---   txOutValueToValue tv =
---     case tv of
---       TxOutAdaOnly _ l -> lovelaceToValue l
---       TxOutValue _ v -> v
-
---   txOutValue (TxOut _ v _) = v
-
---   -- modify the outputs to make sure that the min ada is included in them if it only contains asset.
---   modifiedOuts calculator = map (includeMin calculator) (txOuts  txbody)
---   includeMin calculator txOut= do case txOut of {TxOut addr v hash-> case v of
---                                      TxOutAdaOnly oasie lo ->  txOut
---                                      TxOutValue masie va ->
---                                        if selectAsset va AdaAssetId == Quantity  0
---                                        then performMinCalculation addr va hash
---                                        else  txOut }
---     where
---       performMinCalculation addr val hash =TxOut  addr (TxOutValue MultiAssetInBabbageEra  (val <> lovelaceToValue minLovelace)) hash
---         where
---          minLovelace = minval addr (val <> lovelaceToValue (Lovelace 1_000_000)) hash
-
---       minval add v hash= calculator (TxOut add (TxOutValue MultiAssetInBabbageEra v) hash )
-
---   modifiedBody initialOuts txins change fee= content
---     where
-
---       content=(TxBodyContent  {
---             txIns= reorderInputs$ txins ++ txIns txbody,
---             txInsCollateral=txInsCollateral txbody,
---             txOuts=  if nullValue change
---                   then initialOuts
---                   else initialOuts ++ [ TxOut  walletAddr (TxOutValue MultiAssetInBabbageEra change) TxOutDatumNone]  ,
---             txFee=TxFeeExplicit TxFeesExplicitInBabbageEra  fee,
---             -- txValidityRange=(TxValidityNoLowerBound,TxValidityNoUpperBound ValidityNoUpperBoundInBabbageEra),
---             txValidityRange = txValidityRange txbody,
---             txMetadata=txMetadata txbody ,
---             txAuxScripts=txAuxScripts txbody,
---             txExtraKeyWits=txExtraKeyWits txbody,
---             txProtocolParams= txProtocolParams   txbody,
---             txWithdrawals=txWithdrawals txbody,
---             txCertificates=txCertificates txbody,
---             txUpdateProposal=txUpdateProposal txbody,
---             txMintValue=txMintValue txbody,
---             txScriptValidity=txScriptValidity txbody
---           })
-
-    -- v1Bundle= case case valueToNestedRep _v1 of { ValueNestedRep bundle -> bundle} of
-    --   [ValueNestedBundleAda v , ValueNestedBundle policy assetMap] ->LovelaceToValue v
-    --   [ValueNestedBundle policy assetMap]
-
-
-
-
--- mkTxExplicitFee ::DetailedChainInfo -> TxBuilder -> TxBody BabbageEra
--- mkTxExplicitFee = error "sad"
-
--- gatherInfo :: ChainInfo i -> i  -> TxBuilder  ->  IO (Either AcquireFailure TxContext)
--- gatherInfo cInfo  txBuilder@TxBuilder{txSelections, txInputs} = do
---   error "sad"
---   where
+    preProdSlot timestamp = (timestamp - 1661817713) + 6134513 -- using epoch 18 as reference
 
 toLedgerEpochInfo :: EraHistory mode -> EpochInfo (Either Text.Text)
 toLedgerEpochInfo (EraHistory _ interpreter) =
