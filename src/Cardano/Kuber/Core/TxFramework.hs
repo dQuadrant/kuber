@@ -796,10 +796,13 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
     toSlot tStamp = case getNetworkId  dCinfo of
         Mainnet -> SlotNo $ fromIntegral $  mainnetSlot $ round tStamp
         Testnet (NetworkMagic 1) -> SlotNo $ fromIntegral $ preProdSlot $ round tStamp
+        Testnet (NetworkMagic 2) -> SlotNo $ fromIntegral $ previewSlot $ round tStamp
+
         Testnet _ -> SlotNo $ fromIntegral $ testnetSlot $ round tStamp
     testnetSlot timestamp= (timestamp -1607199617 )+ 12830401 -- using epoch 100 as refrence
     mainnetSlot timestamp = (timestamp -1596491091 )+ 4924800 -- using epoch 209 as reference
     preProdSlot timestamp = (timestamp - 1661817713) + 6134513 -- using epoch 18 as reference
+    previewSlot timestamp = (timestamp - 1660694430) + 691230 -- using  epoch 9 as reference
 
 toLedgerEpochInfo :: EraHistory mode -> EpochInfo (Either Text.Text)
 toLedgerEpochInfo (EraHistory _ interpreter) =
