@@ -5,6 +5,8 @@ import './assets/base.css';
 import '@dafcoe/vue-notification/dist/vue-notification.css'
 import 'vue-toast-notification/dist/theme-sugar.css';
 import ToastPlugin from 'vue-toast-notification';
+import 'flowbite'
+import 'tw-elements';
 
 
 // @ts-ignore

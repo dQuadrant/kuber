@@ -9,6 +9,8 @@ volumes:
     name: cardano-db-sync_node-ipc
   ipc-preprod: 
     name: cardano-preprod_ipc
+  ipc-preview: 
+    name: cardano-preview_node_ipc
 services :
   testnet : 
     image: dquadrant/kuber:2.1.0
@@ -37,3 +39,13 @@ services :
       - frontend
     volumes:
       - ipc-preprod:/ipc/
+  preview : 
+    image: dquadrant/kuber:46fcccf61e1031d893b232ae762a5e44c5b7b218
+    environment:
+      CARDANO_NODE_SOCKET_PATH: /ipc/node.socket
+      NETWORK: 2
+      VIRTUAL_HOST : https://preprod.cnftregistry.io/kuber/api -> :8081/api
+    networks:
+      - frontend
+    volumes:
+      - ipc-preview:/ipc/

@@ -12,27 +12,44 @@ import 'ace-builds/src-noconflict/theme-chrome';
 import 'ace-builds/src-noconflict/ext-language_tools';
 
 import suggestion from '../assets/suggestions.json';
+import Tag from './Tag.vue';
 
 ace.require('ace/ext/language_tools');
 
-
 ace.config.setModuleUrl('ace/mode/json_worker', workerJsonUrl);
-
-
-window.onclick = function(event) {
-  console.log(event.target)
-  if(event.target.id !="utility-dropdown-button")
-    document.getElementById('utility-dropdown-list').classList.add('hidden')
-}
 
 </script>
 
 <template>
   <div class="flex flex-col items-center self-center h-screen w-screen">
     <vue-notification-list position="top-right"></vue-notification-list>
-
     <div class="w-full px-2 pt-1">
       <div class="pb-3">
+        <span class="ml-0.5 mr-4 justify-center">
+          <span>
+            <span class="dropdown">
+              <button
+                class="dropdown-toggle text-white text-[11pt] leading-tight uppercase rounded hover:bg-gray-100 hover:shadow-lg active:bg-gray-200 active:shadow-lg active:text-white transition duration-150 ease-in-out flex items-center whitespace-nowrap"
+                type="button"
+                id="dropdownMenuButton1"
+                data-bs-toggle="dropdown"
+                aria-expanded="false"
+              >
+              <tag v-if="activeApi" :class="activeApi.text + ' py-1 px-4'">{{activeApi.name}}</tag>
+              <span v-else  class="py-1 px-4 rounded-full  text-blue-500 font-semibold flex align-center w-max cursor-pointer active:bg-gray-300 transition duration-300 ease">
+             </span>
+              </button>
+              <table
+                class="left-0  dropdown-menu  hidden min-w-max absolute bg-white text-base z-50 float-left py-2 text-left rounded-lg shadow-lg mt-1 m-0 bg-clip-padding border-2 border-blue-400 border-opacity-30" aria-labelledby="dropdownMenuButton1"
+              >
+              <tr v-for="api in apis" :key="api.display" @click="handleApiSelected(api)" class="hover:bg-gray-100">
+                    <td :class="api.text +' mr-4 border-b-2 dropdown-item text-sm py-2 px-4 font-normal bg-transparent text-center text-gray-700'" >{{api.name}}</td>
+                    <td class="border-b-2 dropdown-item text-sm py-2 px-4 font-normal bg-transparent text-gray-700 "> {{api.display}}</td>
+                </tr>
+              </table>
+            </span>
+          </span>
+        </span>
         <span class="text-blue-800"> Create Tx with </span>
         <span>
           <button
@@ -47,16 +64,15 @@ window.onclick = function(event) {
           </button>
         <span class="float-right mr-2 mt-1">
           <span>
-            <span class="dropdown relative">
+            <span class="inline-block relative">
               <button
                   class="dropdown-toggle px-3 py-2.5 bg-purple-500 text-white font-medium text-xs leading-tight uppercase rounded shadow-md hover:bg-purple-700 hover:shadow-lg focus:bg-purple-700 focus:shadow-lg focus:outline-none focus:ring-0 active:bg-purple-800 active:shadow-lg active:text-white transition duration-150 ease-in-out flex items-center whitespace-nowrap"
                   type="button"
                   id="utility-dropdown-button"
                   data-bs-toggle="dropdown"
                   aria-expanded="false"
-                  onclick="document.getElementById('utility-dropdown-list').classList.toggle('hidden')"
               >
-                Utilities
+                <span>Utilities</span>
                 <svg
                     aria-hidden="true"
                     focusable="false"
@@ -75,7 +91,7 @@ window.onclick = function(event) {
               </button>
               <ul id="utility-dropdown-list"
                   class="dropdown-menu min-w-max absolute right-0 hidden  text-base z-50 float-right py-2 list-none text-left rounded-lg shadow-lg mt-1  m-0 bg-clip-padding border-none bg-gray-800"
-                  aria-labelledby="dropdownMenuButton2"
+                  aria-labelledby="utility-dropdown-button"
               >
                 <li @click="displayKeyHashModal">
                   <a
@@ -88,20 +104,36 @@ window.onclick = function(event) {
                   <a
                       class="dropdown-item text-sm py-2 px-4 font-normal block w-full whitespace-nowrap bg-transparent text-gray-300 hover:bg-gray-700 hover:text-white focus:text-white focus:bg-gray-700"
                       href="#"
-                  >Compute ScriptHash</a
-                  >
+                  >Compute ScriptHash</a>
+                </li>
+                <li>
+                  <button type="button" class="px-6
+                      py-2.5
+                      font-medium
+                      text-xs
+                      leading-tight
+                      uppercase
+                      rounded
+                      shadow-md
+                      bg-transparent text-gray-300 hover:bg-gray-700 hover:text-white focus:text-white focus:bg-gray-700
+                      transition
+                      duration-150
+                      ease-in-out" data-bs-toggle="modal" data-bs-target="#hexEncoderModal">
+                  Launch demo modal
+                </button>
+                
                 </li>
               </ul>
             </span>
           </span>
         </span>
           <transition name="fade" appear>
-            <div class="modal-overlay"
+            <div class="modal-overlay-old"
                  v-if="showKeyHashModal"
                  @click="showKeyHashModal = false"></div>
           </transition>
           <transition name="pop" appear>
-            <div class="modal"
+            <div class="modal-old"
                  role="dialog"
                  v-if="showKeyHashModal"
             >
@@ -124,19 +156,19 @@ window.onclick = function(event) {
                   </div>
                 </div>
                 <div class="mt-3">
-                  <button @click="getKeyHash" class="button hover:bg-green-600">Get Key Hash</button>
+                  <button @click="getKeyHash" class="button-old hover:bg-green-600">Get Key Hash</button>
                   <button @click="showKeyHashModal = false" class="ml-4 border border-red-200 pt-2 pb-2 pl-4 pr-4 rounded text-gray-500 hover:bg-red-400 hover:text-white">Close</button>
                 </div>
             </div>
           </transition>
 
           <transition name="fade" appear>
-            <div class="modal-overlay"
+            <div class="modal-overlay-old"
                  v-if="showPolicyModal"
                  @click="showPolicyModal = false"></div>
           </transition>
           <transition name="pop" appear>
-            <div class="modal"
+            <div class="modal-old"
                  role="dialog"
                  v-if="showPolicyModal"
             >
@@ -158,7 +190,7 @@ window.onclick = function(event) {
                   </div>
                 </div>
                 <div class="mt-3">
-                  <button @click="getScriptPolicy" class="button hover:bg-green-600">Get Policy Id</button>
+                  <button @click="getScriptPolicy" class="button-old hover:bg-green-600">Get Policy Id</button>
                   <button @click="showPolicyModal = false" class="ml-4 border border-red-200 pt-2 pb-2 pl-4 pr-4 rounded text-gray-500 hover:bg-red-400 hover:text-white">Close</button>
                 </div>
             </div>
@@ -181,8 +213,48 @@ window.onclick = function(event) {
         </span>
       </div>
     </div>
-    <!-- v-model="content" -->
+    <!-- Modal -->
+  <div class="modal fade fixed top-0 left-0 hidden w-full h-full outline-none overflow-x-hidden overflow-y-auto" id="hexEncoderModal" tabindex="-1" aria-labelledby="exampleModalCenteredScrollable" aria-modal="true" role="dialog">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable relative w-auto pointer-events-none">
+    <div class="modal-content border-none shadow-lg relative flex flex-col w-full pointer-events-auto bg-white bg-clip-padding rounded-md outline-none text-current">
+      <div class="modal-header flex flex-shrink-0 items-center justify-between p-4 border-b border-gray-200 rounded-t-md">
+        <h5 class="text-xl font-medium leading-normal text-gray-800" id="exampleModalCenteredScrollableLabel">
+          Hex Encoder/Decoder
+        </h5>
+        <button type="button"
+          class="btn-close box-content w-4 h-4 p-1 text-black border-none rounded-none opacity-50 focus:shadow-none focus:outline-none focus:opacity-100 hover:text-black hover:opacity-75 hover:no-underline"
+          data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+              
+      <div class="modal-body relative p-4 pb-2">
+        <div class="mb-2 text-gray-500">Raw data</div>
+                <textarea ref="hexdata"
+                    class=" p-2 w-full  min-h-[200pt] border border-gray-300"
+                    :value="scriptJson"
+                />
+                <div class="mt-2 pt-1 border-t-2 mb-4" v-if="policyId != ''" >
+                  <div class="text-gray-500 mb-1">Script policy id</div>
+                  <div>
+                  <button class="flex" @click="performPolicyIdCopy">
+                    <div>{{policyId}}</div>
+                    <div class="mt-1"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-files" viewBox="0 0 16 16">
+                      <path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/>
+                    </svg></div>
+                  </button>
+                  </div>
+                </div>
+      </div>
+      <div
+        class="modal-footer flex flex-shrink-0 flex-wrap items-center justify-start p-4 border-t border-gray-200 rounded-b-md">
+        <button @click="encodeHex" class="button-old hover:bg-green-600">Get Policy Id</button>
+        <button @click="decodeHex" class="button-old hover:bg-green-600">Get Policy Id</button>
 
+        <button data-bs-dismiss="modal" class="ml-4 border border-red-200 pt-2 pb-2 pl-4 pr-4 rounded text-gray-500 hover:bg-red-400 hover:text-white">Close</button>
+
+      </div>
+    </div>
+  </div>
+</div>
     <v-ace-editor
         value=""
         @init="editorInit"
@@ -194,7 +266,6 @@ window.onclick = function(event) {
 </template>
 <script lang="ts">
 import * as _notification from "@dafcoe/vue-notification";
-import AppVue from "@/App.vue";
 import {useToast} from 'vue-toast-notification';
 
 
@@ -214,8 +285,13 @@ export default {
   },
   data() {
     const providers: Array<CIP30Provider> = [];
-
-    return {
+    let defaultApi = {
+          text: 'text-gray-500',
+          name: 'Auto',
+          display: 'Mainnet/PreProd based on wallet NetworkId',
+          url: undefined
+        }
+    let result={
       providers: providers,
       addSelections: true,
       editor: null,
@@ -226,14 +302,49 @@ export default {
       address: '',
       keyHash: '',
       scriptJson: '',
-      policyId: ''
+      policyId: '',
+      activeApi: defaultApi,
+      apis:[
+        defaultApi,
+        {
+          text: 'text-blue-400',
+          name: 'Preview Testnet',
+          display: 'https://preview.cnftregistry.io/kuber',
+          url: 'https://preview.cnftregistry.io/kuber'
+
+        },
+        {
+          text: 'text-orange-400',
+          name: 'Preprod Testnet',
+          display: 'https://preprod.cnftregistry.io/kuber',
+          url: 'https://preprod.cnftregistry.io/kuber'
+        },
+        {
+          text: 'text-red-400',
+          name: 'Mainnet',
+          display: 'https://cnftregistry.io/kuber',
+          url: 'https://cnftregistry.io/kuber'
+        },
+        {
+          text: 'text-gray-400',
+          name: 'Localhost',
+          display: 'http://localhost:8081',
+          url: 'http://localhost:8081'
+        },
+      ]
     };
+    // result.activeApi=result.apis[0]
+    return result
   },
   beforeUnmount() {
     this.interval && clearInterval(this.interval);
     this.timeout && clearTimeout(this.timeout);
   },
   methods: {
+    handleApiSelected(value){
+      this.activeApi=value
+      console.log("api selected",value)
+    },
     onAddressInput(event){
       this.address=event.target.value
     },
@@ -252,6 +363,7 @@ export default {
       this.showKeyHashModal=true;
       this.address='';
       this.keyHash='';
+      console.log("Displaying keyhashmodal")
     },
     displayPolicyModal(){
       this.showPolicyModal=true;
@@ -259,12 +371,12 @@ export default {
       this.policyId='';
     },
     getKeyHash(){
-      getKeyHashOfAddressFromKuber(this.address).catch(err=>alert(err)).then(res=>{
+      getKeyHashOfAddressFromKuber(this.activeApi.url, this.address).catch(err=>alert(err)).then(res=>{
         this.keyHash = res.keyHash
       });
     },
     getScriptPolicy(){
-      getPolicyIdOfScriptFromKuber(this.scriptJson).catch(err=>alert(err)).then((res: string) =>{
+      getPolicyIdOfScriptFromKuber(this.activeApi.url,this.scriptJson).catch(err=>alert(err)).then((res: string) =>{
         this.policyId = res
       });
     },
@@ -302,9 +414,9 @@ export default {
               } else {
                 request.selections = availableUtxos;
               }
-              return callKuberAndSubmit(instance, JSON.stringify(request));
+              return callKuberAndSubmit(instance,this.activeApi.url,JSON.stringify(request));
             } else {
-              return callKuberAndSubmit(instance, JSON.stringify(request));
+              return callKuberAndSubmit(instance,this.activeApi.url, JSON.stringify(request));
             }
           })
           .catch((e: any) => {
@@ -365,6 +477,7 @@ export default {
 </script>
 <style>
 @import "../assets/base.css";
+@import "tw-elements";
 </style>
 
 <style scoped>
@@ -389,7 +502,16 @@ export default {
 
 .show {display: block;}
 
-.modal {
+.modal-new{
+  position: absolute;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.modal-old {
   position: absolute;
   position: fixed;
   top: 0;
@@ -407,11 +529,11 @@ export default {
   z-index: 999;
   transform: none;
 }
-.modal h1 {
+.modal-old h1 {
   margin: 0 0 1rem;
 }
 
-.modal-overlay {
+.modal-overlay-old {
   content: '';
   position: absolute;
   position: fixed;
@@ -453,7 +575,7 @@ export default {
   display: inline-block;
 }
 
-.button {
+.button-old {
   border: none;
   color: #FFF;
   background: green;
@@ -474,5 +596,15 @@ export default {
   height: 200px;
   width: 500px;
   padding: 5px;
+}
+
+button span {
+  pointer-events: none;
+}
+button div {
+  pointer-events: none;
+}
+button svg {
+  pointer-events: none;
 }
 </style>

@@ -24,8 +24,6 @@ import {
     Vkeywitnesses
 } from '@emurgo/cardano-serialization-lib-asmjs';
 
-const kuberUrl= import.meta.env.VITE_API_URL===undefined? "https://testnet.cnftregistry.io/kuber":import.meta.env.VITE_API_URL
-
 import type {CIP30Instace} from "@/types";
 import {Buffer} from 'buffer'
 
@@ -154,7 +152,7 @@ export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
   }
 
 
-  export  async function getKeyHashOfAddressFromKuber(address: string) {
+  export  async function getKeyHashOfAddressFromKuber(kuberUrl:string, address: string) {
       return fetch(
       // eslint-disable-next-line max-len
       `${kuberUrl}/api/v1/keyhash`,
@@ -194,7 +192,7 @@ export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
     })
   }
 
-  export  async function getPolicyIdOfScriptFromKuber(scriptJsonStr: string) {
+  export  async function getPolicyIdOfScriptFromKuber(kuberUrl:string,scriptJsonStr: string) {
     let scriptJson = JSON.parse(scriptJsonStr)
       return fetch(
       // eslint-disable-next-line max-len
@@ -235,9 +233,8 @@ export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
     })
   }
 
-  export  async function callKuberAndSubmit(provider: CIP30Instace,data: string) {
-    let network = await provider.getNetworkId()
-    const kuberUrlByNetwork= import.meta.env.VITE_API_URL!=undefined ? import.meta.env.VITE_API_URL : (network ==0? "https://testnet.cnftregistry.io/kuber":"https://cnftregistry.io/kuber")
+  export  async function callKuberAndSubmit(provider: CIP30Instace,kuberUrl:string,data: string) {
+    const kuberUrlByNetwork= kuberUrl?kuberUrl:(import.meta.env.VITE_API_URL!=undefined ? import.meta.env.VITE_API_URL : (await provider.getNetworkId() ==0? "https://preprod.cnftregistry.io/kuber":"https://cnftregistry.io/kuber"))
 
     return fetch(
       // eslint-disable-next-line max-len

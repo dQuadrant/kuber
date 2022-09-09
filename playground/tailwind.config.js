@@ -1,10 +1,13 @@
 module.exports = {
     content: [
       "./index.html",
+      "'./node_modules/tw-elements/dist/js/**/*.js'",
       "./src/**/*.{vue,js,ts,jsx,tsx}",
     ],
     theme: {
       extend: {},
     },
-    plugins: [],
+    plugins: [
+      require('tw-elements/dist/plugin')
+  ]
   }
