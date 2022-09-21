@@ -7,7 +7,6 @@ import workerJsonUrl from "ace-builds/src-noconflict/worker-json?url";
 
 import {
   callKuberAndSubmit,
-  getKeyHashOfAddressFromKuber,
   getPolicyIdOfScriptFromKuber,
   listProviders,
 } from "@/scripts/wallet";
@@ -105,7 +104,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
                     data-icon="caret-down"
                     class="w-2 ml-2"
                     role="img"
-                    xmlns="http://www.w3.org/2000/svg"
+                    xmlxns="http://www.w3.org/2000/svg"
                     viewBox="0 0 320 512"
                   >
                     <path
@@ -133,7 +132,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
                       >Compute ScriptHash</a
                     >
                   </li>
-                      
+
                   <li>
                     <a
                       href="#"
@@ -207,7 +206,34 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               @click="showPolicyModal = false"
             ></div>
           </transition>
-
+           <transition name="pop" appear>
+            <div class="modal-old"
+                 role="dialog"
+                 v-if="showPolicyModal"
+            >
+                <div class="mb-2 text-gray-500">Enter script json</div>
+                <textarea
+                    class="textarea border border-gray-300"
+                    :value="scriptJson"
+                    @input="onScriptJsonInput"
+                />
+                <div class="mt-4 mb-4" v-if="policyId != ''" >
+                  <div class="text-gray-500 mb-1">Script policy id</div>
+                  <div>
+                  <button class="flex" @click="performPolicyIdCopy">
+                    <div>{{policyId}}</div>
+                    <div class="mt-1"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-files" viewBox="0 0 16 16">
+                      <path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/>
+                    </svg></div>
+                  </button>
+                  </div>
+                </div>
+                <div class="mt-3">
+                  <button @click="getScriptPolicy" class="button-old hover:bg-green-600">Get Policy Id</button>
+                  <button @click="showPolicyModal = false" class="ml-4 border border-red-200 pt-2 pb-2 pl-4 pr-4 rounded text-gray-500 hover:bg-red-400 hover:text-white">Close</button>
+                </div>
+            </div>
+          </transition>
 
           <div class="ml-2 mt-1 form-check form-check text-sm">
             <input
@@ -322,6 +348,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
 <script lang="ts">
 import * as _notification from "@dafcoe/vue-notification";
 import { useToast } from "vue-toast-notification";
+import { Address, BaseAddress, Ed25519KeyHash, EnterpriseAddress, PointerAddress } from '@emurgo/cardano-serialization-lib-asmjs';
 
 const notification = _notification.useNotificationStore();
 export default {
@@ -460,15 +487,32 @@ export default {
     },
     getKeyHash() {
       // TODO do this with serialization library and not by calling api
-      getKeyHashOfAddressFromKuber(this.activeApi.url, this.address)
-        .catch((err) => alert(err))
-        .then((res) => {
-          this.keyHash = res.keyHash;
-        });
+      let addr=Address.from_bech32(this.address)
+      let addrBase= BaseAddress.from_address(addr)
+      let addrPointer = PointerAddress.from_address(addr)
+      let addrEnterprise = EnterpriseAddress.from_address(addr)
+      let keyHash :Ed25519KeyHash
+      if(addrBase){
+        console.log("hashKind",addrBase.payment_cred().kind)
+        keyHash=addrBase.payment_cred().to_keyhash()
+      }else if (addrPointer){
+        keyHash = addrPointer.payment_cred().to_keyhash();
+      }else if (addrEnterprise){
+        keyHash = addrEnterprise.payment_cred().to_keyhash();
+      }
+      let keyHashHex=Buffer.from(keyHash.to_bytes()).toString("hex")
+
+      this.keyHash=keyHashHex
+
+      // getKeyHashOfAddressFromKuber(this.activeApi.url, this.address)
+      //   .catch((err) => alert(err))
+      //   .then((res) => {
+      //     this.keyHash = res.keyHash;
+      //   });
     },
     getScriptPolicy() {
       // TODO do this with serialization library and not by calling api
-      getPolicyIdOfScriptFromKuber(this.activeApi.url, this.scriptJson)
+      getPolicyIdOfScriptFromKuber(this.activeApi.url || (this.apis.find((x)=> x.name == 'Mainnet')).url, this.scriptJson)
         .catch((err) => alert(err))
         .then((res: string) => {
           this.policyId = res;
