@@ -200,7 +200,7 @@ instance Semigroup TxBuilder where
     txOutputs = txOutputs txb1 ++ txOutputs txb2,
     txCollaterals  = txCollaterals txb1 ++ txCollaterals txb2,  -- collateral for the transaction
     txValidityStart = minValidity (txValidityStart txb1) (txValidityStart txb2),
-    txValidityEnd = maxValidity (txValidityStart txb1) (txValidityStart txb2),
+    txValidityEnd = maxValidity (txValidityEnd txb1) (txValidityEnd txb2),
     txMintData = txMintData txb1 <> txMintData txb2,
     txSignatures = txSignatures txb1 ++ txSignatures txb2,
     txFee  = case txFee txb1 of

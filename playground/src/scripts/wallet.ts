@@ -204,7 +204,7 @@ export async function signAndSubmit(provider: CIP30Instace,_tx : string) {
         headers: new Headers({'content-type': 'application/json'}),
       },
     ).catch(e=>{
-      console.error(`${kuberUrl}/api/v1/tx`, e)
+      console.error(`${kuberUrl}/api/v1/scriptPolicy`, e)
       throw Error(`Kubær API call : `+e.message)
 
     }).then(res=>{
