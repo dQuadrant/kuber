@@ -56,7 +56,7 @@ import Network.Wai.Middleware.Rewrite (rewriteRoot)
 import Cardano.Kuber.Api
 import Kuber.Server.MediaType
 
-import Cardano.Kuber.Util (evaluateExecutionUnits)
+import Cardano.Kuber.Util (evaluateExecutionUnits, evaluateFee)
 import Kuber.Server.Core
 import qualified Data.Aeson as Aeson
 import Cardano.Kuber.Data.Parsers
@@ -69,6 +69,7 @@ type TransactionAPI =
             "api" :> "v1" :> "tx" :> QueryParam "submit" Bool :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "submit" :> ReqBody '[JSON ,CBORBinary,CBORText  ] (SubmitTxModal ) :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx BabbageEra) :> Post '[JSON] ([Either String ExecutionUnits ])
+      :<|>  "api" :> "v1" :> "tx" :> "fee" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx BabbageEra) :> Post '[JSON]  Integer 
       :<|> "api" :> "v1" :> "scriptPolicy"        :> ReqBody '[JSON] (Aeson.Value ) :> Post '[PlainText ] (Text)
       :<|> "api" :> "v1" :> "keyhash"        :> ReqBody '[JSON] (AddressModal) :> Post '[JSON ] (KeyHashResponse)
 
@@ -79,6 +80,7 @@ server dcInfo =
    errorGuard2 (txBuilder dcInfo)
   :<|> errorGuard (submitTx' dcInfo)
   :<|> errorGuard (evaluateExecutionUnits dcInfo )
+  :<|> errorGuard (evaluateFee dcInfo)
   :<|> errorGuard (\sc -> parseAnyScript (Aeson.encode sc)<&> (\(ScriptInAnyLang sl sc') ->serialiseToRawBytesHexText ( scriptPolicyId sc')) )
   :<|> errorGuard (getKeyHash)
   where

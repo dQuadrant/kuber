@@ -64,6 +64,7 @@ import qualified Data.ByteString.Char8 as BS8
 import Control.Applicative ((<|>))
 import Data.Bifunctor (second)
 import Cardano.Api.Shelley (ReferenceScript(ReferenceScript, ReferenceScriptNone), scriptDataToJsonDetailedSchema)
+import Cardano.Kuber.Utility.DataTransformation (pkhToPaymentKeyHash)
 
 
 
@@ -394,7 +395,8 @@ collectColalteral (TxCollateralUtxo utxo) = utxoToAeson  utxo
 
 instance ToJSON TxSignature where
   toJSON (TxSignatureAddr _sigAddr) = toJSON _sigAddr
-  toJSON _ = "TxSignaturePkh Not implemented."
+  toJSON (TxSignaturePkh pkh) = toJSON  $  "Pkh: " ++ show pkh
+  toJSON (TxSignatureSkey skey  ) = toJSON $ serialiseToBech32 skey
 
 instance FromJSON TxInputSelection where
   parseJSON v@(A.String txt) = do
