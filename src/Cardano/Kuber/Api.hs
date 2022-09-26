@@ -53,8 +53,8 @@ module Cardano.Kuber.Api(
     , IsPlutusScript
     , IsSimpleScript
     , TxScript(..)
-    , TxPlutusScript
-    , TxSimpleScript
+    , TxPlutusScript(..)
+    , TxSimpleScript(..)
     , toTxSimpleScript
     , toTxPlutusScript
     , hashPlutusScript
@@ -66,7 +66,10 @@ module Cardano.Kuber.Api(
 
 
     -- Core Tx builder object and it's transformation functions
-    ,   TxBuilder
+    ,   TxBuilder(..)
+    ,   TxMintData(..)
+    ,   TxMintingScriptSource(..)
+    ,
     ,   txBuilderToTxBody
     ,   txBuilderToTxBodyIO
     ,   txBuilderToTx
@@ -97,6 +100,7 @@ module Cardano.Kuber.Api(
     , signTxBody
     , txCollateralUtxo
     , txCollateral
+
 )
 
 where
