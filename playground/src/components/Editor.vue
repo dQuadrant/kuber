@@ -83,7 +83,10 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             class="ml-3 bg-transparent hover:bg-blue-500 text-blue-700 font-semibold hover:text-white py-0.5 px-1.5 border border-blue-500 hover:border-transparent rounded"
             @click="submitTx(provider)"
           >
-            <img style="display: inline; height: 1em; width: 1em" :src="provider.icon" />
+            <img
+              style="display: inline; height: 1em; width: 1em"
+              :src="provider.icon"
+            />
             <span class="ml-1"> {{ provider.name }}</span>
           </button>
           <span class="float-right mr-2 mt-1">
@@ -140,7 +143,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
                       data-bs-toggle="modal"
                       data-bs-target="#hexEncoderModal"
                     >
-                    Hex Encode/Decode
+                      Hex Encode/Decode
                     </a>
                   </li>
                 </ul>
@@ -186,7 +189,10 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
                 </div>
               </div>
               <div class="mt-3">
-                <button @click="getKeyHash" class="button-old hover:bg-green-600">
+                <button
+                  @click="getKeyHash"
+                  class="button-old hover:bg-green-600"
+                >
                   Get Key Hash
                 </button>
                 <button
@@ -206,32 +212,50 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               @click="showPolicyModal = false"
             ></div>
           </transition>
-           <transition name="pop" appear>
-            <div class="modal-old"
-                 role="dialog"
-                 v-if="showPolicyModal"
-            >
-                <div class="mb-2 text-gray-500">Enter script json</div>
-                <textarea
-                    class="textarea border border-gray-300"
-                    :value="scriptJson"
-                    @input="onScriptJsonInput"
-                />
-                <div class="mt-4 mb-4" v-if="policyId != ''" >
-                  <div class="text-gray-500 mb-1">Script policy id</div>
-                  <div>
+          <transition name="pop" appear>
+            <div class="modal-old" role="dialog" v-if="showPolicyModal">
+              <div class="mb-2 text-gray-500">Enter script json</div>
+              <textarea
+                class="textarea border border-gray-300"
+                :value="scriptJson"
+                @input="onScriptJsonInput"
+              />
+              <div class="mt-4 mb-4" v-if="policyId != ''">
+                <div class="text-gray-500 mb-1">Script policy id</div>
+                <div>
                   <button class="flex" @click="performPolicyIdCopy">
-                    <div>{{policyId}}</div>
-                    <div class="mt-1"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-files" viewBox="0 0 16 16">
-                      <path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/>
-                    </svg></div>
+                    <div>{{ policyId }}</div>
+                    <div class="mt-1">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        fill="currentColor"
+                        class="bi bi-files"
+                        viewBox="0 0 16 16"
+                      >
+                        <path
+                          d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
+                        />
+                      </svg>
+                    </div>
                   </button>
-                  </div>
                 </div>
-                <div class="mt-3">
-                  <button @click="getScriptPolicy" class="button-old hover:bg-green-600">Get Policy Id</button>
-                  <button @click="showPolicyModal = false" class="ml-4 border border-red-200 pt-2 pb-2 pl-4 pr-4 rounded text-gray-500 hover:bg-red-400 hover:text-white">Close</button>
-                </div>
+              </div>
+              <div class="mt-3">
+                <button
+                  @click="getScriptPolicy"
+                  class="button-old hover:bg-green-600"
+                >
+                  Get Policy Id
+                </button>
+                <button
+                  @click="showPolicyModal = false"
+                  class="ml-4 border border-red-200 pt-2 pb-2 pl-4 pr-4 rounded text-gray-500 hover:bg-red-400 hover:text-white"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </transition>
 
@@ -290,39 +314,45 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               ref="rawData"
               class="p-2 w-full min-h-[200pt] border border-gray-300"
             />
-              <div class="mt-4 mb-4" v-if="result || errorMsg">
-                <div v-if="errorMsg" class="text-red-500">
-                  {{ errorMsg }}
-                </div>
-                <div v-else>
-                  <div class="text-gray-500 mb-1 text-left">Result</div>
-                  <button class="w-full hover:bg-slate-100 py-0.5" @click="copyToClipboard(result)">
-                    <span class="">{{ result }}</span>
-                    <span class="mt-1 pr-3 float-right">
-                      <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          fill="currentColor"
-                          class="bi bi-files"
-                          viewBox="0 0 16 16"
-                      >
-                        <path
-                            d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
-                        />
-                      </svg>
-                    </span>
-                  </button>
-                </div>
-                </div>
+            <div class="mt-4 mb-4" v-if="result || errorMsg">
+              <div v-if="errorMsg" class="text-red-500">
+                {{ errorMsg }}
               </div>
+              <div v-else>
+                <div class="text-gray-500 mb-1 text-left">Result</div>
+                <button
+                  class="w-full hover:bg-slate-100 py-0.5"
+                  @click="copyToClipboard(result)"
+                >
+                  <span class="">{{ result }}</span>
+                  <span class="mt-1 pr-3 float-right">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      fill="currentColor"
+                      class="bi bi-files"
+                      viewBox="0 0 16 16"
+                    >
+                      <path
+                        d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
+                      />
+                    </svg>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
           <div
             class="modal-footer flex flex-shrink-0 flex-wrap items-center justify-start p-4 border-t border-gray-200 rounded-b-md"
           >
             <button @click="encodeHex" class="button-old hover:bg-green-600">
               Encode
             </button>
-            <button @click="decodeHex" class="button-old hover:bg-green-600 ml-3">
+            <button
+              @click="decodeHex"
+              class="button-old hover:bg-green-600 ml-3"
+            >
               Decode
             </button>
 
@@ -336,25 +366,47 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
         </div>
       </div>
     </div>
-    <v-ace-editor
+    <!-- editor -->
+    <div id="monaco_editor" style="width: 100%; height: 100%"></div>
+    <!-- <v-ace-editor
       value=""
       @init="editorInit"
       lang="json"
       theme="chrome"
       style="height: 100%; width: 100%"
-    />
+    /> -->
   </div>
 </template>
 <script lang="ts">
 import * as _notification from "@dafcoe/vue-notification";
+import loader from "@monaco-editor/loader";
 import { useToast } from "vue-toast-notification";
-import { Address, BaseAddress, Ed25519KeyHash, EnterpriseAddress, PointerAddress } from '@emurgo/cardano-serialization-lib-asmjs';
+import {
+  Address,
+  BaseAddress,
+  Ed25519KeyHash,
+  EnterpriseAddress,
+  PointerAddress,
+} from "@emurgo/cardano-serialization-lib-asmjs";
 
 const notification = _notification.useNotificationStore();
 export default {
   mounted() {
     let counter = 8;
     const __this = this;
+
+    // intializing monaco editor
+    loader.init().then((monaco) => {
+      const editorOptions = {
+        language: "json",
+        minimap: { enabled: false },
+        value: ["{}"].join("\n"),
+      };
+      monaco.editor.create(
+        document.getElementById("monaco_editor"),
+        editorOptions
+      );
+    });
 
     function refreshProvider() {
       __this.providers = listProviders();
@@ -473,10 +525,10 @@ export default {
       //@ts-ignore
       let val = this.$refs.rawData.value;
       if (val) {
-        const decoded = Buffer.from(val, "hex")
-        if (decoded.toString("hex")  === val ) {
-          let result= decoded.toString("utf-8")
-          console.log("decoded",result );
+        const decoded = Buffer.from(val, "hex");
+        if (decoded.toString("hex") === val) {
+          let result = decoded.toString("utf-8");
+          console.log("decoded", result);
           this.result = result;
         } else {
           this.errorMsg = "Invalid input";
@@ -487,22 +539,22 @@ export default {
     },
     getKeyHash() {
       // TODO do this with serialization library and not by calling api
-      let addr=Address.from_bech32(this.address)
-      let addrBase= BaseAddress.from_address(addr)
-      let addrPointer = PointerAddress.from_address(addr)
-      let addrEnterprise = EnterpriseAddress.from_address(addr)
-      let keyHash :Ed25519KeyHash
-      if(addrBase){
-        console.log("hashKind",addrBase.payment_cred().kind)
-        keyHash=addrBase.payment_cred().to_keyhash()
-      }else if (addrPointer){
+      let addr = Address.from_bech32(this.address);
+      let addrBase = BaseAddress.from_address(addr);
+      let addrPointer = PointerAddress.from_address(addr);
+      let addrEnterprise = EnterpriseAddress.from_address(addr);
+      let keyHash: Ed25519KeyHash;
+      if (addrBase) {
+        console.log("hashKind", addrBase.payment_cred().kind);
+        keyHash = addrBase.payment_cred().to_keyhash();
+      } else if (addrPointer) {
         keyHash = addrPointer.payment_cred().to_keyhash();
-      }else if (addrEnterprise){
+      } else if (addrEnterprise) {
         keyHash = addrEnterprise.payment_cred().to_keyhash();
       }
-      let keyHashHex=Buffer.from(keyHash.to_bytes()).toString("hex")
+      let keyHashHex = Buffer.from(keyHash.to_bytes()).toString("hex");
 
-      this.keyHash=keyHashHex
+      this.keyHash = keyHashHex;
 
       // getKeyHashOfAddressFromKuber(this.activeApi.url, this.address)
       //   .catch((err) => alert(err))
@@ -512,7 +564,10 @@ export default {
     },
     getScriptPolicy() {
       // TODO do this with serialization library and not by calling api
-      getPolicyIdOfScriptFromKuber(this.activeApi.url || (this.apis.find((x)=> x.name == 'Mainnet')).url, this.scriptJson)
+      getPolicyIdOfScriptFromKuber(
+        this.activeApi.url || this.apis.find((x) => x.name == "Mainnet").url,
+        this.scriptJson
+      )
         .catch((err) => alert(err))
         .then((res: string) => {
           this.policyId = res;
@@ -537,7 +592,10 @@ export default {
           const collateral = instance.getCollateral
             ? (await instance.getCollateral().catch(() => {})) || []
             : [];
-          if (request.collaterals && typeof request.collaterals.push === "function") {
+          if (
+            request.collaterals &&
+            typeof request.collaterals.push === "function"
+          ) {
             collateral.forEach((x) => request.collaterals.push(x));
           } else if (collateral.length) {
             request.collaterals = collateral;
