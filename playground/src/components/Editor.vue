@@ -368,13 +368,6 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
     </div>
     <!-- editor -->
     <div id="monaco_editor" style="width: 100%; height: 100%"></div>
-    <!-- <v-ace-editor
-      value=""
-      @init="editorInit"
-      lang="json"
-      theme="chrome"
-      style="height: 100%; width: 100%"
-    /> -->
   </div>
 </template>
 <script lang="ts">
@@ -388,25 +381,15 @@ import {
   EnterpriseAddress,
   PointerAddress,
 } from "@emurgo/cardano-serialization-lib-asmjs";
+import { SchemaKuber } from "./schemas";
 
 const notification = _notification.useNotificationStore();
 export default {
   mounted() {
     let counter = 8;
     const __this = this;
-
-    // intializing monaco editor
-    loader.init().then((monaco) => {
-      const editorOptions = {
-        language: "json",
-        minimap: { enabled: false },
-        value: ["{}"].join("\n"),
-      };
-      monaco.editor.create(
-        document.getElementById("monaco_editor"),
-        editorOptions
-      );
-    });
+    this.editor = "hi";
+    this.editorInit();
 
     function refreshProvider() {
       __this.providers = listProviders();
@@ -574,106 +557,98 @@ export default {
         });
     },
     submitTx(provider: CIP30Provider) {
-      const editorContent = this.editor.getValue();
-      this.save(editorContent);
-      let request;
-      try {
-        request = JSON.parse(editorContent);
-      } catch (e: any) {
-        notification.setNotification({
-          type: "alert",
-          message: e.message,
-        });
-        return;
-      }
-      return provider
-        .enable()
-        .then(async (instance: CIP30Instace) => {
-          const collateral = instance.getCollateral
-            ? (await instance.getCollateral().catch(() => {})) || []
-            : [];
-          if (
-            request.collaterals &&
-            typeof request.collaterals.push === "function"
-          ) {
-            collateral.forEach((x) => request.collaterals.push(x));
-          } else if (collateral.length) {
-            request.collaterals = collateral;
-          }
-          if (this.addSelections) {
-            const availableUtxos = await instance.getUtxos();
+      console.log("editor");
+      console.log(this.editor);
+      const proxiedState = new Proxy(this.editor, {});
+      console.log(proxiedState);
+      // var editorContent = this.editor.getValue();
+      // console.log({ editorContent });
+      // this.save(editorContent);
+      // let request;
+      // try {
+      //   request = JSON.parse(editorContent);
+      // } catch (e: any) {
+      //   notification.setNotification({
+      //     type: "alert",
+      //     message: e.message,
+      //   });
+      //   return;
+      // }
+      // return provider
+      //   .enable()
+      //   .then(async (instance: CIP30Instace) => {
+      //     const collateral = instance.getCollateral
+      //       ? (await instance.getCollateral().catch(() => {})) || []
+      //       : [];
+      //     if (
+      //       request.collaterals &&
+      //       typeof request.collaterals.push === "function"
+      //     ) {
+      //       collateral.forEach((x) => request.collaterals.push(x));
+      //     } else if (collateral.length) {
+      //       request.collaterals = collateral;
+      //     }
+      //     if (this.addSelections) {
+      //       const availableUtxos = await instance.getUtxos();
 
-            if (request.selections) {
-              if (typeof request.selections.push === "function") {
-                availableUtxos.forEach((v) => {
-                  request.selections.push(v);
-                });
-              }
-            } else {
-              request.selections = availableUtxos;
-            }
-            return callKuberAndSubmit(
-              instance,
-              this.activeApi.url,
-              JSON.stringify(request)
-            );
-          } else {
-            return callKuberAndSubmit(
-              instance,
-              this.activeApi.url,
-              JSON.stringify(request)
-            );
-          }
-        })
-        .catch((e: any) => {
-          console.error("SubmitTx", e);
-          notification.setNotification({
-            type: "alert",
-            message: e.message || "Oopsie, Nobody knows what happened",
-          });
-        });
+      //       if (request.selections) {
+      //         if (typeof request.selections.push === "function") {
+      //           availableUtxos.forEach((v) => {
+      //             request.selections.push(v);
+      //           });
+      //         }
+      //       } else {
+      //         request.selections = availableUtxos;
+      //       }
+      //       return callKuberAndSubmit(
+      //         instance,
+      //         this.activeApi.url,
+      //         JSON.stringify(request)
+      //       );
+      //     } else {
+      //       return callKuberAndSubmit(
+      //         instance,
+      //         this.activeApi.url,
+      //         JSON.stringify(request)
+      //       );
+      //     }
+      //   })
+      //   .catch((e: any) => {
+      //     console.error("SubmitTx", e);
+      //     notification.setNotification({
+      //       type: "alert",
+      //       message: e.message || "Oopsie, Nobody knows what happened",
+      //     });
+      //   });
     },
-    editorInit(v: any) {
-      // options for enabling autocompletion
-      const options = {
-        useWorker: true,
-        autoScrollEditorIntoView: true,
-        enableBasicAutocompletion: true,
-        enableSnippets: true,
-        enableLiveAutocompletion: true,
-      };
+    editorInit() {
+      // intializing monaco editor
+      loader.init().then((monaco) => {
+        var jsonCode = ["{}"].join("\n");
+        var modelUri = monaco.Uri.parse("a://b/kuber.json");
+        var model = monaco.editor.createModel(jsonCode, "json", modelUri);
 
-      v.setOptions(options);
+        monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+          validate: true,
+          schemas: [
+            {
+              uri: "http://myserver/kuber-schema.json",
+              fileMatch: [modelUri.toString()],
+              schema: SchemaKuber,
+            },
+          ],
+        });
 
-      const suggestionData = {
-        getCompletions: function (editor, session, pos, prefix, callback) {
-          if (prefix.length === 0) {
-            callback(null, []);
-            return;
+        var edits = monaco.editor.create(
+          document.getElementById("monaco_editor"),
+          {
+            model: model,
+            minimap: { enabled: false },
           }
-          callback(
-            null,
-            suggestion.map((suggestion) => suggestion)
-          );
-        },
-      };
-
-      // add the suggestion data to editor instance
-      v.completers = [suggestionData];
-
-      const session = v.getSession();
-      session.setTabSize(2);
-      session.setOptions({
-        basicAutocompletion: true,
-        useWorker: true,
+        );
+        this.editor = edits;
+        console.log(edits);
       });
-      session.setUseWrapMode(true);
-      session.setValue(localStorage.getItem("editor.content") || "{\n\n}");
-      this.interval = setInterval(() => {
-        this.save(this.editor.getValue());
-      }, 2000);
-      this.editor = session;
-      console.log(session);
     },
     save(v: string) {
       localStorage.setItem("editor.content", v);
