@@ -382,6 +382,7 @@ import {
   PointerAddress,
 } from "@emurgo/cardano-serialization-lib-asmjs";
 import { SchemaKuber } from "./schemas";
+import Description from "./descriptions";
 
 const notification = _notification.useNotificationStore();
 var editor = null;
@@ -561,8 +562,6 @@ export default {
     submitTx(provider: CIP30Provider) {
       if (editor) {
         var editorContent = editor.getValue();
-        console.log({ editorContent });
-        this.save(editorContent);
         let request;
         try {
           request = JSON.parse(editorContent);
@@ -638,6 +637,30 @@ export default {
           ],
         });
 
+        // registering hover provider
+        monaco.languages.registerHoverProvider("json", {
+          // @ts-ignore
+          provideHover: function (model, position) {
+            const wordDetails = model.getWordAtPosition(position);
+            const description = Description.kuberDescription(wordDetails.word);
+
+            return {
+              range: new monaco.Range(
+                position.lineNumber,
+                wordDetails.startColumn,
+                model.getLineCount(),
+                model.getLineMaxColumn(model.getLineCount())
+              ),
+              contents: [
+                { value: "**DESCRIPTION**" },
+                {
+                  value: description,
+                },
+              ],
+            };
+          },
+        });
+
         editor = monaco.editor.create(
           document.getElementById("monaco_editor"),
           {
@@ -647,12 +670,6 @@ export default {
         );
       });
     },
-    save(v: string) {
-      localStorage.setItem("editor.content", v);
-    },
-  },
-  components: {
-    VAceEditor,
   },
 };
 </script>
