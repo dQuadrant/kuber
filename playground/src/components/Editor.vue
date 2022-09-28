@@ -384,11 +384,12 @@ import {
 import { SchemaKuber } from "./schemas";
 
 const notification = _notification.useNotificationStore();
+var editor = null;
+
 export default {
   mounted() {
     let counter = 8;
     const __this = this;
-    this.editor = "hi";
     this.editorInit();
 
     function refreshProvider() {
@@ -410,7 +411,6 @@ export default {
     let result = {
       providers: providers,
       addSelections: true,
-      editor: null,
       interval: 0,
       timeout: 0,
       showKeyHashModal: false,
@@ -460,6 +460,7 @@ export default {
     // result.activeApi=result.apis[0]
     return result;
   },
+
   beforeUnmount() {
     this.interval && clearInterval(this.interval);
     this.timeout && clearTimeout(this.timeout);
@@ -469,6 +470,7 @@ export default {
       this.activeApi = value;
       console.log("api selected", value);
     },
+
     onAddressInput(event) {
       this.address = event.target.value;
     },
@@ -557,69 +559,66 @@ export default {
         });
     },
     submitTx(provider: CIP30Provider) {
-      console.log("editor");
-      console.log(this.editor);
-      const proxiedState = new Proxy(this.editor, {});
-      console.log(proxiedState);
-      // var editorContent = this.editor.getValue();
-      // console.log({ editorContent });
-      // this.save(editorContent);
-      // let request;
-      // try {
-      //   request = JSON.parse(editorContent);
-      // } catch (e: any) {
-      //   notification.setNotification({
-      //     type: "alert",
-      //     message: e.message,
-      //   });
-      //   return;
-      // }
-      // return provider
-      //   .enable()
-      //   .then(async (instance: CIP30Instace) => {
-      //     const collateral = instance.getCollateral
-      //       ? (await instance.getCollateral().catch(() => {})) || []
-      //       : [];
-      //     if (
-      //       request.collaterals &&
-      //       typeof request.collaterals.push === "function"
-      //     ) {
-      //       collateral.forEach((x) => request.collaterals.push(x));
-      //     } else if (collateral.length) {
-      //       request.collaterals = collateral;
-      //     }
-      //     if (this.addSelections) {
-      //       const availableUtxos = await instance.getUtxos();
-
-      //       if (request.selections) {
-      //         if (typeof request.selections.push === "function") {
-      //           availableUtxos.forEach((v) => {
-      //             request.selections.push(v);
-      //           });
-      //         }
-      //       } else {
-      //         request.selections = availableUtxos;
-      //       }
-      //       return callKuberAndSubmit(
-      //         instance,
-      //         this.activeApi.url,
-      //         JSON.stringify(request)
-      //       );
-      //     } else {
-      //       return callKuberAndSubmit(
-      //         instance,
-      //         this.activeApi.url,
-      //         JSON.stringify(request)
-      //       );
-      //     }
-      //   })
-      //   .catch((e: any) => {
-      //     console.error("SubmitTx", e);
-      //     notification.setNotification({
-      //       type: "alert",
-      //       message: e.message || "Oopsie, Nobody knows what happened",
-      //     });
-      //   });
+      if (editor) {
+        var editorContent = editor.getValue();
+        console.log({ editorContent });
+        this.save(editorContent);
+        let request;
+        try {
+          request = JSON.parse(editorContent);
+        } catch (e: any) {
+          notification.setNotification({
+            type: "alert",
+            message: e.message,
+          });
+          return;
+        }
+        return provider
+          .enable()
+          .then(async (instance: CIP30Instace) => {
+            const collateral = instance.getCollateral
+              ? (await instance.getCollateral().catch(() => {})) || []
+              : [];
+            if (
+              request.collaterals &&
+              typeof request.collaterals.push === "function"
+            ) {
+              collateral.forEach((x) => request.collaterals.push(x));
+            } else if (collateral.length) {
+              request.collaterals = collateral;
+            }
+            if (this.addSelections) {
+              const availableUtxos = await instance.getUtxos();
+              if (request.selections) {
+                if (typeof request.selections.push === "function") {
+                  availableUtxos.forEach((v) => {
+                    request.selections.push(v);
+                  });
+                }
+              } else {
+                request.selections = availableUtxos;
+              }
+              return callKuberAndSubmit(
+                instance,
+                this.activeApi.url,
+                JSON.stringify(request)
+              );
+            } else {
+              return callKuberAndSubmit(
+                instance,
+                this.activeApi.url,
+                JSON.stringify(request)
+              );
+            }
+          })
+          .catch((e: any) => {
+            console.error("SubmitTx", e);
+            notification.setNotification({
+              type: "alert",
+              message: e.message || "Oopsie, Nobody knows what happened",
+            });
+          });
+      }
     },
     editorInit() {
       // intializing monaco editor
@@ -639,15 +638,13 @@ export default {
           ],
         });
 
-        var edits = monaco.editor.create(
+        editor = monaco.editor.create(
           document.getElementById("monaco_editor"),
           {
             model: model,
             minimap: { enabled: false },
           }
         );
-        this.editor = edits;
-        console.log(edits);
       });
     },
     save(v: string) {
