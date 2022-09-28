@@ -89,8 +89,20 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             />
             <span class="ml-1"> {{ provider.name }}</span>
           </button>
+
           <span class="float-right mr-2 mt-1">
             <span>
+              <button
+                class="mr-3 bg-transparent bg-blue-500 text-white font-semibold hover:text-white py-1 px-1.5 border border-blue-500 hover:border-transparent rounded"
+              >
+                <span class="ml-1"> Kuber</span>
+              </button>
+
+              <button
+                class="mr-3 bg-transparent hover:bg-blue-500 text-blue-700 font-semibold hover:text-white py-1 px-1.5 border border-blue-500 hover:border-transparent rounded"
+              >
+                <span class="ml-1"> Haskell</span>
+              </button>
               <span class="inline-block relative">
                 <button
                   class="dropdown-toggle px-3 py-2.5 bg-purple-500 text-white font-medium text-xs leading-tight uppercase rounded shadow-md hover:bg-purple-700 hover:shadow-lg focus:bg-purple-700 focus:shadow-lg focus:outline-none focus:ring-0 active:bg-purple-800 active:shadow-lg active:text-white transition duration-150 ease-in-out flex items-center whitespace-nowrap"
@@ -366,6 +378,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
         </div>
       </div>
     </div>
+
     <!-- editor -->
     <div id="monaco_editor" style="width: 100%; height: 100%"></div>
   </div>
@@ -412,6 +425,7 @@ export default {
     let result = {
       providers: providers,
       addSelections: true,
+      language: "kuber",
       interval: 0,
       timeout: 0,
       showKeyHashModal: false,
