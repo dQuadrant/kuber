@@ -78,6 +78,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
         <span class="text-blue-800"> Create Tx with </span>
         <span>
           <button
+            v-if="language == LanguageEnums.Kuber"
             v-for="provider in providers"
             :key="provider.name"
             class="ml-3 bg-transparent hover:bg-blue-500 text-blue-700 font-semibold hover:text-white py-0.5 px-1.5 border border-blue-500 hover:border-transparent rounded"
@@ -93,12 +94,32 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
           <span class="float-right mr-2 mt-1">
             <span>
               <button
+                v-if="language == LanguageEnums.Kuber"
+                @click="changeLanguage(LanguageEnums.Kuber)"
                 class="mr-3 bg-transparent bg-blue-500 text-white font-semibold hover:text-white py-1 px-1.5 border border-blue-500 hover:border-transparent rounded"
               >
                 <span class="ml-1"> Kuber</span>
               </button>
 
               <button
+                v-if="language != LanguageEnums.Kuber"
+                @click="changeLanguage(LanguageEnums.Kuber)"
+                class="mr-3 bg-transparent hover:bg-blue-500 text-blue-700 font-semibold hover:text-white py-1 px-1.5 border border-blue-500 hover:border-transparent rounded"
+              >
+                <span class="ml-1"> Kuber</span>
+              </button>
+
+              <button
+                v-if="language == LanguageEnums.Haskell"
+                @click="changeLanguage(LanguageEnums.Haskell)"
+                class="mr-3 bg-transparent bg-blue-500 text-white font-semibold hover:text-white py-1 px-1.5 border border-blue-500 hover:border-transparent rounded"
+              >
+                <span class="ml-1"> Haskell</span>
+              </button>
+
+              <button
+                v-if="language != LanguageEnums.Haskell"
+                @click="changeLanguage(LanguageEnums.Haskell)"
                 class="mr-3 bg-transparent hover:bg-blue-500 text-blue-700 font-semibold hover:text-white py-1 px-1.5 border border-blue-500 hover:border-transparent rounded"
               >
                 <span class="ml-1"> Haskell</span>
@@ -396,6 +417,7 @@ import {
 } from "@emurgo/cardano-serialization-lib-asmjs";
 import { SchemaKuber } from "./schemas";
 import Description from "./descriptions";
+import { LanguageEnums } from "@/models/enums/LanguageEnum";
 
 const notification = _notification.useNotificationStore();
 var editor = null;
@@ -405,6 +427,7 @@ export default {
     let counter = 8;
     const __this = this;
     this.editorInit();
+    // this.haskellEditorInit();
 
     function refreshProvider() {
       __this.providers = listProviders();
@@ -425,7 +448,7 @@ export default {
     let result = {
       providers: providers,
       addSelections: true,
-      language: "kuber",
+      language: LanguageEnums.Kuber,
       interval: 0,
       timeout: 0,
       showKeyHashModal: false,
@@ -481,6 +504,15 @@ export default {
     this.timeout && clearTimeout(this.timeout);
   },
   methods: {
+    changeLanguage(language: string) {
+      this.language = language;
+      editor.setValue("");
+
+      const model = editor.getModel();
+      loader.init().then((monaco) => {
+        monaco.editor.setModelLanguage(model, language);
+      });
+    },
     handleApiSelected(value) {
       this.activeApi = value;
       console.log("api selected", value);
@@ -633,13 +665,15 @@ export default {
           });
       }
     },
+
     editorInit() {
       // intializing monaco editor
+
       loader.init().then((monaco) => {
         var jsonCode = ["{}"].join("\n");
         var modelUri = monaco.Uri.parse("a://b/kuber.json");
         var model = monaco.editor.createModel(jsonCode, "json", modelUri);
-
+        monaco.languages.register({ id: "haskell" });
         monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
           validate: true,
           schemas: [
@@ -650,14 +684,12 @@ export default {
             },
           ],
         });
-
         // registering hover provider
         monaco.languages.registerHoverProvider("json", {
           // @ts-ignore
           provideHover: function (model, position) {
             const wordDetails = model.getWordAtPosition(position);
             const description = Description.kuberDescription(wordDetails.word);
-
             return {
               range: new monaco.Range(
                 position.lineNumber,
@@ -674,7 +706,6 @@ export default {
             };
           },
         });
-
         editor = monaco.editor.create(
           document.getElementById("monaco_editor"),
           {
