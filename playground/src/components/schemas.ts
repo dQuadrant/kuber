@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 export const SchemaKuber = {
   $schema: "http://json-schema.org/draft-04/schema#",
   type: "object",
