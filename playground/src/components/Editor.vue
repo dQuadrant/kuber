@@ -504,7 +504,7 @@ export default {
     this.timeout && clearTimeout(this.timeout);
   },
   methods: {
-    changeLanguage(language: string) {
+    changeLanguage(language: LanguageEnums) {
       this.language = language;
       editor.setValue("");
 
