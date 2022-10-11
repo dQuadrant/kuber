@@ -1453,7 +1453,7 @@ export default {
           allowComments: true,
           schemas: [
             {
-              uri: "http://myserver/kuber-schema.json",
+              uri: "",
               fileMatch: [modelUri.toString()],
               schema: SchemaKuber,
             },
