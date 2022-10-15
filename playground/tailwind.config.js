@@ -25,6 +25,12 @@ module.exports = {
         "8/14": "57.142857143%",
         "9/14": "64.285714286%",
         "13/14": "92.857142857%",
+        "13/20": "65%",
+        compilerTabbar: "3%",
+        fileTabbar: "7%",
+        editorStretch: "90%",
+        editor: "65%",
+        outputTerminal: "25%",
       },
       colors: {
         primary: "#1D51DD",

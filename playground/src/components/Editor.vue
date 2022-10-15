@@ -168,7 +168,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
         class="flex flex-col w-13/20 h-full bg-bgCompiler border-y border-r border-borderColor"
       >
         <!-- file tabbar -->
-        <div class="flex h-14">
+        <div class="flex h-fileTabbar">
           <div
             class="flex font-sans font-medium items-center justify-center h-full w-32 bg-bgCompiler text-fileTextColor"
           >
@@ -194,35 +194,31 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
 
         <!-- code screen -->
 
-        <div class="flex-1 h-full flex-col">
-          <!-- editor -->
-          <div class="flex-1 pb-4">
-            <div
-              class="flex-1"
-              id="monaco_editor"
-              style="width: 100%; height: 100%"
-            ></div>
-          </div>
+        <!-- editor -->
+        <div :class="editorHeight + ' grow pt-4'">
+          <div id="monaco_editor" style="width: 100%; height: 100%"></div>
+        </div>
 
-          <!-- output terminal -->
-          <div
-            v-if="outputTerminalVisibility"
-            class="flex flex-col w-full h-52 p-4 border-y border-borderColor"
-          >
-            <div class="flex justify-between">
-              <div class="font-medium text-sm text-gray-500">OUTPUTS</div>
-              <v-icon
-                @click="showOutputTerminal(false)"
-                class="cursor-pointer"
-                name="io-close-outline"
-                scale="1.2"
-              />
-            </div>
+        <!-- output terminal -->
+        <div
+          v-if="outputTerminalVisibility"
+          class="flex flex-col w-full h-outputTerminal p-4 border-y border-borderColor"
+        >
+          <div class="flex justify-between">
+            <div class="font-medium text-sm text-gray-500">OUTPUTS</div>
+            <v-icon
+              @click="showOutputTerminal(false)"
+              class="cursor-pointer"
+              name="io-close-outline"
+              scale="1.2"
+            />
           </div>
         </div>
 
         <!-- compiler tabbar -->
-        <div class="flex w-full h-8 border-t border-borderColor bg-bgUtilities">
+        <div
+          class="flex w-full h-compilerTabbar border-t border-borderColor bg-bgUtilities"
+        >
           <div
             @click="showOutputTerminal(!outputTerminalVisibility)"
             class="flex px-2 border-x border-borderColor text-sm text-gray-600 items-center cursor-pointer hover:bg-gray-100"
@@ -483,6 +479,7 @@ export default {
       url: undefined,
     };
     let result = {
+      editorHeight: "h-editorStretch",
       outputTerminalVisibility: false,
       isCompiling: false,
       jsonLogo: jsonLogo,
@@ -553,6 +550,11 @@ export default {
   methods: {
     showOutputTerminal(visibility: boolean) {
       this.outputTerminalVisibility = visibility;
+      if (visibility) {
+        this.editorHeight = "h-editor";
+      } else {
+        this.editorHeight = "h-editorStretch";
+      }
     },
 
     changeLanguage(language: LanguageEnums) {
