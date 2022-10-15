@@ -175,7 +175,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             {{ language == LanguageEnums.Kuber ? "Kuber.json" : "Main.hs" }}
           </div>
           <div
-            class="flex justify-end h-full w-full bg-bgFileTabBar border-x border-b border-borderColor py-3 px-4"
+            class="flex justify-end h-full w-full bg-bgFileTabBar border-l border-b border-borderColor py-3 px-4"
           >
             <div class="flex items-center h-full space-x-4">
               <div
@@ -200,9 +200,10 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
         </div>
 
         <!-- output terminal -->
+
         <div
           v-if="outputTerminalVisibility"
-          class="flex flex-col w-full h-outputTerminal p-4 border-y border-borderColor"
+          class="flex flex-col transition ease-in-out delay-4s w-full h-outputTerminal p-4 border-y border-borderColor"
         >
           <div class="flex justify-between">
             <div class="font-medium text-sm text-gray-500">OUTPUTS</div>
@@ -450,8 +451,9 @@ import APIService from "@/services/api_service";
 import { UtilitiesEnums } from "@/models/enums/UtilitiesEnum";
 
 const notification = _notification.useNotificationStore();
-var editor = null;
+
 export default {
+  editor: null,
   mounted() {
     let counter = 8;
     const __this = this;
@@ -559,9 +561,9 @@ export default {
 
     changeLanguage(language: LanguageEnums) {
       this.language = language;
-      editor.setValue("");
+      this.$options.editor.setValue("");
 
-      const model = editor.getModel();
+      const model = this.$options.editor.getModel();
       loader.init().then((monaco) => {
         monaco.editor.setModelLanguage(model, language);
       });
@@ -669,11 +671,15 @@ export default {
     },
     submitTx(provider: CIP30Provider) {
       this.isCompiling = true;
-      if (editor != null) {
-        var editorContent = editor.getValue();
+      this.showOutputTerminal(true);
+      console.log(provider);
+      console.log(this.$options.editor.getValue());
+      if (this.$options.editor != null) {
+        var editorContent = this.$options.editor.getValue();
         let request;
         try {
           request = JSON.parse(editorContent);
+          console.log("success");
         } catch (e: any) {
           notification.setNotification({
             type: "alert",
@@ -792,7 +798,7 @@ export default {
         // @ts-ignore
         monaco.editor.defineTheme("myTheme", theme);
 
-        editor = monaco.editor.create(
+        this.$options.editor = monaco.editor.create(
           document.getElementById("monaco_editor"),
           {
             model: model,
