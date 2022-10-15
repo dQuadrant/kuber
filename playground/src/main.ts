@@ -13,9 +13,9 @@ import VueNotificationList from "@dafcoe/vue-notification";
 
 import { OhVueIcon, addIcons } from "oh-vue-icons";
 
-import { MdKeyboardarrowdownRound } from "oh-vue-icons/icons";
+import { MdKeyboardarrowdownRound, IoCloseOutline } from "oh-vue-icons/icons";
 
-addIcons(MdKeyboardarrowdownRound);
+addIcons(MdKeyboardarrowdownRound, IoCloseOutline);
 const app = createApp(App).component("v-icon", OhVueIcon);
 app.use(VueNotificationList);
 app.use(router);
