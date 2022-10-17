@@ -36,7 +36,6 @@ instance ChainInfo ChainConnectInfo where
         eHistory <-queryEraHistory conn
         systemStart <-querySystemStart conn
         protocolPrams <-queryProtocolParam conn
-        print $ "CardanoNode " ++ show systemStart
         Lovelace costPerWord <-case protocolParamUTxOCostPerByte protocolPrams of
           Nothing -> fail "Missing Cost per bytes of Transaction in protocol Parameters"
           Just lo -> pure lo
