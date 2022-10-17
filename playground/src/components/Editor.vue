@@ -30,7 +30,12 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
     >
       <div class="flex w-full h-full justify-between items-center">
         <div class="flex items-center">
-          <p class="text-primary">Create Tx with</p>
+          <p class="text-primary font-semibold mr-8 text-lg">
+            Kuber Playground
+          </p>
+          <p v-if="language == LanguageEnums.Kuber" class="text-gray-600">
+            Create Tx with
+          </p>
           <button
             v-if="language == LanguageEnums.Kuber"
             v-for="p in providers"
@@ -105,7 +110,10 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
       </div>
 
       <!-- wallet utxos checkbox -->
-      <div class="form-check mt-2 form-check text-sm">
+      <div
+        v-if="language == LanguageEnums.Kuber"
+        class="form-check mt-2 form-check text-sm"
+      >
         <input
           class="form-check-input h-4 w-4 border border-gray-300 rounded-sm bg-white checked:bg-blue-600 checked:border-blue-600 focus:outline-none transition duration-200 mt-1 align-top bg-no-repeat bg-center bg-contain float-left mr-2 cursor-pointer"
           type="checkbox"
@@ -165,7 +173,10 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
 
       <!-- compiler screen -->
       <div
-        class="flex flex-col w-13/20 h-full bg-bgCompiler border-y border-r border-borderColor"
+        :class="
+          editorWidth +
+          ' flex flex-col h-full bg-bgCompiler border-y border-r border-borderColor'
+        "
       >
         <!-- file tabbar -->
         <div class="flex h-fileTabbar">
@@ -226,135 +237,49 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
           >
             Outputs
           </div>
+          <div
+            @click="showUtilities(!utilitiesVisibility)"
+            class="flex px-2 border-x border-borderColor text-sm text-gray-600 items-center cursor-pointer hover:bg-gray-100"
+          >
+            Utilities
+          </div>
         </div>
       </div>
 
       <!-- utilities screen -->
       <div
-        class="flex w-6/20 h-full bg-bgUtilities border-y border-borderColor"
+        v-if="utilitiesVisibility"
+        class="flex flex-col w-6/20 h-full bg-bgUtilities border-y border-borderColor"
       >
-        <div class="flex w-19/20">
-          <div class="flex flex-col w-full">
-            <!-- <div
-              class="flex justify-start items-center font-medium text-gray-600 text-sm h-16 w-full border-b border-borderColor bg-bgFileTabBar py-3 px-4"
-            >
-              UTILITIES
-            </div> -->
-
-            <div class="flex px-6 py-24">
-              <!-- Address utitlity -->
-              <div
-                class="flex flex-col items-center"
-                v-if="utility == UtilitiesEnums.Address"
-              >
-                <div class="mb-5 font-medium text-gray-600">Enter Address</div>
-                <input
-                  class="input border border-gray-300 focus:border focus:border-red-400"
-                  type="text"
-                  :value="address"
-                  @input="onAddressInput"
-                />
-                <div class="mt-4 mb-4" v-if="keyHash != ''">
-                  <div class="text-gray-500 mb-1">Your keyhash</div>
-                  <div>
-                    <button class="flex" @click="performKeyHashCopy">
-                      <div>{{ keyHash }}</div>
-                      <div class="mt-1">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          fill="currentColor"
-                          class="bi bi-files"
-                          viewBox="0 0 16 16"
-                        >
-                          <path
-                            d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
-                          />
-                        </svg>
-                      </div>
-                    </button>
+        <div
+          class="flex justify-start items-center font-semibold text-gray-500 text-sm h-fileTabbar w-full border-b border-borderColor bg-bgFileTabBar py-3 px-4"
+        >
+          UTILITIES
+        </div>
+        <div class="flex">
+          <div class="flex w-19/20">
+            <div class="flex flex-col w-full">
+              <div class="flex px-6 py-24">
+                <!-- Address utitlity -->
+                <div
+                  class="flex flex-col items-center"
+                  v-if="utility == UtilitiesEnums.Address"
+                >
+                  <div class="mb-5 font-medium text-gray-600">
+                    Enter Address
                   </div>
-                </div>
-                <div class="mt-5">
-                  <button
-                    @click="getKeyHash"
-                    class="button-old hover:bg-green-600"
-                  >
-                    Get Key Hash
-                  </button>
-                </div>
-              </div>
-
-              <!-- Script Utilities -->
-              <div
-                class="flex flex-col items-center"
-                v-if="utility == UtilitiesEnums.ScriptHash"
-              >
-                <div class="mb-5 font-medium text-gray-700">
-                  Enter script json
-                </div>
-                <textarea
-                  class="textarea border border-gray-300"
-                  :value="scriptJson"
-                  @input="onScriptJsonInput"
-                />
-                <div class="mt-4 mb-4" v-if="policyId != ''">
-                  <div class="text-gray-500 mb-1">Script policy id</div>
-                  <div>
-                    <button class="flex" @click="performPolicyIdCopy">
-                      <div>{{ policyId }}</div>
-                      <div class="mt-1">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          assets
-                          height="16"
-                          fill="currentColor"
-                          class="bi bi-files"
-                          viewBox="0 0 16 16"
-                        >
-                          <path
-                            d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
-                          />
-                        </svg>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-                <div class="mt-6">
-                  <button
-                    @click="getScriptPolicy"
-                    class="button-old hover:bg-green-600"
-                  >
-                    Get Policy Id
-                  </button>
-                </div>
-              </div>
-
-              <!-- Hex Utility -->
-              <div
-                class="flex flex-col w-full items-center"
-                v-if="utility == UtilitiesEnums.Hex"
-              >
-                <div class="flex flex-col items-center w-full relative">
-                  <div class="mb-5 text-gray-600 font-medium">Raw data</div>
-                  <textarea
-                    ref="rawData"
-                    class="p-2 w-full min-h-[200pt] border border-gray-300 focus:ring-0"
+                  <input
+                    class="input border border-gray-300 focus:border focus:border-red-400"
+                    type="text"
+                    :value="address"
+                    @input="onAddressInput"
                   />
-                  <div class="mt-4 mb-4" v-if="result || errorMsg">
-                    <div v-if="errorMsg" class="text-red-500">
-                      {{ errorMsg }}
-                    </div>
-                    <div v-else>
-                      <div class="text-gray-500 mb-1 text-left">Result</div>
-                      <button
-                        class="w-full hover:bg-slate-100 py-0.5"
-                        @click="copyToClipboard(result)"
-                      >
-                        <span class="">{{ result }}</span>
-                        <span class="mt-1 pr-3 float-right">
+                  <div class="mt-4 mb-4" v-if="keyHash != ''">
+                    <div class="text-gray-500 mb-1">Your keyhash</div>
+                    <div>
+                      <button class="flex" @click="performKeyHashCopy">
+                        <div>{{ keyHash }}</div>
+                        <div class="mt-1">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
                             width="16"
@@ -367,66 +292,162 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
                               d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
                             />
                           </svg>
-                        </span>
+                        </div>
                       </button>
                     </div>
                   </div>
+                  <div class="mt-5">
+                    <button
+                      @click="getKeyHash"
+                      class="button-old hover:bg-green-600"
+                    >
+                      Get Key Hash
+                    </button>
+                  </div>
                 </div>
+
+                <!-- Script Utilities -->
                 <div
-                  class="flex flex-shrink-0 flex-wrap items-center justify-start p-4 rounded-b-md"
+                  class="flex flex-col items-center"
+                  v-if="utility == UtilitiesEnums.ScriptHash"
                 >
-                  <button
-                    @click="encodeHex"
-                    class="button-old hover:bg-green-600"
+                  <div class="mb-5 font-medium text-gray-700">
+                    Enter script json
+                  </div>
+                  <textarea
+                    class="textarea border border-gray-300"
+                    :value="scriptJson"
+                    @input="onScriptJsonInput"
+                  />
+                  <div class="mt-4 mb-4" v-if="policyId != ''">
+                    <div class="text-gray-500 mb-1">Script policy id</div>
+                    <div>
+                      <button class="flex" @click="performPolicyIdCopy">
+                        <div>{{ policyId }}</div>
+                        <div class="mt-1">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            assets
+                            height="16"
+                            fill="currentColor"
+                            class="bi bi-files"
+                            viewBox="0 0 16 16"
+                          >
+                            <path
+                              d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
+                            />
+                          </svg>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="mt-6">
+                    <button
+                      @click="getScriptPolicy"
+                      class="button-old hover:bg-green-600"
+                    >
+                      Get Policy Id
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Hex Utility -->
+                <div
+                  class="flex flex-col w-full items-center"
+                  v-if="utility == UtilitiesEnums.Hex"
+                >
+                  <div class="flex flex-col items-center w-full relative">
+                    <div class="mb-5 text-gray-600 font-medium">Raw data</div>
+                    <textarea
+                      ref="rawData"
+                      class="p-2 w-full min-h-[200pt] border border-gray-300 focus:ring-0"
+                    />
+                    <div class="mt-4 mb-4" v-if="result || errorMsg">
+                      <div v-if="errorMsg" class="text-red-500">
+                        {{ errorMsg }}
+                      </div>
+                      <div v-else>
+                        <div class="text-gray-500 mb-1 text-left">Result</div>
+                        <button
+                          class="w-full hover:bg-slate-100 py-0.5"
+                          @click="copyToClipboard(result)"
+                        >
+                          <span class="">{{ result }}</span>
+                          <span class="mt-1 pr-3 float-right">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="16"
+                              height="16"
+                              fill="currentColor"
+                              class="bi bi-files"
+                              viewBox="0 0 16 16"
+                            >
+                              <path
+                                d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
+                              />
+                            </svg>
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    class="flex flex-shrink-0 flex-wrap items-center justify-start p-4 rounded-b-md"
                   >
-                    Encode
-                  </button>
-                  <button
-                    @click="decodeHex"
-                    class="button-old hover:bg-green-600 ml-3"
-                  >
-                    Decode
-                  </button>
+                    <button
+                      @click="encodeHex"
+                      class="button-old hover:bg-green-600"
+                    >
+                      Encode
+                    </button>
+                    <button
+                      @click="decodeHex"
+                      class="button-old hover:bg-green-600 ml-3"
+                    >
+                      Decode
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-        <!-- utilites menu -->
-        <div
-          class="flex flex-col w-1/20 items-center font-semibold text-gray-600 text-sm justify-start bg-white h-full border border-borderColor"
-        >
+          <!-- utilites menu -->
           <div
-            @click="changeUtility(UtilitiesEnums.Address)"
-            :class="
-              utility == UtilitiesEnums.Address
-                ? ' flex h-32 bg-bgSelectedUtility w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
-                : 'flex h-32 bg-transparent w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
-            "
+            class="flex flex-col w-1/20 items-center font-semibold text-gray-600 text-sm justify-start bg-white h-full border border-borderColor"
           >
-            <p class="rotate-90">Address</p>
-          </div>
+            <div
+              @click="changeUtility(UtilitiesEnums.Address)"
+              :class="
+                utility == UtilitiesEnums.Address
+                  ? ' flex h-32 bg-bgSelectedUtility w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+                  : 'flex h-32 bg-transparent w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+              "
+            >
+              <p class="rotate-90">Address</p>
+            </div>
 
-          <div
-            @click="changeUtility(UtilitiesEnums.ScriptHash)"
-            :class="
-              utility == UtilitiesEnums.ScriptHash
-                ? ' flex h-32 bg-bgSelectedUtility w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
-                : 'flex h-32 bg-transparent w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
-            "
-          >
-            <p class="rotate-90">ScriptHash</p>
-          </div>
+            <div
+              @click="changeUtility(UtilitiesEnums.ScriptHash)"
+              :class="
+                utility == UtilitiesEnums.ScriptHash
+                  ? ' flex h-32 bg-bgSelectedUtility w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+                  : 'flex h-32 bg-transparent w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+              "
+            >
+              <p class="rotate-90">ScriptHash</p>
+            </div>
 
-          <div
-            @click="changeUtility(UtilitiesEnums.Hex)"
-            :class="
-              utility == UtilitiesEnums.Hex
-                ? ' flex h-32 bg-bgSelectedUtility w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
-                : 'flex h-32 bg-transparent w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
-            "
-          >
-            <p class="rotate-90">Hex</p>
+            <div
+              @click="changeUtility(UtilitiesEnums.Hex)"
+              :class="
+                utility == UtilitiesEnums.Hex
+                  ? ' flex h-32 bg-bgSelectedUtility w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+                  : 'flex h-32 bg-transparent w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+              "
+            >
+              <p class="rotate-90">Hex</p>
+            </div>
           </div>
         </div>
       </div>
@@ -482,7 +503,9 @@ export default {
     };
     let result = {
       editorHeight: "h-editorStretch",
+      editorWidth: "w-editor",
       outputTerminalVisibility: false,
+      utilitiesVisibility: true,
       isCompiling: false,
       jsonLogo: jsonLogo,
       providers: providers,
@@ -558,7 +581,14 @@ export default {
         this.editorHeight = "h-editorStretch";
       }
     },
-
+    showUtilities(visibility: boolean) {
+      this.utilitiesVisibility = visibility;
+      if (!visibility) {
+        this.editorWidth = "w-editorStretch";
+      } else {
+        this.editorWidth = "w-editor";
+      }
+    },
     changeLanguage(language: LanguageEnums) {
       this.language = language;
       this.$options.editor.setValue("");
