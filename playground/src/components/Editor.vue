@@ -195,7 +195,11 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               ></div>
               <div
                 class="flex justify-center items-center bg-primary hover:bg-blue-600 text-white font-semibold text-sm w-16 h-full rounded-md shadow-sm cursor-pointer"
-                @click="submitTx(provider)"
+                @click="
+                  language == LanguageEnums.Kuber
+                    ? submitTx(provider)
+                    : compileCode()
+                "
               >
                 RUN
               </div>
@@ -225,6 +229,9 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               scale="1.2"
             />
           </div>
+
+          <!-- outputs-->
+          <p class="text-gray-800 mt-4">{{ output }}</p>
         </div>
 
         <!-- compiler tabbar -->
@@ -470,6 +477,7 @@ import Description from "./descriptions";
 import { LanguageEnums } from "@/models/enums/LanguageEnum";
 import APIService from "@/services/api_service";
 import { UtilitiesEnums } from "@/models/enums/UtilitiesEnum";
+import { ExampleTransfer, SimpleContractCode } from "@/models/constants";
 
 const notification = _notification.useNotificationStore();
 
@@ -479,8 +487,6 @@ export default {
     let counter = 8;
     const __this = this;
     this.editorInit();
-    // APIService.compileCode();
-    // this.haskellEditorInit();
 
     function refreshProvider() {
       __this.providers = listProviders();
@@ -504,6 +510,7 @@ export default {
     let result = {
       editorHeight: "h-editorStretch",
       editorWidth: "w-editor",
+      output: "",
       outputTerminalVisibility: false,
       utilitiesVisibility: true,
       isCompiling: false,
@@ -591,7 +598,9 @@ export default {
     },
     changeLanguage(language: LanguageEnums) {
       this.language = language;
-      this.$options.editor.setValue("");
+      if (language == LanguageEnums.Haskell)
+        this.$options.editor.setValue(SimpleContractCode);
+      else this.$options.editor.setValue(ExampleTransfer);
 
       const model = this.$options.editor.getModel();
       loader.init().then((monaco) => {
@@ -699,6 +708,27 @@ export default {
           this.policyId = res;
         });
     },
+
+    compileCode() {
+      console.log("compiling code");
+      this.isCompiling = true;
+
+      if (this.$options.editor != null) {
+        const code = this.$options.editor.getValue();
+        APIService.compileCode(code).then((value) => {
+          this.showOutputTerminal(true);
+          this.isCompiling = false;
+          if (value) {
+            this.output = value;
+          } else {
+            this.output = "Some unknown error occured";
+          }
+        });
+      } else {
+      }
+      // console.log(this.$options.editor.getValue());
+    },
+
     submitTx(provider: CIP30Provider) {
       this.isCompiling = true;
       this.showOutputTerminal(true);
@@ -771,12 +801,16 @@ export default {
       // intializing monaco editor
 
       loader.init().then((monaco) => {
-        var jsonCode = ["{}"].join("\n");
+        const comment =
+          "// Auto completion is a testing feature, It maynot work sometimes. \n";
+        var jsonCode = [comment + ExampleTransfer].join("\n");
         var modelUri = monaco.Uri.parse("a://b/kuber.json");
         var model = monaco.editor.createModel(jsonCode, "json", modelUri);
+
         monaco.languages.register({ id: "haskell" });
         monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
           validate: true,
+          allowComments: true,
           schemas: [
             {
               uri: "http://myserver/kuber-schema.json",
