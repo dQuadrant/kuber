@@ -602,9 +602,21 @@ export default {
     },
     changeLanguage(language: LanguageEnums) {
       this.language = language;
-      if (language == LanguageEnums.Haskell)
-        this.$options.editor.setValue(SimpleContractCode);
-      else this.$options.editor.setValue(ExampleTransfer);
+      if (language == LanguageEnums.Haskell) {
+        const storedCode = localStorage.getItem(LanguageEnums.Haskell);
+        if (storedCode) {
+          this.$options.editor.setValue(storedCode);
+        } else {
+          this.$options.editor.setValue(SimpleContractCode);
+        }
+      } else {
+        const storedCode = localStorage.getItem(LanguageEnums.Kuber);
+        if (storedCode) {
+          this.$options.editor.setValue(storedCode);
+        } else {
+          this.$options.editor.setValue(ExampleTransfer);
+        }
+      }
 
       const model = this.$options.editor.getModel();
       loader.init().then((monaco) => {
@@ -719,6 +731,7 @@ export default {
 
       if (this.$options.editor != null) {
         const code = this.$options.editor.getValue();
+        localStorage.setItem(LanguageEnums.Haskell, code);
         APIService.compileCode(code).then((value) => {
           this.showOutputTerminal(true);
           this.isCompiling = false;
@@ -736,10 +749,12 @@ export default {
     submitTx(provider: CIP30Provider) {
       this.isCompiling = true;
       this.showOutputTerminal(true);
+
       if (this.$options.editor != null) {
         var editorContent = this.$options.editor.getValue();
         editorContent = editorContent.replace(DefaultComment, "");
         ("");
+        localStorage.setItem(LanguageEnums.Kuber, editorContent);
         let request;
         try {
           request = JSON.parse(editorContent);
@@ -808,7 +823,13 @@ export default {
       // intializing monaco editor
 
       loader.init().then((monaco) => {
-        var jsonCode = [DefaultComment + "\n\n" + ExampleTransfer].join("\n");
+        var jsonCode = "";
+        const storedCode = localStorage.getItem(LanguageEnums.Kuber);
+        if (storedCode) {
+          jsonCode = [storedCode].join("\n");
+        } else {
+          jsonCode = [DefaultComment + "\n\n" + ExampleTransfer].join("\n");
+        }
         var modelUri = monaco.Uri.parse("a://b/kuber.json");
         var model = monaco.editor.createModel(jsonCode, "json", modelUri);
 
