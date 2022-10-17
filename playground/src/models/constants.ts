@@ -1,4 +1,4 @@
-export const SimpleContractCode = ` {-# LANGUAGE NoImplicitPrelude  #-}
+export const SimpleContractCode = `{-# LANGUAGE NoImplicitPrelude  #-}
 {-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE DataKinds #-}
 
@@ -27,3 +27,6 @@ export const ExampleTransfer = `{
         "value": "10A"
     }]
 }`;
+
+export const DefaultComment =
+  "// Auto completion is a testing feature, It maynot work sometimes.";

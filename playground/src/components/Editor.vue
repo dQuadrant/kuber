@@ -477,7 +477,11 @@ import Description from "./descriptions";
 import { LanguageEnums } from "@/models/enums/LanguageEnum";
 import APIService from "@/services/api_service";
 import { UtilitiesEnums } from "@/models/enums/UtilitiesEnum";
-import { ExampleTransfer, SimpleContractCode } from "@/models/constants";
+import {
+  DefaultComment,
+  ExampleTransfer,
+  SimpleContractCode,
+} from "@/models/constants";
 
 const notification = _notification.useNotificationStore();
 
@@ -732,10 +736,10 @@ export default {
     submitTx(provider: CIP30Provider) {
       this.isCompiling = true;
       this.showOutputTerminal(true);
-      console.log(provider);
-      console.log(this.$options.editor.getValue());
       if (this.$options.editor != null) {
         var editorContent = this.$options.editor.getValue();
+        editorContent = editorContent.replace(DefaultComment, "");
+        ("");
         let request;
         try {
           request = JSON.parse(editorContent);
@@ -745,8 +749,10 @@ export default {
             type: "alert",
             message: e.message,
           });
+          this.output = e.message;
           return;
         }
+        ("");
         return provider
           .enable()
           .then(async (instance: CIP30Instace) => {
@@ -772,14 +778,14 @@ export default {
               } else {
                 request.selections = availableUtxos;
               }
-              this.isCompiling = false;
+
+              ("");
               return callKuberAndSubmit(
                 instance,
                 this.activeApi.url,
                 JSON.stringify(request)
               );
             } else {
-              this.isCompiling = false;
               return callKuberAndSubmit(
                 instance,
                 this.activeApi.url,
@@ -793,6 +799,7 @@ export default {
               type: "alert",
               message: e.message || "Oopsie, Nobody knows what happened",
             });
+            this.output = e.message || "Oopsie, Nobody knows what happened";
           });
       }
     },
@@ -801,9 +808,7 @@ export default {
       // intializing monaco editor
 
       loader.init().then((monaco) => {
-        const comment =
-          "// Auto completion is a testing feature, It maynot work sometimes. \n";
-        var jsonCode = [comment + ExampleTransfer].join("\n");
+        var jsonCode = [DefaultComment + "\n\n" + ExampleTransfer].join("\n");
         var modelUri = monaco.Uri.parse("a://b/kuber.json");
         var model = monaco.editor.createModel(jsonCode, "json", modelUri);
 
