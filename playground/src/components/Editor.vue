@@ -565,7 +565,13 @@ export default {
       errorMsg: "",
       activeApi: defaultApi,
       apis: [
-        defaultApi,
+        {
+          text: "text-[#60A5FA]",
+          name: "Auto",
+          border: "border-[#60A5FA]",
+          display: "Mainnet/PreProd based on wallet NetworkId",
+          url: undefined,
+        },
         {
           text: "text-blue-400",
           border: "border-blue-400",
@@ -810,7 +816,6 @@ export default {
     submitTx(provider: CIP30Provider) {
       this.isCompiling = true;
       this.showOutputTerminal(true);
-
       if (this.$options.editor != null) {
         var editorContent = this.$options.editor.getValue();
         editorContent = editorContent.replace(DefaultComment, "");
@@ -825,11 +830,11 @@ export default {
             type: "alert",
             message: e.message,
           });
-          this.kuberOutputs.push(e.message);
+          this.setKuberOutput(e.message);
           this.isCompiling = false;
           return;
         }
-        ("");
+
         return provider
           .enable()
           .then(async (instance: CIP30Instace) => {
@@ -857,17 +862,36 @@ export default {
               }
 
               ("");
-              return callKuberAndSubmit(
+
+              const res = await callKuberAndSubmit(
                 instance,
                 this.activeApi.url,
                 JSON.stringify(request)
               );
+              console.log(res);
+              console.log("ping");
+              if (res) {
+                res.forEach((output) => {
+                  this.setKuberOutput(output);
+                });
+              }
+
+              this.isCompiling = false;
             } else {
-              return callKuberAndSubmit(
+              const res = await callKuberAndSubmit(
                 instance,
                 this.activeApi.url,
                 JSON.stringify(request)
               );
+              console.log(res);
+
+              if (res) {
+                res.forEach((output) => {
+                  this.setKuberOutput(output);
+                });
+              }
+
+              this.isCompiling = false;
             }
           })
           .catch((e: any) => {
