@@ -29,4 +29,4 @@ export const ExampleTransfer = `{
 }`;
 
 export const DefaultComment =
-  "// Auto completion is a testing feature, It maynot work sometimes.";
+  "// Auto completion is a testing feature, It maynot always work.";

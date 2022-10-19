@@ -11,8 +11,9 @@ module.exports = {
         "13/20": "65%",
         "6/20": "30%",
         "19/20": "95%",
-        editorStretch: "95%",
-        editor: "65%",
+        editorStretch: "93.5%",
+        editor: "63.5%",
+        utilitiesMenu: "1.5%",
       },
       height: {
         "1/16": "6.25%",

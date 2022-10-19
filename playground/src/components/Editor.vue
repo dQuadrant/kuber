@@ -33,8 +33,11 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
           <p class="text-primary font-semibold mr-8 text-lg">
             Kuber Playground
           </p>
-          <p v-if="language == LanguageEnums.Kuber" class="text-gray-600">
-            Create Tx with
+          <p
+            v-if="language == LanguageEnums.Kuber"
+            class="font-medium text-gray-600"
+          >
+            Select wallet
           </p>
           <button
             v-if="language == LanguageEnums.Kuber"
@@ -42,8 +45,8 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             :key="p.name"
             :class="
               provider.name == p.name
-                ? 'ml-3 bg-transparent hover:bg-gray-100 text-primary font-semibold  py-0.5 px-1.5 border border-blue-500 hover:border-transparent rounded'
-                : 'ml-3 bg-transparent hover:bg-gray-100 text-gray font-semibold  py-0.5 px-1.5 border border-gray-500 hover:border-transparent rounded'
+                ? 'ml-3 bg-transparent  hover:bg-gray-100 text-primary font-semibold  py-0.5 px-1.5 border border-blue-500 hover:border-transparent rounded-md'
+                : 'ml-3 bg-transparent hover:bg-gray-100 text-gray font-semibold  py-1 px-0.5 border border-gray-500 hover:border-transparent rounded-md'
             "
             @click="setProvider(p)"
           >
@@ -52,81 +55,102 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               :src="p.icon"
             />
             <span class="ml-1"> {{ p.name }}</span>
+            <v-icon
+              v-if="provider.name == p.name"
+              class="ml-2 cursor-pointer text-blue-500"
+              name="bi-check-circle-fill"
+            />
           </button>
         </div>
+        <div class="flex items-center space-x-4">
+          <p class="font-medium text-base text-gray-700">Network:</p>
 
-        <!-- dropdown button -->
-        <div class="dropdown">
-          <button
-            v-if="activeApi"
-            :class="
-              activeApi.border +
-              ' dropdown-toggle border-2 font-sans font-semibold rounded-lg text-white text-[11pt] leading-tight uppercase hover:bg-gray-100  active:bg-gray-200 active:shadow-lg active:text-white transition duration-150 ease-in-out flex items-center justify-center whitespace-nowrap'
-            "
-            type="button"
-            id="dropdownMenuButton1"
-            data-bs-toggle="dropdown"
-            aria-expanded="false"
-          >
-            <tag v-if="activeApi" :class="activeApi.text + ' py-1 pl-2'"
-              >{{ activeApi.name }}
-              <span class="pr-2">
-                <v-icon name="md-keyboardarrowdown-round" />
+          <!-- dropdown button -->
+          <div class="dropdown">
+            <button
+              v-if="activeApi"
+              :class="
+                activeApi.border +
+                ' dropdown-toggle border-2 font-sans font-semibold rounded-lg text-white text-[11pt] leading-tight uppercase hover:bg-gray-100  active:bg-gray-200 active:shadow-lg active:text-white transition duration-150 ease-in-out flex items-center justify-center whitespace-nowrap'
+              "
+              type="button"
+              id="dropdownMenuButton1"
+              @click="handleNetworkDropDown()"
+              aria-expanded="false"
+            >
+              <tag v-if="activeApi" :class="activeApi.text + ' py-1 pl-2'"
+                >{{ activeApi.name }}
+                <span class="pr-2">
+                  <v-icon name="md-keyboardarrowdown-round" />
+                </span>
+              </tag>
+              <span
+                v-else
+                class="py-1 px-4 rounded-full text-blue-500 font-semibold flex align-center w-max cursor-pointer active:bg-gray-300 transition duration-300 ease"
+              >
               </span>
-            </tag>
-            <span
-              v-else
-              class="py-1 px-4 rounded-full text-blue-500 font-semibold flex align-center w-max cursor-pointer active:bg-gray-300 transition duration-300 ease"
-            >
-            </span>
-          </button>
+            </button>
 
-          <table
-            class="left-0 dropdown-menu hidden min-w-max absolute bg-white text-base z-50 float-left py-2 text-left rounded-lg shadow-lg mt-1 m-0 bg-clip-padding border-2 border-blue-400 border-opacity-30"
-            aria-labelledby="dropdownMenuButton1"
-          >
-            <tr
-              v-for="api in apis"
-              :key="api.display"
-              @click="handleApiSelected(api)"
-              class="hover:bg-gray-100 cursor-pointer"
+            <table
+              v-if="networkDropdownVisibility"
+              class="flex flex-col w-full right-0 min-w-max absolute bg-white text-base z-50 float-left py-2 text-left rounded-lg shadow-lg mt-1 m-0 bg-clip-padding border-2 border-blue-400 border-opacity-30"
+              aria-labelledby="dropdownMenuButton1"
             >
-              <td
-                :class="
-                  api.text +
-                  ' mr-4 border-b-2 dropdown-item text-sm py-2 px-4 font-normal bg-transparent text-center text-gray-700'
-                "
+              <tr
+                v-for="api in apis"
+                :key="api.display"
+                @click="handleApiSelected(api)"
+                class="border-b-2 hover:bg-gray-100 cursor-pointer"
               >
-                {{ api.name }}
-              </td>
-              <td
-                class="border-b-2 dropdown-item text-sm py-2 px-4 font-normal bg-transparent text-gray-700"
-              >
-                {{ api.display }}
-              </td>
-            </tr>
-          </table>
+                <td
+                  :class="
+                    api.text +
+                    '  mr-4 dropdown-item text-sm py-2 px-4 font-normal hover:bg-transparent bg-transparent text-center text-gray-700'
+                  "
+                >
+                  {{ api.name }}
+                </td>
+                <td
+                  class="dropdown-item text-sm py-2 px-4 font-normal hover:bg-transparent bg-transparent text-gray-700"
+                >
+                  {{ api.display }}
+                </td>
+              </tr>
+            </table>
+          </div>
         </div>
       </div>
 
       <!-- wallet utxos checkbox -->
       <div
         v-if="language == LanguageEnums.Kuber"
-        class="form-check mt-2 form-check text-sm"
+        class="flex space-x-1 mt-2 items-center"
       >
-        <input
-          class="form-check-input h-4 w-4 border border-gray-300 rounded-sm bg-white checked:bg-blue-600 checked:border-blue-600 focus:outline-none transition duration-200 mt-1 align-top bg-no-repeat bg-center bg-contain float-left mr-2 cursor-pointer"
-          type="checkbox"
-          id="inlineCheckbox1"
-          v-model="addSelections"
-        />
-        <label
-          class="form-check-label inline-block text-gray-500"
-          for="inlineCheckbox1"
-        >
-          Add Wallet UTxOs in selection
-        </label>
+        <div class="flex space-x-2 items-center">
+          <div class="form-check form-check text-sm">
+            <input
+              class="form-check-input h-4 w-4 border border-gray-300 rounded-sm bg-white checked:bg-blue-600 checked:border-blue-600 focus:outline-none transition duration-200 mt-1 align-top bg-no-repeat bg-center bg-contain float-left mr-2 cursor-pointer"
+              type="checkbox"
+              id="inlineCheckbox1"
+              v-model="addSelections"
+            />
+            <label
+              class="form-check-label inline-block text-gray-500"
+              for="inlineCheckbox1"
+            >
+              Add Wallet UTxOs in selection
+            </label>
+          </div>
+          <div class="textover">
+            <v-icon
+              class="cursor-pointer text-gray-400"
+              name="io-information-circle"
+            /><span class="text">utxos info</span>
+          </div>
+        </div>
       </div>
+
+      <div v-else class="mt-3 h-8"></div>
     </div>
 
     <div class="flex w-full h-11/12">
@@ -244,218 +268,203 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
           >
             Outputs
           </div>
-          <div
-            @click="showUtilities(!utilitiesVisibility)"
-            class="flex px-2 border-x border-borderColor text-sm text-gray-600 items-center cursor-pointer hover:bg-gray-100"
-          >
-            Utilities
-          </div>
         </div>
       </div>
 
       <!-- utilities screen -->
       <div
         v-if="utilitiesVisibility"
-        class="flex flex-col w-6/20 h-full bg-bgUtilities border-y border-borderColor"
+        class="flex flex-col w-6/20 h-full bg-white border-y border-borderColor"
       >
         <div
-          class="flex justify-start items-center font-semibold text-gray-500 text-sm h-fileTabbar w-full border-b border-borderColor bg-bgFileTabBar py-3 px-4"
+          class="flex justify-between items-center font-medium text-gray-600 text-sm h-fileTabbar w-full border-b border-borderColor bg-white py-3 px-4"
         >
-          UTILITIES
+          <p>UTILITIES / {{ utility }}</p>
+          <v-icon
+            @click="showUtilities(false)"
+            class="cursor-pointer"
+            name="io-close-outline"
+            scale="1.2"
+          />
         </div>
-        <div class="flex">
-          <div class="flex w-19/20">
-            <div class="flex flex-col w-full">
-              <div class="flex px-6 py-24">
-                <!-- Address utitlity -->
-                <div
-                  class="flex flex-col items-center"
-                  v-if="utility == UtilitiesEnums.Address"
-                >
-                  <div class="mb-5 font-medium text-gray-600">
-                    Enter Address
-                  </div>
-                  <input
-                    class="input border border-gray-300 focus:border focus:border-red-400"
-                    type="text"
-                    :value="address"
-                    @input="onAddressInput"
-                  />
-                  <div class="mt-4 mb-4" v-if="keyHash != ''">
-                    <div class="text-gray-500 mb-1">Your keyhash</div>
-                    <div>
-                      <button class="flex" @click="performKeyHashCopy">
-                        <div>{{ keyHash }}</div>
-                        <div class="mt-1">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            fill="currentColor"
-                            class="bi bi-files"
-                            viewBox="0 0 16 16"
-                          >
-                            <path
-                              d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
-                            />
-                          </svg>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                  <div class="mt-5">
-                    <button
-                      @click="getKeyHash"
-                      class="button-old hover:bg-green-600"
+        <div class="flex w-full px-4 py-8">
+          <!-- Address utitlity -->
+          <div
+            class="flex flex-col w-full items-start"
+            v-if="utility == UtilitiesEnums.Address"
+          >
+            <div class="mb-5 font-semibold text-gray-500">Enter Address</div>
+            <input
+              class="flex w-full input border border-gray-300 focus:border-gray-400"
+              type="text"
+              :value="address"
+              @input="onAddressInput"
+            />
+            <div class="mt-4 mb-4" v-if="keyHash != ''">
+              <div class="text-gray-500 mb-1">Your keyhash</div>
+              <div>
+                <button class="flex" @click="performKeyHashCopy">
+                  <div>{{ keyHash }}</div>
+                  <div class="mt-1">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      fill="currentColor"
+                      class="bi bi-files"
+                      viewBox="0 0 16 16"
                     >
-                      Get Key Hash
-                    </button>
+                      <path
+                        d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
+                      />
+                    </svg>
                   </div>
-                </div>
+                </button>
+              </div>
+            </div>
+            <div class="mt-5">
+              <button @click="getKeyHash" class="button-old hover:bg-green-600">
+                Get Key Hash
+              </button>
+            </div>
+          </div>
 
-                <!-- Script Utilities -->
-                <div
-                  class="flex flex-col items-center"
-                  v-if="utility == UtilitiesEnums.ScriptHash"
-                >
-                  <div class="mb-5 font-medium text-gray-700">
-                    Enter script json
-                  </div>
-                  <textarea
-                    class="textarea border border-gray-300"
-                    :value="scriptJson"
-                    @input="onScriptJsonInput"
-                  />
-                  <div class="mt-4 mb-4" v-if="policyId != ''">
-                    <div class="text-gray-500 mb-1">Script policy id</div>
-                    <div>
-                      <button class="flex" @click="performPolicyIdCopy">
-                        <div>{{ policyId }}</div>
-                        <div class="mt-1">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            assets
-                            height="16"
-                            fill="currentColor"
-                            class="bi bi-files"
-                            viewBox="0 0 16 16"
-                          >
-                            <path
-                              d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
-                            />
-                          </svg>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                  <div class="mt-6">
-                    <button
-                      @click="getScriptPolicy"
-                      class="button-old hover:bg-green-600"
+          <!-- Script Utilities -->
+          <div
+            class="flex w-full flex-col items-start"
+            v-if="utility == UtilitiesEnums.ScriptHash"
+          >
+            <div class="mb-5 font-semibold text-gray-500">
+              Enter script json
+            </div>
+            <textarea
+              class="textarea border border-gray-300 focus:border-gray-400"
+              :value="scriptJson"
+              @input="onScriptJsonInput"
+            />
+            <div class="mt-4 mb-4" v-if="policyId != ''">
+              <div class="text-gray-500 mb-1">Script policy id</div>
+              <div>
+                <button class="flex" @click="performPolicyIdCopy">
+                  <div>{{ policyId }}</div>
+                  <div class="mt-1">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      assets
+                      height="16"
+                      fill="currentColor"
+                      class="bi bi-files"
+                      viewBox="0 0 16 16"
                     >
-                      Get Policy Id
-                    </button>
+                      <path
+                        d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
+                      />
+                    </svg>
                   </div>
-                </div>
+                </button>
+              </div>
+            </div>
+            <div class="mt-6">
+              <button
+                @click="getScriptPolicy"
+                class="button-old hover:bg-green-600"
+              >
+                Get Policy Id
+              </button>
+            </div>
+          </div>
 
-                <!-- Hex Utility -->
-                <div
-                  class="flex flex-col w-full items-center"
-                  v-if="utility == UtilitiesEnums.Hex"
-                >
-                  <div class="flex flex-col items-center w-full relative">
-                    <div class="mb-5 text-gray-600 font-medium">Raw data</div>
-                    <textarea
-                      ref="rawData"
-                      class="p-2 w-full min-h-[200pt] border border-gray-300 focus:ring-0"
-                    />
-                    <div class="mt-4 mb-4" v-if="result || errorMsg">
-                      <div v-if="errorMsg" class="text-red-500">
-                        {{ errorMsg }}
-                      </div>
-                      <div v-else>
-                        <div class="text-gray-500 mb-1 text-left">Result</div>
-                        <button
-                          class="w-full hover:bg-slate-100 py-0.5"
-                          @click="copyToClipboard(result)"
-                        >
-                          <span class="">{{ result }}</span>
-                          <span class="mt-1 pr-3 float-right">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="16"
-                              height="16"
-                              fill="currentColor"
-                              class="bi bi-files"
-                              viewBox="0 0 16 16"
-                            >
-                              <path
-                                d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
-                              />
-                            </svg>
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    class="flex flex-shrink-0 flex-wrap items-center justify-start p-4 rounded-b-md"
+          <!-- Hex Utility -->
+          <div
+            class="flex flex-col w-full items-center"
+            v-if="utility == UtilitiesEnums.Hex"
+          >
+            <div class="flex flex-col items-start w-full relative">
+              <div class="mb-5 text-gray-500 font-semibold">Raw data</div>
+              <textarea
+                :value="rawData"
+                @input="onHexInput"
+                class="p-2 textarea w-full min-h-[200pt] border border-gray-300 focus:border-gray-400"
+              />
+              <div class="mt-4 mb-4" v-if="result || errorMsg">
+                <div v-if="errorMsg" class="text-red-500">
+                  {{ errorMsg }}
+                </div>
+                <div v-else>
+                  <div class="text-gray-500 mb-1 text-left">Result</div>
+                  <button
+                    class="w-full hover:bg-slate-100 py-0.5"
+                    @click="copyToClipboard(result)"
                   >
-                    <button
-                      @click="encodeHex"
-                      class="button-old hover:bg-green-600"
-                    >
-                      Encode
-                    </button>
-                    <button
-                      @click="decodeHex"
-                      class="button-old hover:bg-green-600 ml-3"
-                    >
-                      Decode
-                    </button>
-                  </div>
+                    <span class="">{{ result }}</span>
+                    <span class="mt-1 pr-3 float-right">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        fill="currentColor"
+                        class="bi bi-files"
+                        viewBox="0 0 16 16"
+                      >
+                        <path
+                          d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
+                        />
+                      </svg>
+                    </span>
+                  </button>
                 </div>
               </div>
             </div>
-          </div>
-          <!-- utilites menu -->
-          <div
-            class="flex flex-col w-1/20 items-center font-semibold text-gray-600 text-sm justify-start bg-white h-full border border-borderColor"
-          >
-            <div
-              @click="changeUtility(UtilitiesEnums.Address)"
-              :class="
-                utility == UtilitiesEnums.Address
-                  ? ' flex h-32 bg-bgSelectedUtility w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
-                  : 'flex h-32 bg-transparent w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
-              "
-            >
-              <p class="rotate-90">Address</p>
-            </div>
-
-            <div
-              @click="changeUtility(UtilitiesEnums.ScriptHash)"
-              :class="
-                utility == UtilitiesEnums.ScriptHash
-                  ? ' flex h-32 bg-bgSelectedUtility w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
-                  : 'flex h-32 bg-transparent w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
-              "
-            >
-              <p class="rotate-90">ScriptHash</p>
-            </div>
-
-            <div
-              @click="changeUtility(UtilitiesEnums.Hex)"
-              :class="
-                utility == UtilitiesEnums.Hex
-                  ? ' flex h-32 bg-bgSelectedUtility w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
-                  : 'flex h-32 bg-transparent w-full border border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
-              "
-            >
-              <p class="rotate-90">Hex</p>
+            <div class="flex w-full items-start justify-start mt-4">
+              <button @click="encodeHex" class="button-old hover:bg-green-600">
+                Encode
+              </button>
+              <button
+                @click="decodeHex"
+                class="button-old hover:bg-green-600 ml-3"
+              >
+                Decode
+              </button>
             </div>
           </div>
+        </div>
+      </div>
+      <!-- utilites menu -->
+      <div
+        class="flex flex-col w-utilitiesMenu items-center font-semibold text-gray-600 text-sm justify-start bg-white h-full border border-borderColor"
+      >
+        <div
+          @click="changeUtility(UtilitiesEnums.Address)"
+          :class="
+            utility == UtilitiesEnums.Address
+              ? ' flex h-32 bg-bgSelectedUtility w-full border-b border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+              : 'flex h-32 bg-transparent w-full  border-b border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+          "
+        >
+          <p class="rotate-90">Address</p>
+        </div>
+
+        <div
+          @click="changeUtility(UtilitiesEnums.ScriptHash)"
+          :class="
+            utility == UtilitiesEnums.ScriptHash
+              ? ' flex h-32 bg-bgSelectedUtility w-full border-y border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+              : 'flex h-32 bg-transparent w-full border-y border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+          "
+        >
+          <p class="rotate-90">ScriptHash</p>
+        </div>
+
+        <div
+          @click="changeUtility(UtilitiesEnums.Hex)"
+          :class="
+            utility == UtilitiesEnums.Hex
+              ? ' flex h-32 bg-bgSelectedUtility w-full border-y border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+              : 'flex h-32 bg-transparent w-full border-y border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+          "
+        >
+          <p class="rotate-90">Hex</p>
         </div>
       </div>
     </div>
@@ -516,6 +525,7 @@ export default {
       editorWidth: "w-editor",
       output: "",
       outputTerminalVisibility: false,
+      networkDropdownVisibility: false,
       utilitiesVisibility: true,
       isCompiling: false,
       jsonLogo: jsonLogo,
@@ -596,6 +606,7 @@ export default {
       this.utilitiesVisibility = visibility;
       if (!visibility) {
         this.editorWidth = "w-editorStretch";
+        this.changeUtility(null);
       } else {
         this.editorWidth = "w-editor";
       }
@@ -624,7 +635,10 @@ export default {
       });
     },
 
-    changeUtility(utility: UtilitiesEnums) {
+    changeUtility(utility: UtilitiesEnums | null) {
+      if (!this.utilitiesVisibility && utility != null) {
+        this.showUtilities(true);
+      }
       this.utility = utility;
     },
 
@@ -632,8 +646,14 @@ export default {
       this.provider = provider;
     },
 
+    handleNetworkDropDown() {
+      console.log(this.networkDropdownVisibility);
+      this.networkDropdownVisibility = !this.networkDropdownVisibility;
+    },
+
     handleApiSelected(value) {
       this.activeApi = value;
+      this.networkDropdownVisibility = false;
       console.log("api selected", value);
     },
 
@@ -642,6 +662,9 @@ export default {
     },
     onScriptJsonInput(event) {
       this.scriptJson = event.target.value;
+    },
+    onHexInput(event) {
+      this.rawData = event.target.value;
     },
     performKeyHashCopy() {
       useToast().success("Copied Key Hash");
@@ -668,13 +691,13 @@ export default {
     encodeHex() {
       this.errorMsg = "";
       //@ts-ignore
-      const encoded = Buffer.from(this.$refs.rawData.value).toString("hex");
+      const encoded = Buffer.from(this.rawData).toString("hex");
       this.result = encoded;
     },
     decodeHex() {
       this.errorMsg = "";
       //@ts-ignore
-      let val = this.$refs.rawData.value;
+      let val = this.rawData;
       if (val) {
         const decoded = Buffer.from(val, "hex");
         if (decoded.toString("hex") === val) {
@@ -730,7 +753,8 @@ export default {
       this.isCompiling = true;
 
       if (this.$options.editor != null) {
-        const code = this.$options.editor.getValue();
+        var code = this.$options.editor.getValue();
+        code = code.trim();
         localStorage.setItem(LanguageEnums.Haskell, code);
         APIService.compileCode(code).then((value) => {
           this.showOutputTerminal(true);
@@ -753,7 +777,7 @@ export default {
       if (this.$options.editor != null) {
         var editorContent = this.$options.editor.getValue();
         editorContent = editorContent.replace(DefaultComment, "");
-        ("");
+        editorContent = editorContent.trim();
         localStorage.setItem(LanguageEnums.Kuber, editorContent);
         let request;
         try {
@@ -908,27 +932,6 @@ export default {
 </style>
 
 <style scoped>
-.dropdown-content {
-  display: none;
-  position: absolute;
-  background-color: #f1f1f1;
-  min-width: 160px;
-  overflow: auto;
-  box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
-  z-index: 1;
-}
-
-.dropdown-content button {
-  color: black;
-  padding: 12px 16px;
-  text-decoration: none;
-  display: block;
-}
-
-.dropdown a:hover {
-  background-color: #ddd;
-}
-
 .show {
   display: block;
 }
@@ -978,6 +981,27 @@ export default {
   cursor: pointer;
 }
 
+.textover {
+  position: relative;
+  cursor: pointer;
+  display: inline-block;
+}
+
+.textover .text {
+  visibility: hidden;
+  width: 120px;
+  background-color: black;
+  color: #fff;
+  text-align: center;
+  padding: 5px 0;
+  border-radius: 6px;
+  position: absolute;
+  z-index: 1;
+}
+
+.textover:hover .text {
+  visibility: visible;
+}
 /* ---------------------------------- */
 .fade-enter-active,
 .fade-leave-active {
@@ -1018,14 +1042,24 @@ export default {
 
 .input {
   height: 50px;
-  width: 500px;
+  width: 100%;
   padding: 5px;
+  border-radius: 4px;
 }
 
 .textarea {
   height: 200px;
-  width: 500px;
+  width: 100%;
   padding: 5px;
+  border-radius: 4px;
+}
+
+textarea:focus {
+  outline-width: 0;
+}
+
+input:focus {
+  outline-width: 0;
 }
 
 button span {
