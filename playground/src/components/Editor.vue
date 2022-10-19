@@ -242,9 +242,9 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
 
         <div
           v-if="outputTerminalVisibility"
-          class="flex flex-col transition ease-in-out delay-4s w-full h-outputTerminal p-4 border-y border-borderColor"
+          class="flex flex-col transition ease-in-out delay-4s w-full h-outputTerminal px-4 pt-4 border-y border-borderColor"
         >
-          <div class="flex justify-between">
+          <div class="flex justify-between h-1/6">
             <div class="font-medium text-sm text-gray-500">OUTPUTS</div>
             <v-icon
               @click="showOutputTerminal(false)"
@@ -255,7 +255,24 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
           </div>
 
           <!-- outputs-->
-          <p class="text-gray-800 mt-4">{{ output }}</p>
+          <div
+            id="haskell-output"
+            v-if="language === LanguageEnums.Haskell"
+            class="flex flex-col h-5/6 overflow-y-auto"
+          >
+            <p v-for="output in haskellOutputs" class="text-gray-800 py-1">
+              {{ output }}
+            </p>
+          </div>
+          <div
+            id="kuber-output"
+            v-else
+            class="flex flex-col h-5/6 overflow-y-auto"
+          >
+            <p v-for="output in kuberOutputs" class="text-gray-800 py-1">
+              {{ output }}
+            </p>
+          </div>
         </div>
 
         <!-- compiler tabbar -->
@@ -513,7 +530,7 @@ export default {
   data() {
     const providers: Array<CIP30Provider> = [];
     const provider: CIP30Provider = null;
-    let defaultApi = {
+    let defaultApi = JSON.parse(localStorage.getItem("network")) || {
       text: "text-[#60A5FA]",
       name: "Auto",
       border: "border-[#60A5FA]",
@@ -523,7 +540,8 @@ export default {
     let result = {
       editorHeight: "h-editorStretch",
       editorWidth: "w-editor",
-      output: "",
+      haskellOutputs: [],
+      kuberOutputs: [],
       outputTerminalVisibility: false,
       networkDropdownVisibility: false,
       utilitiesVisibility: true,
@@ -611,8 +629,26 @@ export default {
         this.editorWidth = "w-editor";
       }
     },
+    updateOutputScroll(id: string) {
+      var element = document.getElementById(id);
+      element.scrollTop = element.scrollHeight;
+    },
+
+    setKuberOutput(output: string) {
+      this.kuberOutputs.push(output);
+      this.updateOutputScroll("kuber-output");
+    },
+
+    setHaskellOutput(output: string) {
+      this.haskellOutputs.push(output);
+      this.updateOutputScroll("haskell-output");
+    },
     changeLanguage(language: LanguageEnums) {
+      if (this.language !== language) {
+        this.showOutputTerminal(false);
+      }
       this.language = language;
+
       if (language == LanguageEnums.Haskell) {
         const storedCode = localStorage.getItem(LanguageEnums.Haskell);
         if (storedCode) {
@@ -655,6 +691,7 @@ export default {
       this.activeApi = value;
       this.networkDropdownVisibility = false;
       console.log("api selected", value);
+      localStorage.setItem("network", JSON.stringify(value));
     },
 
     onAddressInput(event) {
@@ -760,9 +797,9 @@ export default {
           this.showOutputTerminal(true);
           this.isCompiling = false;
           if (value) {
-            this.output = value;
+            this.setHaskellOutput(value);
           } else {
-            this.output = "Some unknown error occured";
+            this.setHaskellOutput("Some unknown error occured");
           }
         });
       } else {
@@ -788,7 +825,8 @@ export default {
             type: "alert",
             message: e.message,
           });
-          this.output = e.message;
+          this.kuberOutputs.push(e.message);
+          this.isCompiling = false;
           return;
         }
         ("");
@@ -838,7 +876,10 @@ export default {
               type: "alert",
               message: e.message || "Oopsie, Nobody knows what happened",
             });
-            this.output = e.message || "Oopsie, Nobody knows what happened";
+            this.kuberOutputs.push(
+              e.message || "Oopsie, Nobody knows what happened"
+            );
+            this.isCompiling = false;
           });
       }
     },
