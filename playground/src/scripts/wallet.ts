@@ -266,14 +266,13 @@ export async function callKuberAndSubmit(
   data: string
 ) {
   const outputs = [];
-  const kuberUrlByNetwork = "https://preview.kuber.sireto.dev";
-  //  kuberUrl
-  //   ? kuberUrl
-  //   : import.meta.env.VITE_API_URL != undefined
-  //   ? import.meta.env.VITE_API_URL
-  //   : (await provider.getNetworkId()) == 0
-  //   ? "https://preprod.cnftregistry.io/kuber"
-  //   : "https://cnftregistry.io/kuber";
+  const kuberUrlByNetwork = kuberUrl
+    ? kuberUrl
+    : import.meta.env.VITE_API_URL != undefined
+    ? import.meta.env.VITE_API_URL
+    : (await provider.getNetworkId()) == 0
+    ? "https://preprod.cnftregistry.io/kuber"
+    : "https://cnftregistry.io/kuber";
 
   var res = await fetch(
     // eslint-disable-next-line max-len
