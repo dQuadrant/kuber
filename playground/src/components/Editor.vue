@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { VAceEditor } from "vue3-ace-editor";
 import ace from "ace-builds";
 import { Buffer } from "buffer";
 
@@ -7,7 +6,6 @@ import workerJsonUrl from "ace-builds/src-noconflict/worker-json?url";
 
 import {
   callKuberAndSubmit,
-  getKeyHashOfAddressFromKuber,
   getPolicyIdOfScriptFromKuber,
   listProviders,
 } from "@/scripts/wallet";
@@ -16,8 +14,7 @@ import type { CIP30Instace, CIP30Provider } from "@/types";
 import "ace-builds/src-noconflict/mode-json";
 import "ace-builds/src-noconflict/theme-chrome";
 import "ace-builds/src-noconflict/ext-language_tools";
-
-import suggestion from "../assets/suggestions.json";
+import jsonLogo from "@/src/assets/images/json_logo.png";
 
 ace.require("ace/ext/language_tools");
 
@@ -25,191 +22,124 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
 </script>
 
 <template>
-  <div class="flex flex-col items-center self-center h-screen w-screen">
-    <vue-notification-list position="top-right"></vue-notification-list>
-    <div class="w-full px-2 pt-1">
-      <div class="pb-3">
-        <span class="ml-0.5 mr-4 justify-center">
-          <span>
-            <span class="dropdown">
-              <button
-                class="dropdown-toggle text-white text-[11pt] leading-tight uppercase rounded hover:bg-gray-100 hover:shadow-lg active:bg-gray-200 active:shadow-lg active:text-white transition duration-150 ease-in-out flex items-center whitespace-nowrap"
-                type="button"
-                id="dropdownMenuButton1"
-                data-bs-toggle="dropdown"
-                aria-expanded="false"
+  <vue-notification-list position="top-right"></vue-notification-list>
+  <div class="flex flex-col items-center h-screen w-screen font-sans">
+    <!-- top bar -->
+    <div
+      class="flex flex-col h-1/12 px-4 py-2 items-start w-full border border-borderColor"
+    >
+      <div class="flex w-full h-full justify-between items-center">
+        <div class="flex items-center">
+          <p class="text-primary font-semibold mr-8 text-lg">
+            Kuber Playground
+          </p>
+          <p
+            v-if="language == LanguageEnums.Kuber"
+            class="font-medium text-gray-600"
+          >
+            Select wallet
+          </p>
+          <button
+            v-if="language == LanguageEnums.Kuber"
+            v-for="p in providers"
+            :key="p.name"
+            :class="
+              provider.name == p.name
+                ? 'ml-3 bg-transparent  hover:bg-gray-100 text-primary font-semibold  py-0.5 px-1.5 border border-blue-500 hover:border-transparent rounded-md'
+                : 'ml-3 bg-transparent hover:bg-gray-100 text-gray font-semibold  py-1 px-0.5 border border-gray-500 hover:border-transparent rounded-md'
+            "
+            @click="setProvider(p)"
+          >
+            <img
+              style="display: inline; height: 1em; width: 1em"
+              :src="p.icon"
+            />
+            <span class="ml-1"> {{ p.name }}</span>
+            <v-icon
+              v-if="provider.name == p.name"
+              class="ml-2 cursor-pointer text-blue-500"
+              name="bi-check-circle-fill"
+            />
+          </button>
+        </div>
+        <div class="flex items-center space-x-4">
+          <p class="font-medium text-base text-gray-700">Network:</p>
+
+          <!-- dropdown button -->
+          <div class="dropdown">
+            <button
+              v-if="activeApi"
+              :class="
+                activeApi.border +
+                ' dropdown-toggle border-2 font-sans font-semibold rounded-lg text-white text-[11pt] leading-tight uppercase hover:bg-gray-100  active:bg-gray-200 active:shadow-lg active:text-white transition duration-150 ease-in-out flex items-center justify-center whitespace-nowrap'
+              "
+              type="button"
+              id="dropdownMenuButton1"
+              @click="handleNetworkDropDown()"
+              aria-expanded="false"
+            >
+              <tag v-if="activeApi" :class="activeApi['text'] + ' py-1 pl-2'"
+                >{{ activeApi["name"] }}
+                <span class="pr-2">
+                  <v-icon name="md-keyboardarrowdown-round" />
+                </span>
+              </tag>
+              <span
+                v-else
+                class="py-1 px-4 rounded-full text-blue-500 font-semibold flex align-center w-max cursor-pointer active:bg-gray-300 transition duration-300 ease"
               >
-                <tag v-if="activeApi" :class="activeApi.text + ' py-1 px-4'">{{
-                  activeApi.name
-                }}</tag>
-                <span
-                  v-else
-                  class="py-1 px-4 rounded-full text-blue-500 font-semibold flex align-center w-max cursor-pointer active:bg-gray-300 transition duration-300 ease"
+              </span>
+            </button>
+
+            <table
+              v-if="networkDropdownVisibility"
+              class="flex flex-col w-full right-0 min-w-max absolute bg-white text-base z-50 float-left pt-2 text-left rounded-lg shadow-lg mt-1 m-0 bg-clip-padding border-2 border-blue-400 border-opacity-30"
+              aria-labelledby="dropdownMenuButton1"
+            >
+              <tr
+                v-for="api in Object.values(apis)"
+                :key="api['display']"
+                @click="handleApiSelected(api)"
+                class="border-b-2 hover:bg-gray-100 cursor-pointer"
+              >
+                <td
+                  :class="
+                    api['text'] +
+                    '  mr-4 dropdown-item text-sm py-2 px-4 font-normal hover:bg-transparent bg-transparent text-center text-gray-700'
+                  "
                 >
+                  {{ api["name"] }}
+                </td>
+                <td
+                  class="dropdown-item text-sm py-2 px-4 font-normal hover:bg-transparent bg-transparent text-gray-700"
+                >
+                  {{ api["display"] }}
+                </td>
+              </tr>
+
+              <button
+                type="button"
+                class="flex items-center cursor-pointer py-3 justify-center text-sm px-4 font-semibold hover:bg-menuBar rounded-b-lg hover:text-white bg-transparent text-gray-700"
+                data-bs-toggle="modal"
+                data-bs-target="#staticBackdrop"
+              >
+                Edit/Add Network
+                <span>
+                  <v-icon class="ml-2" name="fa-edit" />
                 </span>
               </button>
-              <table
-                class="left-0 dropdown-menu hidden min-w-max absolute bg-white text-base z-50 float-left py-2 text-left rounded-lg shadow-lg mt-1 m-0 bg-clip-padding border-2 border-blue-400 border-opacity-30"
-                aria-labelledby="dropdownMenuButton1"
-              >
-                <tr
-                  v-for="api in apis"
-                  :key="api.display"
-                  @click="handleApiSelected(api)"
-                  class="hover:bg-gray-100"
-                >
-                  <td
-                    :class="
-                      api.text +
-                      ' mr-4 border-b-2 dropdown-item text-sm py-2 px-4 font-normal bg-transparent text-center text-gray-700'
-                    "
-                  >
-                    {{ api.name }}
-                  </td>
-                  <td
-                    class="border-b-2 dropdown-item text-sm py-2 px-4 font-normal bg-transparent text-gray-700"
-                  >
-                    {{ api.display }}
-                  </td>
-                </tr>
-              </table>
-            </span>
-          </span>
-        </span>
-        <span class="text-blue-800"> Create Tx with </span>
-        <span>
-          <button
-            v-for="provider in providers"
-            :key="provider.name"
-            class="ml-3 bg-transparent hover:bg-blue-500 text-blue-700 font-semibold hover:text-white py-0.5 px-1.5 border border-blue-500 hover:border-transparent rounded"
-            @click="submitTx(provider)"
-          >
-            <img style="display: inline; height: 1em; width: 1em" :src="provider.icon" />
-            <span class="ml-1"> {{ provider.name }}</span>
-          </button>
-          <span class="float-right mr-2 mt-1">
-            <span>
-              <span class="inline-block relative">
-                <button
-                  class="dropdown-toggle px-3 py-2.5 bg-purple-500 text-white font-medium text-xs leading-tight uppercase rounded shadow-md hover:bg-purple-700 hover:shadow-lg focus:bg-purple-700 focus:shadow-lg focus:outline-none focus:ring-0 active:bg-purple-800 active:shadow-lg active:text-white transition duration-150 ease-in-out flex items-center whitespace-nowrap"
-                  type="button"
-                  id="utility-dropdown-button"
-                  data-bs-toggle="dropdown"
-                  aria-expanded="false"
-                >
-                  <span>Utilities</span>
-                  <svg
-                    aria-hidden="true"
-                    focusable="false"
-                    data-prefix="fas"
-                    data-icon="caret-down"
-                    class="w-2 ml-2"
-                    role="img"
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 320 512"
-                  >
-                    <path
-                      fill="currentColor"
-                      d="M31.3 192h257.3c17.8 0 26.7 21.5 14.1 34.1L174.1 354.8c-7.8 7.8-20.5 7.8-28.3 0L17.2 226.1C4.6 213.5 13.5 192 31.3 192z"
-                    ></path>
-                  </svg>
-                </button>
-                <ul
-                  id="utility-dropdown-list"
-                  class="dropdown-menu min-w-max absolute right-0 hidden text-base z-50 float-right py-2 list-none text-left rounded-lg shadow-lg mt-1 m-0 bg-clip-padding border-none bg-gray-800"
-                  aria-labelledby="utility-dropdown-button"
-                >
-                  <li @click="displayKeyHashModal">
-                    <a
-                      class="dropdown-item text-sm py-2 px-4 font-normal block w-full whitespace-nowrap bg-transparent text-gray-300 hover:bg-gray-700 hover:text-white focus:text-white focus:bg-gray-700 active:bg-blue-600"
-                      href="#"
-                      >Compute PubKey Hash</a
-                    >
-                  </li>
-                  <li @click="displayPolicyModal">
-                    <a
-                      class="dropdown-item text-sm py-2 px-4 font-normal block w-full whitespace-nowrap bg-transparent text-gray-300 hover:bg-gray-700 hover:text-white focus:text-white focus:bg-gray-700"
-                      href="#"
-                      >Compute ScriptHash</a
-                    >
-                  </li>
-                      
-                  <li>
-                    <a
-                      href="#"
-                      class="dropdown-item text-sm py-2 px-4 font-normal block w-full whitespace-nowrap bg-transparent text-gray-300 hover:bg-gray-700 hover:text-white focus:text-white focus:bg-gray-700"
-                      data-bs-toggle="modal"
-                      data-bs-target="#hexEncoderModal"
-                    >
-                    Hex Encode/Decode
-                    </a>
-                  </li>
-                </ul>
-              </span>
-            </span>
-          </span>
-          <transition name="fade" appear>
-            <div
-              class="modal-overlay-old"
-              v-if="showKeyHashModal"
-              @click="showKeyHashModal = false"
-            ></div>
-          </transition>
-          <transition name="pop" appear>
-            <div class="modal-old" role="dialog" v-if="showKeyHashModal">
-              <div class="mb-2 text-gray-500">Enter Address</div>
-              <input
-                class="input border border-gray-300"
-                type="text"
-                :value="address"
-                @input="onAddressInput"
-              />
-              <div class="mt-4 mb-4" v-if="keyHash != ''">
-                <div class="text-gray-500 mb-1">Your keyhash</div>
-                <div>
-                  <button class="flex" @click="performKeyHashCopy">
-                    <div>{{ keyHash }}</div>
-                    <div class="mt-1">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        fill="currentColor"
-                        class="bi bi-files"
-                        viewBox="0 0 16 16"
-                      >
-                        <path
-                          d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
-                        />
-                      </svg>
-                    </div>
-                  </button>
-                </div>
-              </div>
-              <div class="mt-3">
-                <button @click="getKeyHash" class="button-old hover:bg-green-600">
-                  Get Key Hash
-                </button>
-                <button
-                  @click="showKeyHashModal = false"
-                  class="ml-4 border border-red-200 pt-2 pb-2 pl-4 pr-4 rounded text-gray-500 hover:bg-red-400 hover:text-white"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </transition>
+            </table>
+          </div>
+        </div>
+      </div>
 
-          <transition name="fade" appear>
-            <div
-              class="modal-overlay-old"
-              v-if="showPolicyModal"
-              @click="showPolicyModal = false"
-            ></div>
-          </transition>
-
-
-          <div class="ml-2 mt-1 form-check form-check text-sm">
+      <!-- wallet utxos checkbox -->
+      <div
+        v-if="language == LanguageEnums.Kuber"
+        class="flex space-x-1 mt-2 items-center"
+      >
+        <div class="flex space-x-2 items-center">
+          <div class="form-check form-check text-sm">
             <input
               class="form-check-input h-4 w-4 border border-gray-300 rounded-sm bg-white checked:bg-blue-600 checked:border-blue-600 focus:outline-none transition duration-200 mt-1 align-top bg-no-repeat bg-center bg-contain float-left mr-2 cursor-pointer"
               type="checkbox"
@@ -223,111 +153,577 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               Add Wallet UTxOs in selection
             </label>
           </div>
-        </span>
+          <div class="textover">
+            <v-icon
+              class="cursor-pointer text-gray-400"
+              name="io-information-circle"
+            /><span class="text">utxos info</span>
+          </div>
+        </div>
       </div>
+
+      <div v-else class="mt-3 h-8"></div>
     </div>
-    <!-- Modal -->
-    <div
-      class="modal fade fixed top-0 left-0 hidden w-full h-full outline-none overflow-x-hidden overflow-y-auto"
-      id="hexEncoderModal"
-      tabindex="-1"
-      aria-labelledby="exampleModalCenteredScrollable"
-      aria-modal="true"
-      role="dialog"
-    >
+
+    <div class="flex w-full h-11/12">
+      <!-- languages menu -->
       <div
-        class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable relative w-auto pointer-events-none"
+        class="flex flex-col items-center space-y-4 w-1/20 py-4 bg-bgMenu h-full border border-borderColor"
       >
-        <div
-          class="modal-content border-none shadow-lg relative flex flex-col w-full pointer-events-auto bg-white bg-clip-padding rounded-md outline-none text-current"
-        >
+        <div class="flex justify-start space-x-3 h-12 w-full">
           <div
-            class="modal-header flex flex-shrink-0 items-center justify-between p-4 border-b border-gray-200 rounded-t-md"
+            v-if="language == LanguageEnums.Kuber"
+            class="h-full w-1 bg-menuBar rounded-md shadow-sm"
+          ></div>
+          <div v-else class="h-full w-1 bg-bgMenu rounded-md"></div>
+          <div
+            @click="changeLanguage(LanguageEnums.Kuber)"
+            :class="
+              language == LanguageEnums.Kuber
+                ? 'flex justify-center items-center w-14 rounded drop-shadow-sm border border-borderColor cursor-pointer bg-white hover:bg-white'
+                : 'flex justify-center items-center w-14 rounded drop-shadow-sm border border-borderColor cursor-pointer hover:bg-white'
+            "
           >
-            <h5
-              class="text-xl font-medium leading-normal text-gray-800"
-              id="exampleModalCenteredScrollableLabel"
-            >
-              Hex Encoder/Decoder
-            </h5>
-            <button
-              type="button"
-              class="btn-close box-content w-4 h-4 p-1 text-black border-none rounded-none opacity-50 focus:shadow-none focus:outline-none focus:opacity-100 hover:text-black hover:opacity-75 hover:no-underline"
-              data-bs-dismiss="modal"
-              aria-label="Close"
-            ></button>
+            <img src="@/assets/images/json_logo.png" />
+          </div>
+        </div>
+
+        <div class="flex justify-start space-x-3 h-12 w-full">
+          <div
+            v-if="language == LanguageEnums.Haskell"
+            class="h-full w-1 bg-menuBar rounded-md shadow-sm"
+          ></div>
+          <div v-else class="h-full w-1 bg-bgMenu rounded-md"></div>
+          <div
+            @click="changeLanguage(LanguageEnums.Haskell)"
+            :class="
+              language == LanguageEnums.Haskell
+                ? 'flex justify-center items-center w-14 rounded drop-shadow-sm border border-borderColor cursor-pointer bg-white hover:bg-white'
+                : 'flex justify-center items-center w-14 rounded drop-shadow-sm border border-borderColor cursor-pointer hover:bg-white'
+            "
+          >
+            <img src="@/assets/images/haskell_logo.png" />
+          </div>
+        </div>
+      </div>
+
+      <!-- compiler screen -->
+      <div
+        :class="
+          editorWidth +
+          ' flex flex-col h-full bg-bgCompiler border-y border-r border-borderColor'
+        "
+      >
+        <!-- file tabbar -->
+        <div class="flex h-fileTabbar">
+          <div
+            class="flex font-sans font-medium items-center justify-center h-full w-32 bg-bgCompiler text-fileTextColor"
+          >
+            {{ language == LanguageEnums.Kuber ? "Kuber.json" : "Main.hs" }}
+          </div>
+          <div
+            class="flex justify-end h-full w-full bg-bgFileTabBar border-l border-b border-borderColor py-3 px-4"
+          >
+            <div class="flex items-center h-full space-x-4">
+              <div
+                v-if="isCompiling"
+                class="spinner-border animate-spin w-6 h-6 border-2 text-menuBar rounded-full"
+              ></div>
+              <div
+                class="flex justify-center items-center bg-primary hover:bg-blue-600 text-white font-semibold text-sm w-16 h-full rounded-md shadow-sm cursor-pointer"
+                @click="
+                  language == LanguageEnums.Kuber
+                    ? submitTx(provider)
+                    : compileCode()
+                "
+              >
+                RUN
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- code screen -->
+
+        <!-- editor -->
+        <div :class="editorHeight + ' grow pt-4'">
+          <div id="monaco_editor" style="width: 100%; height: 100%"></div>
+        </div>
+
+        <!-- output terminal -->
+
+        <div
+          v-if="outputTerminalVisibility"
+          class="flex flex-col transition ease-in-out delay-4s w-full h-outputTerminal px-4 pt-4 border-y border-borderColor"
+        >
+          <div class="flex justify-between h-1/6">
+            <div class="font-medium text-sm text-gray-500">OUTPUTS</div>
+            <v-icon
+              @click="showOutputTerminal(false)"
+              class="cursor-pointer"
+              name="io-close-outline"
+              scale="1.2"
+            />
           </div>
 
-          <div class="modal-body relative p-4 pb-2">
-            <div class="mb-2 text-gray-500">Raw data</div>
-            <textarea
-              ref="rawData"
-              class="p-2 w-full min-h-[200pt] border border-gray-300"
+          <!-- outputs-->
+          <div
+            id="haskell-output"
+            v-if="language === LanguageEnums.Haskell"
+            class="flex flex-col h-5/6 overflow-y-auto"
+          >
+            <p v-for="output in haskellOutputs" class="text-gray-800 py-1">
+              {{ output }}
+            </p>
+          </div>
+          <div
+            id="kuber-output"
+            v-else
+            class="flex flex-col h-5/6 overflow-y-auto"
+          >
+            <p v-for="output in kuberOutputs" class="text-gray-800 py-1">
+              {{ output }}
+            </p>
+          </div>
+        </div>
+
+        <!-- compiler tabbar -->
+        <div
+          class="flex w-full h-compilerTabbar border-t border-borderColor bg-bgUtilities"
+        >
+          <div
+            @click="showOutputTerminal(!outputTerminalVisibility)"
+            class="flex px-2 border-x border-borderColor text-sm text-gray-600 items-center cursor-pointer hover:bg-gray-100"
+          >
+            Outputs
+          </div>
+        </div>
+      </div>
+
+      <!-- utilities screen -->
+      <div
+        v-if="utilitiesVisibility"
+        class="flex flex-col w-6/20 h-full bg-white border-y border-borderColor"
+      >
+        <div
+          class="flex justify-between items-center font-medium text-gray-600 text-sm h-fileTabbar w-full border-b border-borderColor bg-white py-3 px-4"
+        >
+          <p>UTILITIES / {{ utility }}</p>
+          <v-icon
+            @click="showUtilities(false)"
+            class="cursor-pointer"
+            name="io-close-outline"
+            scale="1.2"
+          />
+        </div>
+        <div class="flex w-full px-4 py-8">
+          <!-- Address utitlity -->
+          <div
+            class="flex flex-col w-full items-start"
+            v-if="utility == UtilitiesEnums.Address"
+          >
+            <div class="mb-5 font-semibold text-gray-500">Enter Address</div>
+            <input
+              class="flex w-full input border border-gray-300 focus:border-gray-400"
+              type="text"
+              :value="address"
+              @input="onAddressInput"
             />
+            <div class="mt-4 mb-4" v-if="keyHash != ''">
+              <div class="text-gray-500 mb-1">Your keyhash</div>
+              <div>
+                <button class="flex" @click="performKeyHashCopy">
+                  <div>{{ keyHash }}</div>
+                  <div class="mt-1">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      fill="currentColor"
+                      class="bi bi-files"
+                      viewBox="0 0 16 16"
+                    >
+                      <path
+                        d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
+                      />
+                    </svg>
+                  </div>
+                </button>
+              </div>
+            </div>
+            <div class="mt-5">
+              <button @click="getKeyHash" class="button-old hover:bg-green-600">
+                Get Key Hash
+              </button>
+            </div>
+          </div>
+
+          <!-- Script Utilities -->
+          <div
+            class="flex w-full flex-col items-start"
+            v-if="utility == UtilitiesEnums.ScriptHash"
+          >
+            <div class="mb-5 font-semibold text-gray-500">
+              Enter script json
+            </div>
+            <textarea
+              class="textarea border border-gray-300 focus:border-gray-400"
+              :value="scriptJson"
+              @input="onScriptJsonInput"
+            />
+            <div class="mt-4 mb-4" v-if="policyId != ''">
+              <div class="text-gray-500 mb-1">Script policy id</div>
+              <div>
+                <button class="flex" @click="performPolicyIdCopy">
+                  <div>{{ policyId }}</div>
+                  <div class="mt-1">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      assets
+                      height="16"
+                      fill="currentColor"
+                      class="bi bi-files"
+                      viewBox="0 0 16 16"
+                    >
+                      <path
+                        d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
+                      />
+                    </svg>
+                  </div>
+                </button>
+              </div>
+            </div>
+            <div class="mt-6">
+              <button
+                @click="getScriptPolicy"
+                class="button-old hover:bg-green-600"
+              >
+                Get Policy Id
+              </button>
+            </div>
+          </div>
+
+          <!-- Hex Utility -->
+          <div
+            class="flex flex-col w-full items-center"
+            v-if="utility == UtilitiesEnums.Hex"
+          >
+            <div class="flex flex-col items-start w-full relative">
+              <div class="mb-5 text-gray-500 font-semibold">Raw data</div>
+              <textarea
+                :value="rawData"
+                @input="onHexInput"
+                class="p-2 textarea w-full min-h-[200pt] border border-gray-300 focus:border-gray-400"
+              />
               <div class="mt-4 mb-4" v-if="result || errorMsg">
                 <div v-if="errorMsg" class="text-red-500">
                   {{ errorMsg }}
                 </div>
                 <div v-else>
                   <div class="text-gray-500 mb-1 text-left">Result</div>
-                  <button class="w-full hover:bg-slate-100 py-0.5" @click="copyToClipboard(result)">
+                  <button
+                    class="w-full hover:bg-slate-100 py-0.5"
+                    @click="copyToClipboard(result)"
+                  >
                     <span class="">{{ result }}</span>
                     <span class="mt-1 pr-3 float-right">
                       <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          fill="currentColor"
-                          class="bi bi-files"
-                          viewBox="0 0 16 16"
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        fill="currentColor"
+                        class="bi bi-files"
+                        viewBox="0 0 16 16"
                       >
                         <path
-                            d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
+                          d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
                         />
                       </svg>
                     </span>
                   </button>
                 </div>
+              </div>
+            </div>
+            <div class="flex w-full items-start justify-start mt-4">
+              <button @click="encodeHex" class="button-old hover:bg-green-600">
+                Encode
+              </button>
+              <button
+                @click="decodeHex"
+                class="button-old hover:bg-green-600 ml-3"
+              >
+                Decode
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- utilites menu -->
+      <div
+        class="flex flex-col w-utilitiesMenu items-center font-semibold text-gray-600 text-sm justify-start bg-white h-full border border-borderColor"
+      >
+        <div
+          @click="changeUtility(UtilitiesEnums.Address)"
+          :class="
+            utility == UtilitiesEnums.Address
+              ? ' flex h-32 bg-bgSelectedUtility w-full border-b border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+              : 'flex h-32 bg-transparent w-full  border-b border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+          "
+        >
+          <p class="rotate-90">Address</p>
+        </div>
+
+        <div
+          @click="changeUtility(UtilitiesEnums.ScriptHash)"
+          :class="
+            utility == UtilitiesEnums.ScriptHash
+              ? ' flex h-32 bg-bgSelectedUtility w-full border-y border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+              : 'flex h-32 bg-transparent w-full border-y border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+          "
+        >
+          <p class="rotate-90">ScriptHash</p>
+        </div>
+
+        <div
+          @click="changeUtility(UtilitiesEnums.Hex)"
+          :class="
+            utility == UtilitiesEnums.Hex
+              ? ' flex h-32 bg-bgSelectedUtility w-full border-y border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+              : 'flex h-32 bg-transparent w-full border-y border-borderColor items-center justify-center cursor-pointer hover:bg-gray-100'
+          "
+        >
+          <p class="rotate-90">Hex</p>
+        </div>
+      </div>
+      <!--Network Modal -->
+      <div
+        class="modal fade fixed top-0 left-0 hidden w-full h-full outline-none overflow-x-hidden overflow-y-auto"
+        id="staticBackdrop"
+        data-bs-backdrop="static"
+        data-bs-keyboard="false"
+        tabindex="-1"
+        aria-labelledby="staticBackdropLabel"
+        aria-hidden="true"
+      >
+        <div class="font-sans modal-dialog relative w-auto pointer-events-none">
+          <div
+            class="h-full modal-content border-none shadow-lg relative flex flex-col w-full pointer-events-auto bg-white bg-clip-padding rounded-xl outline-none text-current"
+          >
+            <div
+              class="modal-header flex flex-shrink-0 text-sm text-gray-400 font-semibold items-center justify-between py-4 px-8 border-b border-gray-200 rounded-t-md"
+            >
+              <div>
+                <span class="mr-2"><v-icon name="ri-settings-5-line" /></span
+                >Edit/Add Networks
+              </div>
+
+              <v-icon
+                data-bs-dismiss="modal"
+                class="cursor-pointer text-gray-500"
+                name="io-close-outline"
+                scale="1.1"
+              />
+            </div>
+            <div class="modal-body relative flex flex-col pt-6">
+              <div
+                class="flex text-sm font-semibold text-gray-400 space-x-4 px-8"
+              >
+                <div
+                  @click="changeNetworkTab(NetworkSettingEnums.EditNetwork)"
+                  class="flex flex-col space-y-1 cursor-pointer"
+                >
+                  <div
+                    :class="
+                      networkSettingTab === NetworkSettingEnums.EditNetwork
+                        ? 'text-gray-800'
+                        : 'text-gray-400'
+                    "
+                  >
+                    Edit Network
+                  </div>
+                  <div
+                    v-if="networkSettingTab === NetworkSettingEnums.EditNetwork"
+                    class="h-[2px] bg-menuBar rounded-full"
+                  ></div>
+                </div>
+
+                <div
+                  @click="changeNetworkTab(NetworkSettingEnums.AddNetwork)"
+                  class="flex flex-col space-y-1 cursor-pointer"
+                >
+                  <div
+                    :class="
+                      networkSettingTab === NetworkSettingEnums.AddNetwork
+                        ? 'text-gray-800'
+                        : 'text-gray-400'
+                    "
+                  >
+                    Add Network
+                  </div>
+                  <div
+                    v-if="networkSettingTab === NetworkSettingEnums.AddNetwork"
+                    class="h-[2px] bg-menuBar rounded-full"
+                  ></div>
                 </div>
               </div>
-          <div
-            class="modal-footer flex flex-shrink-0 flex-wrap items-center justify-start p-4 border-t border-gray-200 rounded-b-md"
-          >
-            <button @click="encodeHex" class="button-old hover:bg-green-600">
-              Encode
-            </button>
-            <button @click="decodeHex" class="button-old hover:bg-green-600 ml-3">
-              Decode
-            </button>
 
-            <button
-              data-bs-dismiss="modal"
-              class="border ml-auto mr-2 border-red-200 pt-2 pb-2 pl-4 pr-4 rounded text-gray-500 hover:bg-red-400 hover:text-white"
-            >
-              Close
-            </button>
+              <!-- Edit Network -->
+              <div
+                v-if="networkSettingTab === NetworkSettingEnums.EditNetwork"
+                class="flex flex-col items-start mt-2 h-[295px] px-8 pb-4 overflow-y-auto"
+              >
+                <div
+                  v-for="api in Object.values(apis)"
+                  :key="api['display']"
+                  class="flex w-full space-x-2 items-center justify-between pt-2"
+                >
+                  <div
+                    :class="
+                      activeApi['name'] === api['name']
+                        ? api['text'] +
+                          ' flex justify-start items-start w-1/3 mr-4  text-sm  font-semibold hover:bg-transparent  text-start '
+                        : ' flex justify-start items-start w-1/3 mr-4  text-sm  font-semibold hover:bg-transparent  text-start text-gray-400'
+                    "
+                  >
+                    {{ api["name"] }}
+                    <span class="text-gray-400"
+                      ><v-icon
+                        v-if="api['name'] === 'Auto'"
+                        class="ml-2"
+                        name="hi-solid-lock-closed"
+                    /></span>
+                  </div>
+                  <input
+                    class="flex w-2/3 text-sm py-2 rounded-lg border border-borderColor px-4 font-normal hover:bg-transparent focus:border-blue-500 bg-transparent text-gray-700"
+                    type="text"
+                    :disabled="api['name'] === 'Auto'"
+                    :onblur="saveEditing"
+                    :value="
+                      editingNetwork[api['name']] != null
+                        ? editingNetwork[api['name']]
+                        : api['display']
+                    "
+                    @input="
+                      (event) => {
+                        editNetwork(api['name'], event);
+                      }
+                    "
+                  />
+                  <span
+                    v-if="
+                      api['name'] !== 'Auto' &&
+                      defaultNetworks.includes(api['name'])
+                    "
+                    ><v-icon
+                      @click="resetNetwork(api['name'])"
+                      class="text-gray-400 hover:text-gray-600 cursor-pointer"
+                      name="md-lockreset-round"
+                  /></span>
+                  <span v-else
+                    ><v-icon
+                      class="text-white cursor-default"
+                      name="md-lockreset-round"
+                  /></span>
+                </div>
+              </div>
+
+              <!-- Add network -->
+              <div
+                v-if="networkSettingTab === NetworkSettingEnums.AddNetwork"
+                class="flex flex-col items-start mt-2 h-[295px] px-8 pb-4 overflow-y-auto"
+              >
+                <div class="flex flex-col w-full space-y-2 pt-2">
+                  <div
+                    :class="' flex justify-start items-start w-1/3 mr-4  text-sm  font-semibold hover:bg-transparent  text-start text-gray-800'"
+                  >
+                    Network name
+                  </div>
+                  <input
+                    id="name"
+                    class="flex w-full text-sm py-2 rounded-lg border border-borderColor px-4 font-normal hover:bg-transparent bg-transparent text-gray-700 focus:border-blue-500"
+                    type="text"
+                    :value="newNetwork.name"
+                    @input="handleAddNetwork"
+                  />
+                </div>
+
+                <div class="flex flex-col w-full space-y-2 mt-4">
+                  <div
+                    :class="' flex justify-start items-start w-1/3 mr-4  text-sm  font-semibold hover:bg-transparent  text-start text-gray-800'"
+                  >
+                    URL
+                  </div>
+                  <input
+                    id="url"
+                    class="flex w-full text-sm py-2 rounded-lg border border-borderColor px-4 font-normal hover:bg-transparent bg-transparent text-gray-700 focus:border-blue-500"
+                    type="text"
+                    :value="newNetwork.url"
+                    @input="handleAddNetwork"
+                  />
+                </div>
+                <p
+                  v-for="error in newNetwork.errors"
+                  class="flex items-center text-red-500 text-xs pt-2"
+                >
+                  <span
+                    ><v-icon
+                      class="mr-1"
+                      name="md-erroroutline-outlined"
+                      scale="0.9"
+                  /></span>
+                  {{ error }}
+                </p>
+                <div
+                  class="flex justify-center items-center bg-primary hover:bg-blue-600 py-1 mt-5 text-white font-semibold text-sm w-16 rounded-md shadow-sm cursor-pointer"
+                  @click="addNewNetwork()"
+                >
+                  Save
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
-    <v-ace-editor
-      value=""
-      @init="editorInit"
-      lang="json"
-      theme="chrome"
-      style="height: 100%; width: 100%"
-    />
   </div>
 </template>
 <script lang="ts">
 import * as _notification from "@dafcoe/vue-notification";
+import loader from "@monaco-editor/loader";
 import { useToast } from "vue-toast-notification";
+import {
+  Address,
+  BaseAddress,
+  Ed25519KeyHash,
+  EnterpriseAddress,
+  PointerAddress,
+} from "@emurgo/cardano-serialization-lib-asmjs";
+import { SchemaKuber } from "./schemas";
+import Description from "./descriptions";
+import { LanguageEnums } from "@/models/enums/LanguageEnum";
+import APIService from "@/services/api_service";
+import { UtilitiesEnums } from "@/models/enums/UtilitiesEnum";
+import {
+  DefaultComment,
+  ExampleTransfer,
+  NetworkUrls,
+  SimpleContractCode,
+} from "@/models/constants";
+import {
+  AddNetworkErrorEnums,
+  NetworkEnums,
+  NetworkSettingEnums,
+} from "@/models/enums/SettingEnum";
 
 const notification = _notification.useNotificationStore();
+
 export default {
+  editor: null,
   mounted() {
     let counter = 8;
     const __this = this;
+    this.editorInit();
 
     function refreshProvider() {
       __this.providers = listProviders();
@@ -335,20 +731,39 @@ export default {
       else __this.timeout = 0;
     }
     this.providers = listProviders();
+    this.provider = this.providers.length != 0 ? this.providers[0] : null;
     this.timeout = setTimeout(refreshProvider, 1000);
   },
   data() {
     const providers: Array<CIP30Provider> = [];
-    let defaultApi = {
-      text: "text-gray-500",
+    const provider: CIP30Provider = null;
+    let defaultApi = JSON.parse(localStorage.getItem("network")) || {
+      text: "text-[#60A5FA]",
       name: "Auto",
+      border: "border-[#60A5FA]",
       display: "Mainnet/PreProd based on wallet NetworkId",
       url: undefined,
     };
+    const customNetworks = JSON.parse(localStorage.getItem("networks")) || {};
+
     let result = {
+      editorHeight: "h-editorStretch",
+      editorWidth: "w-editor",
+      editingNetwork: {},
+      newNetwork: { name: "", url: "", errors: [] },
+      haskellOutputs: [],
+      networkSettingTab: NetworkSettingEnums.EditNetwork,
+      kuberOutputs: [],
+      outputTerminalVisibility: false,
+      networkDropdownVisibility: false,
+      utilitiesVisibility: true,
+      isCompiling: false,
+      jsonLogo: jsonLogo,
       providers: providers,
+      provider: provider,
       addSelections: true,
-      editor: null,
+      utility: UtilitiesEnums.Address,
+      language: LanguageEnums.Kuber,
       interval: 0,
       timeout: 0,
       showKeyHashModal: false,
@@ -361,57 +776,275 @@ export default {
       result: "",
       errorMsg: "",
       activeApi: defaultApi,
-      apis: [
-        defaultApi,
-        {
-          text: "text-blue-400",
-          name: "Preview Testnet",
-          display: "https://preview.cnftregistry.io/kuber",
-          url: "https://preview.cnftregistry.io/kuber",
-        },
-        {
-          text: "text-orange-400",
-          name: "Preprod Testnet",
-          display: "https://preprod.cnftregistry.io/kuber",
-          url: "https://preprod.cnftregistry.io/kuber",
-        },
-        {
-          text: "text-red-400",
-          name: "Mainnet",
-          display: "https://cnftregistry.io/kuber",
-          url: "https://cnftregistry.io/kuber",
-        },
-        {
-          text: "text-gray-300",
-          name: "Legacy Testnet",
-          display: "https://testnet.cnftregistry.io/kuber",
-          url: "https://testnet.cnftregistry.io/kuber",
-        },
-        {
-          text: "text-gray-500",
-          name: "Localhost",
-          display: "http://localhost:8081",
-          url: "http://localhost:8081",
-        },
+      defaultNetworks: [
+        NetworkEnums.Auto,
+        NetworkEnums.LegacyTestnet,
+        NetworkEnums.Localhost,
+        NetworkEnums.Mainnet,
+        NetworkEnums.PreprodTestnet,
+        NetworkEnums.PreviewTestnet,
       ],
+      apis: {
+        auto: {
+          text: "text-[#60A5FA]",
+          name: "Auto",
+          border: "border-[#60A5FA]",
+          display: "Mainnet/PreProd based on wallet NetworkId",
+          url: undefined,
+        },
+        "preview testnet": {
+          text: "text-blue-400",
+          border: "border-blue-400",
+          name: "Preview Testnet",
+          display:
+            localStorage.getItem("Preview Testnet") ||
+            NetworkUrls[NetworkEnums.PreviewTestnet],
+          url:
+            localStorage.getItem("Preview Testnet") ||
+            NetworkUrls[NetworkEnums.PreviewTestnet],
+        },
+        "preprod testnet": {
+          text: "text-orange-400",
+          border: "border-orange-400",
+          name: "Preprod Testnet",
+          display:
+            localStorage.getItem("Preprod Testnet") ||
+            NetworkUrls[NetworkEnums.PreprodTestnet],
+          url:
+            localStorage.getItem("Preprod Testnet") ||
+            NetworkUrls[NetworkEnums.PreprodTestnet],
+        },
+        mainnet: {
+          text: "text-red-400",
+          border: "border-red-400",
+          name: "Mainnet",
+          display:
+            localStorage.getItem("Mainnet") ||
+            NetworkUrls[NetworkEnums.Mainnet],
+          url:
+            localStorage.getItem("Mainnet") ||
+            NetworkUrls[NetworkEnums.Mainnet],
+        },
+        "legacy Testnet": {
+          text: "text-gray-300",
+          border: "border-gray-400",
+          name: "Legacy Testnet",
+          display:
+            localStorage.getItem("Legacy Testnet") ||
+            NetworkUrls[NetworkEnums.LegacyTestnet],
+          url:
+            localStorage.getItem("Legacy Testnet") ||
+            NetworkUrls[NetworkEnums.LegacyTestnet],
+        },
+        localhost: {
+          text: "text-gray-500",
+          border: "border-blue-500",
+          name: "Localhost",
+          display:
+            localStorage.getItem("Localhost") ||
+            NetworkUrls[NetworkEnums.Localhost],
+          url:
+            localStorage.getItem("Localhost") ||
+            NetworkUrls[NetworkEnums.Localhost],
+        },
+        ...customNetworks,
+      },
     };
+
     // result.activeApi=result.apis[0]
     return result;
   },
+
   beforeUnmount() {
     this.interval && clearInterval(this.interval);
     this.timeout && clearTimeout(this.timeout);
   },
   methods: {
+    showOutputTerminal(visibility: boolean) {
+      this.outputTerminalVisibility = visibility;
+      if (visibility) {
+        this.editorHeight = "h-editor";
+      } else {
+        this.editorHeight = "h-editorStretch";
+      }
+    },
+    showUtilities(visibility: boolean) {
+      this.utilitiesVisibility = visibility;
+      if (!visibility) {
+        this.editorWidth = "w-editorStretch";
+        this.changeUtility(null);
+      } else {
+        this.editorWidth = "w-editor";
+      }
+    },
+    changeNetworkTab(tab: NetworkSettingEnums) {
+      this.networkSettingTab = tab;
+    },
+    updateOutputScroll(id: string) {
+      var element = document.getElementById(id);
+      element.scrollTop = element.scrollHeight;
+    },
+
+    saveEditing() {
+      const networkName = Object.keys(this.editingNetwork)[0];
+      const value = this.editingNetwork[networkName];
+      this.apis[networkName].display = value;
+      this.apis[networkName].url = value;
+      localStorage.setItem(networkName, value);
+      this.editingNetwork = {};
+    },
+
+    resetNetwork(networkName: string) {
+      localStorage.removeItem(networkName);
+      this.apis[networkName].display = NetworkUrls[networkName];
+      this.apis[networkName].url = NetworkUrls[networkName];
+    },
+
+    editNetwork(name: string, event) {
+      this.editingNetwork[name] = event.target.value;
+    },
+
+    handleAddNetwork(event) {
+      console.log(event);
+      const id = event.target.id;
+      if (id === "name") {
+        const value = event.target.value;
+        this.newNetwork.name = value;
+
+        this.validateAddNetwork(id, value);
+      } else {
+        const value = event.target.value;
+        this.newNetwork.url = event.target.value;
+        this.validateAddNetwork(id, value);
+      }
+    },
+    validateAddNetwork(id, value: string) {
+      console.log(this.newNetwork.errors);
+      if (id === "name") {
+        const emptyNameIndex = this.newNetwork.errors.indexOf(
+          AddNetworkErrorEnums.EmptyName
+        );
+        if (emptyNameIndex > -1) {
+          this.newNetwork.errors.splice(emptyNameIndex, 1);
+        }
+        const duplicateNameIndex = this.newNetwork.errors.indexOf(
+          AddNetworkErrorEnums.DuplicateName
+        );
+        if (this.apis[value.toLowerCase()]) {
+          if (duplicateNameIndex === -1) {
+            this.newNetwork.errors.push(AddNetworkErrorEnums.DuplicateName);
+          }
+        } else {
+          if (duplicateNameIndex > -1) {
+            this.newNetwork.errors.splice(duplicateNameIndex, 1);
+          }
+        }
+      } else {
+        const index = this.newNetwork.errors.indexOf(
+          AddNetworkErrorEnums.EmptyUrl
+        );
+        if (index > -1) {
+          this.newNetwork.errors.splice(index, 1);
+        }
+      }
+    },
+
+    addNewNetwork() {
+      if (this.newNetwork.errors.length === 0) {
+        if (this.newNetwork.name !== "") {
+          const networkName = this.newNetwork.name;
+          if (this.newNetwork.url !== "") {
+            const networks = JSON.parse(localStorage.getItem("networks")) || {};
+
+            const url = this.newNetwork.url;
+            networks[networkName.toLocaleLowerCase()] = {
+              text: "text-green-400",
+              border: "border-green-400",
+              name: networkName,
+              display: url,
+              url: url,
+            };
+            this.apis = { ...this.apis, ...networks };
+            const networksJson = JSON.stringify(networks);
+            localStorage.setItem("networks", networksJson);
+            this.newNetwork = { name: "", url: "", errors: [] };
+          } else {
+            this.newNetwork.errors.push(AddNetworkErrorEnums.EmptyUrl);
+          }
+        } else {
+          this.newNetwork.errors.push(AddNetworkErrorEnums.EmptyName);
+        }
+      }
+    },
+
+    setKuberOutput(output: string) {
+      this.kuberOutputs.push(output);
+      this.updateOutputScroll("kuber-output");
+    },
+
+    setHaskellOutput(output: string) {
+      this.haskellOutputs.push(output);
+      this.updateOutputScroll("haskell-output");
+    },
+    changeLanguage(language: LanguageEnums) {
+      if (this.language !== language) {
+        this.showOutputTerminal(false);
+      }
+      this.language = language;
+
+      if (language == LanguageEnums.Haskell) {
+        const storedCode = localStorage.getItem(LanguageEnums.Haskell);
+        if (storedCode) {
+          this.$options.editor.setValue(storedCode);
+        } else {
+          this.$options.editor.setValue(SimpleContractCode);
+        }
+      } else {
+        const storedCode = localStorage.getItem(LanguageEnums.Kuber);
+        if (storedCode) {
+          this.$options.editor.setValue(storedCode);
+        } else {
+          this.$options.editor.setValue(ExampleTransfer);
+        }
+      }
+
+      const model = this.$options.editor.getModel();
+      loader.init().then((monaco) => {
+        monaco.editor.setModelLanguage(model, language);
+      });
+    },
+
+    changeUtility(utility: UtilitiesEnums | null) {
+      if (!this.utilitiesVisibility && utility != null) {
+        this.showUtilities(true);
+      }
+      this.utility = utility;
+    },
+
+    setProvider(provider: CIP30Provider) {
+      this.provider = provider;
+    },
+
+    handleNetworkDropDown() {
+      console.log(this.networkDropdownVisibility);
+      this.networkDropdownVisibility = !this.networkDropdownVisibility;
+    },
+
     handleApiSelected(value) {
       this.activeApi = value;
+      this.networkDropdownVisibility = false;
       console.log("api selected", value);
+      localStorage.setItem("network", JSON.stringify(value));
     },
+
     onAddressInput(event) {
       this.address = event.target.value;
     },
     onScriptJsonInput(event) {
       this.scriptJson = event.target.value;
+    },
+    onHexInput(event) {
+      this.rawData = event.target.value;
     },
     performKeyHashCopy() {
       useToast().success("Copied Key Hash");
@@ -438,18 +1071,18 @@ export default {
     encodeHex() {
       this.errorMsg = "";
       //@ts-ignore
-      const encoded = Buffer.from(this.$refs.rawData.value).toString("hex");
+      const encoded = Buffer.from(this.rawData).toString("hex");
       this.result = encoded;
     },
     decodeHex() {
       this.errorMsg = "";
       //@ts-ignore
-      let val = this.$refs.rawData.value;
+      let val = this.rawData;
       if (val) {
-        const decoded = Buffer.from(val, "hex")
-        if (decoded.toString("hex")  === val ) {
-          let result= decoded.toString("utf-8")
-          console.log("decoded",result );
+        const decoded = Buffer.from(val, "hex");
+        if (decoded.toString("hex") === val) {
+          let result = decoded.toString("utf-8");
+          console.log("decoded", result);
           this.result = result;
         } else {
           this.errorMsg = "Invalid input";
@@ -460,125 +1093,238 @@ export default {
     },
     getKeyHash() {
       // TODO do this with serialization library and not by calling api
-      getKeyHashOfAddressFromKuber(this.activeApi.url, this.address)
-        .catch((err) => alert(err))
-        .then((res) => {
-          this.keyHash = res.keyHash;
-        });
+      let addr = Address.from_bech32(this.address);
+      let addrBase = BaseAddress.from_address(addr);
+      let addrPointer = PointerAddress.from_address(addr);
+      let addrEnterprise = EnterpriseAddress.from_address(addr);
+      let keyHash: Ed25519KeyHash;
+      if (addrBase) {
+        console.log("hashKind", addrBase.payment_cred().kind);
+        keyHash = addrBase.payment_cred().to_keyhash();
+      } else if (addrPointer) {
+        keyHash = addrPointer.payment_cred().to_keyhash();
+      } else if (addrEnterprise) {
+        keyHash = addrEnterprise.payment_cred().to_keyhash();
+      }
+      let keyHashHex = Buffer.from(keyHash.to_bytes()).toString("hex");
+
+      this.keyHash = keyHashHex;
+
+      // getKeyHashOfAddressFromKuber(this.activeApi.url, this.address)
+      //   .catch((err) => alert(err))
+      //   .then((res) => {
+      //     this.keyHash = res.keyHash;
+      //   });
     },
     getScriptPolicy() {
       // TODO do this with serialization library and not by calling api
-      getPolicyIdOfScriptFromKuber(this.activeApi.url, this.scriptJson)
+      getPolicyIdOfScriptFromKuber(
+        this.activeApi.url || this.apis["Mainnet"].url,
+        this.scriptJson
+      )
         .catch((err) => alert(err))
         .then((res: string) => {
           this.policyId = res;
         });
     },
-    submitTx(provider: CIP30Provider) {
-      const editorContent = this.editor.getValue();
-      this.save(editorContent);
-      let request;
-      try {
-        request = JSON.parse(editorContent);
-      } catch (e: any) {
-        notification.setNotification({
-          type: "alert",
-          message: e.message,
-        });
-        return;
-      }
-      return provider
-        .enable()
-        .then(async (instance: CIP30Instace) => {
-          const collateral = instance.getCollateral
-            ? (await instance.getCollateral().catch(() => {})) || []
-            : [];
-          if (request.collaterals && typeof request.collaterals.push === "function") {
-            collateral.forEach((x) => request.collaterals.push(x));
-          } else if (collateral.length) {
-            request.collaterals = collateral;
-          }
-          if (this.addSelections) {
-            const availableUtxos = await instance.getUtxos();
 
-            if (request.selections) {
-              if (typeof request.selections.push === "function") {
-                availableUtxos.forEach((v) => {
-                  request.selections.push(v);
-                });
-              }
-            } else {
-              request.selections = availableUtxos;
-            }
-            return callKuberAndSubmit(
-              instance,
-              this.activeApi.url,
-              JSON.stringify(request)
-            );
+    compileCode() {
+      console.log("compiling code");
+      this.isCompiling = true;
+
+      if (this.$options.editor != null) {
+        var code = this.$options.editor.getValue();
+        code = code.trim();
+        localStorage.setItem(LanguageEnums.Haskell, code);
+        APIService.compileCode(code).then((value) => {
+          this.showOutputTerminal(true);
+          this.isCompiling = false;
+          if (value) {
+            this.setHaskellOutput(value);
           } else {
-            return callKuberAndSubmit(
-              instance,
-              this.activeApi.url,
-              JSON.stringify(request)
-            );
+            this.setHaskellOutput("Some unknown error occured");
           }
-        })
-        .catch((e: any) => {
-          console.error("SubmitTx", e);
+        });
+      } else {
+      }
+      // console.log(this.$options.editor.getValue());
+    },
+
+    submitTx(provider: CIP30Provider) {
+      this.isCompiling = true;
+      this.showOutputTerminal(true);
+      if (this.$options.editor != null) {
+        var editorContent = this.$options.editor.getValue();
+        editorContent = editorContent.replace(DefaultComment, "");
+        editorContent = editorContent.trim();
+        localStorage.setItem(LanguageEnums.Kuber, editorContent);
+        let request;
+        try {
+          request = JSON.parse(editorContent);
+          console.log("success");
+        } catch (e: any) {
           notification.setNotification({
             type: "alert",
-            message: e.message || "Oopsie, Nobody knows what happened",
+            message: e.message,
           });
+          this.setKuberOutput(e.message);
+          this.isCompiling = false;
+          return;
+        }
+
+        return provider
+          .enable()
+          .then(async (instance: CIP30Instace) => {
+            const collateral = instance.getCollateral
+              ? (await instance.getCollateral().catch(() => {})) || []
+              : [];
+            if (
+              request.collaterals &&
+              typeof request.collaterals.push === "function"
+            ) {
+              collateral.forEach((x) => request.collaterals.push(x));
+            } else if (collateral.length) {
+              request.collaterals = collateral;
+            }
+            if (this.addSelections) {
+              const availableUtxos = await instance.getUtxos();
+              if (request.selections) {
+                if (typeof request.selections.push === "function") {
+                  availableUtxos.forEach((v) => {
+                    request.selections.push(v);
+                  });
+                }
+              } else {
+                request.selections = availableUtxos;
+              }
+
+              ("");
+
+              const res = await callKuberAndSubmit(
+                instance,
+                this.activeApi.url,
+                JSON.stringify(request)
+              );
+              console.log(res);
+              console.log("ping");
+              if (res) {
+                res.forEach((output) => {
+                  this.setKuberOutput(output);
+                });
+              }
+
+              this.isCompiling = false;
+            } else {
+              const res = await callKuberAndSubmit(
+                instance,
+                this.activeApi.url,
+                JSON.stringify(request)
+              );
+              console.log(res);
+
+              if (res) {
+                res.forEach((output) => {
+                  this.setKuberOutput(output);
+                });
+              }
+
+              this.isCompiling = false;
+            }
+          })
+          .catch((e: any) => {
+            console.error("SubmitTx", e);
+            notification.setNotification({
+              type: "alert",
+              message: e.message || "Oopsie, Nobody knows what happened",
+            });
+            this.kuberOutputs.push(
+              e.message || "Oopsie, Nobody knows what happened"
+            );
+            this.isCompiling = false;
+          });
+      }
+    },
+
+    editorInit() {
+      // intializing monaco editor
+
+      loader.init().then((monaco) => {
+        var jsonCode = "";
+        const storedCode = localStorage.getItem(LanguageEnums.Kuber);
+        if (storedCode) {
+          jsonCode = [storedCode].join("\n");
+        } else {
+          jsonCode = [DefaultComment + "\n\n" + ExampleTransfer].join("\n");
+        }
+        var modelUri = monaco.Uri.parse("a://b/kuber.json");
+        var model = monaco.editor.createModel(jsonCode, "json", modelUri);
+
+        monaco.languages.register({ id: "haskell" });
+        monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+          validate: true,
+          allowComments: true,
+          schemas: [
+            {
+              uri: "http://myserver/kuber-schema.json",
+              fileMatch: [modelUri.toString()],
+              schema: SchemaKuber,
+            },
+          ],
         });
-    },
-    editorInit(v: any) {
-      // options for enabling autocompletion
-      const options = {
-        useWorker: true,
-        autoScrollEditorIntoView: true,
-        enableBasicAutocompletion: true,
-        enableSnippets: true,
-        enableLiveAutocompletion: true,
-      };
+        // registering hover provider
+        monaco.languages.registerHoverProvider("json", {
+          // @ts-ignore
+          provideHover: function (model, position) {
+            const wordDetails = model.getWordAtPosition(position);
+            const description = Description.kuberDescription(wordDetails.word);
+            return {
+              range: new monaco.Range(
+                position.lineNumber,
+                wordDetails.startColumn,
+                model.getLineCount(),
+                model.getLineMaxColumn(model.getLineCount())
+              ),
+              contents: [
+                { value: "**DESCRIPTION**" },
+                {
+                  value: description,
+                },
+              ],
+            };
+          },
+        });
 
-      v.setOptions(options);
+        const theme = {
+          base: "vs",
+          inherit: true,
+          rules: [
+            {
+              token: "custom-info",
+              background: "ffffff",
+            },
+            { token: "custom-error", foreground: "ee4444" },
+            { token: "custom-notice", foreground: "1055af" },
+            { token: "custom-date", foreground: "20aa20" },
+          ],
+          colors: {
+            "editor.background": "#F5F5F5",
+          },
+        };
 
-      const suggestionData = {
-        getCompletions: function (editor, session, pos, prefix, callback) {
-          if (prefix.length === 0) {
-            callback(null, []);
-            return;
+        // @ts-ignore
+        monaco.editor.defineTheme("myTheme", theme);
+
+        this.$options.editor = monaco.editor.create(
+          document.getElementById("monaco_editor"),
+          {
+            model: model,
+            minimap: { enabled: false },
+            theme: "myTheme",
+            automaticLayout: true,
           }
-          callback(
-            null,
-            suggestion.map((suggestion) => suggestion)
-          );
-        },
-      };
-
-      // add the suggestion data to editor instance
-      v.completers = [suggestionData];
-
-      const session = v.getSession();
-      session.setTabSize(2);
-      session.setOptions({
-        basicAutocompletion: true,
-        useWorker: true,
+        );
       });
-      session.setUseWrapMode(true);
-      session.setValue(localStorage.getItem("editor.content") || "{\n\n}");
-      this.interval = setInterval(() => {
-        this.save(this.editor.getValue());
-      }, 2000);
-      this.editor = session;
-      console.log(session);
     },
-    save(v: string) {
-      localStorage.setItem("editor.content", v);
-    },
-  },
-  components: {
-    VAceEditor,
   },
 };
 </script>
@@ -588,27 +1334,6 @@ export default {
 </style>
 
 <style scoped>
-.dropdown-content {
-  display: none;
-  position: absolute;
-  background-color: #f1f1f1;
-  min-width: 160px;
-  overflow: auto;
-  box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
-  z-index: 1;
-}
-
-.dropdown-content button {
-  color: black;
-  padding: 12px 16px;
-  text-decoration: none;
-  display: block;
-}
-
-.dropdown a:hover {
-  background-color: #ddd;
-}
-
 .show {
   display: block;
 }
@@ -658,6 +1383,27 @@ export default {
   cursor: pointer;
 }
 
+.textover {
+  position: relative;
+  cursor: pointer;
+  display: inline-block;
+}
+
+.textover .text {
+  visibility: hidden;
+  width: 120px;
+  background-color: black;
+  color: #fff;
+  text-align: center;
+  padding: 5px 0;
+  border-radius: 6px;
+  position: absolute;
+  z-index: 1;
+}
+
+.textover:hover .text {
+  visibility: visible;
+}
 /* ---------------------------------- */
 .fade-enter-active,
 .fade-leave-active {
@@ -698,14 +1444,24 @@ export default {
 
 .input {
   height: 50px;
-  width: 500px;
+  width: 100%;
   padding: 5px;
+  border-radius: 4px;
 }
 
 .textarea {
   height: 200px;
-  width: 500px;
+  width: 100%;
   padding: 5px;
+  border-radius: 4px;
+}
+
+textarea:focus {
+  outline-width: 0;
+}
+
+input:focus {
+  outline-width: 0;
 }
 
 button span {

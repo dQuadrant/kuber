@@ -218,7 +218,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin fixedInputs) spendableUtxos
       calculator= computeBody meta (Lovelace cpw) compulsarySignatories  fixedInputSum availableInputs (map fst collaterals) fixedOutputs
       colalteralSignatories = Set.fromList ( map snd collaterals)
-      withExtraSigs = appendExtraSignatures extraSignatures colalteralSignatories
+      withExtraSigs = appendExtraSignatures  colalteralSignatories extraSignatures
       withMintSignatures = appendMintingScriptSignatures withExtraSigs (map (\(TxMintData (_,wit) _ _)-> wit) resolvedMints)
       compulsarySignatories = foldl (\acc x -> case x of
                           Left (_,TxOut a _ _ _) -> case addressInEraToPaymentKeyHash  a of
@@ -317,19 +317,16 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       _ -> False ) _inputs
 
 
-    -- unEitherExecutionUnit e= case e of
-    --   Left e -> throw $  SomeError  $ "EvaluateExecutionUnits: " ++ show e
-    --   Right v -> pure v
-    appendExtraSignatures :: [TxSignature] -> Set (Hash PaymentKey) -> Set (Hash PaymentKey)
-    appendExtraSignatures signatures _set = foldl (\set item -> case item of
+    appendExtraSignatures :: Set (Hash PaymentKey)  -> [TxSignature] -> Set (Hash PaymentKey)
+    appendExtraSignatures  = foldl (\set item -> case item of
         TxSignatureAddr aie -> case addressInEraToPaymentKeyHash   aie of
                                 Just pkh -> Set.insert pkh set
                                 Nothing -> set
         TxSignaturePkh pkh -> case pkhToPaymentKeyHash pkh of
                                 Just pkh' -> Set.insert pkh' set
                                 Nothing -> set
-        TxSignatureSkey sk -> Set.insert (skeyToPaymentKeyHash   sk) _set
-      ) _set signatures
+        TxSignatureSkey sk -> Set.insert (skeyToPaymentKeyHash   sk) set
+      )
 
     classifyMints mp  = mapM  (classifyMint mp)
 
@@ -486,7 +483,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
     totxIn  i  parsedInput = case parsedInput of
       Left (a,b) -> (i,BuildTxWith a)
       Right (e,a,b) -> (i,BuildTxWith  ( ScriptWitness ScriptWitnessForSpending a )  )
-    mkBodyContent meta fixedInputs extraUtxos outs collateral  txMintValue' fee =  bodyContent --   Debug.trace ("Body Content :\n" ++ show bodyContent) bodyContent
+    mkBodyContent meta fixedInputs extraUtxos outs collateral  txMintValue' fee =  bodyContent
       where
       references =  Set.fromList (map (\(TxInputReference a) -> a) _inputRefs) <>   referenceInputsFromScriptReference <> referenceInputsFromMint
       bodyContent=(TxBodyContent {

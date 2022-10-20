@@ -46,6 +46,7 @@ module Cardano.Kuber.Util
     , calculateTxoutMinLovelace
     , evaluateExecutionUnits
     , evaluateExUnitMap
+    , evaluateFee
     , babbageMinLovelace
 
     -- query helpers
@@ -203,6 +204,15 @@ evaluateExecutionUnits (DetailedChainInfo costPerWord conn pParam ledgerPparam s
             Right exUnitMap -> pure $ Prelude.map (\case
                                         Left see -> Left (show see)
                                         Right eu -> Right eu  )   (Map.elems exUnitMap)
+
+evaluateFee :: DetailedChainInfo ->  Tx BabbageEra -> IO Integer
+evaluateFee (DetailedChainInfo costPerWord conn pParam ledgerPparam systemStart eraHistory)  tx = do
+    let txbody =  getTxBody tx
+
+        _inputs :: Set.Set TxIn
+        _inputs = case txbody of {ShelleyTxBody sbe tb scripts scriptData mAuxData validity -> Set.map fromShelleyTxIn   $ inputs tb }
+        (Lovelace fee) = evaluateTransactionFee pParam txbody (fromIntegral  $  length  $ getTxWitnesses tx) 0
+    pure fee
 
 
 evaluateExUnitMapIO ::  DetailedChainInfo  ->  TxBody BabbageEra -> IO ( Either FrameworkError   (Map TxIn ExecutionUnits,Map PolicyId  ExecutionUnits))

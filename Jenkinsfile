@@ -64,8 +64,8 @@ pipeline {
                     script {
                           docker.withServer("${DEPLOYMENT_CLOUD}") {
                               docker.withRegistry("https://${DEPLOYMENT_REGISTRY}", "${DEPLOYMENT_REGISTRY}") {
-                                sh "docker service update --with-registry-auth --image ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${COMPUTED_DOCKER_TAG} ${DEPLOYMENT_SERVICE}_mainnet"
-                                sh "docker service update --with-registry-auth --image ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${COMPUTED_DOCKER_TAG} ${DEPLOYMENT_SERVICE}_testnet"
+                                sh "docker service update --with-registry-auth --image ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${COMPUTED_DOCKER_TAG} ${DEPLOYMENT_SERVICE}_preview"
+                                sh "docker service update --with-registry-auth --image ${DEPLOYMENT_REGISTRY}/${DEPLOYMENT_IMAGE_NAME}:${COMPUTED_DOCKER_TAG} ${DEPLOYMENT_SERVICE}_preprod"
                               }
                           }
                     }
