@@ -18,13 +18,23 @@ import {
   IoCloseOutline,
   BiCheckCircleFill,
   IoInformationCircle,
+  MdModeeditoutline,
+  FaEdit,
+  RiSettings5Line,
+  MdLockresetRound,
+  HiSolidLockClosed,
 } from "oh-vue-icons/icons";
 
 addIcons(
   MdKeyboardarrowdownRound,
   IoCloseOutline,
   BiCheckCircleFill,
-  IoInformationCircle
+  IoInformationCircle,
+  MdModeeditoutline,
+  FaEdit,
+  RiSettings5Line,
+  MdLockresetRound,
+  HiSolidLockClosed
 );
 const app = createApp(App).component("v-icon", OhVueIcon);
 app.use(VueNotificationList);

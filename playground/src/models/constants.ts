@@ -30,3 +30,11 @@ export const ExampleTransfer = `{
 
 export const DefaultComment =
   "// Auto completion is a testing feature, It maynot always work.";
+
+export const NetworkUrls = {
+  "Preview Testnet": "https://preview.cnftregistry.io/kuber",
+  "Preprod Testnet": "https://preprod.cnftregistry.io/kuber",
+  Mainnet: "https://cnftregistry.io/kuber",
+  "Legacy Testnet": "https://testnet.cnftregistry.io/kuber",
+  Localhost: "http://localhost:8081",
+};

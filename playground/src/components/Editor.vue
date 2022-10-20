@@ -78,8 +78,8 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               @click="handleNetworkDropDown()"
               aria-expanded="false"
             >
-              <tag v-if="activeApi" :class="activeApi.text + ' py-1 pl-2'"
-                >{{ activeApi.name }}
+              <tag v-if="activeApi" :class="activeApi['text'] + ' py-1 pl-2'"
+                >{{ activeApi["name"] }}
                 <span class="pr-2">
                   <v-icon name="md-keyboardarrowdown-round" />
                 </span>
@@ -93,29 +93,41 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
 
             <table
               v-if="networkDropdownVisibility"
-              class="flex flex-col w-full right-0 min-w-max absolute bg-white text-base z-50 float-left py-2 text-left rounded-lg shadow-lg mt-1 m-0 bg-clip-padding border-2 border-blue-400 border-opacity-30"
+              class="flex flex-col w-full right-0 min-w-max absolute bg-white text-base z-50 float-left pt-2 text-left rounded-lg shadow-lg mt-1 m-0 bg-clip-padding border-2 border-blue-400 border-opacity-30"
               aria-labelledby="dropdownMenuButton1"
             >
               <tr
-                v-for="api in apis"
-                :key="api.display"
+                v-for="api in Object.values(apis)"
+                :key="api['display']"
                 @click="handleApiSelected(api)"
                 class="border-b-2 hover:bg-gray-100 cursor-pointer"
               >
                 <td
                   :class="
-                    api.text +
+                    api['text'] +
                     '  mr-4 dropdown-item text-sm py-2 px-4 font-normal hover:bg-transparent bg-transparent text-center text-gray-700'
                   "
                 >
-                  {{ api.name }}
+                  {{ api["name"] }}
                 </td>
                 <td
                   class="dropdown-item text-sm py-2 px-4 font-normal hover:bg-transparent bg-transparent text-gray-700"
                 >
-                  {{ api.display }}
+                  {{ api["display"] }}
                 </td>
               </tr>
+
+              <button
+                type="button"
+                class="flex items-center cursor-pointer py-3 justify-center text-sm px-4 font-semibold hover:bg-menuBar rounded-b-lg hover:text-white bg-transparent text-gray-700"
+                data-bs-toggle="modal"
+                data-bs-target="#staticBackdrop"
+              >
+                Edit/Add Network
+                <span>
+                  <v-icon class="ml-2" name="fa-edit" />
+                </span>
+              </button>
             </table>
           </div>
         </div>
@@ -484,6 +496,183 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
           <p class="rotate-90">Hex</p>
         </div>
       </div>
+      <!--Network Modal -->
+      <div
+        class="modal fade fixed top-0 left-0 hidden w-full h-full outline-none overflow-x-hidden overflow-y-auto"
+        id="staticBackdrop"
+        data-bs-backdrop="static"
+        data-bs-keyboard="false"
+        tabindex="-1"
+        aria-labelledby="staticBackdropLabel"
+        aria-hidden="true"
+      >
+        <div class="font-sans modal-dialog relative w-auto pointer-events-none">
+          <div
+            class="h-full modal-content border-none shadow-lg relative flex flex-col w-full pointer-events-auto bg-white bg-clip-padding rounded-xl outline-none text-current"
+          >
+            <div
+              class="modal-header flex flex-shrink-0 text-sm text-gray-400 font-semibold items-center justify-between py-4 px-8 border-b border-gray-200 rounded-t-md"
+            >
+              <div>
+                <span class="mr-2"><v-icon name="ri-settings-5-line" /></span
+                >Edit/Add Networks
+              </div>
+
+              <v-icon
+                data-bs-dismiss="modal"
+                class="cursor-pointer text-gray-500"
+                name="io-close-outline"
+                scale="1.1"
+              />
+            </div>
+            <div class="modal-body relative flex flex-col pt-6">
+              <div
+                class="flex text-sm font-semibold text-gray-400 space-x-4 px-8"
+              >
+                <div
+                  @click="changeNetworkTab(NetworkSettingEnums.EditNetwork)"
+                  class="flex flex-col space-y-1 cursor-pointer"
+                >
+                  <div
+                    :class="
+                      networkSettingTab === NetworkSettingEnums.EditNetwork
+                        ? 'text-gray-800'
+                        : 'text-gray-400'
+                    "
+                  >
+                    Edit Network
+                  </div>
+                  <div
+                    v-if="networkSettingTab === NetworkSettingEnums.EditNetwork"
+                    class="h-[2px] bg-menuBar rounded-full"
+                  ></div>
+                </div>
+
+                <div
+                  @click="changeNetworkTab(NetworkSettingEnums.AddNetwork)"
+                  class="flex flex-col space-y-1 cursor-pointer"
+                >
+                  <div
+                    :class="
+                      networkSettingTab === NetworkSettingEnums.AddNetwork
+                        ? 'text-gray-800'
+                        : 'text-gray-400'
+                    "
+                  >
+                    Add Network
+                  </div>
+                  <div
+                    v-if="networkSettingTab === NetworkSettingEnums.AddNetwork"
+                    class="h-[2px] bg-menuBar rounded-full"
+                  ></div>
+                </div>
+              </div>
+
+              <!-- Edit Network -->
+              <div
+                v-if="networkSettingTab === NetworkSettingEnums.EditNetwork"
+                class="flex flex-col items-start mt-2 h-[295px] px-8 pb-4 overflow-y-auto"
+              >
+                <div
+                  v-for="api in Object.values(apis)"
+                  :key="api['display']"
+                  class="flex w-full space-x-2 items-center justify-between pt-2"
+                >
+                  <div
+                    :class="
+                      activeApi['name'] === api['name']
+                        ? api['text'] +
+                          ' flex justify-start items-start w-1/3 mr-4  text-sm  font-semibold hover:bg-transparent  text-start '
+                        : ' flex justify-start items-start w-1/3 mr-4  text-sm  font-semibold hover:bg-transparent  text-start text-gray-400'
+                    "
+                  >
+                    {{ api["name"] }}
+                    <span class="text-gray-400"
+                      ><v-icon
+                        v-if="api['name'] === 'Auto'"
+                        class="ml-2"
+                        name="hi-solid-lock-closed"
+                    /></span>
+                  </div>
+                  <input
+                    class="flex w-2/3 text-sm py-2 rounded-lg border border-borderColor px-4 font-normal hover:bg-transparent focus:border-blue-500 bg-transparent text-gray-700"
+                    type="text"
+                    :disabled="api['name'] === 'Auto'"
+                    :onblur="saveEditing"
+                    :value="
+                      editingNetwork[api['name']] != null
+                        ? editingNetwork[api['name']]
+                        : api['display']
+                    "
+                    @input="
+                      (event) => {
+                        editNetwork(api['name'], event);
+                      }
+                    "
+                  />
+                  <span
+                    v-if="
+                      api['name'] !== 'Auto' &&
+                      defaultNetworks.includes(api['name'])
+                    "
+                    ><v-icon
+                      @click="resetNetwork(api['name'])"
+                      class="text-gray-400 hover:text-gray-600 cursor-pointer"
+                      name="md-lockreset-round"
+                  /></span>
+                  <span v-else
+                    ><v-icon
+                      class="text-white cursor-default"
+                      name="md-lockreset-round"
+                  /></span>
+                </div>
+              </div>
+
+              <!-- Add network -->
+              <div
+                v-if="networkSettingTab === NetworkSettingEnums.AddNetwork"
+                class="flex flex-col items-start mt-2 h-[295px] px-8 pb-4 overflow-y-auto"
+              >
+                <div class="flex flex-col w-full space-y-2 pt-2">
+                  <div
+                    :class="' flex justify-start items-start w-1/3 mr-4  text-sm  font-semibold hover:bg-transparent  text-start text-gray-800'"
+                  >
+                    Network name
+                  </div>
+                  <input
+                    id="name"
+                    class="flex w-full text-sm py-2 rounded-lg border border-borderColor px-4 font-normal hover:bg-transparent bg-transparent text-gray-700 focus:border-blue-500"
+                    type="text"
+                    :value="newNetwork.name"
+                    @input="handleAddNetwork"
+                  />
+                </div>
+
+                <div class="flex flex-col w-full space-y-2 mt-4">
+                  <div
+                    :class="' flex justify-start items-start w-1/3 mr-4  text-sm  font-semibold hover:bg-transparent  text-start text-gray-800'"
+                  >
+                    URL
+                  </div>
+                  <input
+                    id="url"
+                    class="flex w-full text-sm py-2 rounded-lg border border-borderColor px-4 font-normal hover:bg-transparent bg-transparent text-gray-700 focus:border-blue-500"
+                    type="text"
+                    :value="newNetwork.url"
+                    @input="handleAddNetwork"
+                  />
+                </div>
+                <div
+                  class="flex justify-center items-center bg-primary hover:bg-blue-600 py-1 mt-5 text-white font-semibold text-sm w-16 rounded-md shadow-sm cursor-pointer"
+                  @click="addNewNetwork()"
+                >
+                  Save
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -506,8 +695,10 @@ import { UtilitiesEnums } from "@/models/enums/UtilitiesEnum";
 import {
   DefaultComment,
   ExampleTransfer,
+  NetworkUrls,
   SimpleContractCode,
 } from "@/models/constants";
+import { NetworkEnums, NetworkSettingEnums } from "@/models/enums/SettingEnum";
 
 const notification = _notification.useNotificationStore();
 
@@ -537,10 +728,15 @@ export default {
       display: "Mainnet/PreProd based on wallet NetworkId",
       url: undefined,
     };
+    const customNetworks = JSON.parse(localStorage.getItem("networks")) || {};
+
     let result = {
       editorHeight: "h-editorStretch",
       editorWidth: "w-editor",
+      editingNetwork: {},
+      newNetwork: { name: "", url: "", nameErrors: [], urlErrors: [] },
       haskellOutputs: [],
+      networkSettingTab: NetworkSettingEnums.EditNetwork,
       kuberOutputs: [],
       outputTerminalVisibility: false,
       networkDropdownVisibility: false,
@@ -564,51 +760,81 @@ export default {
       result: "",
       errorMsg: "",
       activeApi: defaultApi,
-      apis: [
-        {
+      defaultNetworks: [
+        NetworkEnums.Auto,
+        NetworkEnums.LegacyTestnet,
+        NetworkEnums.Localhost,
+        NetworkEnums.Mainnet,
+        NetworkEnums.PreprodTestnet,
+        NetworkEnums.PreviewTestnet,
+      ],
+      apis: {
+        Auto: {
           text: "text-[#60A5FA]",
           name: "Auto",
           border: "border-[#60A5FA]",
           display: "Mainnet/PreProd based on wallet NetworkId",
           url: undefined,
         },
-        {
+        "Preview Testnet": {
           text: "text-blue-400",
           border: "border-blue-400",
           name: "Preview Testnet",
-          display: "https://preview.cnftregistry.io/kuber",
-          url: "https://preview.cnftregistry.io/kuber",
+          display:
+            localStorage.getItem("Preview Testnet") ||
+            NetworkUrls[NetworkEnums.PreviewTestnet],
+          url:
+            localStorage.getItem("Preview Testnet") ||
+            NetworkUrls[NetworkEnums.PreviewTestnet],
         },
-        {
+        "Preprod Testnet": {
           text: "text-orange-400",
           border: "border-orange-400",
           name: "Preprod Testnet",
-          display: "https://preprod.cnftregistry.io/kuber",
-          url: "https://preprod.cnftregistry.io/kuber",
+          display:
+            localStorage.getItem("Preprod Testnet") ||
+            NetworkUrls[NetworkEnums.PreprodTestnet],
+          url:
+            localStorage.getItem("Preprod Testnet") ||
+            NetworkUrls[NetworkEnums.PreprodTestnet],
         },
-        {
+        Mainnet: {
           text: "text-red-400",
           border: "border-red-400",
           name: "Mainnet",
-          display: "https://cnftregistry.io/kuber",
-          url: "https://cnftregistry.io/kuber",
+          display:
+            localStorage.getItem("Mainnet") ||
+            NetworkUrls[NetworkEnums.Mainnet],
+          url:
+            localStorage.getItem("Mainnet") ||
+            NetworkUrls[NetworkEnums.Mainnet],
         },
-        {
+        "Legacy Testnet": {
           text: "text-gray-300",
           border: "border-gray-400",
           name: "Legacy Testnet",
-          display: "https://testnet.cnftregistry.io/kuber",
-          url: "https://testnet.cnftregistry.io/kuber",
+          display:
+            localStorage.getItem("Legacy Testnet") ||
+            NetworkUrls[NetworkEnums.LegacyTestnet],
+          url:
+            localStorage.getItem("Legacy Testnet") ||
+            NetworkUrls[NetworkEnums.LegacyTestnet],
         },
-        {
+        Localhost: {
           text: "text-gray-500",
           border: "border-blue-500",
           name: "Localhost",
-          display: "http://localhost:8081",
-          url: "http://localhost:8081",
+          display:
+            localStorage.getItem("Localhost") ||
+            NetworkUrls[NetworkEnums.Localhost],
+          url:
+            localStorage.getItem("Localhost") ||
+            NetworkUrls[NetworkEnums.Localhost],
         },
-      ],
+        ...customNetworks,
+      },
     };
+
     // result.activeApi=result.apis[0]
     return result;
   },
@@ -635,9 +861,62 @@ export default {
         this.editorWidth = "w-editor";
       }
     },
+    changeNetworkTab(tab: NetworkSettingEnums) {
+      this.networkSettingTab = tab;
+    },
     updateOutputScroll(id: string) {
       var element = document.getElementById(id);
       element.scrollTop = element.scrollHeight;
+    },
+
+    saveEditing() {
+      const networkName = Object.keys(this.editingNetwork)[0];
+      const value = this.editingNetwork[networkName];
+      this.apis[networkName].display = value;
+      this.apis[networkName].url = value;
+      localStorage.setItem(networkName, value);
+      this.editingNetwork = {};
+    },
+
+    resetNetwork(networkName: string) {
+      localStorage.removeItem(networkName);
+      this.apis[networkName].display = NetworkUrls[networkName];
+      this.apis[networkName].url = NetworkUrls[networkName];
+    },
+
+    editNetwork(name: string, event) {
+      this.editingNetwork[name] = event.target.value;
+    },
+
+    handleAddNetwork(event) {
+      console.log(event);
+      const id = event.target.id;
+      if (id === "name") {
+        this.newNetwork.name = event.target.value;
+      } else {
+        this.newNetwork.url = event.target.value;
+      }
+    },
+
+    addNewNetwork() {
+      if (this.newNetwork.name !== "") {
+        if (this.newNetwork.url !== "") {
+          const networkName = "nabinnet";
+          const networks = JSON.parse(localStorage.getItem("networks")) || {};
+
+          const url = this.newNetwork.url;
+          networks[networkName] = {
+            text: "text-green-400",
+            border: "border-green-400",
+            name: networkName,
+            display: url,
+            url: url,
+          };
+          this.apis = { ...this.apis, ...networks };
+          const networksJson = JSON.stringify(networks);
+          localStorage.setItem("networks", networksJson);
+        }
+      }
     },
 
     setKuberOutput(output: string) {
@@ -782,7 +1061,7 @@ export default {
     getScriptPolicy() {
       // TODO do this with serialization library and not by calling api
       getPolicyIdOfScriptFromKuber(
-        this.activeApi.url || this.apis.find((x) => x.name == "Mainnet").url,
+        this.activeApi.url || this.apis["Mainnet"].url,
         this.scriptJson
       )
         .catch((err) => alert(err))
