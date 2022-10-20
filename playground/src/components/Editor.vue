@@ -662,6 +662,18 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
                     @input="handleAddNetwork"
                   />
                 </div>
+                <p
+                  v-for="error in newNetwork.errors"
+                  class="flex items-center text-red-500 text-xs pt-2"
+                >
+                  <span
+                    ><v-icon
+                      class="mr-1"
+                      name="md-erroroutline-outlined"
+                      scale="0.9"
+                  /></span>
+                  {{ error }}
+                </p>
                 <div
                   class="flex justify-center items-center bg-primary hover:bg-blue-600 py-1 mt-5 text-white font-semibold text-sm w-16 rounded-md shadow-sm cursor-pointer"
                   @click="addNewNetwork()"
@@ -698,7 +710,11 @@ import {
   NetworkUrls,
   SimpleContractCode,
 } from "@/models/constants";
-import { NetworkEnums, NetworkSettingEnums } from "@/models/enums/SettingEnum";
+import {
+  AddNetworkErrorEnums,
+  NetworkEnums,
+  NetworkSettingEnums,
+} from "@/models/enums/SettingEnum";
 
 const notification = _notification.useNotificationStore();
 
@@ -734,7 +750,7 @@ export default {
       editorHeight: "h-editorStretch",
       editorWidth: "w-editor",
       editingNetwork: {},
-      newNetwork: { name: "", url: "", nameErrors: [], urlErrors: [] },
+      newNetwork: { name: "", url: "", errors: [] },
       haskellOutputs: [],
       networkSettingTab: NetworkSettingEnums.EditNetwork,
       kuberOutputs: [],
@@ -769,14 +785,14 @@ export default {
         NetworkEnums.PreviewTestnet,
       ],
       apis: {
-        Auto: {
+        auto: {
           text: "text-[#60A5FA]",
           name: "Auto",
           border: "border-[#60A5FA]",
           display: "Mainnet/PreProd based on wallet NetworkId",
           url: undefined,
         },
-        "Preview Testnet": {
+        "preview testnet": {
           text: "text-blue-400",
           border: "border-blue-400",
           name: "Preview Testnet",
@@ -787,7 +803,7 @@ export default {
             localStorage.getItem("Preview Testnet") ||
             NetworkUrls[NetworkEnums.PreviewTestnet],
         },
-        "Preprod Testnet": {
+        "preprod testnet": {
           text: "text-orange-400",
           border: "border-orange-400",
           name: "Preprod Testnet",
@@ -798,7 +814,7 @@ export default {
             localStorage.getItem("Preprod Testnet") ||
             NetworkUrls[NetworkEnums.PreprodTestnet],
         },
-        Mainnet: {
+        mainnet: {
           text: "text-red-400",
           border: "border-red-400",
           name: "Mainnet",
@@ -809,7 +825,7 @@ export default {
             localStorage.getItem("Mainnet") ||
             NetworkUrls[NetworkEnums.Mainnet],
         },
-        "Legacy Testnet": {
+        "legacy Testnet": {
           text: "text-gray-300",
           border: "border-gray-400",
           name: "Legacy Testnet",
@@ -820,7 +836,7 @@ export default {
             localStorage.getItem("Legacy Testnet") ||
             NetworkUrls[NetworkEnums.LegacyTestnet],
         },
-        Localhost: {
+        localhost: {
           text: "text-gray-500",
           border: "border-blue-500",
           name: "Localhost",
@@ -892,29 +908,71 @@ export default {
       console.log(event);
       const id = event.target.id;
       if (id === "name") {
-        this.newNetwork.name = event.target.value;
+        const value = event.target.value;
+        this.newNetwork.name = value;
+
+        this.validateAddNetwork(id, value);
       } else {
+        const value = event.target.value;
         this.newNetwork.url = event.target.value;
+        this.validateAddNetwork(id, value);
+      }
+    },
+    validateAddNetwork(id, value: string) {
+      console.log(this.newNetwork.errors);
+      if (id === "name") {
+        const emptyNameIndex = this.newNetwork.errors.indexOf(
+          AddNetworkErrorEnums.EmptyName
+        );
+        if (emptyNameIndex > -1) {
+          this.newNetwork.errors.splice(emptyNameIndex, 1);
+        }
+        const duplicateNameIndex = this.newNetwork.errors.indexOf(
+          AddNetworkErrorEnums.DuplicateName
+        );
+        if (this.apis[value.toLowerCase()]) {
+          if (duplicateNameIndex === -1) {
+            this.newNetwork.errors.push(AddNetworkErrorEnums.DuplicateName);
+          }
+        } else {
+          if (duplicateNameIndex > -1) {
+            this.newNetwork.errors.splice(duplicateNameIndex, 1);
+          }
+        }
+      } else {
+        const index = this.newNetwork.errors.indexOf(
+          AddNetworkErrorEnums.EmptyUrl
+        );
+        if (index > -1) {
+          this.newNetwork.errors.splice(index, 1);
+        }
       }
     },
 
     addNewNetwork() {
-      if (this.newNetwork.name !== "") {
-        if (this.newNetwork.url !== "") {
-          const networkName = "nabinnet";
-          const networks = JSON.parse(localStorage.getItem("networks")) || {};
+      if (this.newNetwork.errors.length === 0) {
+        if (this.newNetwork.name !== "") {
+          const networkName = this.newNetwork.name;
+          if (this.newNetwork.url !== "") {
+            const networks = JSON.parse(localStorage.getItem("networks")) || {};
 
-          const url = this.newNetwork.url;
-          networks[networkName] = {
-            text: "text-green-400",
-            border: "border-green-400",
-            name: networkName,
-            display: url,
-            url: url,
-          };
-          this.apis = { ...this.apis, ...networks };
-          const networksJson = JSON.stringify(networks);
-          localStorage.setItem("networks", networksJson);
+            const url = this.newNetwork.url;
+            networks[networkName.toLocaleLowerCase()] = {
+              text: "text-green-400",
+              border: "border-green-400",
+              name: networkName,
+              display: url,
+              url: url,
+            };
+            this.apis = { ...this.apis, ...networks };
+            const networksJson = JSON.stringify(networks);
+            localStorage.setItem("networks", networksJson);
+            this.newNetwork = { name: "", url: "", errors: [] };
+          } else {
+            this.newNetwork.errors.push(AddNetworkErrorEnums.EmptyUrl);
+          }
+        } else {
+          this.newNetwork.errors.push(AddNetworkErrorEnums.EmptyName);
         }
       }
     },

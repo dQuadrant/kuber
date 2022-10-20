@@ -23,6 +23,7 @@ import {
   RiSettings5Line,
   MdLockresetRound,
   HiSolidLockClosed,
+  MdErroroutlineOutlined,
 } from "oh-vue-icons/icons";
 
 addIcons(
@@ -34,7 +35,8 @@ addIcons(
   FaEdit,
   RiSettings5Line,
   MdLockresetRound,
-  HiSolidLockClosed
+  HiSolidLockClosed,
+  MdErroroutlineOutlined
 );
 const app = createApp(App).component("v-icon", OhVueIcon);
 app.use(VueNotificationList);

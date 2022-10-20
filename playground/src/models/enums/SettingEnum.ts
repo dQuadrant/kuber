@@ -11,3 +11,9 @@ export enum NetworkEnums {
   LegacyTestnet = "Legacy Testnet",
   Localhost = "Localhost",
 }
+
+export enum AddNetworkErrorEnums {
+  EmptyName = "Network name shouldnot be empty!!",
+  EmptyUrl = "Url shouldnot be empty!!",
+  DuplicateName = "Network name must be unique!!",
+}
