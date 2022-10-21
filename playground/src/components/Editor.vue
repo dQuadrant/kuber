@@ -14,7 +14,6 @@ import type { CIP30Instace, CIP30Provider } from "@/types";
 import "ace-builds/src-noconflict/mode-json";
 import "ace-builds/src-noconflict/theme-chrome";
 import "ace-builds/src-noconflict/ext-language_tools";
-import jsonLogo from "@/src/assets/images/json_logo.png";
 
 ace.require("ace/ext/language_tools");
 
@@ -214,15 +213,44 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
           ' flex flex-col h-full bg-bgCompiler border-y border-r border-borderColor'
         "
       >
-        <!-- file tabbar -->
-        <div class="flex h-fileTabbar">
+        <!-- kuber file tabbar -->
+        <div
+          v-if="language === LanguageEnums.Kuber"
+          class="flex h-fileTabbar bg-bgFileTabBar"
+        >
           <div
-            class="flex font-sans font-medium items-center justify-center h-full w-32 bg-bgCompiler text-fileTextColor"
+            @click="changeKuberEditorTab(KuberTabEnums.KuberJson)"
+            :class="
+              kuberSelectedTab === KuberTabEnums.KuberJson
+                ? 'flex font-sans font-medium items-center justify-center h-full px-4 bg-bgCompiler text-fileTextColor cursor-pointer'
+                : ' flex font-sans font-medium items-center justify-center h-full px-4 text-fileTextColor border-x border-b border-borderColor cursor-pointer'
+            "
           >
-            {{ language == LanguageEnums.Kuber ? "Kuber.json" : "Main.hs" }}
+            Kuber.json
           </div>
           <div
-            class="flex justify-end h-full w-full bg-bgFileTabBar border-l border-b border-borderColor py-3 px-4"
+            @click="changeKuberEditorTab(KuberTabEnums.ExampleTransferJson)"
+            :class="
+              kuberSelectedTab === KuberTabEnums.ExampleTransferJson
+                ? 'flex font-sans font-medium items-center justify-center h-full px-4 bg-bgCompiler text-fileTextColor cursor-pointer'
+                : ' flex font-sans font-medium items-center justify-center h-full px-4 text-fileTextColor border-x border-b border-borderColor cursor-pointer'
+            "
+          >
+            ExampleTransfer.json
+          </div>
+          <div
+            @click="changeKuberEditorTab(KuberTabEnums.Readme)"
+            :class="
+              kuberSelectedTab === KuberTabEnums.Readme
+                ? 'flex font-sans font-medium items-center justify-center h-full px-4 border-r border-borderColor bg-bgCompiler text-fileTextColor cursor-pointer'
+                : ' flex font-sans font-medium items-center justify-center h-full px-4 text-fileTextColor border-x border-b border-borderColor cursor-pointer'
+            "
+          >
+            README
+          </div>
+
+          <div
+            class="flex justify-end h-full w-full bg-bgFileTabBar border-b border-borderColor py-3 px-4"
           >
             <div class="flex items-center h-full space-x-4">
               <div
@@ -230,12 +258,75 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
                 class="spinner-border animate-spin w-6 h-6 border-2 text-menuBar rounded-full"
               ></div>
               <div
+                v-if="kuberSelectedTab === KuberTabEnums.KuberJson"
                 class="flex justify-center items-center bg-primary hover:bg-blue-600 text-white font-semibold text-sm w-16 h-full rounded-md shadow-sm cursor-pointer"
-                @click="
-                  language == LanguageEnums.Kuber
-                    ? submitTx(provider)
-                    : compileCode()
-                "
+                @click="compileCode()"
+              >
+                RUN
+              </div>
+              <div
+                v-else
+                class="flex justify-center items-center bg-gray-300 text-white font-semibold text-sm w-16 h-full rounded-md shadow-sm cursor-not-allowed"
+                @click=""
+              >
+                RUN
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- haskell file tabbar  -->
+        <div v-else class="flex h-fileTabbar bg-bgFileTabBar">
+          <div
+            @click="changeHaskellEditorTab(HaskellTabEnums.ContractHs)"
+            :class="
+              haskellSelectedTab === HaskellTabEnums.ContractHs
+                ? 'flex font-sans font-medium items-center justify-center h-full px-4 bg-bgCompiler text-fileTextColor cursor-pointer'
+                : ' flex font-sans font-medium items-center justify-center h-full px-4 text-fileTextColor border-x border-b border-borderColor cursor-pointer'
+            "
+          >
+            Contract.hs
+          </div>
+          <div
+            @click="changeHaskellEditorTab(HaskellTabEnums.SimpleContractHS)"
+            :class="
+              haskellSelectedTab === HaskellTabEnums.SimpleContractHS
+                ? 'flex font-sans font-medium items-center justify-center h-full px-4 bg-bgCompiler text-fileTextColor cursor-pointer'
+                : ' flex font-sans font-medium items-center justify-center h-full px-4 text-fileTextColor border-x border-b border-borderColor cursor-pointer'
+            "
+          >
+            SimpleContract.hs
+          </div>
+          <div
+            @click="changeHaskellEditorTab(HaskellTabEnums.Readme)"
+            :class="
+              haskellSelectedTab === HaskellTabEnums.Readme
+                ? 'flex font-sans font-medium items-center justify-center h-full px-4 border-r border-borderColor bg-bgCompiler text-fileTextColor cursor-pointer'
+                : ' flex font-sans font-medium items-center justify-center h-full px-4 text-fileTextColor border-x border-b border-borderColor cursor-pointer'
+            "
+          >
+            README
+          </div>
+
+          <div
+            class="flex justify-end h-full w-full bg-bgFileTabBar border-b border-borderColor py-3 px-4"
+          >
+            <div class="flex items-center h-full space-x-4">
+              <div
+                v-if="isCompiling"
+                class="spinner-border animate-spin w-6 h-6 border-2 text-menuBar rounded-full"
+              ></div>
+              <div
+                v-if="haskellSelectedTab === HaskellTabEnums.ContractHs"
+                class="flex justify-center items-center bg-primary hover:bg-blue-600 text-white font-semibold text-sm w-16 h-full rounded-md shadow-sm cursor-pointer"
+                @click="compileCode()"
+              >
+                RUN
+              </div>
+              <div
+                v-else
+                class="flex justify-center items-center bg-gray-300 text-white font-semibold text-sm w-16 h-full rounded-md shadow-sm cursor-not-allowed"
+                @click=""
               >
                 RUN
               </div>
@@ -701,12 +792,19 @@ import {
 } from "@emurgo/cardano-serialization-lib-asmjs";
 import { SchemaKuber } from "./schemas";
 import Description from "./descriptions";
-import { LanguageEnums } from "@/models/enums/LanguageEnum";
+import {
+  LanguageEnums,
+  KuberTabEnums,
+  HaskellTabEnums,
+} from "@/models/enums/LanguageEnum";
 import APIService from "@/services/api_service";
 import { UtilitiesEnums } from "@/models/enums/UtilitiesEnum";
 import {
   DefaultComment,
-  ExampleTransfer,
+  DefaultKuberCode,
+  DefaultHaskellCode,
+  HaskellCodes,
+  KuberCodes,
   NetworkUrls,
   SimpleContractCode,
 } from "@/models/constants";
@@ -749,6 +847,8 @@ export default {
     let result = {
       editorHeight: "h-editorStretch",
       editorWidth: "w-editor",
+      kuberSelectedTab: KuberTabEnums.KuberJson,
+      haskellSelectedTab: HaskellTabEnums.ContractHs,
       editingNetwork: {},
       newNetwork: { name: "", url: "", errors: [] },
       haskellOutputs: [],
@@ -758,7 +858,6 @@ export default {
       networkDropdownVisibility: false,
       utilitiesVisibility: true,
       isCompiling: false,
-      jsonLogo: jsonLogo,
       providers: providers,
       provider: provider,
       addSelections: true,
@@ -880,6 +979,26 @@ export default {
     changeNetworkTab(tab: NetworkSettingEnums) {
       this.networkSettingTab = tab;
     },
+
+    changeKuberEditorTab(tab: KuberTabEnums) {
+      this.saveCode(this.kuberSelectedTab);
+      this.kuberSelectedTab = tab;
+      this.loadKuberCode(tab);
+    },
+
+    changeHaskellEditorTab(tab: HaskellTabEnums) {
+      this.saveCode(this.haskellSelectedTab);
+      this.haskellSelectedTab = tab;
+      this.loadHaskellCode(tab);
+    },
+
+    saveCode(id: string) {
+      if (this.$options.editor != null) {
+        var code = this.$options.editor.getValue();
+        code = code.trim();
+        localStorage.setItem(id, code);
+      }
+    },
     updateOutputScroll(id: string) {
       var element = document.getElementById(id);
       element.scrollTop = element.scrollHeight;
@@ -986,6 +1105,49 @@ export default {
       this.haskellOutputs.push(output);
       this.updateOutputScroll("haskell-output");
     },
+
+    loadHaskellCode(tab: HaskellTabEnums) {
+      if (tab === HaskellTabEnums.ContractHs) {
+        const storedCode = localStorage.getItem(tab);
+        if (storedCode) {
+          this.$options.editor.setValue(storedCode);
+        } else {
+          this.$options.editor.setValue(DefaultHaskellCode);
+        }
+        this.$options.editor.updateOptions({
+          lineNumbers: true,
+          readOnly: false,
+        });
+      } else {
+        this.$options.editor.setValue(HaskellCodes[tab]);
+        this.$options.editor.updateOptions({
+          lineNumbers: false,
+          readOnly: true,
+        });
+      }
+    },
+
+    loadKuberCode(tab: KuberTabEnums) {
+      if (tab === KuberTabEnums.KuberJson) {
+        const storedCode = localStorage.getItem(tab);
+        if (storedCode) {
+          this.$options.editor.setValue(storedCode);
+        } else {
+          this.$options.editor.setValue(DefaultKuberCode);
+        }
+        this.$options.editor.updateOptions({
+          lineNumbers: true,
+          readOnly: false,
+        });
+      } else {
+        this.$options.editor.setValue(KuberCodes[tab]);
+        this.$options.editor.updateOptions({
+          lineNumbers: false,
+          readOnly: true,
+        });
+      }
+    },
+
     changeLanguage(language: LanguageEnums) {
       if (this.language !== language) {
         this.showOutputTerminal(false);
@@ -993,19 +1155,9 @@ export default {
       this.language = language;
 
       if (language == LanguageEnums.Haskell) {
-        const storedCode = localStorage.getItem(LanguageEnums.Haskell);
-        if (storedCode) {
-          this.$options.editor.setValue(storedCode);
-        } else {
-          this.$options.editor.setValue(SimpleContractCode);
-        }
+        this.loadHaskellCode(this.haskellSelectedTab);
       } else {
-        const storedCode = localStorage.getItem(LanguageEnums.Kuber);
-        if (storedCode) {
-          this.$options.editor.setValue(storedCode);
-        } else {
-          this.$options.editor.setValue(ExampleTransfer);
-        }
+        this.loadKuberCode(this.kuberSelectedTab);
       }
 
       const model = this.$options.editor.getModel();
@@ -1254,7 +1406,7 @@ export default {
         if (storedCode) {
           jsonCode = [storedCode].join("\n");
         } else {
-          jsonCode = [DefaultComment + "\n\n" + ExampleTransfer].join("\n");
+          jsonCode = [DefaultComment + "\n\n" + DefaultKuberCode].join("\n");
         }
         var modelUri = monaco.Uri.parse("a://b/kuber.json");
         var model = monaco.editor.createModel(jsonCode, "json", modelUri);
