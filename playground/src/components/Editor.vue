@@ -25,11 +25,13 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
   <div class="flex flex-col items-center h-screen w-screen font-sans">
     <!-- top bar -->
     <div
-      class="flex flex-col h-1/12 px-4 py-2 items-start w-full border border-borderColor"
+      class="flex flex-col h-1/12 px-4 py-1 2xl:text-base xl:text-sm lg:text-sm items-start w-full border border-borderColor"
     >
       <div class="flex w-full h-full justify-between items-center">
         <div class="flex items-center">
-          <p class="text-primary font-semibold mr-8 text-lg">
+          <p
+            class="text-primary font-semibold mr-8 2xl:text-lg xl:text-base lg:text-base"
+          >
             Kuber Playground
           </p>
           <p
@@ -44,8 +46,8 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             :key="p.name"
             :class="
               provider.name === p.name
-                ? 'ml-3 bg-transparent  hover:bg-gray-100 text-primary font-semibold  py-0.5 px-1.5 border border-blue-500 hover:border-transparent rounded-md'
-                : 'ml-3 bg-transparent hover:bg-gray-100 text-gray-500 font-semibold  py-0.5 px-1.5 border border-gray-300 hover:border-transparent rounded-md'
+                ? 'flex items-center ml-3 bg-transparent  hover:bg-gray-100 text-primary font-semibold  py-0.5 px-1.5 border border-blue-500 hover:border-transparent rounded-md'
+                : 'flex items-center ml-3 bg-transparent hover:bg-gray-100 text-gray-500 font-semibold  py-0.5 px-1.5 border border-gray-300 hover:border-transparent rounded-md'
             "
             @click="setProvider(p)"
           >
@@ -56,21 +58,21 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             <span class="ml-1"> {{ p.name }}</span>
             <v-icon
               v-if="provider.name == p.name"
-              class="ml-2 cursor-pointer text-blue-500"
+              class="ml-2 cursor-pointer text-blue-500 2xl:w-5 2xl:h-5 xl:w-4 xl:h-4 lg:w-4 lg:h-4"
               name="bi-check-circle-fill"
             />
           </button>
         </div>
-        <div class="flex items-center space-x-4">
-          <p class="font-medium text-base text-gray-700">Network:</p>
+        <div class="flex items-center space-x-4 2xl:text-base xl:text-sm">
+          <p class="font-medium text-gray-700">Network:</p>
 
           <!-- dropdown button -->
-          <div class="dropdown">
+          <div class="dropdown 2xl:text-sm xl:text-xs lg:text-xs">
             <button
               v-if="activeApi"
               :class="
                 activeApi.border +
-                ' dropdown-toggle border-2 font-sans font-semibold rounded-lg text-white text-[11pt] leading-tight uppercase hover:bg-gray-100  active:bg-gray-200 active:shadow-lg active:text-white transition duration-150 ease-in-out flex items-center justify-center whitespace-nowrap'
+                '   dropdown-toggle border-2 font-sans font-semibold rounded-lg text-white  leading-tight uppercase hover:bg-gray-100  active:bg-gray-200 active:shadow-lg active:text-white transition duration-150 ease-in-out flex items-center justify-center whitespace-nowrap'
               "
               type="button"
               id="dropdownMenuButton1"
@@ -99,18 +101,18 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
                 v-for="api in Object.values(apis)"
                 :key="api['display']"
                 @click="handleApiSelected(api)"
-                class="border-b-2 hover:bg-gray-100 cursor-pointer"
+                class="border-b-2 hover:bg-gray-100 cursor-pointer 2xl:text-sm xl:text-xs lg:text-xs"
               >
                 <td
                   :class="
                     api['text'] +
-                    '  mr-4 dropdown-item text-sm py-2 px-4 font-normal hover:bg-transparent bg-transparent text-center text-gray-700'
+                    '  mr-4 dropdown-item  py-2 px-4 font-normal hover:bg-transparent bg-transparent text-center text-gray-700'
                   "
                 >
                   {{ api["name"] }}
                 </td>
                 <td
-                  class="dropdown-item text-sm py-2 px-4 font-normal hover:bg-transparent bg-transparent text-gray-700"
+                  class="dropdown-item py-2 px-4 font-normal hover:bg-transparent bg-transparent text-gray-700"
                 >
                   {{ api["display"] }}
                 </td>
@@ -118,7 +120,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
 
               <button
                 type="button"
-                class="flex items-center cursor-pointer py-3 justify-center text-sm px-4 font-semibold hover:bg-menuBar rounded-b-lg hover:text-white bg-transparent text-gray-700"
+                class="flex items-center cursor-pointer py-3 justify-center 2xl:text-sm xl:text-xs lg:text-xs px-4 font-semibold hover:bg-menuBar rounded-b-lg hover:text-white bg-transparent text-gray-700"
                 data-bs-toggle="modal"
                 data-bs-target="#staticBackdrop"
               >
@@ -135,12 +137,12 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
       <!-- wallet utxos checkbox -->
       <div
         v-if="language == LanguageEnums.Kuber"
-        class="flex space-x-1 mt-2 items-center"
+        class="flex space-x-1 mt-[1px] items-center 2xl:text-sm xl:text-xs lg:text-xs"
       >
         <div class="flex space-x-2 items-center">
-          <div class="form-check form-check text-sm">
+          <div class="form-check form-check">
             <input
-              class="form-check-input h-4 w-4 border border-gray-300 rounded-sm bg-white checked:bg-blue-600 checked:border-blue-600 focus:outline-none transition duration-200 mt-1 align-top bg-no-repeat bg-center bg-contain float-left mr-2 cursor-pointer"
+              class="form-check-input 2xl:h-4 2xl:w-4 xl:w-3 xl:h-3 border border-gray-300 rounded-sm bg-white checked:bg-blue-600 checked:border-blue-600 focus:outline-none transition duration-200 mt-[1px] align-top bg-no-repeat bg-center bg-contain float-left mr-2 cursor-pointer"
               type="checkbox"
               id="inlineCheckbox1"
               v-model="addSelections"
@@ -154,7 +156,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
           </div>
           <div class="textover">
             <v-icon
-              class="cursor-pointer text-gray-400"
+              class="cursor-pointer text-gray-400 2xl:h-5 2xl:w-5 xl:w-4 xl:h-4 lg:w-4 lg:h-4"
               name="io-information-circle"
             /><span class="text"
               >Wallet utxos will be added to kuber selections field</span
@@ -163,7 +165,12 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
         </div>
       </div>
 
-      <div v-else class="mt-3 h-8 text-gray-500 text-sm">Plutus Compiler</div>
+      <div
+        v-else
+        class="2xl:mt-1 2xl:h-4 xl:mt-1 xl:h-4 lg:h-4 text-gray-500 2xl:text-sm xl:text-xs lg:text-xs"
+      >
+        Plutus Compiler
+      </div>
     </div>
 
     <div class="flex w-full h-11/12">
@@ -171,7 +178,9 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
       <div
         class="flex flex-col items-center space-y-4 w-1/20 py-4 bg-bgMenu h-full border border-borderColor"
       >
-        <div class="flex justify-start space-x-3 h-12 w-full">
+        <div
+          class="flex justify-start 2xl:space-x-2 xl:space-x-2 lg:space-x-1 2xl:h-12 xl:h-11 lg:h-10 w-full"
+        >
           <div
             v-if="language == LanguageEnums.Kuber"
             class="h-full w-1 bg-menuBar rounded-md shadow-sm"
@@ -181,15 +190,17 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             @click="changeLanguage(LanguageEnums.Kuber)"
             :class="
               language == LanguageEnums.Kuber
-                ? 'flex justify-center items-center w-14 rounded drop-shadow-sm border border-borderColor cursor-pointer bg-white hover:bg-white'
-                : 'flex justify-center items-center w-14 rounded drop-shadow-sm border border-borderColor cursor-pointer hover:bg-white'
+                ? 'flex justify-center items-center 2xl:w-14 xl:w-12 lg:w-11  rounded drop-shadow-sm border border-borderColor cursor-pointer bg-white hover:bg-white'
+                : 'flex justify-center items-center 2xl:w-14 xl:w-12 lg:w-11 rounded drop-shadow-sm border border-borderColor cursor-pointer hover:bg-white'
             "
           >
             <img src="@/assets/images/json_logo.png" />
           </div>
         </div>
 
-        <div class="flex justify-start space-x-3 h-12 w-full">
+        <div
+          class="flex justify-start 2xl:space-x-2 xl:space-x-2 lg:space-x-1 2xl:h-12 xl:h-11 lg:h-10 w-full"
+        >
           <div
             v-if="language == LanguageEnums.Haskell"
             class="h-full w-1 bg-menuBar rounded-md shadow-sm"
@@ -199,8 +210,8 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             @click="changeLanguage(LanguageEnums.Haskell)"
             :class="
               language == LanguageEnums.Haskell
-                ? 'flex justify-center items-center w-14 rounded drop-shadow-sm border border-borderColor cursor-pointer bg-white hover:bg-white'
-                : 'flex justify-center items-center w-14 rounded drop-shadow-sm border border-borderColor cursor-pointer hover:bg-white'
+                ? 'flex justify-center items-center 2xl:w-14 xl:w-12 lg:w-11  lap rounded drop-shadow-sm border border-borderColor cursor-pointer bg-white hover:bg-white'
+                : 'flex justify-center items-center 2xl:w-14 xl:w-12 lg:w-11  rounded drop-shadow-sm border border-borderColor cursor-pointer hover:bg-white'
             "
           >
             <img src="@/assets/images/haskell_logo.png" />
@@ -212,7 +223,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
       <div
         :class="
           editorWidth +
-          ' flex flex-col h-full bg-bgCompiler border-y border-r border-borderColor'
+          ' flex flex-col h-full 2xl:text-base xl:text-sm lg:text-sm bg-bgCompiler border-y border-r border-borderColor'
         "
       >
         <!-- kuber file tabbar -->
@@ -252,23 +263,25 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
           </div>
 
           <div
-            class="flex justify-end h-full w-full bg-bgFileTabBar border-b border-borderColor py-3 px-4"
+            class="flex justify-end h-full w-full bg-bgFileTabBar border-b border-borderColor xl:py-2 2xl:py-2 lg:py-1 px-4"
           >
-            <div class="flex items-center h-full space-x-4">
+            <div
+              class="flex items-center h-full space-x-4 2xl:text-sm xl:text-xs lg:text-xs"
+            >
               <div
                 v-if="isCompiling"
                 class="spinner-border animate-spin w-6 h-6 border-2 text-menuBar rounded-full"
               ></div>
               <div
                 v-if="kuberSelectedTab === KuberTabEnums.KuberJson"
-                class="flex justify-center items-center bg-primary hover:bg-blue-600 text-white font-semibold text-sm px-4 h-full rounded-md shadow-sm cursor-pointer"
+                class="flex justify-center items-center bg-primary hover:bg-blue-600 text-white font-semibold px-4 h-full rounded-md shadow-sm cursor-pointer"
                 @click="submitTx(provider)"
               >
                 RUN
               </div>
               <div
                 v-else
-                class="flex justify-center items-center bg-gray-300 text-white font-semibold text-sm px-4 h-full rounded-md shadow-sm cursor-not-allowed"
+                class="flex justify-center items-center bg-gray-300 text-white font-semibold px-4 h-full rounded-md shadow-sm cursor-not-allowed"
                 @click=""
               >
                 RUN
@@ -314,23 +327,25 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
           </div>
 
           <div
-            class="flex justify-end h-full w-full bg-bgFileTabBar border-b border-borderColor py-3 px-4"
+            class="flex justify-end h-full w-full bg-bgFileTabBar border-b border-borderColor xl:py-2 2xl:py-2 lg:py-1 px-4"
           >
-            <div class="flex items-center h-full space-x-4">
+            <div
+              class="flex items-center h-full space-x-4 2xl:text-sm xl:text-xs lg:text-xs"
+            >
               <div
                 v-if="isCompiling"
                 class="spinner-border animate-spin w-6 h-6 border-2 text-menuBar rounded-full"
               ></div>
               <div
                 v-if="haskellSelectedTab === HaskellTabEnums.ContractHs"
-                class="flex justify-center items-center bg-primary hover:bg-blue-600 text-white font-semibold text-sm px-4 h-full rounded-md shadow-sm cursor-pointer"
+                class="flex justify-center items-center bg-primary hover:bg-blue-600 text-white font-semibold px-4 h-full rounded-md shadow-sm cursor-pointer"
                 @click="compileCode()"
               >
                 COMPILE
               </div>
               <div
                 v-else
-                class="flex justify-center items-center bg-gray-300 text-white font-semibold text-sm px-4 h-full rounded-md shadow-sm cursor-not-allowed"
+                class="flex justify-center items-center bg-gray-300 text-white font-semibold px-4 h-full rounded-md shadow-sm cursor-not-allowed"
                 @click=""
               >
                 COMPILE
@@ -342,18 +357,22 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
         <!-- code screen -->
 
         <!-- editor -->
-        <div :class="editorHeight + ' grow pt-4'">
-          <div id="monaco_editor" style="width: 100%; height: 100%"></div>
+        <div :class="editorHeight + ' grow pt-4 text-xs'">
+          <div
+            id="monaco_editor"
+            style="width: 100%; height: 100%"
+            class="text-xs"
+          ></div>
         </div>
 
         <!-- output terminal -->
 
         <div
           v-if="outputTerminalVisibility"
-          class="flex flex-col transition ease-in-out delay-4s w-full h-outputTerminal px-4 pt-4 border-y border-borderColor"
+          class="flex flex-col transition ease-in-out delay-4s w-full 2xl:text-sm xl:text-xs lg:text-xs h-outputTerminal px-4 pt-4 border-y border-borderColor"
         >
           <div class="flex justify-between h-1/6">
-            <div class="font-medium text-sm text-gray-500">OUTPUTS</div>
+            <div class="font-medium text-gray-500">OUTPUTS</div>
             <v-icon
               @click="showOutputTerminal(false)"
               class="cursor-pointer"
@@ -385,11 +404,11 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
 
         <!-- compiler tabbar -->
         <div
-          class="flex w-full h-compilerTabbar border-t border-borderColor bg-bgUtilities"
+          class="flex w-full h-compilerTabbar border-t border-borderColor 2xl:text-sm xl:text-xs lg:text-xs bg-bgUtilities"
         >
           <div
             @click="showOutputTerminal(!outputTerminalVisibility)"
-            class="flex px-2 border-x border-borderColor text-sm text-gray-600 items-center cursor-pointer hover:bg-gray-100"
+            class="flex px-2 border-x border-borderColor text-gray-600 items-center cursor-pointer hover:bg-gray-100"
           >
             Outputs
           </div>
@@ -402,7 +421,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
         class="flex flex-col w-6/20 h-full bg-white border-y border-borderColor"
       >
         <div
-          class="flex justify-between items-center font-medium text-gray-600 text-sm h-fileTabbar w-full border-b border-borderColor bg-white py-3 px-4"
+          class="flex justify-between items-center font-medium text-gray-600 2xl:text-sm xl:text-xs lg:text-xs h-fileTabbar w-full border-b border-borderColor bg-white py-3 px-4"
         >
           <p>UTILITIES / {{ utility }}</p>
           <v-icon
@@ -412,7 +431,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             scale="1.2"
           />
         </div>
-        <div class="flex w-full px-4 py-8">
+        <div class="flex w-full px-4 py-8 2xl:text-base xl:text-sm lg:text-sm">
           <!-- Address utitlity -->
           <div
             class="flex flex-col w-full items-start"
@@ -557,7 +576,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
       </div>
       <!-- utilites menu -->
       <div
-        class="flex flex-col w-utilitiesMenu items-center font-semibold text-gray-600 text-sm justify-start bg-white h-full border border-borderColor"
+        class="flex flex-col w-utilitiesMenu items-center font-semibold text-gray-600 2xl:text-sm xl:text-sm lg:text-xs justify-start bg-white h-full border border-borderColor"
       >
         <div
           @click="changeUtility(UtilitiesEnums.Address)"
