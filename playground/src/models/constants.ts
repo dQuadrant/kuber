@@ -115,9 +115,9 @@ export const DefaultComment =
   "// Auto completion is a testing feature, It maynot always work.";
 
 export const NetworkUrls = {
-  "Preview Testnet": "https://preview.cnftregistry.io/kuber",
-  "Preprod Testnet": "https://preprod.cnftregistry.io/kuber",
-  Mainnet: "https://cnftregistry.io/kuber",
-  "Legacy Testnet": "https://testnet.cnftregistry.io/kuber",
-  Localhost: "http://localhost:8081",
+  "preview testnet": "https://preview.cnftregistry.io/kuber",
+  "preprod testnet": "https://preprod.cnftregistry.io/kuber",
+  mainnet: "https://cnftregistry.io/kuber",
+  "legacy testnet": "https://testnet.cnftregistry.io/kuber",
+  localhost: "http://localhost:8081",
 };
