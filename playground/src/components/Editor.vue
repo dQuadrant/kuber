@@ -163,7 +163,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
         </div>
       </div>
 
-      <div v-else class="mt-3 h-8"></div>
+      <div v-else class="mt-3 h-8 text-gray-500 text-sm">Plutus Compiler</div>
     </div>
 
     <div class="flex w-full h-11/12">
@@ -218,13 +218,13 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
         <!-- kuber file tabbar -->
         <div
           v-if="language === LanguageEnums.Kuber"
-          class="flex h-fileTabbar bg-bgFileTabBar"
+          class="flex h-fileTabbar bg-bgFileTabBar disable-text-selection"
         >
           <div
             @click="changeKuberEditorTab(KuberTabEnums.KuberJson)"
             :class="
               kuberSelectedTab === KuberTabEnums.KuberJson
-                ? 'flex font-sans font-medium items-center justify-center h-full px-4 bg-bgCompiler text-fileTextColor cursor-pointer'
+                ? 'flex  font-sans font-medium items-center justify-center h-full px-4 bg-bgCompiler text-fileTextColor cursor-pointer'
                 : ' flex font-sans font-medium items-center justify-center h-full px-4 text-fileTextColor border-x border-b border-borderColor cursor-pointer'
             "
           >
@@ -278,7 +278,10 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
         </div>
 
         <!-- haskell file tabbar  -->
-        <div v-else class="flex h-fileTabbar bg-bgFileTabBar">
+        <div
+          v-else
+          class="flex h-fileTabbar bg-bgFileTabBar disable-text-selection"
+        >
           <div
             @click="changeHaskellEditorTab(HaskellTabEnums.ContractHs)"
             :class="
@@ -1100,12 +1103,12 @@ export default {
 
     setKuberOutput(output: string) {
       this.kuberOutputs.push(output);
-      this.updateOutputScroll("kuber-output");
+      // this.updateOutputScroll("kuber-output");
     },
 
     setHaskellOutput(output: string) {
       this.haskellOutputs.push(output);
-      this.updateOutputScroll("haskell-output");
+      // this.updateOutputScroll("haskell-output");
     },
 
     loadHaskellCode(tab: HaskellTabEnums) {
@@ -1284,6 +1287,7 @@ export default {
 
     compileCode() {
       console.log("compiling code");
+      this.haskellOutputs = [];
       this.isCompiling = true;
 
       if (this.$options.editor != null) {
@@ -1300,11 +1304,13 @@ export default {
           }
         });
       } else {
+        this.isCompiling = false;
       }
       // console.log(this.$options.editor.getValue());
     },
 
     submitTx(provider: CIP30Provider) {
+      this.kuberOutputs = [];
       this.isCompiling = true;
       this.showOutputTerminal(true);
       if (this.$options.editor != null) {
@@ -1537,6 +1543,14 @@ export default {
   cursor: pointer;
 }
 
+.disable-text-selection {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
 .textover {
   position: relative;
   cursor: pointer;
