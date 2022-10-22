@@ -708,8 +708,8 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
                   />
                   <span
                     v-if="
-                      api['name'] !== 'Auto' &&
-                      defaultNetworks.includes(api['name'])
+                      api['name'].toLowerCase() !== NetworkEnums.Auto &&
+                      defaultNetworks.includes(api['name'].toLowerCase())
                     "
                     ><v-icon
                       @click="resetNetwork(api['name'])"
@@ -862,6 +862,7 @@ export default {
       outputTerminalVisibility: false,
       networkDropdownVisibility: false,
       utilitiesVisibility: true,
+      customNetworks: customNetworks,
       isCompiling: false,
       providers: providers,
       provider: provider,
@@ -901,10 +902,10 @@ export default {
           border: "border-blue-400",
           name: "Preview Testnet",
           display:
-            localStorage.getItem("Preview Testnet") ||
+            localStorage.getItem(NetworkEnums.PreviewTestnet) ||
             NetworkUrls[NetworkEnums.PreviewTestnet],
           url:
-            localStorage.getItem("Preview Testnet") ||
+            localStorage.getItem(NetworkEnums.PreviewTestnet) ||
             NetworkUrls[NetworkEnums.PreviewTestnet],
         },
         "preprod testnet": {
@@ -912,10 +913,10 @@ export default {
           border: "border-orange-400",
           name: "Preprod Testnet",
           display:
-            localStorage.getItem("Preprod Testnet") ||
+            localStorage.getItem(NetworkEnums.PreprodTestnet) ||
             NetworkUrls[NetworkEnums.PreprodTestnet],
           url:
-            localStorage.getItem("Preprod Testnet") ||
+            localStorage.getItem(NetworkEnums.PreprodTestnet) ||
             NetworkUrls[NetworkEnums.PreprodTestnet],
         },
         mainnet: {
@@ -923,21 +924,21 @@ export default {
           border: "border-red-400",
           name: "Mainnet",
           display:
-            localStorage.getItem("Mainnet") ||
+            localStorage.getItem(NetworkEnums.Mainnet) ||
             NetworkUrls[NetworkEnums.Mainnet],
           url:
-            localStorage.getItem("Mainnet") ||
+            localStorage.getItem(NetworkEnums.Mainnet) ||
             NetworkUrls[NetworkEnums.Mainnet],
         },
-        "legacy Testnet": {
+        "legacy testnet": {
           text: "text-gray-300",
           border: "border-gray-400",
           name: "Legacy Testnet",
           display:
-            localStorage.getItem("Legacy Testnet") ||
+            localStorage.getItem(NetworkEnums.LegacyTestnet) ||
             NetworkUrls[NetworkEnums.LegacyTestnet],
           url:
-            localStorage.getItem("Legacy Testnet") ||
+            localStorage.getItem(NetworkEnums.LegacyTestnet) ||
             NetworkUrls[NetworkEnums.LegacyTestnet],
         },
         localhost: {
@@ -945,10 +946,10 @@ export default {
           border: "border-blue-500",
           name: "Localhost",
           display:
-            localStorage.getItem("Localhost") ||
+            localStorage.getItem(NetworkEnums.Localhost) ||
             NetworkUrls[NetworkEnums.Localhost],
           url:
-            localStorage.getItem("Localhost") ||
+            localStorage.getItem(NetworkEnums.Localhost) ||
             NetworkUrls[NetworkEnums.Localhost],
         },
         ...customNetworks,
@@ -981,6 +982,7 @@ export default {
         this.editorWidth = "w-editor";
       }
     },
+
     changeNetworkTab(tab: NetworkSettingEnums) {
       this.networkSettingTab = tab;
     },
@@ -1015,17 +1017,24 @@ export default {
       this.apis[networkName].display = value;
       this.apis[networkName].url = value;
       localStorage.setItem(networkName, value);
+      // @ts-ignore
+      if (!this.defaultNetworks.includes(networkName)) {
+        this.customNetworks[networkName].display = value;
+        this.customNetworks[networkName].url = value;
+        localStorage.setItem("networks", JSON.stringify(this.customNetworks));
+      }
       this.editingNetwork = {};
     },
 
     resetNetwork(networkName: string) {
+      networkName = networkName.toLowerCase();
       localStorage.removeItem(networkName);
       this.apis[networkName].display = NetworkUrls[networkName];
       this.apis[networkName].url = NetworkUrls[networkName];
     },
 
     editNetwork(name: string, event) {
-      this.editingNetwork[name] = event.target.value;
+      this.editingNetwork[name.toLowerCase()] = event.target.value;
     },
 
     handleAddNetwork(event) {

@@ -4,12 +4,12 @@ export enum NetworkSettingEnums {
 }
 
 export enum NetworkEnums {
-  Auto = "Auto",
-  PreviewTestnet = "Preview Testnet",
-  PreprodTestnet = "Preprod Testnet",
-  Mainnet = "Mainnet",
-  LegacyTestnet = "Legacy Testnet",
-  Localhost = "Localhost",
+  Auto = "auto",
+  PreviewTestnet = "preview testnet",
+  PreprodTestnet = "preprod testnet",
+  Mainnet = "mainnet",
+  LegacyTestnet = "legacy testnet",
+  Localhost = "localhost",
 }
 
 export enum AddNetworkErrorEnums {
