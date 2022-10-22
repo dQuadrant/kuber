@@ -5,12 +5,12 @@ export enum LanguageEnums {
 
 export enum KuberTabEnums {
   KuberJson = "kuber.json",
-  ExampleTransferJson = "exampleTransfer",
+  ExampleJson = "exampleMetadata",
   Readme = "readme",
 }
 
 export enum HaskellTabEnums {
   ContractHs = "contract.hs",
-  SimpleContractHS = "simpleContract",
+  ExampleHs = "simpleContract",
   Readme = "readme",
 }

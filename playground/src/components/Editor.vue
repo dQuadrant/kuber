@@ -149,14 +149,16 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               class="form-check-label inline-block text-gray-500"
               for="inlineCheckbox1"
             >
-              Add Wallet UTxOs in selection
+              Add Wallet UTxOs in $.selections
             </label>
           </div>
           <div class="textover">
             <v-icon
               class="cursor-pointer text-gray-400"
               name="io-information-circle"
-            /><span class="text">utxos info</span>
+            /><span class="text"
+              >Wallet utxos will be added to kuber selections field</span
+            >
           </div>
         </div>
       </div>
@@ -229,14 +231,14 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             Kuber.json
           </div>
           <div
-            @click="changeKuberEditorTab(KuberTabEnums.ExampleTransferJson)"
+            @click="changeKuberEditorTab(KuberTabEnums.ExampleJson)"
             :class="
-              kuberSelectedTab === KuberTabEnums.ExampleTransferJson
+              kuberSelectedTab === KuberTabEnums.ExampleJson
                 ? 'flex font-sans font-medium items-center justify-center h-full px-4 bg-bgCompiler text-fileTextColor cursor-pointer'
                 : ' flex font-sans font-medium items-center justify-center h-full px-4 text-fileTextColor border-x border-b border-borderColor cursor-pointer'
             "
           >
-            ExampleTransfer.json
+            ExampleMetadata.json
           </div>
           <div
             @click="changeKuberEditorTab(KuberTabEnums.Readme)"
@@ -259,14 +261,14 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               ></div>
               <div
                 v-if="kuberSelectedTab === KuberTabEnums.KuberJson"
-                class="flex justify-center items-center bg-primary hover:bg-blue-600 text-white font-semibold text-sm w-16 h-full rounded-md shadow-sm cursor-pointer"
-                @click="compileCode()"
+                class="flex justify-center items-center bg-primary hover:bg-blue-600 text-white font-semibold text-sm px-4 h-full rounded-md shadow-sm cursor-pointer"
+                @click="submitTx(provider)"
               >
                 RUN
               </div>
               <div
                 v-else
-                class="flex justify-center items-center bg-gray-300 text-white font-semibold text-sm w-16 h-full rounded-md shadow-sm cursor-not-allowed"
+                class="flex justify-center items-center bg-gray-300 text-white font-semibold text-sm px-4 h-full rounded-md shadow-sm cursor-not-allowed"
                 @click=""
               >
                 RUN
@@ -288,9 +290,9 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             Contract.hs
           </div>
           <div
-            @click="changeHaskellEditorTab(HaskellTabEnums.SimpleContractHS)"
+            @click="changeHaskellEditorTab(HaskellTabEnums.ExampleHs)"
             :class="
-              haskellSelectedTab === HaskellTabEnums.SimpleContractHS
+              haskellSelectedTab === HaskellTabEnums.ExampleHs
                 ? 'flex font-sans font-medium items-center justify-center h-full px-4 bg-bgCompiler text-fileTextColor cursor-pointer'
                 : ' flex font-sans font-medium items-center justify-center h-full px-4 text-fileTextColor border-x border-b border-borderColor cursor-pointer'
             "
@@ -318,17 +320,17 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               ></div>
               <div
                 v-if="haskellSelectedTab === HaskellTabEnums.ContractHs"
-                class="flex justify-center items-center bg-primary hover:bg-blue-600 text-white font-semibold text-sm w-16 h-full rounded-md shadow-sm cursor-pointer"
+                class="flex justify-center items-center bg-primary hover:bg-blue-600 text-white font-semibold text-sm px-4 h-full rounded-md shadow-sm cursor-pointer"
                 @click="compileCode()"
               >
-                RUN
+                COMPILE
               </div>
               <div
                 v-else
-                class="flex justify-center items-center bg-gray-300 text-white font-semibold text-sm w-16 h-full rounded-md shadow-sm cursor-not-allowed"
+                class="flex justify-center items-center bg-gray-300 text-white font-semibold text-sm px-4 h-full rounded-md shadow-sm cursor-not-allowed"
                 @click=""
               >
-                RUN
+                COMPILE
               </div>
             </div>
           </div>
@@ -1538,12 +1540,14 @@ export default {
 .textover {
   position: relative;
   cursor: pointer;
+  text-align: start;
   display: inline-block;
 }
 
 .textover .text {
   visibility: hidden;
-  width: 120px;
+  width: 300px;
+  text-align: start;
   background-color: black;
   color: #fff;
   text-align: center;
