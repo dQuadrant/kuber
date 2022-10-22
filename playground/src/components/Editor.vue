@@ -43,9 +43,9 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             v-for="p in providers"
             :key="p.name"
             :class="
-              provider.name == p.name
+              provider.name === p.name
                 ? 'ml-3 bg-transparent  hover:bg-gray-100 text-primary font-semibold  py-0.5 px-1.5 border border-blue-500 hover:border-transparent rounded-md'
-                : 'ml-3 bg-transparent hover:bg-gray-100 text-gray font-semibold  py-1 px-0.5 border border-gray-500 hover:border-transparent rounded-md'
+                : 'ml-3 bg-transparent hover:bg-gray-100 text-gray-500 font-semibold  py-0.5 px-1.5 border border-gray-300 hover:border-transparent rounded-md'
             "
             @click="setProvider(p)"
           >
