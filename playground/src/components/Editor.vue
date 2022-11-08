@@ -1,23 +1,7 @@
 <script setup lang="ts">
-import ace from "ace-builds";
 import { Buffer } from "buffer";
+import { callKuberAndSubmit,getPolicyIdOfScriptFromKuber,listProviders } from "kuber-client"
 
-import workerJsonUrl from "ace-builds/src-noconflict/worker-json?url";
-
-import {
-  callKuberAndSubmit,
-  getPolicyIdOfScriptFromKuber,
-  listProviders,
-} from "@/scripts/wallet";
-import type { CIP30Instace, CIP30Provider } from "@/types";
-
-import "ace-builds/src-noconflict/mode-json";
-import "ace-builds/src-noconflict/theme-chrome";
-import "ace-builds/src-noconflict/ext-language_tools";
-
-ace.require("ace/ext/language_tools");
-
-ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
 </script>
 
 <template>
@@ -34,10 +18,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
           >
             Kuber Playground
           </p>
-          <p
-            v-if="language == LanguageEnums.Kuber"
-            class="font-medium text-gray-600"
-          >
+          <p v-if="language == LanguageEnums.Kuber" class="font-medium text-gray-600">
             Select wallet
           </p>
           <button
@@ -51,10 +32,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             "
             @click="setProvider(p)"
           >
-            <img
-              style="display: inline; height: 1em; width: 1em"
-              :src="p.icon"
-            />
+            <img style="display: inline; height: 1em; width: 1em" :src="p.icon" />
             <span class="ml-1"> {{ p.name }}</span>
             <v-icon
               v-if="provider.name == p.name"
@@ -291,10 +269,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
         </div>
 
         <!-- haskell file tabbar  -->
-        <div
-          v-else
-          class="flex h-fileTabbar bg-bgFileTabBar disable-text-selection"
-        >
+        <div v-else class="flex h-fileTabbar bg-bgFileTabBar disable-text-selection">
           <div
             @click="changeHaskellEditorTab(HaskellTabEnums.ContractHs)"
             :class="
@@ -358,11 +333,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
 
         <!-- editor -->
         <div :class="editorHeight + ' grow pt-4 text-xs'">
-          <div
-            id="monaco_editor"
-            style="width: 100%; height: 100%"
-            class="text-xs"
-          ></div>
+          <div id="monaco_editor" style="width: 100%; height: 100%" class="text-xs"></div>
         </div>
 
         <!-- output terminal -->
@@ -391,11 +362,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               {{ output }}
             </p>
           </div>
-          <div
-            id="kuber-output"
-            v-else
-            class="flex flex-col h-5/6 overflow-y-auto"
-          >
+          <div id="kuber-output" v-else class="flex flex-col h-5/6 overflow-y-auto">
             <p v-for="output in kuberOutputs" class="text-gray-800 py-1">
               {{ output }}
             </p>
@@ -478,9 +445,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
             class="flex w-full flex-col items-start"
             v-if="utility == UtilitiesEnums.ScriptHash"
           >
-            <div class="mb-5 font-semibold text-gray-500">
-              Enter script json
-            </div>
+            <div class="mb-5 font-semibold text-gray-500">Enter script json</div>
             <textarea
               class="textarea border border-gray-300 focus:border-gray-400"
               :value="scriptJson"
@@ -510,10 +475,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               </div>
             </div>
             <div class="mt-6">
-              <button
-                @click="getScriptPolicy"
-                class="button-old hover:bg-green-600"
-              >
+              <button @click="getScriptPolicy" class="button-old hover:bg-green-600">
                 Get Policy Id
               </button>
             </div>
@@ -564,10 +526,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               <button @click="encodeHex" class="button-old hover:bg-green-600">
                 Encode
               </button>
-              <button
-                @click="decodeHex"
-                class="button-old hover:bg-green-600 ml-3"
-              >
+              <button @click="decodeHex" class="button-old hover:bg-green-600 ml-3">
                 Decode
               </button>
             </div>
@@ -629,8 +588,8 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               class="modal-header flex flex-shrink-0 text-sm text-gray-400 font-semibold items-center justify-between py-4 px-8 border-b border-gray-200 rounded-t-md"
             >
               <div>
-                <span class="mr-2"><v-icon name="ri-settings-5-line" /></span
-                >Edit/Add Networks
+                <span class="mr-2"><v-icon name="ri-settings-5-line" /></span>Edit/Add
+                Networks
               </div>
 
               <v-icon
@@ -641,9 +600,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
               />
             </div>
             <div class="modal-body relative flex flex-col pt-6">
-              <div
-                class="flex text-sm font-semibold text-gray-400 space-x-4 px-8"
-              >
+              <div class="flex text-sm font-semibold text-gray-400 space-x-4 px-8">
                 <div
                   @click="changeNetworkTab(NetworkSettingEnums.EditNetwork)"
                   class="flex flex-col space-y-1 cursor-pointer"
@@ -736,9 +693,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
                       name="md-lockreset-round"
                   /></span>
                   <span v-else
-                    ><v-icon
-                      class="text-white cursor-default"
-                      name="md-lockreset-round"
+                    ><v-icon class="text-white cursor-default" name="md-lockreset-round"
                   /></span>
                 </div>
               </div>
@@ -782,10 +737,7 @@ ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
                   class="flex items-center text-red-500 text-xs pt-2"
                 >
                   <span
-                    ><v-icon
-                      class="mr-1"
-                      name="md-erroroutline-outlined"
-                      scale="0.9"
+                    ><v-icon class="mr-1" name="md-erroroutline-outlined" scale="0.9"
                   /></span>
                   {{ error }}
                 </p>
@@ -837,6 +789,7 @@ import {
   NetworkEnums,
   NetworkSettingEnums,
 } from "@/models/enums/SettingEnum";
+import type { CIP30Instace, CIP30Provider } from 'kuber-client/dist/types';
 
 const notification = _notification.useNotificationStore();
 
@@ -1092,9 +1045,7 @@ export default {
           }
         }
       } else {
-        const index = this.newNetwork.errors.indexOf(
-          AddNetworkErrorEnums.EmptyUrl
-        );
+        const index = this.newNetwork.errors.indexOf(AddNetworkErrorEnums.EmptyUrl);
         if (index > -1) {
           this.newNetwork.errors.splice(index, 1);
         }
@@ -1337,7 +1288,7 @@ export default {
       // console.log(this.$options.editor.getValue());
     },
 
-    submitTx(provider: CIP30Provider) {
+    submitTx(provider: CIP30Provider): any {
       this.kuberOutputs = [];
       this.isCompiling = true;
       this.showOutputTerminal(true);
@@ -1359,6 +1310,7 @@ export default {
           this.isCompiling = false;
           return;
         }
+        console.log("Using provider",provider)
 
         return provider
           .enable()
@@ -1366,15 +1318,13 @@ export default {
             const collateral = instance.getCollateral
               ? (await instance.getCollateral().catch(() => {})) || []
               : [];
-            if (
-              request.collaterals &&
-              typeof request.collaterals.push === "function"
-            ) {
+            if (request.collaterals && typeof request.collaterals.push === "function") {
               collateral.forEach((x) => request.collaterals.push(x));
             } else if (collateral.length) {
               request.collaterals = collateral;
             }
             if (this.addSelections) {
+              console.log("Adding no selections")
               const availableUtxos = await instance.getUtxos();
               if (request.selections) {
                 if (typeof request.selections.push === "function") {
@@ -1386,8 +1336,6 @@ export default {
                 request.selections = availableUtxos;
               }
 
-              ("");
-
               const res = await callKuberAndSubmit(
                 instance,
                 this.activeApi.url,
@@ -1396,9 +1344,7 @@ export default {
               console.log(res);
               console.log("ping");
               if (res) {
-                res.forEach((output) => {
-                  this.setKuberOutput(output);
-                });
+                this.setKuberOutput(  "Tx : " + res.to_hex());
               }
 
               this.isCompiling = false;
@@ -1411,9 +1357,8 @@ export default {
               console.log(res);
 
               if (res) {
-                res.forEach((output) => {
-                  this.setKuberOutput(output);
-                });
+                this.setKuberOutput( "Tx : " + res.to_hex());
+         
               }
 
               this.isCompiling = false;
@@ -1425,9 +1370,7 @@ export default {
               type: "alert",
               message: e.message || "Oopsie, Nobody knows what happened",
             });
-            this.kuberOutputs.push(
-              e.message || "Oopsie, Nobody knows what happened"
-            );
+            this.kuberOutputs.push(e.message || "Oopsie, Nobody knows what happened");
             this.isCompiling = false;
           });
       }
