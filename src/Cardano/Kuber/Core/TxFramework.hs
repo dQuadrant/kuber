@@ -170,12 +170,6 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
                     (UTxO availableUtxo)
                     (TxBuilder selections _inputs _inputRefs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata )
   = do
-  --     (toLedgerPParams era pparams)
-            --  tx
-            --  (toLedgerUTxO era utxo)
-            --  (toLedgerEpochInfo history)
-            --  systemstart
-            --  cModelArray
   let network = getNetworkId  dCinfo
   (resolvedMints, unresolvedMints) <- classifyMints (UTxO availableUtxo) mintData <&> partitionEithers
   let mergedMetadata = foldl injectMetadataPolicy (foldl  injectMetadataPolicy metadata resolvedMints) unresolvedMints
@@ -518,19 +512,6 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
                                     of
                                       Nothing -> list
                                       Just ha -> ha:list  ) [] extraSignatures
-
-    -- fixedOutputSum = foldMap txOutputVal _outputs
-    --   where
-    --   txOutputVal :: TxOutput TxOutputContent -> Value
-    --   txOutputVal o = case o of { TxOutput toc b b' _ -> case toc of
-    --                                 TxOutAddress aie va -> va
-    --                                 TxOutAddressWithReference aie va sa -> va
-    --                                 TxOutScriptAddress aie va ha -> va
-    --                                 TxOutPkh pkh va -> va
-    --                                 TxOutScript tvs va ha -> va
-    --                                 TxOutScriptAddressWithData _ va _ -> va
-    --                                 TxOutScriptWithData _ va _ -> va
-    --                             }
     zeroValue = valueFromList []
 
     referenceInputsFromScriptReference = foldl (\coll input  -> case input of
@@ -705,7 +686,8 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
         where
         collaterals = mapMaybe  (\(x,pkh) -> Map.lookup x utxoMap <&> (x,) )txContextCollaterals
         -- sort the txouts based on following condition
-        -- - the ones with multiple assets comes first
+        -- - the ones with inline datum or script come at very first
+        -- - the ones with multiple assets comes then
         -- - then the ones with lower lovelace amount come
         -- - then the ones with higher lovelace amount come
         sortingFunc :: (TxIn,TxOut CtxUTxO BabbageEra) -> (TxIn,TxOut CtxUTxO BabbageEra)-> Ordering
@@ -778,29 +760,9 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       ValiditySlot sn -> TxValidityUpperBound ValidityUpperBoundInBabbageEra sn
 
     defaultExunits=ExecutionUnits {executionMemory=10000000,executionSteps= 6000000000 }
-    -- isOnlyAdaTxOut (TxOut a v d) = case v of
-    --                                     -- only ada then it's ok
-    --                                     TxOutAdaOnly oasie (Lovelace lo) -> lo>=2500000
-    --                                     -- make sure that it has only one asset and that one is ada asset.
-    --                                     TxOutValue masie va -> length vals == 1 && snd(head vals) >= 2500000
-    --                                           where
-    --                                             vals=valueToList  va
-    -- unWrapBalance f = do
-      -- x <- f
-      -- case  x  of
-      --  Left tbe -> throw $ SomeError $ "First Balance :" ++ show tbe
-      --  Right res -> pure res
-    toSlot tStamp = case getNetworkId  dCinfo of
-        Mainnet -> SlotNo $ fromIntegral $  mainnetSlot $ round tStamp
-        Testnet (NetworkMagic 1) -> SlotNo $ fromIntegral $ preProdSlot $ round tStamp
-        Testnet (NetworkMagic 2) -> SlotNo $ fromIntegral $ previewSlot $ round tStamp
 
-        Testnet _ -> SlotNo $ fromIntegral $ testnetSlot $ round tStamp
-    testnetSlot timestamp= (timestamp -1607199617 )+ 12830401 -- using epoch 100 as refrence
-    mainnetSlot timestamp = (timestamp -1596491091 )+ 4924800 -- using epoch 209 as reference
-    preProdSlot timestamp = (timestamp - 1661817713) + 6134513 -- using epoch 18 as reference
-    previewSlot timestamp = (timestamp - 1660694430) + 691230 -- using  epoch 9 as reference
-
+    toSlot  =  timestampToSlot systemStart  eraHistory   
+    
 toLedgerEpochInfo :: EraHistory mode -> EpochInfo (Either Text.Text)
 toLedgerEpochInfo (EraHistory _ interpreter) =
     hoistEpochInfo (first (Text.pack . show) . runExcept) $

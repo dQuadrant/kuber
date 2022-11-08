@@ -69,7 +69,7 @@ module Cardano.Kuber.Api(
     ,   TxBuilder(..)
     ,   TxMintData(..)
     ,   TxMintingScriptSource(..)
-    ,
+
     ,   txBuilderToTxBody
     ,   txBuilderToTxBodyIO
     ,   txBuilderToTx

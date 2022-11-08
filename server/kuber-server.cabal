@@ -101,3 +101,4 @@ executable kuber
     , cardano-binary
     , cardano-ledger-core
     , kuber-server
+    , cmdargs >= 0.10.18

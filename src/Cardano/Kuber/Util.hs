@@ -67,6 +67,9 @@ module Cardano.Kuber.Util
     , unHex
     , unHexLazy
     , getDefaultConnection
+
+  -- time conversion utility
+    , timestampToSlot
 )
 where
 
@@ -110,7 +113,7 @@ import Data.Map (Map)
 import qualified Codec.CBOR.Write as Cborg
 import qualified Codec.CBOR.Encoding as Cborg
 import qualified Cardano.Binary as Cborg
-import Cardano.Slotting.Time (SystemStart)
+import Cardano.Slotting.Time (SystemStart, RelativeTime, toRelativeTime)
 import Cardano.Ledger.Babbage.TxBody (inputs, mint')
 import Cardano.Ledger.Shelley.UTxO (txins)
 import Cardano.Kuber.Utility.ChainInfoUtil
@@ -140,6 +143,10 @@ import Data.List (intercalate)
 import qualified Cardano.Ledger.Alonzo as Alonzo
 import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Kuber.Utility.ScriptUtil (fromPlutusV1Script, fromPlutusV2Script)
+import qualified Ouroboros.Consensus.HardFork.History as Qry
+import Data.Time (NominalDiffTime, UTCTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime, POSIXTime)
+import Ouroboros.Consensus.HardFork.History (unsafeExtendSafeZone)
 
 
 calculateTxoutMinLovelaceOrErr :: TxOut CtxTx  BabbageEra -> ProtocolParameters ->  Lovelace
@@ -304,3 +311,13 @@ splitMetadataStrings = Map.map morphValue
 
 toCharUtf8 :: Char -> BSL.Builder
 toCharUtf8 = charUtf8
+
+timestampToSlot ::     SystemStart  ->  EraHistory mode ->POSIXTime ->  SlotNo
+timestampToSlot sstart (EraHistory _ interpreter) utcTime = case
+  Qry.interpretQuery (unsafeExtendSafeZone interpreter) (Qry.wallclockToSlot relativeTime) of
+      -- left should never occur because we have used unsafeExtendSafeZone.
+    Left phe -> error $ "Unexpected : " ++ show phe
+    Right (slot,_,_) ->  slot
+  where
+    relativeTime= toRelativeTime sstart (posixSecondsToUTCTime utcTime)
+
