@@ -38,6 +38,8 @@ module Cardano.Kuber.Api(
     ,   txSignByPkh
     ,   txSign
 
+    -- explicitly set tx fee
+    ,   txSetFee 
     -- change address
     , txChangeAddress
 

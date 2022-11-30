@@ -208,7 +208,9 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       resolvedMintsMp = Map.fromList $ map (\(TxMintData (policyId,sw) _ _)->(policyId,sw)) resolvedMints
       txMintValue' postResolved = if null (valueToList mintValue) then TxMintNone  else  TxMintValue MultiAssetInBabbageEra mintValue $ BuildTxWith (resolvedMintsMp <> postResolved)
       fixedInputSum =  usedInputSum fixedInputs <> mintValue
-      fee= Lovelace 300_000
+      fee=case explicitFee of
+        Nothing ->  Lovelace 400_000
+        Just n -> Lovelace n
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin fixedInputs) spendableUtxos
       calculator= computeBody meta (Lovelace cpw) compulsarySignatories  fixedInputSum availableInputs (map fst collaterals) fixedOutputs
       colalteralSignatories = Set.fromList ( map snd collaterals)
@@ -220,7 +222,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
                                                     Just pkh -> Set.insert pkh acc
                           Right _ -> acc ) withMintSignatures   $ Map.elems  fixedInputs
   mintWithDefaultExunits <- applyMintExUnits Map.empty  (\p -> pure defaultExunits) unresolvedMints
-  (txBody1,signatories,fee1) <-  calculator  (txMintValue' mintWithDefaultExunits) fixedInputs   fee
+  iteration1@(txBody1,signatories,fee1) <-  calculator  (txMintValue' mintWithDefaultExunits) fixedInputs   fee
   (finalBody,finalSignatories,finalFee) <- (
     if  not requiresExUnitCalculation && null  unresolvedMints
       then  (
@@ -232,7 +234,9 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
                     then pure v
                     else iteratedBalancing (n-1)  fee'
                 Left e -> Left e
-        in iteratedBalancing  7  fee1
+        in  if isJust explicitFee 
+              then pure iteration1
+              else iteratedBalancing  7  fee1
       )
       else (
           let iteratedBalancing 0 _ _ =   Left $ FrameworkError LibraryError "Transaction not balanced even in 10 iterations"

@@ -357,6 +357,9 @@ txSign p = txSignature $ TxSignatureSkey p
 -- So, the validator of this script will not be executed.
 
 
+txSetFee :: Integer -> TxBuilder
+txSetFee v = TxBuilder  [] [] [] [] [] mempty mempty [] [] (Just v) Nothing Map.empty
+
 -- Redeem from a Script. The script address and value in the TxIn is determined automatically by querying the utxo from cardano node
 -- txRedeemTxin:: TxIn ->  ->ScriptData -> ScriptData  -> TxBuilder
 -- txRedeemTxin txin script _data _redeemer = txInput $ TxInputUnResolved $ TxInputScriptTxin  ( TxValidatorScript $ script)  (Just  _data)  _redeemer  Nothing txin
