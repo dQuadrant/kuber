@@ -796,7 +796,7 @@ const notification = _notification.useNotificationStore();
 export default {
   editor: null,
   mounted() {
-    let counter = 8;
+    let counter = 5;
     const __this = this;
     this.editorInit();
 
@@ -810,15 +810,16 @@ export default {
     this.timeout = setTimeout(refreshProvider, 1000);
   },
   data() {
-    const providers: Array<CIP30Provider> = [];
-    const provider: CIP30Provider = null;
-    let defaultApi = JSON.parse(localStorage.getItem("network")) || {
+    const autoApi= {
       text: "text-[#60A5FA]",
       name: "Auto",
       border: "border-[#60A5FA]",
-      display: "Mainnet/PreProd based on wallet NetworkId",
-      url: undefined,
+      display: import.meta.env.VITE_API_URL === undefined ? "Mainnet/PreProd based on wallet NetworkId": "Same server's API backend",
+      url: import.meta.env.VITE_API_URL,
     };
+    const providers: Array<CIP30Provider> = [];
+    const provider: CIP30Provider = null;
+    let defaultApi = JSON.parse(localStorage.getItem("network")) || autoApi;
     const customNetworks = JSON.parse(localStorage.getItem("networks")) || {};
 
     let result = {
@@ -855,20 +856,13 @@ export default {
       activeApi: defaultApi,
       defaultNetworks: [
         NetworkEnums.Auto,
-        NetworkEnums.LegacyTestnet,
         NetworkEnums.Localhost,
         NetworkEnums.Mainnet,
         NetworkEnums.PreprodTestnet,
         NetworkEnums.PreviewTestnet,
       ],
       apis: {
-        auto: {
-          text: "text-[#60A5FA]",
-          name: "Auto",
-          border: "border-[#60A5FA]",
-          display: "Mainnet/PreProd based on wallet NetworkId",
-          url: undefined,
-        },
+        auto:autoApi,
         "preview testnet": {
           text: "text-blue-400",
           border: "border-blue-400",
@@ -901,17 +895,6 @@ export default {
           url:
             localStorage.getItem(NetworkEnums.Mainnet) ||
             NetworkUrls[NetworkEnums.Mainnet],
-        },
-        "legacy testnet": {
-          text: "text-gray-300",
-          border: "border-gray-400",
-          name: "Legacy Testnet",
-          display:
-            localStorage.getItem(NetworkEnums.LegacyTestnet) ||
-            NetworkUrls[NetworkEnums.LegacyTestnet],
-          url:
-            localStorage.getItem(NetworkEnums.LegacyTestnet) ||
-            NetworkUrls[NetworkEnums.LegacyTestnet],
         },
         localhost: {
           text: "text-gray-500",

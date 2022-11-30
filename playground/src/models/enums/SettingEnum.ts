@@ -8,7 +8,6 @@ export enum NetworkEnums {
   PreviewTestnet = "preview testnet",
   PreprodTestnet = "preprod testnet",
   Mainnet = "mainnet",
-  LegacyTestnet = "legacy testnet",
   Localhost = "localhost",
 }
 

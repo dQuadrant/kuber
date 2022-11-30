@@ -10,11 +10,11 @@ pipeline {
         DEPLOYMENT_IMAGE_NAME = 'kuber/api'
 
         //From develop branch: deployment details for develop
-        DEPLOYMENT_DEVELOP_CLOUD = '172.31.0.1:2376'
+        DEPLOYMENT_DEVELOP_CLOUD = '172.31.0.6:2376'
         DEPLOYMENT_DEVELOP_SERVICE = 'kuber-dev_api'
 
         // From master branch:deployment details for staging
-        DEPLOYMENT_STAGING_CLOUD = '172.31.0.1:2376'
+        DEPLOYMENT_STAGING_CLOUD = '172.31.0.6:2376'
         DEPLOYMENT_STAGING_SERVICE = 'kuber-staging'
 
         //When tag is pushed: deployment details for release
