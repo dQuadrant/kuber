@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Buffer } from "buffer";
-import { callKuber, callKuberAndSubmit,getPolicyIdOfScriptFromKuber,listProviders, signAndSubmit } from "kuber-client"
+import { callKuber,getPolicyIdOfScriptFromKuber,listProviders, signTx, submitTx } from "kuber-client"
 
 </script>
 
@@ -253,7 +253,7 @@ import { callKuber, callKuberAndSubmit,getPolicyIdOfScriptFromKuber,listProvider
               <div
                 v-if="kuberSelectedTab === KuberTabEnums.KuberJson"
                 class="flex justify-center items-center bg-primary hover:bg-blue-600 text-white font-semibold px-4 h-full rounded-md shadow-sm cursor-pointer"
-                @click="submitTx(provider)"
+                @click="constructSignAndSubmit(provider)"
               >
                 RUN
               </div>
@@ -806,7 +806,7 @@ import {
   NetworkEnums,
   NetworkSettingEnums,
 } from "@/models/enums/SettingEnum";
-import type { CIP30Instace, CIP30Provider } from 'kuber-client/dist/types';
+import type { CIP30Instace, CIP30Provider } from "kuber-client/types";
 
 const notification = _notification.useNotificationStore();
 
@@ -1306,7 +1306,7 @@ export default {
       // console.log(this.$options.editor.getValue());
     },
 
-    submitTx(provider: CIP30Provider): any {
+    constructSignAndSubmit(provider: CIP30Provider): any {
       this.kuberOutputs = [];
       this.isCompiling = true;
       this.showOutputTerminal(true);
@@ -1358,17 +1358,21 @@ export default {
                 request.selections = availableUtxos;
               }
             }
+
               console.log("calling kuber")
               const transactionResponse = await callKuber(
                 this.activeApi.url,
                 JSON.stringify(request)
               );
-              this.kuberOutputs.push("Fee             : " + transactionResponse.fee)
+              this.kuberOutputs.push("Fee             : " + transactionResponse.fee + " lovelace")
               this.kuberOutputs.push("TransactionHash : " + transactionResponse.txHash)
               this.kuberOutputs.push("Unsigned Tx     : ["+(transactionResponse.tx.length /2) +" bytes]  " + transactionResponse.tx)
-              const submittedTx = await signAndSubmit(instance,transactionResponse.tx)
-              const submittedTxhex=submittedTx.to_hex()
-              this.kuberOutputs.push("Signed   Tx     : ["+(submittedTxhex.length /2) +" bytes]  " + submittedTx.to_hex())
+              const signedTx= await signTx (instance,transactionResponse.tx)
+              const signedTxHex=signedTx.to_hex()
+              this.kuberOutputs.push("Signed   Tx     : ["+(signedTxHex.length /2) +" bytes]  " + signedTxHex)
+              submitTx(instance,signedTx)
+              this.kuberOutputs.push("Tx Submitted 	✓✓")
+
           })
           .catch((e: any) => {
             console.error("SubmitTx", e);
