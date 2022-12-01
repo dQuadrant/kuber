@@ -88,7 +88,7 @@ export const SchemaKuber = {
         }
       },
       patternProperties: {
-        "[0-9]*":{}
+        "[0-9]+":{}
      },
      additionalProperties: false
     },

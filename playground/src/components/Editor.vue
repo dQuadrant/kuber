@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Buffer } from "buffer";
-import { callKuberAndSubmit,getPolicyIdOfScriptFromKuber,listProviders } from "kuber-client"
+import { callKuber, callKuberAndSubmit,getPolicyIdOfScriptFromKuber,listProviders, signAndSubmit } from "kuber-client"
 
 </script>
 
@@ -358,14 +358,10 @@ import { callKuberAndSubmit,getPolicyIdOfScriptFromKuber,listProviders } from "k
             v-if="language === LanguageEnums.Haskell"
             class="flex flex-col h-5/6 overflow-y-auto"
           >
-            <p v-for="output in haskellOutputs" class="text-gray-800 py-1">
-              {{ output }}
-            </p>
+          <pre v-for="output in haskellOutputs" class="text-gray-800 py-1">{{ output }}</pre>
           </div>
           <div id="kuber-output" v-else class="flex flex-col h-5/6 overflow-y-auto">
-            <p v-for="output in kuberOutputs" class="text-gray-800 py-1">
-              {{ output }}
-            </p>
+            <pre v-for="output in kuberOutputs" class="text-gray-800 py-1">{{ output }}</pre>
           </div>
         </div>
 
@@ -412,11 +408,11 @@ import { callKuberAndSubmit,getPolicyIdOfScriptFromKuber,listProviders } from "k
               @input="onAddressInput"
             />
             <div class="mt-4 mb-4" v-if="keyHash != ''">
-              <div class="text-gray-500 mb-1">Your keyhash</div>
+              <div class="text-gray-500 text-sm mb-1 mt-3">PublicKey Hash</div>
               <div>
                 <button class="flex" @click="performKeyHashCopy">
-                  <div>{{ keyHash }}</div>
-                  <div class="mt-1">
+                  <div class="text-gray-700">{{ keyHash }}</div>
+                  <span class="mt-1 pl-2">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       width="16"
@@ -429,7 +425,28 @@ import { callKuberAndSubmit,getPolicyIdOfScriptFromKuber,listProviders } from "k
                         d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
                       />
                     </svg>
-                  </div>
+                  </span>
+                </button>
+              </div>
+
+              <div class="text-gray-500 text-sm mb-1 mt-5">StakeKey Hash</div>
+              <div>
+                <button class="flex" @click="copyToClipboard(stakeKeyHash)">
+                  <div class="text-gray-700">{{ stakeKeyHash }}</div> 
+                  <span class="pl-2 mt-1">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      fill="currentColor"
+                      class="bi bi-files"
+                      viewBox="0 0 16 16"
+                    >
+                      <path
+                        d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
+                      />
+                    </svg>
+                  </span>
                 </button>
               </div>
             </div>
@@ -848,6 +865,7 @@ export default {
       showPolicyModal: false,
       address: "",
       keyHash: "",
+      stakeKeyHash: "",
       scriptJson: "",
       policyId: "",
       rawData: "",
@@ -1217,16 +1235,20 @@ export default {
       let addrPointer = PointerAddress.from_address(addr);
       let addrEnterprise = EnterpriseAddress.from_address(addr);
       let keyHash: Ed25519KeyHash;
+      let stakeKeyHash : any;
       if (addrBase) {
         console.log("hashKind", addrBase.payment_cred().kind);
-        keyHash = addrBase.payment_cred().to_keyhash();
+        keyHash = addrBase.payment_cred().to_keyhash() ;
+        stakeKeyHash = addrBase.stake_cred().to_keyhash() || addrBase.stake_cred().to_scripthash() 
       } else if (addrPointer) {
         keyHash = addrPointer.payment_cred().to_keyhash();
       } else if (addrEnterprise) {
         keyHash = addrEnterprise.payment_cred().to_keyhash();
       }
       let keyHashHex = Buffer.from(keyHash.to_bytes()).toString("hex");
-
+      if(stakeKeyHash){
+        this.stakeKeyHash=Buffer.from(stakeKeyHash.to_bytes()).toString("hex");
+      }
       this.keyHash = keyHashHex;
 
       // getKeyHashOfAddressFromKuber(this.activeApi.url, this.address)
@@ -1256,11 +1278,24 @@ export default {
         var code = this.$options.editor.getValue();
         code = code.trim();
         localStorage.setItem(LanguageEnums.Haskell, code);
-        APIService.compileCode(code).then((value) => {
+        APIService.compileCode(code).then((response) => {
           this.showOutputTerminal(true);
           this.isCompiling = false;
-          if (value) {
-            this.setHaskellOutput(value);
+          if (response) {
+            console.log(response)
+            // hash
+    // {cborHex: '49480100002221200101', description: '', type: 'PlutusScriptV2'}
+            if(response.result){
+                response.result.hash
+                const script=response.result.script
+
+                response.result.script
+                response.result.cborHex
+                this.setHaskellOutput("ScriptHash:" + response.result.hash);
+                const jsonContent=JSON.stringify(script, null, 5).split('\n')
+                jsonContent[0] ="Script :" + jsonContent[0] 
+                this.haskellOutputs.push(...jsonContent)
+          }           
           } else {
             this.setHaskellOutput("Some unknown error occured");
           }
@@ -1307,45 +1342,33 @@ export default {
               request.collaterals = collateral;
             }
             if (this.addSelections) {
-              console.log("Adding no selections")
+              console.log("Adding  selections")
               const availableUtxos = await instance.getUtxos();
+              console.log('after getUtxos')
               if (request.selections) {
                 if (typeof request.selections.push === "function") {
                   availableUtxos.forEach((v) => {
                     request.selections.push(v);
                   });
+                }else{
+                  availableUtxos.push(request.selections);
+                  request.selections=availableUtxos
                 }
               } else {
                 request.selections = availableUtxos;
               }
-
-              const res = await callKuberAndSubmit(
-                instance,
-                this.activeApi.url,
-                JSON.stringify(request)
-              );
-              console.log(res);
-              console.log("ping");
-              if (res) {
-                this.setKuberOutput(  "Tx : " + res.to_hex());
-              }
-
-              this.isCompiling = false;
-            } else {
-              const res = await callKuberAndSubmit(
-                instance,
-                this.activeApi.url,
-                JSON.stringify(request)
-              );
-              console.log(res);
-
-              if (res) {
-                this.setKuberOutput( "Tx : " + res.to_hex());
-         
-              }
-
-              this.isCompiling = false;
             }
+              console.log("calling kuber")
+              const transactionResponse = await callKuber(
+                this.activeApi.url,
+                JSON.stringify(request)
+              );
+              this.kuberOutputs.push("Fee             : " + transactionResponse.fee)
+              this.kuberOutputs.push("TransactionHash : " + transactionResponse.txHash)
+              this.kuberOutputs.push("Unsigned Tx     : ["+(transactionResponse.tx.length /2) +" bytes]  " + transactionResponse.tx)
+              const submittedTx = await signAndSubmit(instance,transactionResponse.tx)
+              const submittedTxhex=submittedTx.to_hex()
+              this.kuberOutputs.push("Signed   Tx     : ["+(submittedTxhex.length /2) +" bytes]  " + submittedTx.to_hex())
           })
           .catch((e: any) => {
             console.error("SubmitTx", e);
@@ -1354,7 +1377,8 @@ export default {
               message: e.message || "Oopsie, Nobody knows what happened",
             });
             this.kuberOutputs.push(e.message || "Oopsie, Nobody knows what happened");
-            this.isCompiling = false;
+          }).finally(()=>{
+            this.isCompiling=false;
           });
       }
     },
