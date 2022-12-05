@@ -123,6 +123,8 @@ txBuilderToTxBodyIO' cInfo builder = do
         Left fe -> pure $ Left fe
         Right (UTxO txInUtxos) ->do
           -- Compute Txbody and return
+          putStrLn $ (show builder)
+          putStrLn $ toConsoleTextNoPrefix $  UTxO (combinedUtxos <> txInUtxos)
           pure $ txBuilderToTxBody' dcInfo (UTxO $ combinedUtxos <> txInUtxos) builder
   where
 
@@ -234,7 +236,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
                     then pure v
                     else iteratedBalancing (n-1)  fee'
                 Left e -> Left e
-        in  if isJust explicitFee 
+        in  if isJust explicitFee
               then pure iteration1
               else iteratedBalancing  7  fee1
       )
@@ -488,7 +490,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
         txIns= getTxin fixedInputs extraUtxos ,
         txInsCollateral= if null collateral then TxInsCollateralNone  else TxInsCollateral CollateralInBabbageEra collateral,
         txOuts=outs,
-        txInsReference = TxInsReferenceNone  ,
+        txInsReference = if Set.null references then TxInsReferenceNone else TxInsReference ReferenceTxInsScriptsInlineDatumsInBabbageEra (Set.toList references) ,
         txTotalCollateral= TxTotalCollateralNone  ,
         txReturnCollateral = TxReturnCollateralNone ,
         Cardano.Api.Shelley.txFee=TxFeeExplicit TxFeesExplicitInBabbageEra  fee,
@@ -640,7 +642,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
         filterAddrUtxo addr =pure $ UTxO $ Map.filter (ofAddress addr) availableUtxo
         ofAddress addr (TxOut a _ _ _)= addr == a
         doLookup tin = case Map.lookup tin availableUtxo of
-          Nothing -> Left $ FrameworkError LibraryError  "Input Utxo missing in utxo map"
+          Nothing -> Left $ FrameworkError LibraryError $  "Input Utxo missing in utxo map : " ++ T.unpack (renderTxIn tin)
           Just to ->pure $ UTxO $ Map.singleton  tin  to
     toInput ::  Map TxIn (Either ScriptExecutionError ExecutionUnits)  -> Either FrameworkError ExecutionUnits-> TxInputResolved_  -> Either FrameworkError   [(TxIn,ParsedInput)]
     toInput exUnitLookup onMissing inCtx = case inCtx of
@@ -765,8 +767,8 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
 
     defaultExunits=ExecutionUnits {executionMemory=10000000,executionSteps= 6000000000 }
 
-    toSlot  =  timestampToSlot systemStart  eraHistory   
-    
+    toSlot  =  timestampToSlot systemStart  eraHistory
+
 toLedgerEpochInfo :: EraHistory mode -> EpochInfo (Either Text.Text)
 toLedgerEpochInfo (EraHistory _ interpreter) =
     hoistEpochInfo (first (Text.pack . show) . runExcept) $

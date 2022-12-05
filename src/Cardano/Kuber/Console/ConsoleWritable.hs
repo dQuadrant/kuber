@@ -5,7 +5,7 @@ where
 
 import Cardano.Api
 import qualified Data.Map as Map
-import Cardano.Api.Shelley (Lovelace(Lovelace), TxBody (ShelleyTxBody), ReferenceScript (ReferenceScriptNone))
+import Cardano.Api.Shelley (Lovelace(Lovelace), TxBody (ShelleyTxBody), ReferenceScript (ReferenceScriptNone, ReferenceScript))
 import GHC.Real
 import Data.List
 import qualified Data.Set as Set
@@ -30,9 +30,9 @@ instance ConsoleWritable TxIn where
 instance IsCardanoEra era =>  ConsoleWritable (UTxO era) where
   toConsoleText prefix (UTxO utxoMap) =  prefix ++ intercalate (prefix ++ "\n") (map toStrings $ Map.toList utxoMap)
     where
-      toStrings (TxIn txId (TxIx index),TxOut addr value hash _  )=    showStr txId ++ "#" ++  show index ++"\t:\t" ++ (case value of
+      toStrings (TxIn txId (TxIx index),TxOut addr value hash refScript )=    showStr txId ++ "#" ++  show index ++" : " ++ (case value of
        TxOutAdaOnly oasie (Lovelace v) -> show v
-       TxOutValue masie va ->  intercalate " +" (map vToString $valueToList va ) )
+       TxOutValue masie va ->  intercalate " +" (map vToString $valueToList va ) ) ++ showRefScript refScript
       vToString (AssetId policy asset,Quantity v)=show v ++ " " ++ showStr  policy ++ "." ++ showStr  asset
       vToString (AdaAssetId, Quantity v) = if v >99999
         then(
@@ -60,11 +60,18 @@ instance ConsoleWritable Value where
         TxOutValue masie va -> va
 
 instance IsCardanoEra era => ConsoleWritable (TxOut ctx era ) where
- toConsoleTextNoPrefix  t@(TxOut aie val datum _) = T.unpack (serialiseAddress aie) ++ toConsoleText " : "  (toValue t )
+ toConsoleTextNoPrefix  t@(TxOut aie val datum refScript) = T.unpack (serialiseAddress aie) ++ toConsoleText " : "  (toValue t ) ++ showRefScript refScript
   where
         toValue (TxOut _ v _ _) = case v of
           TxOutAdaOnly oasie lo -> lovelaceToValue lo
           TxOutValue masie va -> va
+    
  toConsoleText prefix txout = prefix ++ toConsoleTextNoPrefix txout
 
 showStr x = init $ tail $ show x
+
+showRefScript refScript = case refScript of 
+      ReferenceScript rtisidsie sial ->  case sial of { ScriptInAnyLang sl sc -> (case sl of
+                                                          SimpleScriptLanguage ssv -> " + SimpleScript("
+                                                          PlutusScriptLanguage psv -> " + PlutusScript(" ) ++ show (  hashScript sc) ++ ")" } 
+      ReferenceScriptNone -> ""
