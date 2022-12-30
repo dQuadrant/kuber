@@ -63,6 +63,7 @@ module Cardano.Kuber.Api(
     , plutusScriptAddr
     , plutusScriptToScriptAny
     , txScriptPolicyId
+    , txScriptHash
     , hashTxScript
     , txScriptToScriptAny
 

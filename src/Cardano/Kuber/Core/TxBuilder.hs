@@ -440,6 +440,9 @@ txScriptPolicyId :: TxScript -> PolicyId
 txScriptPolicyId sc = PolicyId (hashTxScript sc)
 
 
+txScriptHash :: TxScript -> ScriptHash
+txScriptHash = hashTxScript
+
 hashTxScript :: TxScript -> ScriptHash
 hashTxScript sc = case sc of
   TxScriptSimple tss -> case tss of

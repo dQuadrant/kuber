@@ -1282,9 +1282,6 @@ export default {
           this.showOutputTerminal(true);
           this.isCompiling = false;
           if (response) {
-            console.log(response)
-            // hash
-    // {cborHex: '49480100002221200101', description: '', type: 'PlutusScriptV2'}
             if(response.result){
                 response.result.hash
                 const script=response.result.script
@@ -1295,9 +1292,11 @@ export default {
                 const jsonContent=JSON.stringify(script, null, 5).split('\n')
                 jsonContent[0] ="Script :" + jsonContent[0] 
                 this.haskellOutputs.push(...jsonContent)
-          }           
-          } else {
-            this.setHaskellOutput("Some unknown error occured");
+            }           
+            else {
+              console.error(response)
+              this.setHaskellOutput(response.output + response.error);
+            }
           }
         });
       } else {
