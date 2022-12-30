@@ -20,7 +20,7 @@
     "buffer": "^6.0.3",
     "flowbite": "^1.5.3",
     "install": "^0.13.0",
-    "monaco-editor": "0.35.0-dev.20221214",
+    "monaco-editor": "^0.34.0",
     "monaco-editor-webpack-plugin": "^7.0.1",
     "monaco-languageclient": "^4.0.3",
     "npm": "^8.19.1",
