@@ -397,10 +397,17 @@ import { callKuber,getPolicyIdOfScriptFromKuber,listProviders, signTx, submitTx 
         <div class="flex w-full px-4 py-8 2xl:text-base xl:text-sm lg:text-sm">
           <!-- Address utitlity -->
           <div
-            class="flex flex-col w-full items-start"
+            class="w-full items-start"
             v-if="utility == UtilitiesEnums.Address"
           >
+          <div class="flex justify-center">
+            <button @click="()=>{switchAddress = !switchAddress}" class="mb-2 bg-blue-500 font-bold py-2 px-4 rounded text-white hover:bg-blue-450">
+                    Switch
+            </button> 
+          </div>
+          <div v-if="switchAddress == false">
             <div class="mb-5 font-semibold text-gray-500">Enter Address</div>
+            
             <input
               class="flex w-full input border border-gray-300 focus:border-gray-400"
               type="text"
@@ -450,11 +457,57 @@ import { callKuber,getPolicyIdOfScriptFromKuber,listProviders, signTx, submitTx 
                 </button>
               </div>
             </div>
-            <div class="mt-5">
+            <div class="mt-5 ">
               <button @click="getKeyHash" class="button-old hover:bg-green-600">
                 Get Key Hash
               </button>
             </div>
+          </div>
+          <div
+            class="flex flex-col w-full items-start"
+            v-if="switchAddress == true"
+          >
+            
+            <div class="mb-5 font-semibold text-gray-500">PublicKey Hash</div>
+            <input
+              class="flex w-full input border border-gray-300 focus:border-gray-400"
+              type="text"
+              v-model="pubkeyinput"
+            />
+            <div class="mb-5 font-semibold text-gray-500">StakeKey Hash</div>
+            <input
+              class="0 input border border-gray-300 focus:border-gray-400"
+              type="text"
+              v-model="stakekeyinput"
+            />
+            <div class="break-words mt-4 mb-4" v-if="generatedAddress != ''">
+              <div class="text-gray-500 text-sm mb-1 mt-3">Address</div>
+              <div class="">
+                <button class="flex flex-row" @click="copyToClipboard(generatedAddress)">
+                  <p class="break-words text-gray-700">{{ generatedAddress.substring(0,25) }}...{{ generatedAddress.substring(generatedAddress.length-25) }}</p>
+                  <span class="mt-1 pl-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      fill="currentColor"
+                      class="bi bi-files"
+                      viewBox="0 0 16 16"
+                    >
+                      <path
+                        d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
+                      />
+                    </svg>
+                  </span>
+                </button>
+              </div>
+            </div>
+              <div class="mt-53">
+                <button @click="getAddressFromHashKeys(pubkeyinput, stakekeyinput )" class="button-old hover:bg-green-600">
+                  Get Address
+                </button> 
+            </div>
+          </div>
           </div>
 
           <!-- Script Utilities -->
@@ -782,6 +835,7 @@ import {
   Ed25519KeyHash,
   EnterpriseAddress,
   PointerAddress,
+  StakeCredential
 } from "@emurgo/cardano-serialization-lib-asmjs";
 import { SchemaKuber } from "./schemas";
 import Description from "./descriptions";
@@ -807,6 +861,7 @@ import {
   NetworkSettingEnums,
 } from "@/models/enums/SettingEnum";
 import type { CIP30Instace, CIP30Provider } from "kuber-client/types";
+import { generate } from "@vue/compiler-core";
 
 const notification = _notification.useNotificationStore();
 
@@ -849,6 +904,10 @@ export default {
       haskellOutputs: [],
       networkSettingTab: NetworkSettingEnums.EditNetwork,
       kuberOutputs: [],
+      pubkeyinput : "",
+      stakekeyinput:"",
+      generatedAddress:"",
+      switchAddress:false,
       outputTerminalVisibility: false,
       networkDropdownVisibility: false,
       utilitiesVisibility: true,
@@ -863,7 +922,7 @@ export default {
       timeout: 0,
       showKeyHashModal: false,
       showPolicyModal: false,
-      address: "",
+      address: "addr_test1qrnfvn88aeq29nc7v3m39hwlx7cqglm4e39dt9xq7qadexfrkwpajej8f9xuarfzz4uhgez0j6xd8jqf8xwg2lz2mewqrmkv24",
       keyHash: "",
       stakeKeyHash: "",
       scriptJson: "",
@@ -1188,8 +1247,13 @@ export default {
       navigator.clipboard.writeText(this.keyHash);
     },
     copyToClipboard(data) {
-      useToast().success("Copied :" + data);
-      navigator.clipboard.writeText(data);
+      if(navigator.clipboard){
+        navigator.clipboard.writeText(data);
+        useToast().success("Copied :" + data);
+      }
+      else{
+        useToast().info("Clipboard not available in HTTP mode");
+      }
     },
     performPolicyIdCopy() {
       useToast().success("Copied Key Hash");
@@ -1256,6 +1320,24 @@ export default {
       //   .then((res) => {
       //     this.keyHash = res.keyHash;
       //   });
+    },
+    getAddressFromHashKeys(pubkey, stakekey) {
+      const pubKey = StakeCredential.from_keyhash(Ed25519KeyHash.from_bytes(Buffer.from(pubkey, "hex")))
+      let network = 0;
+      if(this.activeApi.name=="Mainnet" ){
+        network = 1;
+      }
+      let addr = "";
+      if(stakekey==''){
+        const address= EnterpriseAddress.new(network,pubKey);
+        addr = address.to_address().to_bech32();
+      }
+      else if(stakekey!='' && pubkey!=''){
+        const stakeKey = StakeCredential.from_keyhash(Ed25519KeyHash.from_bytes(Buffer.from(stakekey, "hex")));
+        const address = BaseAddress.new(network, pubKey, stakeKey);
+        addr = address.to_address().to_bech32();
+      }
+      this.generatedAddress = addr;
     },
     getScriptPolicy() {
       // TODO do this with serialization library and not by calling api
