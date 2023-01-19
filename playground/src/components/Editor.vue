@@ -409,13 +409,13 @@ import { callKuber,getPolicyIdOfScriptFromKuber,listProviders, signTx, submitTx 
             <div class="mb-5 font-semibold text-gray-500">Enter Address</div>
             
             <input
-              class="flex w-full input border border-gray-300 focus:border-gray-400"
+              class="flex w-full normal-input border border-gray-300 focus:border-gray-400"
               type="text"
               :value="address"
               @input="onAddressInput"
             />
             <div class="mt-4 mb-4" v-if="keyHash != ''">
-              <div class="text-gray-500 text-sm mb-1 mt-3">PublicKey Hash</div>
+              <div class="text-gray-500 text-sm mb-1 mt-3">{{paymentCredText}}</div>
               <div>
                 <button class="flex" @click="performKeyHashCopy">
                   <div class="text-gray-700">{{ keyHash }}</div>
@@ -436,7 +436,7 @@ import { callKuber,getPolicyIdOfScriptFromKuber,listProviders, signTx, submitTx 
                 </button>
               </div>
 
-              <div class="text-gray-500 text-sm mb-1 mt-5">StakeKey Hash</div>
+              <div class="text-gray-500 text-sm mb-1 mt-5">{{stakeCredText}}</div>
               <div>
                 <button class="flex" @click="copyToClipboard(stakeKeyHash)">
                   <div class="text-gray-700">{{ stakeKeyHash }}</div> 
@@ -467,19 +467,41 @@ import { callKuber,getPolicyIdOfScriptFromKuber,listProviders, signTx, submitTx 
             class="flex flex-col w-full items-start"
             v-if="switchAddress == true"
           >
-            
-            <div class="mb-5 font-semibold text-gray-500">PublicKey Hash</div>
-            <input
-              class="flex w-full input border border-gray-300 focus:border-gray-400"
-              type="text"
-              v-model="pubkeyinput"
-            />
-            <div class="mb-5 font-semibold text-gray-500">StakeKey Hash</div>
-            <input
-              class="0 input border border-gray-300 focus:border-gray-400"
-              type="text"
-              v-model="stakekeyinput"
-            />
+            <select id="currency" v-model="network" name="network" class="h-full rounded-md border-transparent bg-transparent py-0 pl-2 pr-1 text-gray-500 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                <option>Testnet</option>
+                <option>Mainnet</option>
+                      
+            </select>
+            <div class="mt-5 w-full">
+              <label for="price" class="block font-semibold text-gray-500">Payment Credential</label>
+              <div class="relative mt-1 rounded-md shadow-sm">
+                <input class="block w-5/6 input border rounded border-gray-300 pl-7 pr-12 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" type="text" v-model="pubkeyinput"/>
+                <!-- <input type="text" name="price" id="price" class="block w-5/6 rounded-md border-gray-300 pl-7 pr-12 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="0.00"> -->
+                <div class="absolute inset-y-0 right-0 flex items-center">
+                  <label for="hashtype" class="sr-only">Hash Type</label>
+                  <select id="hashtype" v-model="scriptPubKey" name="currency" class="h-full rounded-md border-transparent bg-transparent py-0 pl-2 pr-1 text-gray-500 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    <option>Script Hash</option>
+                    <option>Key Hash</option>
+                    
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="mt-5 w-full">
+              <label for="price" class="block font-semibold text-gray-500">Stake Credential</label>
+              <div class="relative mt-1 rounded-md shadow-sm">
+                <input class="block w-5/6 input border rounded border-gray-300 pl-7 pr-12 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" type="text" v-model="stakekeyinput"/>
+                <!-- <input type="text" name="price" id="price" class="block w-5/6 rounded-md border-gray-300 pl-7 pr-12 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="0.00"> -->
+                <div class="absolute inset-y-0 right-0 flex items-center">
+                  <label for="currency" class="sr-only">Hash Type</label>
+                  <select id="currency" v-model="scriptStakeKey" name="currency" class="h-full rounded-md border-transparent bg-transparent py-0 pl-2 pr-1 text-gray-500 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    <option>Script Hash</option>
+                    <option>Key Hash</option>
+                    
+                  </select>
+                </div>
+              </div>
+            </div>
             <div class="break-words mt-4 mb-4" v-if="generatedAddress != ''">
               <div class="text-gray-500 text-sm mb-1 mt-3">Address</div>
               <div class="">
@@ -502,7 +524,7 @@ import { callKuber,getPolicyIdOfScriptFromKuber,listProviders, signTx, submitTx 
                 </button>
               </div>
             </div>
-              <div class="mt-53">
+              <div class="mt-5">
                 <button @click="getAddressFromHashKeys(pubkeyinput, stakekeyinput )" class="button-old hover:bg-green-600">
                   Get Address
                 </button> 
@@ -835,6 +857,7 @@ import {
   Ed25519KeyHash,
   EnterpriseAddress,
   PointerAddress,
+  ScriptHash,
   StakeCredential
 } from "@emurgo/cardano-serialization-lib-asmjs";
 import { SchemaKuber } from "./schemas";
@@ -905,6 +928,11 @@ export default {
       networkSettingTab: NetworkSettingEnums.EditNetwork,
       kuberOutputs: [],
       pubkeyinput : "",
+      scriptPubKey:"Key Hash",
+      scriptStakeKey:"Key Hash",
+      network:"Testnet",
+      paymentCredText:"Payment Credential: PubKeyHash",
+      stakeCredText: "Stake Credential: PubKeyHash",
       stakekeyinput:"",
       generatedAddress:"",
       switchAddress:false,
@@ -1292,6 +1320,11 @@ export default {
         this.result = "";
       }
     },
+    // getScriptHashFromAddress(){
+    //   let addr = Address.from_bech32(this.address);
+    //   let scrHash = ScriptHash.from_bech32(this.address);
+    //   console.log(scrHash);
+    // },
     getKeyHash() {
       // TODO do this with serialization library and not by calling api
       let addr = Address.from_bech32(this.address);
@@ -1301,17 +1334,51 @@ export default {
       let keyHash: Ed25519KeyHash;
       let stakeKeyHash : any;
       if (addrBase) {
-        console.log("hashKind", addrBase.payment_cred().kind);
-        keyHash = addrBase.payment_cred().to_keyhash() ;
-        stakeKeyHash = addrBase.stake_cred().to_keyhash() || addrBase.stake_cred().to_scripthash() 
-      } else if (addrPointer) {
-        keyHash = addrPointer.payment_cred().to_keyhash();
-      } else if (addrEnterprise) {
-        keyHash = addrEnterprise.payment_cred().to_keyhash();
+        if(addrBase.payment_cred().kind() == 0){
+          keyHash = addrBase.payment_cred().to_keyhash() ;
+        }
+        else{
+          keyHash = addrBase.payment_cred().to_scripthash();
+          this.paymentCredText = "Payment Credential: Script Hash";
+        }
+        if(addrBase.stake_cred().kind() == 0){
+          stakeKeyHash = addrBase.stake_cred().to_keyhash();
+        }
+        else{
+          stakeKeyHash = addrBase.stake_cred().to_scripthash();
+          this.stakeCredText = "Stake Credential: Script Hash";
+        }
+        
+      } 
+      else if (addrPointer) {
+        if(addrPointer.payment_cred().kind() == 0){
+          keyHash = addrPointer.payment_cred().to_keyhash() ;
+          stakeKeyHash = "";
+        }
+        else{
+          keyHash = addrPointer.payment_cred().to_scripthash();
+          this.paymentCredText = "Payment Credential: Script Hash";
+          stakeKeyHash = "";
+        }
+        this.stakeCredText = "Stake Credential";
+      } 
+      else if (addrEnterprise) {
+        console.log("hashKind", addrEnterprise.payment_cred().kind());
+        if(addrEnterprise.payment_cred().kind() == 0){
+          keyHash = addrEnterprise.payment_cred().to_keyhash() ;
+        }
+        else{
+          keyHash = addrEnterprise.payment_cred().to_scripthash();
+          this.paymentCredText = "Payment Credential: Script Hash";
+        }
+        this.stakeCredText = "Stake Credential";
       }
       let keyHashHex = Buffer.from(keyHash.to_bytes()).toString("hex");
       if(stakeKeyHash){
         this.stakeKeyHash=Buffer.from(stakeKeyHash.to_bytes()).toString("hex");
+      }
+      else{
+        this.stakeKeyHash="";
       }
       this.keyHash = keyHashHex;
 
@@ -1322,22 +1389,35 @@ export default {
       //   });
     },
     getAddressFromHashKeys(pubkey, stakekey) {
-      const pubKey = StakeCredential.from_keyhash(Ed25519KeyHash.from_bytes(Buffer.from(pubkey, "hex")))
-      let network = 0;
-      if(this.activeApi.name=="Mainnet" ){
-        network = 1;
+      let pubKey;
+      if(this.scriptPubKey == "Key Hash"){
+        pubKey = StakeCredential.from_keyhash(Ed25519KeyHash.from_bytes(Buffer.from(pubkey, "hex")));
+      }
+      else if(this.scriptPubKey == "Script Hash"){
+        pubKey = StakeCredential.from_scripthash(ScriptHash.from_bytes(Buffer.from(pubkey, "hex")));  
       }
       let addr = "";
+      const network = this.network=="Testnet" ? 0 : 1;
       if(stakekey==''){
+        console.log("here ", network);
         const address= EnterpriseAddress.new(network,pubKey);
         addr = address.to_address().to_bech32();
+        
       }
       else if(stakekey!='' && pubkey!=''){
-        const stakeKey = StakeCredential.from_keyhash(Ed25519KeyHash.from_bytes(Buffer.from(stakekey, "hex")));
-        const address = BaseAddress.new(network, pubKey, stakeKey);
-        addr = address.to_address().to_bech32();
+        if(this.scriptStakeKey=="Key Hash"){
+          const stakeKey = StakeCredential.from_keyhash(Ed25519KeyHash.from_bytes(Buffer.from(stakekey, "hex")));
+          const address = BaseAddress.new(network, pubKey, stakeKey);
+          addr = address.to_address().to_bech32();
+        }
+        else{
+          const stakeKey = StakeCredential.from_scripthash(ScriptHash.from_hex(stakekey));
+          const address = BaseAddress.new(network, pubKey, stakeKey);
+          addr = address.to_address().to_bech32();
+        }
       }
       this.generatedAddress = addr;
+      console.log(addr);
     },
     getScriptPolicy() {
       // TODO do this with serialization library and not by calling api
@@ -1677,9 +1757,16 @@ export default {
 
 .input {
   height: 50px;
-  width: 100%;
+  width: 73%;
   padding: 5px;
   border-radius: 4px;
+}
+
+.normal-input{
+  height:50px;
+  width:100%;
+  padding:5px;
+  border-radius:4px;
 }
 
 .textarea {
