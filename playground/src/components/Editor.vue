@@ -1357,10 +1357,18 @@ export default {
                 request.selections = availableUtxos;
               }
             }
-
               console.log("calling kuber")
+              let url =this.activeApi.url
+              if(!url && this.activeApi.name=='Auto'){
+                  const network=await instance.getNetworkId()
+                  if(network){
+                    url = this.apis.mainnet.url
+                  }else{
+                    url = this.apis["preprod testnet"].url
+                  }
+              }
               const transactionResponse = await callKuber(
-                this.activeApi.url,
+                url,
                 JSON.stringify(request)
               );
               this.kuberOutputs.push("Fee             : " + transactionResponse.fee + " lovelace")
