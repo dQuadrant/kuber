@@ -1260,7 +1260,7 @@ export default {
     getScriptPolicy() {
       // TODO do this with serialization library and not by calling api
       getPolicyIdOfScriptFromKuber(
-        this.activeApi.url || this.apis["Mainnet"].url,
+        this.activeApi.url || this.apis.mainnet.url,
         this.scriptJson
       )
         .catch((err) => alert(err))

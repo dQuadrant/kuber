@@ -306,7 +306,7 @@ export const SchemaKuber = {
       type: "object",
       properties:{
         type: {type :"string", enum:["sig"],required: true},
-        sig: {type: "string",required: true}
+        keyHash: {type: "string",required: true}
       },
       additionalProperties: false,
     },
