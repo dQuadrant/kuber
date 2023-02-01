@@ -3,5 +3,5 @@ export enum KuberDiscriptionEnums {
   Inputs = "inputs",
   Outputs = "outputs",
   Mint = "mint",
-  MetaData = "metadata",
+  MetaData = "metadata",  
 }

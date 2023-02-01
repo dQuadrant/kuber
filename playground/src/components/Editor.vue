@@ -884,6 +884,14 @@ import {
   NetworkSettingEnums,
 } from "@/models/enums/SettingEnum";
 import type { CIP30Instace, CIP30Provider } from "kuber-client/types";
+import type {LanguageId} from '../syntax_helpers/register';
+import type {ScopeName, TextMateGrammar, ScopeNameInfo} from '../syntax_helpers/providers'
+import type * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import {createOnigScanner, createOnigString, loadWASM} from 'vscode-oniguruma';
+import {SimpleLanguageInfoProvider} from '../syntax_helpers/providers';
+import {registerLanguages} from '../syntax_helpers/register';
+import {rehydrateRegexps} from '../syntax_helpers/configuration';
+import VsCodeDarkTheme from '../syntax_helpers/vs-dark-plus-theme';
 import { generate } from "@vue/compiler-core";
 
 const notification = _notification.useNotificationStore();
@@ -1551,7 +1559,7 @@ export default {
     editorInit() {
       // intializing monaco editor
 
-      loader.init().then((monaco) => {
+      loader.init().then(async (monaco) => {
         var jsonCode = "";
         const storedCode = localStorage.getItem(LanguageEnums.Kuber);
         if (storedCode) {
@@ -1616,6 +1624,80 @@ export default {
 
         // @ts-ignore
         monaco.editor.defineTheme("myTheme", theme);
+        interface DemoScopeNameInfo extends ScopeNameInfo {
+          path: string;
+        }
+
+        const languages: monaco.languages.ILanguageExtensionPoint[] = [
+          {
+            id: 'haskell',
+            extensions: [
+              '.hs',
+            ],
+            aliases: ['Haskell', 'hs'],
+            filenames: ['Snakefile', 'BUILD', 'BUCK', 'TARGETS'],
+            firstLine: '^#!\\s*/?.*\\bpython[0-9.-]*\\b',
+          },
+        ];
+        const grammars: {[scopeName: string]: DemoScopeNameInfo} = {
+          'source.haskell': {
+            language: 'haskell',
+            path: 'haskell_grammar.json',
+          },
+        };
+
+        const fetchGrammar = async (scopeName: ScopeName): Promise<TextMateGrammar> => {
+          const {path} = grammars[scopeName];
+          const uri = `/${path}`;
+          const response = await fetch(uri);
+          const grammar = await response.text();
+          const type = path.endsWith('.json') ? 'json' : 'plist';
+          return {type, grammar};
+        };
+
+        const fetchConfiguration = async (
+          language: LanguageId,
+        ): Promise<monaco.languages.LanguageConfiguration> => {
+          const uri = `/${language}_config.json`;
+          const response = await fetch(uri);
+          const rawConfiguration = await response.text();
+          return rehydrateRegexps(rawConfiguration);
+        };
+
+        async function loadVSCodeOnigurumWASM(): Promise<Response | ArrayBuffer> {
+          const response = await fetch('/node_modules/vscode-oniguruma/release/onig.wasm');
+          const contentType = response.headers.get('content-type');
+          if (contentType === 'application/wasm') {
+            return response;
+          }
+
+          // Using the response directly only works if the server sets the MIME type 'application/wasm'.
+          // Otherwise, a TypeError is thrown when using the streaming compiler.
+          // We therefore use the non-streaming compiler :(.
+          return await response.arrayBuffer();
+        }
+
+        const data: ArrayBuffer | Response = await loadVSCodeOnigurumWASM();
+        loadWASM(data);
+        const onigLib = Promise.resolve({
+          createOnigScanner,
+          createOnigString,
+        });
+
+        const provider = new SimpleLanguageInfoProvider({
+          grammars,
+          fetchGrammar,
+          configurations: languages.map((language) => language.id),
+          fetchConfiguration,
+          theme: VsCodeDarkTheme,
+          onigLib,
+          monaco,
+        });
+        registerLanguages(
+          languages,
+          (language: LanguageId) => provider.fetchLanguageInfo(language),
+          monaco,
+        );
 
         this.$options.editor = monaco.editor.create(
           document.getElementById("monaco_editor"),
@@ -1626,6 +1708,7 @@ export default {
             automaticLayout: true,
           }
         );
+        provider.injectCSS();
       });
     },
   },
