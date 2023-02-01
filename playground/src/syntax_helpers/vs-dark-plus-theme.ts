@@ -7,8 +7,8 @@ export default {
   settings: [
     {
       settings: {
-        foreground: '#D4D4D4',
-        background: '#1E1E1E',
+        foreground: '#14D4D4',
+        background: '#b2c8c5',
       },
     },
     {

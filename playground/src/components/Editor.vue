@@ -893,6 +893,7 @@ import {registerLanguages} from '../syntax_helpers/register';
 import {rehydrateRegexps} from '../syntax_helpers/configuration';
 import VsCodeDarkTheme from '../syntax_helpers/vs-dark-plus-theme';
 import { generate } from "@vue/compiler-core";
+import vsDarkPlusTheme from "../syntax_helpers/vs-dark-plus-theme";
 
 const notification = _notification.useNotificationStore();
 
@@ -1606,7 +1607,7 @@ export default {
         });
 
         const theme = {
-          base: "vs",
+          base: "vs-dark",
           inherit: true,
           rules: [
             {
@@ -1689,7 +1690,7 @@ export default {
           fetchGrammar,
           configurations: languages.map((language) => language.id),
           fetchConfiguration,
-          theme: VsCodeDarkTheme,
+          theme: vsDarkPlusTheme,
           onigLib,
           monaco,
         });
@@ -1702,9 +1703,11 @@ export default {
         this.$options.editor = monaco.editor.create(
           document.getElementById("monaco_editor"),
           {
+            language: "haskell",
             model: model,
+            
             minimap: { enabled: false },
-            theme: "myTheme",
+            theme: "vs-dark",
             automaticLayout: true,
           }
         );

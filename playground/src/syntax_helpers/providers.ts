@@ -114,7 +114,8 @@ export class SimpleLanguageInfoProvider {
     const cssColors = this.registry.getColorMap();
     const colorMap = cssColors.map(Color.Format.CSS.parseHex);
     // This is needed to ensure the minimap gets the right colors.
-    TokenizationRegistry.setColorMap(colorMap);
+    const tokenization = new TokenizationRegistry()
+    tokenization.setColorMap(colorMap);
     const css = generateTokensCSSForColorMap(colorMap);
     const style = createStyleElementForColorsCSS();
     style.innerHTML = css;
