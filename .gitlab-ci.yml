@@ -1,11 +1,12 @@
 stages:
     - build
 
-tags:
-  - shell
+
 build:
     stage: build
     image: docker:latest
+    tags:
+        - shell
     services:
         - dind
     script:
