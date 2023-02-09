@@ -1,0 +1,19 @@
+stages:
+    - build
+
+tags:
+  - shell
+build:
+    stage: build
+    image: docker:latest
+    services:
+        - dind
+    script:
+        - docker info
+        - echo $CI_REGISTRY_PASSWORD | docker login --username $CI_REGISTRY_USER $CI_REGISTRY --password-stdin
+        - if [ "$CI_COMMIT_REF_NAME" == "develop" ]; then COMMON_TAG="nightly"; elif [ "$CI_COMMIT_REF_NAME" == "master" ]; then COMMON_TAG="latest"; else COMMON_TAG=$CI_COMMIT_REF_SLUG; fi
+        - docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA || true
+        - docker build  -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA -t $CI_REGISTRY_IMAGE:$COMMON_TAG  --shm-size 512M .
+        - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+        - docker push $CI_REGISTRY_IMAGE:$COMMON_TAG
+
