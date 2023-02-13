@@ -24,6 +24,9 @@ import {
   MdLockresetRound,
   HiSolidLockClosed,
   MdErroroutlineOutlined,
+  FaRegularClone,
+  BiArrowDownUp,
+  
 } from "oh-vue-icons/icons";
 
 addIcons(
@@ -36,7 +39,9 @@ addIcons(
   RiSettings5Line,
   MdLockresetRound,
   HiSolidLockClosed,
-  MdErroroutlineOutlined
+  MdErroroutlineOutlined,
+  FaRegularClone,
+  BiArrowDownUp,
 );
 const app = createApp(App).component("v-icon", OhVueIcon);
 app.use(VueNotificationList);

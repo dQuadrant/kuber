@@ -120,3 +120,7 @@ export const NetworkUrls = {
   mainnet: "https://mainnet.kuberide.com",
   localhost: "http://localhost:8081",
 };
+
+export const HaskellResults = {
+  "contract.hs":{"code":0,"error":"","script":{"cborHex":"49480100002221200101","description":"","type":"PlutusScriptV2"},"success":true}
+}

@@ -281,16 +281,6 @@ import { callKuber,getPolicyIdOfScriptFromKuber,listProviders, signTx, submitTx 
             Contract.hs
           </div>
           <div
-            @click="changeHaskellEditorTab(HaskellTabEnums.ExampleHs)"
-            :class="
-              haskellSelectedTab === HaskellTabEnums.ExampleHs
-                ? 'flex font-sans font-medium items-center justify-center h-full px-4 bg-bgCompiler text-fileTextColor cursor-pointer'
-                : ' flex font-sans font-medium items-center justify-center h-full px-4 text-fileTextColor border-x border-b border-borderColor cursor-pointer'
-            "
-          >
-            SimpleContract.hs
-          </div>
-          <div
             @click="changeHaskellEditorTab(HaskellTabEnums.Readme)"
             :class="
               haskellSelectedTab === HaskellTabEnums.Readme
@@ -396,67 +386,7 @@ import { callKuber,getPolicyIdOfScriptFromKuber,listProviders, signTx, submitTx 
         </div>
         <div class="flex w-full px-4 py-8 2xl:text-base xl:text-sm lg:text-sm">
           <!-- Address utitlity -->
-          <div
-            class="flex flex-col w-full items-start"
-            v-if="utility == UtilitiesEnums.Address"
-          >
-            <div class="mb-5 font-semibold text-gray-500">Enter Address</div>
-            <input
-              class="flex w-full input border border-gray-300 focus:border-gray-400"
-              type="text"
-              :value="address"
-              @input="onAddressInput"
-            />
-            <div class="mt-4 mb-4" v-if="keyHash != ''">
-              <div class="text-gray-500 text-sm mb-1 mt-3">PublicKey Hash</div>
-              <div>
-                <button class="flex" @click="performKeyHashCopy">
-                  <div class="text-gray-700">{{ keyHash }}</div>
-                  <span class="mt-1 pl-2">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      fill="currentColor"
-                      class="bi bi-files"
-                      viewBox="0 0 16 16"
-                    >
-                      <path
-                        d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
-                      />
-                    </svg>
-                  </span>
-                </button>
-              </div>
-
-              <div class="text-gray-500 text-sm mb-1 mt-5">StakeKey Hash</div>
-              <div>
-                <button class="flex" @click="copyToClipboard(stakeKeyHash)">
-                  <div class="text-gray-700">{{ stakeKeyHash }}</div> 
-                  <span class="pl-2 mt-1">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      fill="currentColor"
-                      class="bi bi-files"
-                      viewBox="0 0 16 16"
-                    >
-                      <path
-                        d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"
-                      />
-                    </svg>
-                  </span>
-                </button>
-              </div>
-            </div>
-            <div class="mt-5">
-              <button @click="getKeyHash" class="button-old hover:bg-green-600">
-                Get Key Hash
-              </button>
-            </div>
-          </div>
-
+          <AddressUtil v-if="utility == UtilitiesEnums.Address"></AddressUtil>
           <!-- Script Utilities -->
           <div
             class="flex w-full flex-col items-start"
@@ -806,11 +736,13 @@ import {
   NetworkEnums,
   NetworkSettingEnums,
 } from "@/models/enums/SettingEnum";
+import AddressUtil from "./AddressUtil.vue";
 import type { CIP30Instace, CIP30Provider } from "kuber-client/types";
 
 const notification = _notification.useNotificationStore();
 
 export default {
+  components: {AddressUtil},
   editor: null,
   mounted() {
     let counter = 5;
@@ -1092,24 +1024,12 @@ export default {
     },
 
     loadHaskellCode(tab: HaskellTabEnums) {
-      if (tab === HaskellTabEnums.ContractHs) {
-        const storedCode = localStorage.getItem(tab);
-        if (storedCode) {
-          this.$options.editor.setValue(storedCode);
-        } else {
-          this.$options.editor.setValue(DefaultHaskellCode);
-        }
-        this.$options.editor.updateOptions({
-          lineNumbers: true,
-          readOnly: false,
-        });
-      } else {
         this.$options.editor.setValue(HaskellCodes[tab]);
         this.$options.editor.updateOptions({
-          lineNumbers: false,
+          lineNumbers: true,
           readOnly: true,
         });
-      }
+
     },
 
     loadKuberCode(tab: KuberTabEnums) {
@@ -1174,9 +1094,6 @@ export default {
       localStorage.setItem("network", JSON.stringify(value));
     },
 
-    onAddressInput(event) {
-      this.address = event.target.value;
-    },
     onScriptJsonInput(event) {
       this.scriptJson = event.target.value;
     },
@@ -1228,35 +1145,6 @@ export default {
         this.result = "";
       }
     },
-    getKeyHash() {
-      // TODO do this with serialization library and not by calling api
-      let addr = Address.from_bech32(this.address);
-      let addrBase = BaseAddress.from_address(addr);
-      let addrPointer = PointerAddress.from_address(addr);
-      let addrEnterprise = EnterpriseAddress.from_address(addr);
-      let keyHash: Ed25519KeyHash;
-      let stakeKeyHash : any;
-      if (addrBase) {
-        console.log("hashKind", addrBase.payment_cred().kind);
-        keyHash = addrBase.payment_cred().to_keyhash() ;
-        stakeKeyHash = addrBase.stake_cred().to_keyhash() || addrBase.stake_cred().to_scripthash() 
-      } else if (addrPointer) {
-        keyHash = addrPointer.payment_cred().to_keyhash();
-      } else if (addrEnterprise) {
-        keyHash = addrEnterprise.payment_cred().to_keyhash();
-      }
-      let keyHashHex = Buffer.from(keyHash.to_bytes()).toString("hex");
-      if(stakeKeyHash){
-        this.stakeKeyHash=Buffer.from(stakeKeyHash.to_bytes()).toString("hex");
-      }
-      this.keyHash = keyHashHex;
-
-      // getKeyHashOfAddressFromKuber(this.activeApi.url, this.address)
-      //   .catch((err) => alert(err))
-      //   .then((res) => {
-      //     this.keyHash = res.keyHash;
-      //   });
-    },
     getScriptPolicy() {
       // TODO do this with serialization library and not by calling api
       getPolicyIdOfScriptFromKuber(
@@ -1278,16 +1166,13 @@ export default {
         var code = this.$options.editor.getValue();
         code = code.trim();
         localStorage.setItem(LanguageEnums.Haskell, code);
-        APIService.compileCode(code).then((response) => {
+        APIService.compileCode(code).then((response:any) => {
           this.showOutputTerminal(true);
           this.isCompiling = false;
           if (response) {
             if(response.result){
                 response.result.hash
                 const script=response.result.script
-
-                response.result.script
-                response.result.cborHex
                 this.setHaskellOutput("ScriptHash:" + response.result.hash);
                 const jsonContent=JSON.stringify(script, null, 5).split('\n')
                 jsonContent[0] ="Script :" + jsonContent[0] 

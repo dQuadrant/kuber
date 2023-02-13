@@ -1,23 +1,11 @@
 export default class APIService {
   static async compileCode(code: string) {
-    try {
-      const response = await fetch(
-        import.meta.env.VITE_COMPILER_API + "compile",
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            // accept: "application/json",
-          },
-          body: JSON.stringify({ code: code }),
-        }
-      );
-      if (response && response.status == 200) {
-        const res = await response.json();
-        return res;
-      }
-    } catch (err) {
-      return err;
-    }
+    const result= {"code":0,"error":"",
+    "output":"Up to date\n====BEGINSCRIPT====\n{\"hash\":\" 3a888d65f16790950a72daee1f63aa05add6d268434107cfa5b67712\",\"script\":{\"cborHex\":\"49480100002221200101\",\"description\":\"\",\"type\":\"PlutusScriptV2\"}}\n",
+    "result":{
+      "hash":" 3a888d65f16790950a72daee1f63aa05add6d268434107cfa5b67712",
+      "script":{"cborHex":"49480100002221200101","description":"","type":"PlutusScriptV2"}},
+      "success":true}
+    return new Promise(resolve => setTimeout(resolve, 1000, result));
   }
 }
