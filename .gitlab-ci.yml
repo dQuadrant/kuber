@@ -4,6 +4,9 @@ stages:
 
 build:
     stage: build
+    cache:
+        paths: 
+            - dist-newstyle
     tags:
         - shell
     script:
