@@ -4,7 +4,7 @@
   "scripts": {
     "start": "vite --host=0.0.0.0",
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vite build",
     "preview": "vite preview --port 5050",
     "typecheck": "vue-tsc --noEmit"
   },

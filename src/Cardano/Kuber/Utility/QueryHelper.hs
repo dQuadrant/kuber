@@ -30,7 +30,6 @@ performQuery conn q=
   qFilter = QueryInEra BabbageEraInCardanoMode
                     $ QueryInShelleyBasedEra ShelleyBasedEraBabbage  q
 
-
 queryUtxos :: LocalNodeConnectInfo CardanoMode-> Set AddressAny -> IO (Either FrameworkError  (UTxO BabbageEra))
 queryUtxos conn addr= performQuery conn (QueryUTxO (QueryUTxOByAddress  addr))
 

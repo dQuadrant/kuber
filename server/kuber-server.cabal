@@ -97,8 +97,9 @@ executable kuber
     , cborg
     , http-types
     , http-media
+    , http-conduit
     , wai-cors
     , cardano-binary
     , cardano-ledger-core
     , kuber-server
-    , cmdargs >= 0.10.18
+    , optparse-applicative

@@ -19,6 +19,7 @@ RUN bash -e /merge-root /layer1 \
 
 FROM node:16 as ui-layer
 WORKDIR /app
+ENV NODE_OPTIONS=--max_old_space_size=6144 
 COPY ./playground/package.json ./playground/package-lock.json ./
 RUN npm ci
 COPY ./playground .
@@ -30,4 +31,5 @@ COPY --from=layer1  / /
 WORKDIR /app
 COPY  --from=ui-layer /app/dist/ .
 EXPOSE 8081
+HEALTHCHECK --interval=40s --timeout=10s --start-period=30s --retries=2 CMD [ "/bin/kuber" , "--healthcheck" ]
 ENTRYPOINT  /bin/kuber

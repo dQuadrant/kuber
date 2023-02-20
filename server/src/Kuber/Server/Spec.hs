@@ -69,10 +69,10 @@ type TransactionAPI =
             "api" :> "v1" :> "tx" :> QueryParam "submit" Bool :> ReqBody '[JSON] TxBuilder :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "submit" :> ReqBody '[JSON ,CBORBinary,CBORText  ] (SubmitTxModal ) :> Post '[JSON] (TxResponse )
       :<|>  "api" :> "v1" :> "tx" :> "exUnits" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx BabbageEra) :> Post '[JSON] ([Either String ExecutionUnits ])
-      :<|>  "api" :> "v1" :> "tx" :> "fee" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx BabbageEra) :> Post '[JSON]  Integer 
+      :<|>  "api" :> "v1" :> "tx" :> "fee" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx BabbageEra) :> Post '[JSON]  Integer
       :<|> "api" :> "v1" :> "scriptPolicy"        :> ReqBody '[JSON] (Aeson.Value ) :> Post '[PlainText ] (Text)
       :<|> "api" :> "v1" :> "keyhash"        :> ReqBody '[JSON] (AddressModal) :> Post '[JSON ] (KeyHashResponse)
-
+      :<|>  "api" :> "v1" :> "chaintip" :> Get '[JSON] QueryTipResponse
        )
 
 server :: DetailedChainInfo -> Server TransactionAPI
@@ -83,6 +83,8 @@ server dcInfo =
   :<|> errorGuard (evaluateFee dcInfo)
   :<|> errorGuard (\sc -> parseAnyScript (Aeson.encode sc)<&> (\(ScriptInAnyLang sl sc') ->serialiseToRawBytesHexText ( scriptPolicyId sc')) )
   :<|> errorGuard (getKeyHash)
+  :<|> liftIO (errorHandler $   queryTip dcInfo)
+
   where
 
     errorGuard f v = liftIO $ do
