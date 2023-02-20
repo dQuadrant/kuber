@@ -68,6 +68,20 @@ function execute-isolated() {
 
 if [[ "$1" == cabal* ]] ; then
     execute-isolated "$@" # execute the cabal command
+elif [[ "$1" == 'shell' ]] 
+ then
+  echo "+ execute-isolated $*"
+  exec docker run -it -u"$(id -u):$(id -g)" \
+  -v $CABAL_CACHE_DIR:$HOME/.cabal \
+  -v $CABAL_CACHE_DIR:/.cabal \
+	-v $DIST_NEWSTYLE_DIR:$WORKDIR/dist-newstyle/ \
+  -v $WORKDIR:$WORKDIR \
+  -v $CHROOT_DIR:/chroot-env/ \
+  -e OVERRIDE_CHROOT_DIR=/chroot-env \
+	-e HOME=$HOME \
+	--entrypoint /bin/bash \
+	--workdir $WORKDIR \
+	dquadrant/cardano-ci 
 else
     ## default build
     execute-isolated 'cabal build exe:kuber && bash -e ./.ci/copy-libraries.sh'

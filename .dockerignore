@@ -1,2 +1,5 @@
 *
-!./dist-newstyle/build/docker
+!./dist-newstyle/build/docker/chroot-env
+!./.ci
+!./playground
+./playground/node_modules
