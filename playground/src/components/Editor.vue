@@ -384,12 +384,12 @@ import { callKuber,getPolicyIdOfScriptFromKuber,listProviders, signTx, submitTx 
             scale="1.2"
           />
         </div>
-        <div class="flex w-full px-4 py-8 2xl:text-base xl:text-sm lg:text-sm">
+        <div class="flex w-full 2xl:text-base xl:text-sm lg:text-sm">
           <!-- Address utitlity -->
           <AddressUtil v-if="utility == UtilitiesEnums.Address"></AddressUtil>
           <!-- Script Utilities -->
           <div
-            class="flex w-full flex-col items-start"
+            class="flex w-full flex-col items-start px-4 py-8"
             v-if="utility == UtilitiesEnums.ScriptHash"
           >
             <div class="mb-5 font-semibold text-gray-500">Enter script json</div>
@@ -430,7 +430,7 @@ import { callKuber,getPolicyIdOfScriptFromKuber,listProviders, signTx, submitTx 
 
           <!-- Hex Utility -->
           <div
-            class="flex flex-col w-full items-center"
+            class="flex flex-col w-full items-center px-4 py-8"
             v-if="utility == UtilitiesEnums.Hex"
           >
             <div class="flex flex-col items-start w-full relative">
@@ -1226,9 +1226,7 @@ export default {
               request.collaterals = collateral;
             }
             if (this.addSelections) {
-              console.log("Adding  selections")
               const availableUtxos = await instance.getUtxos();
-              console.log('after getUtxos')
               if (request.selections) {
                 if (typeof request.selections.push === "function") {
                   availableUtxos.forEach((v) => {
@@ -1242,7 +1240,6 @@ export default {
                 request.selections = availableUtxos;
               }
             }
-              console.log("calling kuber")
               let url =this.activeApi.url
               if(!url && this.activeApi.name=='Auto'){
                   const network=await instance.getNetworkId()
@@ -1262,8 +1259,15 @@ export default {
               const signedTx= await signTx (instance,transactionResponse.tx)
               const signedTxHex=signedTx.to_hex()
               this.kuberOutputs.push("Signed   Tx     : ["+(signedTxHex.length /2) +" bytes]  " + signedTxHex)
-              submitTx(instance,signedTx)
-              this.kuberOutputs.push("Tx Submitted 	✓✓")
+              return submitTx(instance,signedTx).then(()=>{
+                this.kuberOutputs.push("Tx Submitted 	✓✓")
+              }).catch(e=>{
+                this.kuberOutputs.push("❌ Tx submission Failed: " +((e && (e.message || e.info)) || e))
+                notification.setNotification({
+                  type: "error",
+                  message: ((e && (e.message || e.info)) ) || "Oopsie, Nobody knows what happened",
+                });
+              })
 
           })
           .catch((e: any) => {

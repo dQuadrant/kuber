@@ -348,7 +348,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
           Nothing -> pure $ Right $ transform (policy,f)
           Just eu -> pure $ Left $ transform (policy, f eu)
       TxMintingReferenceScript ti m_eu m_sd -> case Map.lookup ti mp of
-              Nothing -> Left $ FrameworkError BalancingError  "Reference Script Utxo is missing"
+              Nothing -> Left $ FrameworkError BalancingError  $ "Reference Script Utxo is missing :" ++ T.unpack ( renderTxIn ti)
               Just (TxOut _ _ _ (ReferenceScript _ anySc@(ScriptInAnyLang sl sc'))) ->do
                 ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anySc
                 case script' of
@@ -410,7 +410,7 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
     txContextCollaterals =foldl getCollaterals [] _collaterals
     getCollaterals  accum  x = case x  of
         TxCollateralTxin txin -> accum++ (case Map.lookup txin availableUtxo of
-          Nothing -> error "Collateral input missing in utxo map"
+          Nothing -> error $ "Collateral input missing in utxo map : " ++ T.unpack ( renderTxIn txin)
           Just (TxOut a v dh _) -> case addressInEraToPaymentKeyHash  a of
                                     Just pkh ->  (txin,pkh) : accum
                                     Nothing -> error "Invalid address type utxo in collateral"
@@ -459,7 +459,9 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
 
         monadFailChangeAddr= case mChangeAddr of
           Nothing ->  if null usableAddresses
-                        then Left $ FrameworkError BalancingError "no change address"
+                        then if null _inputs && null selections
+                              then Left $ FrameworkError BalancingError "No utxo available for fee payment: both `inputs` and `selections` are empty"
+                              else Left $ FrameworkError BalancingError "Change address is missing"
                         else pure $ head usableAddresses
 
           Just aie -> pure aie
@@ -657,11 +659,11 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       TxInputReferenceScriptUtxo scriptRefTin mData r mExunit (UTxO txin) -> mapM (\(_in,val) -> do
         exUnit <- getExUnit _in mExunit
         case Map.lookup scriptRefTin availableUtxo of
-          Nothing -> Left $ FrameworkError LibraryError "Missing utxo for reference script"
+          Nothing -> Left $ FrameworkError LibraryError $ "Missing reference script utxo: " ++ T.unpack (renderTxIn scriptRefTin)
           Just (TxOut _ _ _ (ReferenceScript _ (ScriptInAnyLang sl sc))) ->do
               witness <-  createTxInReferenceScriptWitness scriptRefTin Nothing mData r exUnit
               pure (_in,Right (mExunit, witness,val ))
-          Just _ ->Left $ FrameworkError BalancingError "Reference script utxo doesn't contain reference script"
+          Just _ ->Left $ FrameworkError BalancingError $ "Utxo used as refreence script doesn't contain reference script: " ++ T.unpack (renderTxIn scriptRefTin)
               ) $ Map.toList txin
 
       where
