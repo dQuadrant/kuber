@@ -11,15 +11,11 @@ pipeline {
 
         //From develop branch: deployment details for develop
         DEPLOYMENT_DEVELOP_CLOUD = '172.31.0.6:2376'
-        DEPLOYMENT_DEVELOP_SERVICE = 'kuber-dev_api'
+        DEPLOYMENT_DEVELOP_SERVICE = 'kuber'
 
         // From master branch:deployment details for staging
-        DEPLOYMENT_STAGING_CLOUD = '172.31.0.6:2376'
-        DEPLOYMENT_STAGING_SERVICE = 'kuber-staging'
-
-        //When tag is pushed: deployment details for release
-        DEPLOYMENT_RELEASE_CLOUD = '172.31.0.7:2376'
-        DEPLOYMENT_RELEASE_SERVICE = 'kuber_api'
+        DEPLOYMENT_STAGING_CLOUD = '172.31.0.7:2376'
+        DEPLOYMENT_STAGING_SERVICE = 'kuber'
 
 
         COMPUTED_PR = "${env.gitlabMergeRequestIid ? 'true' : ''}"

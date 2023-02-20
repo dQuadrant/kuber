@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               kuber-server
-version:            2.3.1.0
+version:            2.3.2.0
 
 -- A short (one-line) description of the package.
 -- synopsis:

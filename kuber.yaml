@@ -3,29 +3,18 @@ networks:
   frontend:
     external: true
 volumes:
-  ipc-testnet :
-    name : cardano-db-sync_node-ipc-testnet
   ipc-mainnet:
-    name: cardano-db-sync_node-ipc
+    name: cardano_mainnet_ipc
   ipc-preprod: 
-    name: cardano-preprod_ipc
+    name: cardano_preprod_ipc
   ipc-preview: 
-    name: cardano-preview_node_ipc
+    name: cardano_preview_ipc
 services :
-  testnet : 
-    image: registry.sireto.io/kuber/api:latest-131
-    environment:
-      VIRTUAL_HOST : https://testnet.cnftregistry.io/kuber/api -> :8081/api
-      NETWORK: testnet
-    networks:
-      - frontend
-    volumes:
-      - ipc-testnet:/root/.cardano/testnet
   mainnet : 
-    image: dquadrant/kuber:ce4d493784da945cb6a29cb5325b3f969e3924a7
+    image: dquadrant/kuber:2.3.2
     environment:
       NETWORK: mainnet
-      VIRTUAL_HOST : https://cnftregistry.io/kuber/api -> :8081/api
+      VIRTUAL_HOST : https://mainnet.kuberide.com -> :8081
     networks:
       - frontend
     volumes:
@@ -35,7 +24,7 @@ services :
     environment:
       CARDANO_NODE_SOCKET_PATH: /ipc/node.socket
       NETWORK: 1
-      VIRTUAL_HOST : https://preprod.cnftregistry.io/kuber/api -> :8081/api
+      VIRTUAL_HOST : https://preprod.kuberide.com -> :8081
     networks:
       - frontend
     volumes:
@@ -45,7 +34,7 @@ services :
     environment:
       CARDANO_NODE_SOCKET_PATH: /ipc/node.socket
       NETWORK: 2
-      VIRTUAL_HOST : https://preview.cnftregistry.io/kuber/api -> :8081/api
+      VIRTUAL_HOST : https://preview.kuberide.com -> :8081/api
     networks:
       - frontend
     volumes:

@@ -1,6 +1,6 @@
 {
   "name": "frontend",
-  "version": "0.0.0",
+  "version": "2.3.2",
   "scripts": {
     "start": "vite --host=0.0.0.0",
     "dev": "vite",
