@@ -47,7 +47,7 @@ Kuber can be stared easily with [docker-compose.yml](./docker-compose.yml) file.
 
 ```bash
 git clone https://github.com/dquadrant/kuber.git
-git checkout 2.3.0
+git checkout 2.3.1
 docker-compose up -d
 ```
 
@@ -71,7 +71,7 @@ In summary, to prepare your system for building kuber from sources, you have to:
 Once everything is installed and ready, kuber will also be ready to run
  ```
 cabal update
-CARDANO_NODE_SOCKET_PATH=/home/user/.cardano/testnet/node.socket cabal run exe:kuber
+CARDANO_NODE_SOCKET_PATH=/home/user/.cardano/preprod/node.socket NETWORK=preprod cabal run exe:kuber
  ```
 
 This will start kuber on port `8081`.

@@ -16,9 +16,9 @@ services:
         max-size: "200k"
         max-file: "10"
   kuber:
-    image: dquadrant/kuber:${KUBER_VERSION:-2.2.0}
+    image: dquadrant/kuber:${KUBER_VERSION:-2.3.1}
     environment:
-      NETWORK: ${NETWORK:- preprod}
+      NETWORK: ${NETWORK:- preprod} 
     volumes:
       - node-ipc:/root/.cardano/preprod/
 #      -node-ipc:/root/.cardano/mainnet/ for NETWORK=mainnet   or set CARDANO_NODE_SOCKET_PATH explicitly

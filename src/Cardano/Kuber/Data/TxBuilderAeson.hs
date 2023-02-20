@@ -511,17 +511,13 @@ instance FromJSON (TxOutput TxOutputContent ) where
         Just val -> parseJSON  val
         _ -> pure $ valueFromList []
     datumHashE <- parseData
-    shouldEmbed <- v .:? "inline" .!= True
-    let txOutDatum=if shouldEmbed
-                                then case datumHashE of
-                                  Nothing -> TxOutDatumNone
-                                  Just (Left sd) -> TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra sd
-                                  Just (Right dh) -> TxOutDatumHash ScriptDataInBabbageEra dh
-                                else (case datumHashE of
-                                  Just (Left datum) -> TxOutDatumHash ScriptDataInBabbageEra (hashScriptData datum)
-                                  Just (Right dh)   -> TxOutDatumHash ScriptDataInBabbageEra dh
-                                  _ -> TxOutDatumNone
-                                )
+    shouldEmbed <- v .:? "inlineDatum" .!= True
+    let txOutDatum=case datumHashE of
+                      Nothing -> TxOutDatumNone
+                      Just (Left sd) -> if shouldEmbed 
+                        then TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra sd 
+                        else TxOutDatumHash ScriptDataInBabbageEra (hashScriptData sd)
+                      Just (Right dh) -> TxOutDatumHash ScriptDataInBabbageEra dh
     mScript_ <- v .:? "script"
     mScript <- case mScript_ of
       Nothing ->  v .:? "inlineScript"
