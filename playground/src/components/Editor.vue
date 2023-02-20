@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { Buffer } from "buffer";
-import { callKuber,getPolicyIdOfScriptFromKuber,listProviders, signTx, submitTx } from "kuber-client"
-
+import {
+  callKuber,
+  getPolicyIdOfScriptFromKuber,
+  listProviders,
+  signTx,
+  submitTx,
+} from "kuber-client";
 </script>
 
 <template>
@@ -348,10 +353,14 @@ import { callKuber,getPolicyIdOfScriptFromKuber,listProviders, signTx, submitTx 
             v-if="language === LanguageEnums.Haskell"
             class="flex flex-col h-5/6 overflow-y-auto"
           >
-          <pre v-for="output in haskellOutputs" class="text-gray-800 py-1">{{ output }}</pre>
+            <pre v-for="output in haskellOutputs" class="text-gray-800 py-1">{{
+              output
+            }}</pre>
           </div>
           <div id="kuber-output" v-else class="flex flex-col h-5/6 overflow-y-auto">
-            <pre v-for="output in kuberOutputs" class="text-gray-800 py-1">{{ output }}</pre>
+            <pre v-for="output in kuberOutputs" class="text-gray-800 py-1">{{
+              output
+            }}</pre>
           </div>
         </div>
 
@@ -711,6 +720,7 @@ import {
   BaseAddress,
   Ed25519KeyHash,
   EnterpriseAddress,
+  hash_transaction,
   PointerAddress,
 } from "@emurgo/cardano-serialization-lib-asmjs";
 import { SchemaKuber } from "./schemas";
@@ -742,7 +752,7 @@ import type { CIP30Instace, CIP30Provider } from "kuber-client/types";
 const notification = _notification.useNotificationStore();
 
 export default {
-  components: {AddressUtil},
+  components: { AddressUtil },
   editor: null,
   mounted() {
     let counter = 5;
@@ -759,11 +769,14 @@ export default {
     this.timeout = setTimeout(refreshProvider, 1000);
   },
   data() {
-    const autoApi= {
+    const autoApi = {
       text: "text-[#60A5FA]",
       name: "Auto",
       border: "border-[#60A5FA]",
-      display: import.meta.env.VITE_API_URL === undefined ? "Mainnet/PreProd based on wallet NetworkId": "Same server's API backend",
+      display:
+        import.meta.env.VITE_API_URL === undefined
+          ? "Mainnet/PreProd based on wallet NetworkId"
+          : "Same server's API backend",
       url: import.meta.env.VITE_API_URL,
     };
     const providers: Array<CIP30Provider> = [];
@@ -812,7 +825,7 @@ export default {
         NetworkEnums.PreviewTestnet,
       ],
       apis: {
-        auto:autoApi,
+        auto: autoApi,
         "preview testnet": {
           text: "text-blue-400",
           border: "border-blue-400",
@@ -1024,12 +1037,11 @@ export default {
     },
 
     loadHaskellCode(tab: HaskellTabEnums) {
-        this.$options.editor.setValue(HaskellCodes[tab]);
-        this.$options.editor.updateOptions({
-          lineNumbers: true,
-          readOnly: true,
-        });
-
+      this.$options.editor.setValue(HaskellCodes[tab]);
+      this.$options.editor.updateOptions({
+        lineNumbers: true,
+        readOnly: true,
+      });
     },
 
     loadKuberCode(tab: KuberTabEnums) {
@@ -1166,20 +1178,19 @@ export default {
         var code = this.$options.editor.getValue();
         code = code.trim();
         localStorage.setItem(LanguageEnums.Haskell, code);
-        APIService.compileCode(code).then((response:any) => {
+        APIService.compileCode(code).then((response: any) => {
           this.showOutputTerminal(true);
           this.isCompiling = false;
           if (response) {
-            if(response.result){
-                response.result.hash
-                const script=response.result.script
-                this.setHaskellOutput("ScriptHash:" + response.result.hash);
-                const jsonContent=JSON.stringify(script, null, 5).split('\n')
-                jsonContent[0] ="Script :" + jsonContent[0] 
-                this.haskellOutputs.push(...jsonContent)
-            }           
-            else {
-              console.error(response)
+            if (response.result) {
+              response.result.hash;
+              const script = response.result.script;
+              this.setHaskellOutput("ScriptHash:" + response.result.hash);
+              const jsonContent = JSON.stringify(script, null, 5).split("\n");
+              jsonContent[0] = "Script :" + jsonContent[0];
+              this.haskellOutputs.push(...jsonContent);
+            } else {
+              console.error(response);
               this.setHaskellOutput(response.output + response.error);
             }
           }
@@ -1212,7 +1223,7 @@ export default {
           this.isCompiling = false;
           return;
         }
-        console.log("Using provider",provider)
+        console.log("Using provider", provider);
 
         return provider
           .enable()
@@ -1232,53 +1243,68 @@ export default {
                   availableUtxos.forEach((v) => {
                     request.selections.push(v);
                   });
-                }else{
+                } else {
                   availableUtxos.push(request.selections);
-                  request.selections=availableUtxos
+                  request.selections = availableUtxos;
                 }
               } else {
                 request.selections = availableUtxos;
               }
             }
-              let url =this.activeApi.url
-              if(!url && this.activeApi.name=='Auto'){
-                  const network=await instance.getNetworkId()
-                  if(network){
-                    url = this.apis.mainnet.url
-                  }else{
-                    url = this.apis["preprod testnet"].url
-                  }
+            let url = this.activeApi.url;
+            if (!url && this.activeApi.name == "Auto") {
+              const network = await instance.getNetworkId();
+              if (network) {
+                url = this.apis.mainnet.url;
+              } else {
+                url = this.apis["preprod testnet"].url;
               }
-              const transactionResponse = await callKuber(
-                url,
-                JSON.stringify(request)
-              );
-              this.kuberOutputs.push("Fee             : " + transactionResponse.fee + " lovelace")
-              this.kuberOutputs.push("TransactionHash : " + transactionResponse.txHash)
-              this.kuberOutputs.push("Unsigned Tx     : ["+(transactionResponse.tx.length /2) +" bytes]  " + transactionResponse.tx)
-              const signedTx= await signTx (instance,transactionResponse.tx)
-              const signedTxHex=signedTx.to_hex()
-              this.kuberOutputs.push("Signed   Tx     : ["+(signedTxHex.length /2) +" bytes]  " + signedTxHex)
-              return submitTx(instance,signedTx).then(()=>{
-                this.kuberOutputs.push("Tx Submitted 	✓✓")
-              }).catch(e=>{
-                this.kuberOutputs.push("❌ Tx submission Failed: " +((e && (e.message || e.info)) || e))
+            }
+            const transactionResponse = await callKuber(url, JSON.stringify(request));
+            this.kuberOutputs.push(
+              "Fee             : " + transactionResponse.fee + " lovelace"
+            );
+            this.kuberOutputs.push("Unsigned txHash : " + transactionResponse.txHash);
+            this.kuberOutputs.push(
+              "Unsigned Tx     : [" +
+                transactionResponse.tx.length / 2 +
+                " bytes]  " +
+                transactionResponse.tx
+            );
+            const signedTx = await signTx(instance, transactionResponse.tx);
+            const signedTxHex = signedTx.to_hex();
+            this.kuberOutputs.push(
+              "Signed   Tx     : [" + signedTxHex.length / 2 + " bytes]  " + signedTxHex
+            );
+            this.kuberOutputs.push(
+              "Signed  txHash  : "+hash_transaction(signedTx.body()).to_hex()
+            );
+            return submitTx(instance, signedTx)
+              .then(() => {
+                this.kuberOutputs.push("✅ Tx Submitted");
+              })
+              .catch((e) => {
+                this.kuberOutputs.push(
+                  "❌ Tx submission Failed: " + ((e && (e.message || e.info)) || e)
+                );
                 notification.setNotification({
                   type: "error",
-                  message: ((e && (e.message || e.info)) ) || "Oopsie, Nobody knows what happened",
+                  message:
+                  (e && (e.message || e.info)) || "Oopsie, Nobody knows what happened",
                 });
-              })
-
+              });
           })
           .catch((e: any) => {
             console.error("SubmitTx", e);
+            let msg=(e && (e.message || e.info)) || "Oopsie, Nobody knows what happened"
             notification.setNotification({
               type: "alert",
-              message: e.message || "Oopsie, Nobody knows what happened",
+              message:msg
             });
-            this.kuberOutputs.push(e.message || "Oopsie, Nobody knows what happened");
-          }).finally(()=>{
-            this.isCompiling=false;
+            this.kuberOutputs.push("❌ "+msg);
+          })
+          .finally(() => {
+            this.isCompiling = false;
           });
       }
     },

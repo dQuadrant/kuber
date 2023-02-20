@@ -49,7 +49,6 @@ import qualified Data.ByteString.Short      as SBS
 import qualified Data.ByteString.Lazy       as LBS
 import qualified Data.Text.Lazy.Encoding    as TL
 import qualified Data.Text.Lazy             as TL
-import Debug.Trace (trace, traceM)
 import qualified Data.HashMap.Strict as HM
 import Data.String (IsString(fromString))
 import qualified Debug.Trace as Debug

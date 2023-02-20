@@ -39,7 +39,6 @@ import           Data.Text.Conversions        (Base16 (Base16, unBase16),
 import           Data.Text.Encoding           (encodeUtf8)
 import qualified Data.Text.Encoding           as T
 import qualified Data.Text.Encoding           as TSE
-import           Debug.Trace                  (traceM)
 import           GHC.IO.Exception             (IOErrorType (UserError),
                                                IOException (IOError))
 import           Text.Read                    (readMaybe)

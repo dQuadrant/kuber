@@ -63,7 +63,7 @@ import Cardano.Binary (ToCBOR(toCBOR))
 import qualified Cardano.Binary as Cborg
 import Cardano.Kuber.Utility.ScriptUtil
 import Cardano.Kuber.Utility.QueryHelper (queryUtxos, queryTxins)
-import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable(toConsoleTextNoPrefix))
+import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable(toConsoleTextNoPrefix, toConsoleText))
 import Cardano.Kuber.Utility.DataTransformation (skeyToPaymentKeyHash, pkhToPaymentKeyHash)
 import Data.Foldable (foldlM)
 import Data.Bifunctor (first)
@@ -79,6 +79,7 @@ import Cardano.Slotting.EpochInfo (hoistEpochInfo, epochInfoSlotToUTCTime)
 import Ouroboros.Consensus.HardFork.History.EpochInfo (interpreterToEpochInfo)
 import           Control.Monad.Trans.Except(runExcept)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import qualified Data.Aeson.KeyMap as Mpa
 
 type BoolChange   = Bool
 type BoolFee = Bool
@@ -123,8 +124,6 @@ txBuilderToTxBodyIO' cInfo builder = do
         Left fe -> pure $ Left fe
         Right (UTxO txInUtxos) ->do
           -- Compute Txbody and return
-          putStrLn $ (show builder)
-          putStrLn $ toConsoleTextNoPrefix $  UTxO (combinedUtxos <> txInUtxos)
           pure $ txBuilderToTxBody' dcInfo (UTxO $ combinedUtxos <> txInUtxos) builder
   where
 
@@ -228,11 +227,11 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
   (finalBody,finalSignatories,finalFee) <- (
     if  not requiresExUnitCalculation && null  unresolvedMints
       then  (
-        let iteratedBalancing 0 _ = Left $ FrameworkError LibraryError "Transaction not balanced even in 7 iterations"
-            iteratedBalancing n lastFee= do
+        let 
+            iteratedBalancing n lastFee= Debug.trace (show n ++ " -> lastfee:" ++ show lastFee) $ do
               case calculator (txMintValue' mempty) fixedInputs  lastFee  of
                 Right  v@(txBody',signatories',fee') ->
-                  if fee' ==  lastFee
+                  if  (if n>0 then  (==) else (<=) ) fee'  lastFee
                     then pure v
                     else iteratedBalancing (n-1)  fee'
                 Left e -> Left e
@@ -241,14 +240,13 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
               else iteratedBalancing  7  fee1
       )
       else (
-          let iteratedBalancing 0 _ _ =   Left $ FrameworkError LibraryError "Transaction not balanced even in 10 iterations"
-              iteratedBalancing n lastBody lastFee=do
+          let iteratedBalancing n lastBody lastFee=do
                 (inputExmap,mintExmap) <- evaluateExUnitMap dCinfo ( UTxO availableUtxo) lastBody
                 inputs' <- usedInputs  (Map.map Right inputExmap ) (Right defaultExunits)  resolvedInputs
                 exUnitAppliedMints <- applyMintExUnits mintExmap (\p -> Left $ FrameworkError BalancingError ("Missing Exunits for minting" ++ show p)) unresolvedMints
                 case calculator (txMintValue' exUnitAppliedMints) inputs'  lastFee  of
                   Right  v@(txBody',signatories',fee') ->
-                    if fee' ==  lastFee
+                    if (if n>0 then  (==) else (<=) ) fee'  lastFee
                       then pure v
                       else iteratedBalancing (n-1) txBody'  fee'
                   Left e -> Left e

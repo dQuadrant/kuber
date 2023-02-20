@@ -15,9 +15,11 @@ import Data.Typeable (Typeable)
 import System.Console.CmdArgs
 import Text.Read (readMaybe)
 import Data.String (IsString(..))
+import System.IO
 
 main :: IO ()
 main = do
+  hSetBuffering stdout LineBuffering
   dcinfo <- chainInfoFromEnv >>= withDetails
   Modes port hostStr <- cmdArgs $ modes [
         Modes {
