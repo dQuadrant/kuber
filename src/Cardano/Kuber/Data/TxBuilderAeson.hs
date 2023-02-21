@@ -512,7 +512,7 @@ instance FromJSON (TxOutput TxOutputContent ) where
         Just val -> parseJSON  val
         _ -> pure $ valueFromList []
     datumHashE <- parseData
-    shouldEmbed <- v .:? "inline" .!= True
+    shouldEmbed <- v .:? "inlineDatum" .!= True
     let txOutDatum=if shouldEmbed
                                 then case datumHashE of
                                   Nothing -> TxOutDatumNone

@@ -26,10 +26,10 @@ import Data.Text (Text)
 import Cardano.Kuber.Data.Models
 import qualified Data.ByteString.Char8 as BS8
 import Data.Functor ((<&>))
-import Cardano.Kuber.Api (TxBuilder)
 import Cardano.Kuber.Data.Parsers (parseTxIn)
 import qualified Debug.Trace as Debug
-
+import Data.Word (Word64)
+import qualified Data.Aeson.Key as A
 
 getKeyHash :: AddressModal -> IO KeyHashResponse
 getKeyHash aie = do
@@ -37,7 +37,33 @@ getKeyHash aie = do
     Nothing -> throw $ FrameworkError  ParserError  "Couldn't derive key-hash from address "
     Just ha -> pure $ KeyHashResponse $ BS8.unpack $ serialiseToRawBytesHex ha
 
+data QueryTipResponse  = QueryTipResponse{
+    blk:: String
+  , qtrSlotNo ::  Word64 
+}
+instance ToJSON QueryTipResponse where
+  toJSON (QueryTipResponse blk slot) = A.object [
+      A.fromString "slot"  A..= slot,
+      A.fromString "block" A..= blk
+    ]
 
+
+queryTip ::ChainInfo x => x -> IO QueryTipResponse
+queryTip ctx = do
+    chainPoint<-doQuery (QueryChainPoint CardanoMode)
+    systemStart<-doQuery QuerySystemStart
+    tip <- doQuery (QueryChainPoint CardanoMode)
+    case chainPoint of 
+      ChainPointAtGenesis -> pure $ QueryTipResponse "genesis" 0
+      ChainPoint sn ha -> pure $ QueryTipResponse (toHexString $  serialiseToRawBytes ha) (unSlotNo sn)
+
+  where
+  doQuery q=  do 
+      a <-queryNodeLocalState conn Nothing  q
+      case a of
+        Left af -> throw $ FrameworkError NodeQueryError (show af)
+        Right e -> pure e
+  conn= getConnectInfo ctx
 
 getBalance :: ChainInfo x =>  x  -> String -> IO BalanceResponse
 getBalance ctx addrStr = do
