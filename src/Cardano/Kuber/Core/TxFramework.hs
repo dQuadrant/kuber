@@ -43,7 +43,6 @@ import Cardano.Kuber.Core.TxBuilder
 import Cardano.Kuber.Core.ChainInfo (DetailedChainInfo (DetailedChainInfo, dciConn), ChainInfo (getNetworkId, getConnectInfo, withDetails))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Cardano.Api.Crypto.Ed25519Bip32 (xPrvFromBytes)
-import Debug.Trace (trace, traceM)
 import qualified Data.Aeson as A
 import GHC.Num (wordToInteger)
 import qualified Data.Map.Strict as StrictMap
@@ -201,14 +200,18 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
   fixedOutputs <-case updateTxOutMinAda (Lovelace cpw) parsedOutputs of
     Left (i, output,txoutAda,minAda) -> Left $ FrameworkError TxValidationError $  "$.outputs["++show i ++ "] Minimum lovelace txout is " ++ show minAda ++ ", But it has only " ++ show txoutAda
     Right tos -> pure tos
-  collaterals <- if hasScriptInput
+  collaterals <- if hasScriptInput || hasPlutusMint
                   then  (case collaterals of
                     Nothing ->  Left $ FrameworkError BalancingError "No utxo available for collateral"
                     Just tis -> pure tis
                     )
                   else pure []
   let
-      mintValue =  valueFromList $  foldl (\ l (TxMintData (p,_) amount _) -> l ++   map (first (AssetId p))  amount ) mempty  resolvedMints
+      
+      mintDataAssetList (TxMintData (p,_) amount _) = map (first (AssetId p))  amount 
+      mintValue =  valueFromList $  
+                          concatMap mintDataAssetList resolvedMints
+                      ++  concatMap mintDataAssetList unresolvedMints
       resolvedMintsMp = Map.fromList $ map (\(TxMintData (policyId,sw) _ _)->(policyId,sw)) resolvedMints
       txMintValue' postResolved = if null (valueToList mintValue) then TxMintNone  else  TxMintValue MultiAssetInBabbageEra mintValue $ BuildTxWith (resolvedMintsMp <> postResolved)
       fixedInputSum =  usedInputSum fixedInputs <> mintValue
@@ -230,8 +233,8 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
   (finalBody,finalSignatories,finalFee) <- (
     if  not requiresExUnitCalculation && null  unresolvedMints
       then  (
-        let 
-            iteratedBalancing n lastFee= Debug.trace (show n ++ " -> lastfee:" ++ show lastFee) $ do
+        let
+            iteratedBalancing n lastFee=
               case calculator (txMintValue' mempty) fixedInputs  lastFee  of
                 Right  v@(txBody',signatories',fee') ->
                   if  (if n>0 then  (==) else (<=) ) fee'  lastFee
@@ -310,6 +313,11 @@ txBuilderToTxBody'  dCinfo@(DetailedChainInfo cpw conn pParam ledgerPParam syste
       TxInputUnResolved TxInputReferenceScriptTxin{} -> True
       _ -> False ) _inputs
 
+    hasPlutusMint = any (\case TxMintData tmss x0 map -> case tmss of
+                                 TxMintingPlutusScript tps m_eu sd -> True
+                                 TxMintingReferenceScript ti m_eu m_sd -> False -- TODO: find the reference script type here.
+                                 TxMintingSimpleScript tss -> False
+      ) mintData
     requiresExUnitCalculation = any (\case
       TxInputResolved TxInputScriptUtxo {}-> True
       TxInputResolved TxInputReferenceScriptUtxo{}-> True

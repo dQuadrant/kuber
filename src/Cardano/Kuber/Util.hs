@@ -239,6 +239,8 @@ evaluateExUnitMap  (DetailedChainInfo cpw conn pParam ledgerPparam systemStart e
   Left tve -> do
     Left $ FrameworkError   ExUnitCalculationError (show tve)
   Right exMap -> do
+    Debug.traceM  $ "exUnitMap " ++ show exMap
+    Debug.traceM $ "TxBody" ++ show txbody
     eithers<- mapM  doMap ( Map.toList exMap)
     pure $ bimap Map.fromList Map.fromList $ partitionEithers eithers
 
