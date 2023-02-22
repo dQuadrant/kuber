@@ -1,7 +1,6 @@
 stages:
     - build
-
-
+    - deploy
 build:
     stage: build
     cache:
@@ -17,4 +16,15 @@ build:
         - ./.ci/build  -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA -t $CI_REGISTRY_IMAGE:$COMMON_TAG
         - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
         - docker push $CI_REGISTRY_IMAGE:$COMMON_TAG
+
+deploy:
+    stage: deploy
+    image: docker:latest
+    only:
+        refs:
+          - develop
+    script:
+        - echo $CI_REGISTRY_PASSWORD | docker login --username $CI_REGISTRY_USER $CI_REGISTRY --password-stdin
+        - docker --host 172.31.0.6:2376 service update --with-registry-auth --image $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA  kuber_dev_preprod
+        - docker --host 172.31.0.6:2376 service update --with-registry-auth --image $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA  kuber_dev_preview
 
