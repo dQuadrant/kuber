@@ -10,14 +10,14 @@ build:
         - shell
     script:
         - docker info
-        - echo $CI_REGISTRY_PASSWORD | docker login --username $CI_REGISTRY_USER $CI_REGISTRY --password-stdin
-        - if [ "$CI_COMMIT_REF_NAME" == "develop" ]; then COMMON_TAG="nightly"; elif [ "$CI_COMMIT_REF_NAME" == "master" ]; then COMMON_TAG="latest"; else COMMON_TAG=$CI_COMMIT_REF_SLUG; fi
+        - if [ ! -z "$CI_COMMIT_TAG" ]; then COMMON_TAG="release";  elif [ "$CI_COMMIT_REF_NAME" == "master" ]; then COMMON_TAG="latest"; else COMMON_TAG=$CI_COMMIT_REF_SLUG; fi
+        - if [ ! -z "$CI_COMMIT_TAG" ]; then IMAGE_IDENTIFIER="$CI_COMMIT_TAG"; else IMAGE_IDENTIFIER=$CI_COMMIT_SHA; fi
         - ./.ci/build cabal update
-        - ./.ci/build  -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA -t $CI_REGISTRY_IMAGE:$COMMON_TAG
-        - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+        - ./.ci/build  -t "$CI_REGISTRY_IMAGE:$IMAGE_IDENTIFIER" -t "$CI_REGISTRY_IMAGE:$COMMON_TAG"
+        - docker push $CI_REGISTRY_IMAGE:$IMAGE_IDENTIFIER
         - docker push $CI_REGISTRY_IMAGE:$COMMON_TAG
 
-deploy:
+deploy-dev:
     stage: deploy
     image: docker:latest
     only:
@@ -28,3 +28,13 @@ deploy:
         - docker --host 172.31.0.6:2376 service update --with-registry-auth --image $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA  kuber_dev_preprod
         - docker --host 172.31.0.6:2376 service update --with-registry-auth --image $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA  kuber_dev_preview
 
+deploy-release:
+    stage: deploy
+    image: docker:latest
+    only:
+        - tags
+    script:
+        - echo $CI_REGISTRY_PASSWORD | docker login --username $CI_REGISTRY_USER $CI_REGISTRY --password-stdin
+        - docker --host 172.31.0.7:2376 service update --with-registry-auth --image $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG  cardanoapi_preprod
+        - docker --host 172.31.0.7:2376 service update --with-registry-auth --image $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG  cardanoapi_preview
+        - docker --host 172.31.0.7:2376 service update --with-registry-auth --image $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG  cardanoapi_mainnet
