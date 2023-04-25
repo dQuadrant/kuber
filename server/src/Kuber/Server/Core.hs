@@ -30,6 +30,9 @@ import Cardano.Kuber.Data.Parsers (parseTxIn)
 import qualified Debug.Trace as Debug
 import Data.Word (Word64)
 import qualified Data.Aeson.Key as A
+import Data.Time.Clock.POSIX ( POSIXTime, getPOSIXTime )
+import Data.Aeson ((.:))
+
 
 getKeyHash :: AddressModal -> IO KeyHashResponse
 getKeyHash aie = do
@@ -41,12 +44,70 @@ data QueryTipResponse  = QueryTipResponse{
     blk:: String
   , qtrSlotNo ::  Word64 
 }
+
+data TimeTranslationReq  = TimeTranslationReq{
+    date:: POSIXTime
+}
+data SlotTranslationReq  = SlotTranslationReq{
+    slotNo:: SlotNo
+}
+
+data TranslationResponse = TranslationResponse {
+    tResSlotNo:: SlotNo,
+    tResTimestamp:: POSIXTime
+}
+
+instance ToJSON TranslationResponse  where
+    toJSON (TranslationResponse slot time)= A.object [
+          A.fromString "slot" A..= slot
+        , A.fromString "time" A..= time
+      ]
+
+instance FromJSON  TimeTranslationReq where
+  parseJSON (A.Object v) =do
+    dateInt <- v .:  A.fromString "date"
+    pure $ TimeTranslationReq  (fromInteger dateInt)
+  parseJSON _ = fail "Expected object"
+
+instance FromJSON SlotTranslationReq where
+
+  parseJSON (A.Object v) =do
+    slotNo <- v .:  A.fromString "slotNo"
+    pure $ SlotTranslationReq  (fromInteger slotNo)
+  parseJSON _ = fail "Expected object"
+
 instance ToJSON QueryTipResponse where
   toJSON (QueryTipResponse blk slot) = A.object [
       A.fromString "slot"  A..= slot,
       A.fromString "block" A..= blk
     ]
 
+translatePosixTime ::ChainInfo x => x -> TimeTranslationReq -> IO TranslationResponse
+translatePosixTime ctx (TimeTranslationReq timestamp) = do
+    (DetailedChainInfo _ _ pp _ systemStart eraHistory)<- withDetails ctx
+    let slotNo = timestampToSlot systemStart eraHistory timestamp
+    pure  $ TranslationResponse slotNo timestamp
+
+translateSlot ::ChainInfo x => x -> SlotTranslationReq ->  IO TranslationResponse
+translateSlot ctx (SlotTranslationReq slotNo) = do
+    (DetailedChainInfo _ _ pp _ systemStart eraHistory)<- withDetails ctx
+    pure $ TranslationResponse slotNo (slotToTimestamp systemStart eraHistory slotNo) 
+
+queryTime ::ChainInfo x => x -> IO TranslationResponse
+queryTime ctx = do
+    (DetailedChainInfo _ _ pp _ systemStart eraHistory)<- withDetails ctx
+    now <- getPOSIXTime
+    let roundedTime = fromInteger $ round now
+    let slotNo = timestampToSlot systemStart eraHistory roundedTime
+    pure  $ TranslationResponse slotNo roundedTime
+
+  where
+  doQuery q=  do
+      a <-queryNodeLocalState conn Nothing  q
+      case a of
+        Left af -> throw $ FrameworkError NodeQueryError (show af)
+        Right e -> pure e
+  conn= getConnectInfo ctx
 
 queryTip ::ChainInfo x => x -> IO QueryTipResponse
 queryTip ctx = do

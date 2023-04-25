@@ -60,6 +60,7 @@ library
     , warp
     , wai-middleware-static
     , wai-extra
+    , time
 
 
 executable kuber

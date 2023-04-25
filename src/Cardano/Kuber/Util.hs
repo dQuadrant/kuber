@@ -72,6 +72,7 @@ module Cardano.Kuber.Util
 
   -- time conversion utility
     , timestampToSlot
+    , slotToTimestamp
 )
 where
 
@@ -115,7 +116,7 @@ import Data.Map (Map)
 import qualified Codec.CBOR.Write as Cborg
 import qualified Codec.CBOR.Encoding as Cborg
 import qualified Cardano.Binary as Cborg
-import Cardano.Slotting.Time (SystemStart, RelativeTime, toRelativeTime)
+import Cardano.Slotting.Time (SystemStart, RelativeTime, toRelativeTime, fromRelativeTime)
 import Cardano.Ledger.Babbage.TxBody (inputs, mint')
 import Cardano.Ledger.Shelley.UTxO (txins)
 import Cardano.Kuber.Utility.ChainInfoUtil
@@ -147,7 +148,7 @@ import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Kuber.Utility.ScriptUtil (fromPlutusV1Script, fromPlutusV2Script, fromPlutusV1Validator, fromPlutusV2Validator)
 import qualified Ouroboros.Consensus.HardFork.History as Qry
 import Data.Time (NominalDiffTime, UTCTime)
-import Data.Time.Clock.POSIX (posixSecondsToUTCTime, POSIXTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime, POSIXTime, utcTimeToPOSIXSeconds)
 import Ouroboros.Consensus.HardFork.History (unsafeExtendSafeZone)
 
 
@@ -325,3 +326,11 @@ timestampToSlot sstart (EraHistory _ interpreter) utcTime = case
   where
     relativeTime= toRelativeTime sstart (posixSecondsToUTCTime utcTime)
 
+
+slotToTimestamp ::     SystemStart  ->  EraHistory mode  ->  SlotNo -> POSIXTime
+slotToTimestamp sstart (EraHistory _ interpreter) slotNo = case
+  Qry.interpretQuery
+    (unsafeExtendSafeZone interpreter) (Qry.slotToWallclock slotNo)
+  of
+    Left phe -> error $ "Unexpected : " ++ show phe
+    Right (rt,_) -> utcTimeToPOSIXSeconds $  fromRelativeTime sstart rt

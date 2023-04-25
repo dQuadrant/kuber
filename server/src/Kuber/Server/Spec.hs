@@ -72,6 +72,9 @@ type TransactionAPI =
       :<|>  "api" :> "v1" :> "tx" :> "fee" :> ReqBody '[CBORText,CBORBinary,CBORText   ] (Tx BabbageEra) :> Post '[JSON]  Integer
       :<|> "api" :> "v1" :> "scriptPolicy"        :> ReqBody '[JSON] (Aeson.Value ) :> Post '[PlainText ] (Text)
       :<|> "api" :> "v1" :> "keyhash"        :> ReqBody '[JSON] (AddressModal) :> Post '[JSON ] (KeyHashResponse)
+      :<|> "api" :> "v1" :> "time"  :> Get '[JSON] TranslationResponse
+      :<|> "api" :> "v1" :> "time" :> "toslot" :> ReqBody '[JSON] (TimeTranslationReq) :> Post '[JSON] TranslationResponse
+      :<|> "api" :> "v1" :> "time" :> "fromSlot" :> ReqBody '[JSON] (SlotTranslationReq) :> Post '[JSON] TranslationResponse
       :<|>  "api" :> "v1" :> "chaintip" :> Get '[JSON] QueryTipResponse
        )
 
@@ -83,6 +86,9 @@ server dcInfo =
   :<|> errorGuard (evaluateFee dcInfo)
   :<|> errorGuard (\sc -> parseAnyScript (Aeson.encode sc)<&> (\(ScriptInAnyLang sl sc') ->serialiseToRawBytesHexText ( scriptPolicyId sc')) )
   :<|> errorGuard (getKeyHash)
+  :<|> liftIO (errorHandler $   queryTime dcInfo)
+  :<|> errorGuard (translatePosixTime dcInfo)
+  :<|> errorGuard (translateSlot dcInfo)
   :<|> liftIO (errorHandler $   queryTip dcInfo)
 
   where
