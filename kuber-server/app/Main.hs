@@ -7,7 +7,7 @@ module Main where
 
 import Network.Wai.Handler.Warp (run, setPort, defaultSettings, setHost, runSettings)
 import Kuber.Server.Spec (app)
-import Cardano.Kuber.Api (chainInfoFromEnv, ChainInfo (withDetails), DetailedChainInfo (DetailedChainInfo))
+import Cardano.Kuber.Api (chainInfoFromEnv, throwFrameworkError)
 import System.Environment (getArgs)
 import Cardano.Kuber.Util (timestampToSlot)
 import Data.Text (stripStart)
@@ -75,7 +75,7 @@ main = do
      performRequest healthCheckUrl
 
     else do 
-      dcinfo <- chainInfoFromEnv >>= withDetails
+      dcinfo <- chainInfoFromEnv  
 
       let settings = setPort port defaultSettings
       let settings2  = (case hostStr of

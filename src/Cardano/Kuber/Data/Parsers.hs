@@ -54,9 +54,9 @@ parseSignKey txt
   | T.head txt /= '{' =
     case deserialiseFromBech32 (AsSigningKey AsPaymentKey) txt of
       Left ide -> case convertText txt <&> unBase16 of
-        Nothing -> fail "SignKey is neither Bench32 nor Hex encoded"
+        Nothing -> fail "SignKey is neither Bech32 nor Hex encoded"
         Just bs -> case deserialiseFromCBOR (AsSigningKey AsPaymentKey) bs of
-          Left de   -> fail "SignKey is neither Bench32 nor CBOR encoded"
+          Left de   -> fail "SignKey is neither Bech32 nor CBOR encoded"
           Right sk' -> pure sk'
       Right sk -> pure sk
   | otherwise = case A.eitherDecode (fromStrict $ encodeUtf8 txt) of
@@ -206,9 +206,9 @@ parseAddress addrText = case deserialiseAddress (AsAddressInEra AsBabbageEra) ad
       Just hex -> case parseAddressBinary hex of
         Just addr -> pure addr
         Nothing -> case deserialiseFromRawBytes (AsAddressInEra AsBabbageEra) hex of
-            Nothing -> fail  $ "Address is neither bench32 nor cborHex : "++ T.unpack addrText
+            Nothing -> fail  $ "Address is neither bech32 nor cborHex : "++ T.unpack addrText
             Just addr -> pure addr
-      Nothing -> fail $ "Address is neither bench32 nor cborHex : "++ T.unpack addrText
+      Nothing -> fail $ "Address is neither bech32 nor cborHex : "++ T.unpack addrText
   Just aie -> pure aie
 
 parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra BabbageEra)
@@ -216,9 +216,9 @@ parseAddressCbor  cbor = do
   aie <-  parseCbor cbor
   pure $ fromShelleyAddr ShelleyBasedEraBabbage  aie
 
-parseAddressBench32 :: MonadFail m => Text -> m (AddressInEra BabbageEra)
-parseAddressBench32 txt = case deserialiseAddress (AsAddressInEra AsBabbageEra) txt of
-  Nothing -> fail $ "Address is not in bench32 format"
+parseAddressBech32 :: MonadFail m => Text -> m (AddressInEra BabbageEra)
+parseAddressBech32 txt = case deserialiseAddress (AsAddressInEra AsBabbageEra) txt of
+  Nothing -> fail $ "Address is not in bech32 format"
   Just aie -> pure aie
 
 scriptDataParser :: MonadFail m =>  Aeson.Value  -> m ScriptData

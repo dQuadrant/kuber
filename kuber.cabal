@@ -28,12 +28,17 @@ library
     Cardano.Kuber.Console.ConsoleWritable
     Cardano.Kuber.Data.Models
     Cardano.Kuber.Data.Parsers
+    Cardano.Kuber.Http.Spec
 
   other-modules:
     Cardano.Kuber.Error
     Cardano.Kuber.Core.ChainInfo
+    Cardano.Kuber.Core.LocalNodeChainApi
+    Cardano.Kuber.Core.Kontract
+    Cardano.Kuber.Core.ChainAPI
     Cardano.Kuber.Core.TxBuilder
     Cardano.Kuber.Core.TxFramework
+    Cardano.Kuber.Core.KuberAPI
     Cardano.Kuber.Data.TxBuilderAeson
     Cardano.Kuber.Utility.ChainInfoUtil
     Cardano.Kuber.Utility.WalletUtil
@@ -41,8 +46,10 @@ library
     Cardano.Kuber.Utility.DataTransformation
     Cardano.Kuber.Utility.Text
     Cardano.Kuber.Utility.ScriptUtil
+    Cardano.Kuber.Utility.Misc
+    Cardano.Kuber.Http.Client
+    Cardano.Kuber.Http.MediaType
 
-    -- Plutus.Contract.Wallet.Utils
   hs-source-dirs: src
   build-depends:
       base >= 4.9 && <5
@@ -72,7 +79,13 @@ library
     , transformers
     , unordered-containers
     , time
-
+    ,  servant
+    ,  servant-client
+    ,  http-media
+    ,  http-client
+    , network-uri
+    , http-types
+    , http-client-tls
 test-suite test
   default-language: Haskell2010
   type: exitcode-stdio-1.0

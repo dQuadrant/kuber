@@ -25,8 +25,8 @@ library
   exposed-modules:
     Kuber.Server.ServantError
     Kuber.Server.Core
-    Kuber.Server.MediaType
     Kuber.Server.Spec
+    Kuber.Server.Model
   other-modules:
 
     -- Plutus.Contract.Wallet.Utils
@@ -61,6 +61,7 @@ library
     , wai-middleware-static
     , wai-extra
     , time
+    , plutus-ledger-api
 
 
 executable kuber

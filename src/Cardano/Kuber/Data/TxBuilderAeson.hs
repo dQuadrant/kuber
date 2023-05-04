@@ -39,7 +39,7 @@ import qualified Data.Aeson.Types as A
 
 import qualified Data.Text as T
 import Cardano.Kuber.Data.Models ( unAddressModal)
-import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBench32, parseAddressCbor, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex, parseCbor)
+import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBech32, parseAddressCbor, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex, parseCbor)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey), fromJSON)
 import qualified Data.Vector as V
@@ -64,7 +64,7 @@ import qualified Data.ByteString.Char8 as BS8
 import Control.Applicative ((<|>))
 import Data.Bifunctor (second)
 import Cardano.Api.Shelley (ReferenceScript(ReferenceScript, ReferenceScriptNone), scriptDataToJsonDetailedSchema)
-import Cardano.Kuber.Utility.DataTransformation (pkhToPaymentKeyHash)
+import Cardano.Kuber.Utility.DataTransformation (pkhToPaymentKeyHash, addressInEraToAddressAny)
 
 
 
@@ -406,7 +406,7 @@ instance FromJSON TxInputSelection where
           Just utxo ->  pure $ TxSelectableUtxos  utxo
           Nothing -> fail "Invalid InputSelection Hex:  It must be  address, txHash#index or  utxoCbor"
         Just addr -> pure $ TxSelectableAddresses  [addr]
-      Nothing -> case parseAddressBench32 txt  of
+      Nothing -> case parseAddressBech32 txt  of
         Just addr -> pure $ TxSelectableAddresses  [addr]
         Nothing -> case parseTxIn txt of
           Just txin -> pure $ TxSelectableTxIn  [txin]
@@ -457,7 +457,7 @@ instance FromJSON TxInput where
               Nothing -> fail $ "Invalid Input HexString : It must be  address, txHash#index or  utxoCbor"
               Just sk -> pure $ TxInputUnResolved $ TxInputSkey  sk
         Just addr -> pure $ TxInputUnResolved $ TxInputAddr  addr
-      Nothing -> case parseAddressBench32 s  of
+      Nothing -> case parseAddressBech32 s  of
         Just addr -> pure $ TxInputUnResolved $ TxInputAddr  addr
         Nothing -> case parseTxIn s of
           Just txin -> pure $ TxInputUnResolved $ TxInputTxin txin

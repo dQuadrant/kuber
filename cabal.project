@@ -3,7 +3,9 @@ index-state:2022-02-18T00:00:00Z
 
 packages:
   .
-  ./server
+  ./kuber-server
+  ./kontract-example
+  
 -- You never, ever, want this.
 write-ghc-environment-files: never
 

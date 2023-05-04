@@ -28,7 +28,7 @@ instance ConsoleWritable TxIn where
   toConsoleTextNoPrefix txin = T.unpack (renderTxIn txin)
 
 instance IsCardanoEra era =>  ConsoleWritable (UTxO era) where
-  toConsoleText prefix (UTxO utxoMap) =  prefix ++ intercalate (prefix ++ "\n") (map toStrings $ Map.toList utxoMap)
+  toConsoleText prefix (UTxO utxoMap) =  prefix ++ intercalate ( "\n" ++ prefix) (map toStrings $ Map.toList utxoMap)
     where
       toStrings (TxIn txId (TxIx index),TxOut addr value hash refScript )=    showStr txId ++ "#" ++  show index ++" : " ++ (case value of
        TxOutAdaOnly oasie (Lovelace v) -> show v

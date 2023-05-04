@@ -1,5 +1,5 @@
 module Cardano.Kuber.Api(
-
+    
     -- payments in a transaction
         txPayTo
     ,   txPayToPkh
@@ -74,18 +74,17 @@ module Cardano.Kuber.Api(
     ,   TxMintingScriptSource(..)
 
     ,   txBuilderToTxBody
-    ,   txBuilderToTxBodyIO
-    ,   txBuilderToTx
-    ,   txBuilderToTxIO
+    ,   executeTxBuilder
 
     -- Chain info Structures
-    , ChainInfo (withProtocolParam ,withDetails,getNetworkId ,getConnectInfo)
     , ChainConnectInfo(..)
-    , DetailedChainInfo(dciProtocolParams,DetailedChainInfo)
-    , ChainInfoWithProtocolParams
+
 
 
     -- ChainInfo constructor functions
+    ,   RemoteKuberConnection
+    ,   createRemoeKuberConnection
+    ,   createRemoeKuberConnection'
     ,   chainInfoFromEnv
     ,   chainInfoFromEnv'
     ,   chainInfoMainnet
@@ -93,10 +92,12 @@ module Cardano.Kuber.Api(
     ,   localNodeConnInfo
     ,   getWorkPath
     ,   getWorkPathFunc
+    ,   getNetworkFromEnv
 
     -- Error Class
     ,   ErrorType(..)
     ,   FrameworkError(..)
+    , throwFrameworkError
 
     -- tx submission
     , submitTx
@@ -104,11 +105,20 @@ module Cardano.Kuber.Api(
     , txCollateralUtxo
     , txCollateral
 
+    -- Kontract  and ChainApi related API    
+    , Kontract(KLift, KError)
+    , kError
+    , kWrapParser
+    , evaluateKontract
+    , eitherToKontract
+    , HasChainQueryAPI(..)
+    , HasSubmitApi(..)
+    , HasKuberAPI(..)
+    , HasLocalNodeAPI(..)
 )
 
 where
 
--- input consmptions
 import Cardano.Kuber.Utility.WalletUtil
 import Cardano.Kuber.Core.ChainInfo
 import Cardano.Kuber.Data.Parsers
@@ -118,4 +128,8 @@ import Cardano.Kuber.Data.TxBuilderAeson
 import Cardano.Kuber.Utility.ChainInfoUtil
 import Cardano.Kuber.Error
 import Cardano.Kuber.Utility.QueryHelper
-
+import Cardano.Kuber.Core.Kontract
+import Cardano.Kuber.Core.ChainAPI
+import Cardano.Kuber.Core.KuberAPI
+import Cardano.Kuber.Core.LocalNodeChainApi
+import Cardano.Kuber.Http.Client

@@ -24,7 +24,6 @@ import Data.Time.Clock
 import Data.Map (Map)
 import Control.Exception
 import Data.Either
-import Cardano.Kuber.Util
 import Data.Functor ((<&>))
 import qualified Data.ByteString.Short as SBS
 import qualified Data.ByteString.Lazy as LBS

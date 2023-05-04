@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Cardano.Kuber.Utility.ChainInfoUtil where
-import Cardano.Kuber.Core.ChainInfo ( ChainConnectInfo(..) )
+import Cardano.Kuber.Core.LocalNodeChainApi ( ChainConnectInfo(..) )
 import Cardano.Api (NetworkId(Mainnet, Testnet), NetworkMagic (NetworkMagic), LocalNodeConnectInfo (LocalNodeConnectInfo), CardanoMode, ConsensusModeParams (CardanoModeParams), EpochSlots (EpochSlots))
 import Control.Exception (try, throw)
 import System.Environment (getEnv)
