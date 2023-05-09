@@ -7,7 +7,7 @@
 module Cardano.Kuber.Data.Parsers where
 
 import           Cardano.Api
-import Cardano.Api.Shelley ( fromShelleyAddr, fromShelleyTxOut )
+import Cardano.Api.Shelley ( fromShelleyAddr, fromShelleyTxOut, ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra), ReferenceScript (ReferenceScriptNone, ReferenceScript) )
 import           Cardano.Binary               (FromCBOR (fromCBOR), decodeFull)
 import           Cardano.Kuber.Utility.Text
 import qualified Cardano.Ledger.Alonzo       as Alonzo
@@ -218,7 +218,7 @@ parseAddressCbor  cbor = do
 
 parseAddressBech32 :: MonadFail m => Text -> m (AddressInEra BabbageEra)
 parseAddressBech32 txt = case deserialiseAddress (AsAddressInEra AsBabbageEra) txt of
-  Nothing -> fail $ "Address is not in bech32 format"
+  Nothing -> fail "Address is not in bech32 format"
   Just aie -> pure aie
 
 scriptDataParser :: MonadFail m =>  Aeson.Value  -> m ScriptData
@@ -230,7 +230,7 @@ scriptDataParser v = doParsing v
         ScriptDataJsonSchemaError va sdjse -> fail $  "Wrong schema" ++ show sdjse
         ScriptDataRangeError va sdre -> fail $  "Invalid data " ++ show sdre
        Right sd -> pure  sd
-    doParsing val  = fail $ "Script data Must be either string or object: got:" ++  (show val)
+    doParsing val  = fail $ "Script data Must be either string or object: got:" ++  show val
 
 
 txInParser :: Aeson.Value -> Aeson.Parser TxIn
@@ -249,6 +249,17 @@ txInParser  (Aeson.Object o) = do
   pure $ TxIn txid index
 txInParser (Aeson.String v) =parseTxIn v
 txInParser _ = fail "Expected Utxo to be of type Object or String"
+
+
+-- (.:*) :: FromJSON a => A.KeyMap A.Value  -> [A.Key] -> A.Parser a
+-- (.:*) obj keys = doAccum keys
+--   where
+--     doAccum   [] = fail "Expecting one of the keys" ++ keys
+--     doAccum   (key:ks)= do
+--         val <- obj .:? key
+--         case val of
+--           Nothing -> doAccum  ks
+--           Just any -> pure any
 
 
 parseTxIn :: MonadFail m =>  Text -> m TxIn
@@ -293,3 +304,54 @@ parseCbor  v = case decodeFull v of
 
 parseCborHex :: (ToText a2, MonadFail m, FromCBOR b) => a2 -> m b
 parseCborHex  v = parseHexString v >>=parseCbor
+
+
+txinOrUtxoParser :: A.Value -> A.Parser (Either TxIn (UTxO BabbageEra))
+txinOrUtxoParser obj@(A.Object o) = do
+    txin' <- o .:? "txIn"
+    txin'' <- o .:? "txin"
+    txin<-case txin' of
+            Nothing -> case txin'' of
+                Nothing -> txInParser obj
+                Just any -> pure any
+            Just any -> pure any
+    addrM <- o .:? "address"
+    valueM <- o.:? "value"
+    case (addrM,valueM) of
+      (Just addrT , Just valT) -> do
+          addr <- parseAddress addrT
+          val <- parseValueText valT
+          refScript <-  o .:?*  ["referenceScript", "script","referencescript"]
+          datumHash <-  o.:? "datumHash"
+          inlineDatum <- o .:?* ["inlineDatum", "datum","inlinedatum"]
+          dh <- case inlineDatum of
+              Nothing -> case datumHash of
+                Nothing -> pure TxOutDatumNone
+                Just any -> pure $ TxOutDatumHash ScriptDataInBabbageEra any
+              Just any ->  do
+                sd<- scriptDataParser any
+                pure $ TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra  sd -- proper parse
+          let
+              rScript =case refScript of
+                Nothing -> ReferenceScriptNone
+                Just any -> ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra any
+          pure $ Right $ UTxO $ Map.singleton txin  (TxOut addr (TxOutValue MultiAssetInBabbageEra val) dh rScript)
+
+      _ -> pure $ Left txin
+    where
+
+    (.:?*) :: FromJSON a => A.KeyMap A.Value  -> [A.Key] -> A.Parser (Maybe a)
+    (.:?*) obj = doAccum
+      where
+        doAccum   [] = pure Nothing
+        doAccum   (key:ks)= do
+            val <- obj .:? key
+            case val of
+              Nothing -> doAccum  ks
+              Just any -> pure any
+txinOrUtxoParser (A.String v) = do
+  case parseHexString v of
+    Just binary -> parseUtxoCbor binary <&> Right
+    Nothing -> parseTxIn v <&> Left
+
+txinOrUtxoParser _ = fail "Expected Utxo Object or cborHex"

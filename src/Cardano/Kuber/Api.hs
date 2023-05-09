@@ -63,15 +63,14 @@ module Cardano.Kuber.Api(
     , plutusScriptAddr
     , plutusScriptToScriptAny
     , txScriptPolicyId
+    , txScriptAddress
     , txScriptHash
     , hashTxScript
     , txScriptToScriptAny
 
 
     -- Core Tx builder object and it's transformation functions
-    ,   TxBuilder(..)
-    ,   TxMintData(..)
-    ,   TxMintingScriptSource(..)
+    ,   TxBuilder
 
     ,   txBuilderToTxBody
     ,   executeTxBuilder
@@ -125,6 +124,7 @@ import Cardano.Kuber.Data.Parsers
 import Cardano.Kuber.Core.TxBuilder
 import Cardano.Kuber.Core.TxFramework
 import Cardano.Kuber.Data.TxBuilderAeson
+import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Utility.ChainInfoUtil
 import Cardano.Kuber.Error
 import Cardano.Kuber.Utility.QueryHelper

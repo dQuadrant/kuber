@@ -89,7 +89,9 @@ data TxInputUnResolved_ = TxInputTxin TxIn
 
 data TxInput  = TxInputResolved TxInputResolved_ | TxInputUnResolved TxInputUnResolved_ deriving (Show)
 
-newtype TxInputReference  = TxInputReference TxIn deriving (Show)
+data TxInputReference  = TxInputReferenceTxin TxIn
+    |  TxInputReferenceUtxo (UTxO BabbageEra)
+    deriving (Show)
 
 data TxOutputContent =
      TxOutPkh PubKeyHash Value
@@ -331,7 +333,7 @@ txConsumeTxIn  v = txInput $ TxInputUnResolved $ TxInputTxin v
 -- use the TxIn as input in the transaction
 -- the Txout value and address  is determined by querying the node
 txReferenceTxIn :: TxIn -> TxBuilder
-txReferenceTxIn  v = txInputReference $ TxInputReference v
+txReferenceTxIn  v = txInputReference $ TxInputReferenceTxin v
 
 
 -- use txIn as input in the transaction
@@ -438,6 +440,9 @@ class IsMintingScript sc where
 txScriptPolicyId :: TxScript -> PolicyId
 txScriptPolicyId sc = PolicyId (hashTxScript sc)
 
+
+txScriptAddress :: TxScript -> NetworkId ->  StakeAddressReference  -> AddressInEra BabbageEra
+txScriptAddress sc net = makeShelleyAddressInEra net   (PaymentCredentialByScript $ txScriptHash sc)
 
 txScriptHash :: TxScript -> ScriptHash
 txScriptHash = hashTxScript

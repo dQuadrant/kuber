@@ -103,7 +103,7 @@ executeTxBuilder builder = do
   let (selectionAddrs,sel_txins,sel_utxo) = mergeSelections
       mergeSelections=foldl (mergeSelection network)  (Set.empty,Set.empty ,Map.empty ) (txSelections builder)
       (input_txins,input_utxo) = mergeInputs
-      (txins,utxo) = ( sel_txins  <> input_txins <> collateralins <> referenceTxins, sel_utxo <> input_utxo <> collateralUtxo)
+      (txins,utxo) = ( sel_txins  <> input_txins <> collateralins <> referenceTxins, sel_utxo <> input_utxo <> collateralUtxo <> refUtxos)
       (collateralins,collateralUtxo) = mergeColaterals
       addrs=   selectionAddrs  <> Set.fromList (mapMaybe (getInputAddresses network) (txInputs builder))
   (UTxO  uto) <- queryIfNotEmpty addrs (kQueryUtxoByAddress   addrs) (UTxO  Map.empty)
@@ -140,15 +140,22 @@ executeTxBuilder builder = do
                     TxCollateralTxin ti -> (Set.insert ti s,m)
                     TxCollateralUtxo (UTxO uto) -> (s,uto <> m) ) (mempty,mempty) (txCollaterals builder)
 
+    refUtxos :: Map TxIn (TxOut CtxUTxO BabbageEra)
+    refUtxos =  foldl  (\s ref -> case ref of
+      TxInputReferenceTxin ti -> s
+      TxInputReferenceUtxo (UTxO uto) -> uto <> s ) mempty $   txInputReferences builder
+
     referenceTxins :: (Set TxIn)
-    referenceTxins = foldl  (\s ref -> case ref of { TxInputReference ti -> Set.insert ti s }  ) Set.empty $   txInputReferences builder
+    referenceTxins = foldl  (\s ref -> case ref of
+      TxInputReferenceTxin ti -> Set.insert ti s
+      TxInputReferenceUtxo uto -> s ) Set.empty $   txInputReferences builder
 
     mergeSelection :: NetworkId -> ( Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO BabbageEra))  -> TxInputSelection  -> (Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO BabbageEra))
     mergeSelection networkId (a,i,u) sel = case sel of
         TxSelectableAddresses aies -> (Set.union a  (Set.fromList $ map addressInEraToAddressAny aies),i,u)
         TxSelectableUtxos (UTxO uto) -> (a,i, uto <> u)
         TxSelectableTxIn tis -> (a,Set.union i (Set.fromList tis),u)
-        TxSelectableSkey skeys -> (Set.union a (Set.fromList $ map (\s ->  toAddressAny $ skeyToAddr s (networkId ) ) skeys), i , u )
+        TxSelectableSkey skeys -> (Set.union a (Set.fromList $ map (\s ->  toAddressAny $ skeyToAddr s networkId ) skeys), i , u )
 
 -- Construct TxBody from TxBuilder specification.
 -- Utxos map must be provided for the utxos that are available in wallet and used in input
@@ -479,7 +486,14 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       Right (e,a,b) -> (i,BuildTxWith  ( ScriptWitness ScriptWitnessForSpending a )  )
     mkBodyContent meta fixedInputs extraUtxos outs collateral  txMintValue' fee =  bodyContent
       where
-      references =  Set.fromList (map (\(TxInputReference a) -> a) _inputRefs) <>   referenceInputsFromScriptReference <> referenceInputsFromMint
+      references =
+          foldl (\accum v -> case v of
+              TxInputReferenceTxin tin -> Set.insert tin accum
+              TxInputReferenceUtxo (UTxO utxo) -> Map.keysSet utxo <> accum
+          ) mempty _inputRefs
+         <> referenceInputsFromScriptReference
+         <> referenceInputsFromMint
+
       bodyContent=(TxBodyContent {
         txIns= getTxin fixedInputs extraUtxos ,
         txInsCollateral= if null collateral then TxInsCollateralNone  else TxInsCollateral CollateralInBabbageEra collateral,

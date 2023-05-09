@@ -81,7 +81,7 @@ kuberApiServer a = (
 queryServer a = 
         makeHandler  a kQueryProtocolParams
   :<|>  makeHandler a (kQueryChainPoint <&> ChainPointModal)
-  :<|> makeHandler2  a queryUtxosHandler
+  :<|> makeHandler2  a queryUtxosHandler 
   :<|> (makeHandler a kQuerySystemStart <&> SystemStartModal)
   :<|> (makeHandler a kQueryGenesisParams <&> GenesisParamModal)
 

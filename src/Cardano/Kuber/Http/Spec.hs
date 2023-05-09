@@ -25,7 +25,7 @@ type KuberServerApi =
 type QueryApi =
             "protocol-params" :>  Get '[JSON] ProtocolParameters
       :<|>  "chain-point" :>  Get '[JSON] ChainPointModal
-      :<|>  "utxo" :> QueryParams "address" Text :> QueryParams "txin" Text :>  Get '[JSON] (UTxO BabbageEra)
+      :<|>  "utxo" :> QueryParams "address" Text :> QueryParams "txin" Text :>  Get '[JSON] UtxoModal
       :<|>  "system-start" :>  Get '[JSON] SystemStartModal
       :<|>  "genesis-params"  :> Get '[JSON] GenesisParamModal
 

@@ -45,7 +45,7 @@ makeHandler1 a  f p1 = makeHandler a (f p1)
 makeHandler2 a  f p1 p2= makeHandler a (f p1 p2)
 
 
-queryUtxosHandler :: HasChainQueryAPI api =>   [Text] ->  [Text] -> Kontract api w FrameworkError (UTxO BabbageEra)
+queryUtxosHandler :: HasChainQueryAPI api =>   [Text] ->  [Text] -> Kontract api w FrameworkError UtxoModal
 queryUtxosHandler   [] [] = KError (FrameworkError ParserError "Missing both address and txins")
 queryUtxosHandler   addrTxts txinTxts = do
       if null addrTxts
@@ -54,14 +54,14 @@ queryUtxosHandler   addrTxts txinTxts = do
                 Right v -> pure v
                 Left msg -> KError (FrameworkError ParserError msg)
             ) txinTxts
-          kQueryUtxoByTxin (Set.fromList txins)
+          kQueryUtxoByTxin (Set.fromList txins) <&> UtxoModal
       else if null txinTxts
         then do
           addrs <-  mapM (\v1 -> case parseAddressBech32  v1 of
                     Right v -> pure  $ addressInEraToAddressAny v
                     Left msg -> KError (FrameworkError ParserError msg)
                 ) addrTxts
-          kQueryUtxoByAddress (Set.fromList addrs)
+          kQueryUtxoByAddress (Set.fromList addrs) <&> UtxoModal
       else
         KError (FrameworkError ParserError "Expected either addresses or txins in parameter")
 

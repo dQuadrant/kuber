@@ -18,7 +18,7 @@
 module Cardano.Kuber.Data.Models where
 
 import Cardano.Api
-import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData)
+import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData, scriptDataFromJsonDetailedSchema, scriptDataToJsonDetailedSchema, ReferenceScript (ReferenceScript, ReferenceScriptNone))
 import Cardano.Binary (ToCBOR (toCBOR), decodeFull, fromCBOR)
 import Cardano.Ledger.Babbage.Tx (TxBody (txfee))
 import Codec.CBOR.Write (toLazyByteString)
@@ -35,7 +35,7 @@ import qualified Data.Text.Encoding as TSE
 import GHC.Generics (Generic)
 import Text.Read (readMaybe)
 import Cardano.Kuber.Utility.Text (toHexString)
-import Cardano.Kuber.Data.Parsers (signKeyParser)
+import Cardano.Kuber.Data.Parsers (signKeyParser, txinOrUtxoParser)
 import Cardano.Slotting.Time (SystemStart(SystemStart))
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, POSIXTime)
 import Cardano.Kuber.Error (FrameworkError)
@@ -43,6 +43,8 @@ import qualified Data.Aeson.Key as A
 import qualified Data.Aeson as A
 import Data.Word (Word64)
 import qualified Data.Map as Map
+import Data.Vector.Primitive (Vector(Vector))
+import qualified Data.Vector as Vector
 
 class Wrapper  m a  where
   unWrap :: m  ->  a
@@ -52,6 +54,8 @@ newtype AssetModal = AssetModal AssetId deriving (Show)
 newtype AddressModal = AddressModal (AddressInEra BabbageEra) deriving (Show)
 
 newtype SignKeyModal = SignKeyModal (SigningKey PaymentKey) deriving (Show)
+
+newtype UtxoModal = UtxoModal (UTxO BabbageEra) deriving (Show)
 
 newtype UtxoIdModal = UtxoIdModal (TxId, TxIx) deriving (Show)
 
@@ -65,6 +69,12 @@ newtype SystemStartModal = SystemStartModal SystemStart
 newtype EraHistoryModal = EraHistoryModal (EraHistory CardanoMode)
 newtype GenesisParamModal = GenesisParamModal GenesisParameters
 
+
+instance Wrapper UtxoModal (UTxO BabbageEra) where
+  unWrap (UtxoModal utxos) = utxos
+
+instance Wrapper  (UTxO BabbageEra) (Map.Map TxIn (TxOut CtxUTxO BabbageEra)) where
+  unWrap (UTxO utxos) = utxos
 
 instance Wrapper SystemStartModal SystemStart where
   unWrap  (SystemStartModal ss )= ss
@@ -286,8 +296,55 @@ instance FromJSON ChainPointModal where
         block :: Text <- o  A..: "block"
         case block of 
           "genesis" -> pure (ChainPointModal ChainPointAtGenesis)
-          _ -> pure (ChainPointModal ChainPointAtGenesis) -- Thee proper  deserialization of (Hash BlockHeader) is pending
+          _ -> do
+            hHash <- o A..: "block"  
+            slot <- o A..: "slot"
+            pure $ ChainPointModal $ ChainPoint  (SlotNo slot) hHash
     parseJSON _ = fail "Expected ChainPoint Modal"
+
+
+instance FromJSON UtxoModal where
+  parseJSON v = case v of 
+    Object km -> doparse v
+    String txt -> doparse v
+    A.Array vs -> mconcat $ map doparse  $ Vector.toList  vs
+    _ -> fail "parseError : Expected Utxo Modal Object"
+    where 
+      doparse obj = do 
+        result <- txinOrUtxoParser obj
+        case result of 
+          Left ti -> fail "Parse Utxo Failed, missing address, value "
+          Right uto -> pure $ UtxoModal uto
+
+instance ToJSON UtxoModal where
+  toJSON (UtxoModal (UTxO utxoMp)) = A.Array $ Vector.fromList  (map (\(tin,TxOut addr val datum sc)->
+              let  baseUtxo = [
+                      "address" .= addr
+                    , "txin" .= tin
+                    , "value"   .= val]
+              in
+                A.object $ (baseUtxo  ++ (case datum of
+                 TxOutDatumNone -> []
+                 TxOutDatumHash sdsie ha -> [ "datumHash" .= ha]
+                 TxOutDatumInline rtisidsie sd -> [ "datum" .= scriptDataToJsonDetailedSchema sd]) 
+                )   ++ (case sc of
+                ReferenceScript rtisidsie sial -> ["script" .= sial]
+                ReferenceScriptNone -> []
+                )
+
+    ) $ Map.toList utxoMp)
+    where 
+    appendNonEmpty :: (Foldable t, KeyValue a1, ToJSON (t a2)) => A.Key -> t a2 -> [a1] -> [a1]
+    appendNonEmpty  key  val obj   =  if null val then obj else (key .= val) : obj
+
+    infixl 8 >=
+    (>=) a b = appendNonEmpty a b
+
+    infixr 7 <#>
+    (<#>)  f  f2  =  f $ f2 []
+
+    infixr 6 <+>
+    (<+>) f  v = f v
 
 
 

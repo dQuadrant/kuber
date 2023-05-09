@@ -45,7 +45,7 @@ import qualified Data.ByteString.Char8 as BS8
 
 cQueryPParams         :: ClientM ProtocolParameters
 cQueryChainPoint      :: ClientM ChainPointModal
-cQueryUtxos           :: [Text]     -> [Text]     -> ClientM (UTxO BabbageEra)
+cQueryUtxos           :: [Text]     -> [Text]     -> ClientM UtxoModal
 cQuerySystemStart     :: ClientM SystemStartModal
 cQueryGenesisParams   :: ClientM GenesisParamModal
 cBuildTx              :: Maybe Bool     -> TxBuilder    -> ClientM TxModal
@@ -73,8 +73,8 @@ instance HasChainQueryAPI   RemoteKuberConnection where
   kQueryProtocolParams = liftHttpReq cQueryPParams
   kQuerySystemStart = liftHttpReq cQuerySystemStart <&>  unWrap
   kQueryGenesisParams = liftHttpReq cQueryGenesisParams <&>  unWrap
-  kQueryUtxoByAddress addrs  = liftHttpReq (cQueryUtxos  (map serialiseAddress  $  Set.toList addrs ) [] )
-  kQueryUtxoByTxin txins = liftHttpReq (cQueryUtxos  [] (map renderTxIn  $  Set.toList txins) )
+  kQueryUtxoByAddress addrs  = liftHttpReq (cQueryUtxos  (map serialiseAddress  $  Set.toList addrs ) []  <&> unWrap)
+  kQueryUtxoByTxin txins = liftHttpReq (cQueryUtxos  [] (map renderTxIn  $  Set.toList txins) <&> unWrap )
   kQueryChainPoint  = liftHttpReq cQueryChainPoint <&> unWrap
 
 instance {-# OVERLAPS #-}  HasKuberAPI RemoteKuberConnection where

@@ -75,6 +75,21 @@ instance FromJSON FrameworkError where
 
 instance Show FrameworkError where
   show  (FrameworkError t m)= "FrameworkError: "++show t ++ ": "++show m
+  show  (FrameworkErrors errs)= "FrameworkErrors: ["  ++ concatMap (\(FrameworkError t m) -> show errs ++ ": "++show m) errs ++ "]"
+
+  showsPrec _ (FrameworkError t m) =
+    showString "FrameworkError: " .
+    shows t .
+    showString ": " .
+    shows m
+
+  showsPrec _ (FrameworkErrors []) =
+    showString "FrameworkErrors: []"
+
+  showsPrec p (FrameworkErrors errs) =
+    showParen (p > 10) $
+    showString $ "FrameworkErrors: [" ++ foldr (\err -> (++) (shows err ", ")) "" errs++ "]"
+
 
 instance ToJSON FrameworkError where
   toJSON (FrameworkError t m) = object ["type" .= show t, "message" .= m]
@@ -91,8 +106,6 @@ throwFrameworkError :: Applicative m => Either FrameworkError a-> m a
 throwFrameworkError = \case
     Left e -> throw e
     Right v -> pure v
-
-
 
 
 fromScriptExecutionError :: ScriptExecutionError -> TxBody BabbageEra -> FrameworkError

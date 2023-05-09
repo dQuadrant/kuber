@@ -15,6 +15,7 @@ import Cardano.Kuber.Utility.DataTransformation ( addressInEraToAddressAny )
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (EraMismatch(EraMismatch))
 import qualified Data.Text as T
 import Control.Exception (throw)
+import Cardano.Kuber.Data.Parsers (parseAnyScript)
 
 
 performShelleyQuery :: LocalNodeConnectInfo CardanoMode -> QueryInShelleyBasedEra BabbageEra b -> IO (Either FrameworkError b)

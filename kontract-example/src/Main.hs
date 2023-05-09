@@ -15,13 +15,23 @@ main = putStrLn "Hello, Haskell!" >> run
 run :: IO ()
 run = do
   (networkName,network) <- getNetworkFromEnv "NETWORK"
-  kuberConn <- createRemoeKuberConnection network "http://something.com:8081" Nothing
-  result <- evaluateKontract kuberConn $ do 
+  kuberConn <- createRemoeKuberConnection network "http://localhost:8081" Nothing
+--   localChainInfo <- chainInfoFromEnv
+
+
+  result <- evaluateKontract kuberConn $ do
         (asset,amount) <-kWrapParser $ parseAssetNQuantity ( T.pack "3")
-        addr <- kWrapParser $ parseAddressBech32 (T.pack "addr_test1qrmntnd29t3kpnn8uf7d9asr3fzvw7lnah55h52yvaxnfe4g2v2ge520usmkn0zcl46gy38877hej5cnqe6s602xpkyqtpcsrj")  
+        tip <- kQueryChainPoint
+        liftIO $ putStrLn ("Chain is at " ++ show tip)
+        addr <- kWrapParser $ parseAddressBech32 (T.pack "addr_test1qrmntnd29t3kpnn8uf7d9asr3fzvw7lnah55h52yvaxnfe4g2v2ge520usmkn0zcl46gy38877hej5cnqe6s602xpkyqtpcsrj")
+
         utxos <- kQueryUtxoByAddress (Set.singleton $ addressInEraToAddressAny addr)
+
         liftIO (putStrLn  $ "Your utxos : \n" ++ toConsoleText " - " utxos)
+
+
         tx<- kBuildAndSubmit (txPayTo addr (valueFromList [(asset,amount)]))
+
         liftIO (print tx)
-  
+
   print result
