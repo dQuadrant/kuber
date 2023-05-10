@@ -54,8 +54,8 @@ sample = KuberConfig
       <*>  option auto
           ( long "url"
          <> help "Url for  health-check operation"
-         <> showDefaultWith (const "http://127.0.0.1:8081/api/v1/chaintip")
-         <> value "http://127.0.0.1:8081/api/v1/chaintip"
+         <> showDefaultWith (const "http://127.0.0.1:8081/api/v3/chain-point")
+         <> value "http://127.0.0.1:8081/api/v3/chain-point"
          <> metavar "URL" )
       <*> switch  (
         long "healthcheck"
