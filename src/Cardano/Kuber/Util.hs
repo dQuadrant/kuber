@@ -21,7 +21,6 @@ module Cardano.Kuber.Util
     , toPlutusCredential
     , addrInEraToPlutusAddress
     , addressToPlutusCredential
-    , toPlutusScriptHash
     , fromPlutusV1Script
     , fromPlutusV2Script
     , fromPlutusV2Validator

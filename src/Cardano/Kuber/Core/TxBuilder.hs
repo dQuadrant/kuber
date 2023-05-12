@@ -172,9 +172,9 @@ maxValidity (ValiditySlot s1) (ValiditySlot s2) = ValiditySlot (max s1 s2)
 maxValidity v1@(ValiditySlot _) _ = v1
 maxValidity _ v2 = v2
 
--- TxBuilder object
--- It is a semigroup and monoid instance, so it can be constructed using helper function
--- and merged to construct a transaction specification
+-- |  
+-- `TxBuilder` is not to be directly used but, parts of it are constructed using helper functions.
+-- Multiple builder parts can be combined to construct full transaction specification
 data TxBuilder=TxBuilder{
     txSelections :: [TxInputSelection],
     txInputs:: [TxInput],
@@ -252,12 +252,12 @@ txValidPosixTimeRange :: POSIXTime  -> POSIXTime -> TxBuilder
 txValidPosixTimeRange start end = TxBuilder  [] [] [] [] [] (ValidityPosixTime start ) (ValidityPosixTime end) [] [] Nothing Nothing Map.empty
 
 -- set  validity statart time in posix seconds
-txValidFromPosix:: POSIXTime -> TxBuilder
-txValidFromPosix start =  TxBuilder  [] [] [] [] [] (ValidityPosixTime start) mempty [] [] Nothing Nothing Map.empty
+txValidFromPosixTime:: POSIXTime -> TxBuilder
+txValidFromPosixTime start =  TxBuilder  [] [] [] [] [] (ValidityPosixTime start) mempty [] [] Nothing Nothing Map.empty
 
 -- set transaction validity end time in posix seconds
-txValidUntilPosix :: POSIXTime -> TxBuilder
-txValidUntilPosix end =  TxBuilder  [] [] [] [] [] mempty (ValidityPosixTime  end) [] [] Nothing Nothing Map.empty
+txValidUntilPosixTime :: POSIXTime -> TxBuilder
+txValidUntilPosixTime end =  TxBuilder  [] [] [] [] [] mempty (ValidityPosixTime  end) [] [] Nothing Nothing Map.empty
 
 -- Set validity Start and end slot
 txValidSlotRange :: SlotNo  -> SlotNo -> TxBuilder
@@ -290,18 +290,18 @@ txMintSimpleScript script amounts = _txMint $ TxMintData (TxMintingSimpleScript 
 --     script = SimpleScript SimpleScriptV2 simpleScript
 --     policyId = scriptPolicyId script
 
--- pay to an Address
+-- | pay to an Address
 txPayTo:: AddressInEra BabbageEra ->Value ->TxBuilder
 txPayTo addr v=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) TxOutDatumNone ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
 
-txPayToWithReference:: AddressInEra BabbageEra ->Value -> Plutus.Script  ->TxBuilder
-txPayToWithReference  addr v pScript=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) TxOutDatumNone (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra (ScriptInAnyLang (PlutusScriptLanguage  PlutusScriptV2) $ fromPlutusV2Script  pScript) ))False False OnInsufficientUtxoAdaUnset
+txPayToWithReferenceScript:: AddressInEra BabbageEra ->Value -> Plutus.Script  ->TxBuilder
+txPayToWithReferenceScript  addr v pScript=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) TxOutDatumNone (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra (ScriptInAnyLang (PlutusScriptLanguage  PlutusScriptV2) $ fromPlutusV2Script  pScript) ))False False OnInsufficientUtxoAdaUnset
 
 -- pay to an Address by pubKeyHash. Note that the resulting address will be an enterprise address
 txPayToPkh:: PubKeyHash  ->Value ->TxBuilder
 txPayToPkh pkh v= txOutput $  TxOutput ( TxOutPkh  pkh  v ) False False OnInsufficientUtxoAdaUnset
 
--- pay to Script address
+-- pay to Script Address
 txPayToScript :: AddressInEra BabbageEra -> Value -> Hash ScriptData -> TxBuilder
 txPayToScript addr v d = txOutput $TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) (TxOutDatumHash ScriptDataInBabbageEra d) ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
 
@@ -335,6 +335,8 @@ txConsumeTxIn  v = txInput $ TxInputUnResolved $ TxInputTxin v
 txReferenceTxIn :: TxIn -> TxBuilder
 txReferenceTxIn  v = txInputReference $ TxInputReferenceTxin v
 
+txReferenctUtxo :: TxIn -> TxOut CtxUTxO BabbageEra -> TxBuilder
+txReferenctUtxo tin tout = txInputReference$ TxInputReferenceUtxo (UTxO $ Map.singleton tin tout)
 
 -- use txIn as input in the transaction
 -- Since TxOut is also given the txIn is not queried from the node.

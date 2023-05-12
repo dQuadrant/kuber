@@ -58,7 +58,7 @@ function getVersion(){
 }
 
 #Get the library dependencies
-copyExecutable "$(findExecutable kuber)"
+copyExecutable "$(findExecutable kuber-server)"
 copyExecutable /bin/bash
 copyExecutable /bin/ls
 copyExecutable /bin/sh

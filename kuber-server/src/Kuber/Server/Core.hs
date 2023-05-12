@@ -97,7 +97,10 @@ queryBalanceHandler addrStr =
 txBuilderHandler :: HasKuberAPI a => Maybe Bool -> TxBuilder -> Kontract a w FrameworkError TxModal
 txBuilderHandler submitM txBuilder = do
   liftIO $ putStrLn $ BS8.unpack $  prettyPrintJSON txBuilder
-  kBuildAndSubmit txBuilder <&> TxModal
+  case submitM of 
+    Just True ->  kBuildAndSubmit txBuilder <&> TxModal
+    _ ->  kBuildTx txBuilder <&> TxModal
+ 
 
 submitTxHandler :: HasSubmitApi a =>  SubmitTxModal -> Kontract a w FrameworkError TxModal
 submitTxHandler  (SubmitTxModal tx mWitness) = do

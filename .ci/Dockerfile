@@ -11,5 +11,5 @@ LABEL "maintainer"="Sudip Bhattarai"
 COPY --from=layer1  / /
 WORKDIR /app
 EXPOSE 8081
-HEALTHCHECK --interval=40s --timeout=10s --start-period=30s --retries=2 CMD [ "/bin/kuber" , "--healthcheck" ]
-ENTRYPOINT  /bin/kuber
+HEALTHCHECK --interval=40s --timeout=10s --start-period=30s --retries=2 CMD [ "/bin/kuber-server" , "--healthcheck" ]
+ENTRYPOINT  /bin/kuber-server

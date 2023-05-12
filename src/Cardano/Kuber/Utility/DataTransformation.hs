@@ -24,14 +24,14 @@ import Plutus.V1.Ledger.Value (AssetClass (AssetClass))
 
 
 
--- Create enterprise address from SignKey
+-- |Create enterprise address from SignKey
 skeyToAddr:: SigningKey PaymentKey -> NetworkId -> Shelley.Address ShelleyAddr
 skeyToAddr skey network =
   makeShelleyAddress  network  credential NoStakeAddress
   where
     credential=PaymentCredentialByKey  $ verificationKeyHash   $ getVerificationKey  skey
 
--- Create enterprise  (AddressInEra BabbageEra) datastructure
+-- |Create enterprise  address from SignKey
 skeyToAddrInEra ::  SigningKey PaymentKey -> NetworkId -> AddressInEra BabbageEra
 skeyToAddrInEra skey network=makeShelleyAddressInEra network   credential NoStakeAddress
   where
@@ -46,12 +46,16 @@ sKeyToPkh:: SigningKey PaymentKey -> PubKeyHash
 sKeyToPkh skey= PubKeyHash (toBuiltin  $  serialiseToRawBytes  vkh)
   where
     vkh=verificationKeyHash   $ getVerificationKey  skey
-
+-- | Convert Pkh (plutus type) to Hash PaymentKey (cardano-api type)
 pkhToPaymentKeyHash :: PubKeyHash -> Maybe  (Hash PaymentKey )
 pkhToPaymentKeyHash pkh = deserialiseFromRawBytes (AsHash AsPaymentKey) $ fromBuiltin $ getPubKeyHash  pkh
 
+-- | Convert skey (plutus type) to Hash PaymentKey (cardano-api type)
 skeyToPaymentKeyHash :: SigningKey PaymentKey -> Hash PaymentKey
 skeyToPaymentKeyHash skey = verificationKeyHash   $ getVerificationKey  skey
+
+-- | Convert AddressInEra (cardano-api type) to Hash PaymentKey (cardano-api type).
+-- Will return `Nothing` if address is  an Byron Address 
 
 addressInEraToPaymentKeyHash :: AddressInEra BabbageEra -> Maybe (Hash PaymentKey)
 addressInEraToPaymentKeyHash a = case a of { AddressInEra atie ad -> case ad of
@@ -61,7 +65,7 @@ addressInEraToPaymentKeyHash a = case a of { AddressInEra atie ad -> case ad of
                                                  PaymentCredentialByScript sh -> Nothing
                                     }
 
--- convert PubKeyhash to corresponding Enterprise address. 
+-- | convert PubKeyhash (plutus tupe) to corresponding Enterprise address (cardano-api type). 
 -- Note that the transformation  Address <-> Pkh is not symmetrical for all addresses
 -- It's symmetrical for Enterprise addresses (because enterprise addresses have no stake Key in it)
 pkhToMaybeAddr:: NetworkId -> PubKeyHash -> Maybe (AddressInEra  BabbageEra)
@@ -73,71 +77,86 @@ pkhToMaybeAddr network (PubKeyHash pkh) =do
     vKey= deserialiseFromRawBytes (AsHash AsPaymentKey) $fromBuiltin pkh
 
 
--- convert address to corresponding PubKeyHash. 
+-- | Convert Shelley Address (cardano-api type) to corresponding PubKeyHash (plutus type) 
 -- Note that the transformation  Address <-> Pkh is not symmetrical for all addresses
 -- It's symmetrical for Enterprise addresses (because enterprise addresses have no stake Key in it)
 addrToMaybePkh :: Cardano.Api.Shelley.Address ShelleyAddr -> Maybe PubKeyHash
 addrToMaybePkh  = shelleyPayAddrToPlutusPubKHash
 
 
--- convert (AddressInEra) data type  to corresponding PubKeyHash. 
+-- | Convert AddressInEra (cardano-api type) data type  to corresponding ScriptHash. 
 -- Note that the transformation  Address <-> Pkh is not symmetrical for all addresses
--- It's symmetrical for Enterprise addresses (because enterprise addresses have no stake Key in it)
-addrInEraToPkh :: MonadFail m =>AddressInEra e -> m PubKeyHash
-addrInEraToPkh a = case a of { AddressInEra atie ad -> case ad of
-                                      ByronAddress ad' -> fail "Byron address is not supported"
-                                      a@(ShelleyAddress net cre sr) -> case addrToMaybePkh a of
-                                        Nothing -> fail "Expected PublicKey address got Script Address"
-                                        Just pkh -> pure pkh }
+-- It's symmetrical for Enterprise addresses (because enterprise addresses have no stake Key in it).
+-- Returns Nothing if Address is Byron era address or if it's a PublicKey Addresss.
+addrInEraToPkh :: MonadFail m =>AddressInEra e -> m Plutus.PubKeyHash
+addrInEraToPkh a = case a of { 
+    AddressInEra atie ad -> case ad of
+    ByronAddress ad' -> fail "Byron address is not supported"
+    a@(ShelleyAddress net cre sr) -> case addrToMaybePkh a of
+      Nothing -> fail "Expected PublicKey address got Script Address"
+      Just pkh -> pure pkh }
 
 
--- convert the address to Enterprise Address. 
--- Enterprise address is an address having no stakeKey
+addrInEraToValHash :: MonadFail m =>AddressInEra e -> m Plutus.ValidatorHash
+addrInEraToValHash a = case a of { 
+    AddressInEra atie ad -> case ad of
+    ByronAddress ad' -> fail "Byron address is not supported"
+    a@(ShelleyAddress net cre sr) -> let
+        credential=toPlutusCredential cre
+      in
+      case credential of
+      Plutus.PubKeyCredential pkh -> fail "Expected Script address got PublicKey Address"
+      Plutus.ScriptCredential vh -> pure vh  }
+
+
+-- | Convert the address to Enterprise Address. 
+-- Enterprise address is an address having no stakeKey. Returns same address if the address is a Byron era address.
 unstakeAddr :: AddressInEra BabbageEra -> AddressInEra BabbageEra
 unstakeAddr a = case a of { AddressInEra atie ad -> case ad of
                                       ByronAddress ad' ->a
                                       ShelleyAddress net cre sr ->  shelleyAddressInEra $ ShelleyAddress net cre StakeRefNull }
 
 
--- Create Plutus library AssetClass structure from Cardano.Api's AssetId
+-- | Create Plutus library AssetClass structure from Cardano.Api's AssetId
 toPlutusAssetClass :: AssetId -> AssetClass
 toPlutusAssetClass (AssetId (PolicyId hash) (AssetName name)) = AssetClass (CurrencySymbol $ toBuiltin $ serialiseToRawBytes hash , TokenName $ toBuiltin name)
 toPlutusAssetClass AdaAssetId  =AssetClass (CurrencySymbol $ fromString "", TokenName $ fromString "")
 
 
 
--- Convert (ToData) (i.e. Plutus data) to Cardano.Api's ScriptData structure 
+-- | Convert (ToData) (i.e. Plutus data) to Cardano.Api's ScriptData structure 
 dataToScriptData :: (ToData a1) => a1 -> ScriptData
 dataToScriptData sData =  fromPlutusData $ toData sData
 
-toPlutusScriptHash = Alonzo.transScriptHash 
-            
 
+-- toPlutusScriptHash :: Cardano.Ledger.Shelley.API.ScriptHash c -> Plutus.ValidatorHash
+-- toPlutusScriptHash = Alonzo.transScriptHash 
+
+
+-- | Convert Credential (cardano-api type)  to Credential (plutus type)
 toPlutusCredential :: Credential keyrole crypto -> Plutus.Credential
 toPlutusCredential  = Alonzo.transCred
 
 
+-- | Extract Payment Credential from Shelley Address (cardano-api type) and return  Plutus Credential (plutus type)
 addressToPlutusCredential :: Cardano.Api.Shelley.Address ShelleyAddr -> Plutus.Credential
 addressToPlutusCredential (ShelleyAddress net cre sr) = toPlutusCredential cre
 
--- shelleyPayAddrToPlutusPubKHash :: Address ShelleyAddr -> Maybe Plutus.PubKeyHash
--- shelleyPayAddrToPlutusPubKHash (ShelleyAddress _ payCred _) =
---   case payCred of
---     Shelley.ScriptHashObj _ -> Nothing
---     Shelley.KeyHashObj kHash -> Just $ Alonzo.transKeyHash kHash
 
--- toPlutusAddress :: AddressInEra BabbageEra ->  Plutus.Address
-
+-- | Convert Shelley Address (cardano-api type) to Address (plutus type)
 toPlutusAddress :: Address ShelleyAddr -> Plutus.Address
 toPlutusAddress (ShelleyAddress net cre sr) =Plutus.Address  (toPlutusCredential cre) (Alonzo.transStakeReference  sr)
 
 
-
+-- | Convert  AddressInEra (cardano-api type) to Address (plutus type).It calls `error` internally if the provided address
+-- is byron address
 addrInEraToPlutusAddress :: AddressInEra era -> Plutus.Address
 addrInEraToPlutusAddress addr = case addr of { AddressInEra atie ad -> case ad of
                                         ByronAddress ad' -> error "addrInEraToPlutusAddress(): got byron address"
                                         ShelleyAddress net cre sr ->  Plutus.Address (toPlutusCredential cre) (Alonzo.transStakeReference  sr)   }
 
+-- | Convert Address (plutus type) to Shelley Address (cardano-api type).
+-- Address is re-deserialized, which might fail. This is because it's possible to set arbitary byteString as hashes in plutus.
 fromPlutusAddress :: NetworkId -> Plutus.Address -> Maybe (Address ShelleyAddr)
 fromPlutusAddress network (Plutus.Address cre m_sc) = makeShelleyAddress network <$> paymentCre <*> stakingCre
   where
@@ -151,23 +170,3 @@ fromPlutusAddress network (Plutus.Address cre m_sc) = makeShelleyAddress network
         Plutus.PubKeyCredential (PubKeyHash pkh) -> deserialiseFromRawBytes (AsHash AsStakeKey ) (fromBuiltin  pkh) <&> StakeCredentialByKey  <&> StakeAddressByValue
         Plutus.ScriptCredential (Plutus.ValidatorHash vh) -> deserialiseFromRawBytes AsScriptHash (fromBuiltin  vh) <&> StakeCredentialByScript   <&> StakeAddressByValue
       Plutus.StakingPtr n i j -> Just $ fromShelleyStakeReference $ StakeRefPtr (Ptr (SlotNo $ fromInteger n) (Ledger.TxIx $ fromInteger i) (Ledger.CertIx $ fromInteger j))
-
---  then KeyHashObj (KeyHash addrHash)
---           else ScriptHashObj (ScriptHash addrHash)
---       addrHash :: Hash (CC.ADDRHASH crypto) a
---       addrHash =
---         hashFromPackedBytes $
---           PackedBytes28 a b c (fromIntegral (d `shiftR` 32))
-
-
-
-
--- transStakeReference (StakeRefPtr (Ptr (SlotNo slot) txIx certIx)) =
---   let !txIxInteger = toInteger (txIxToInt txIx)
---       !certIxInteger = toInteger (certIxToInt certIx)
---    in Just (PV1.StakingPtr (fromIntegral slot) txIxInteger certIxInteger)
--- transStakeReference StakeRefNull = Nothing
-
-  --   data Credential
-  -- = PubKeyCredential PubKeyHash -- ^ The transaction that spends this output must be signed by the private key
-  -- | ScriptCredential ValidatorHash -- 

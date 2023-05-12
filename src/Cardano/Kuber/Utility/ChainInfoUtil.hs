@@ -49,14 +49,14 @@ chainInfoPreview = do
   pure $ ChainConnectInfo conn
 
 
--- Using Environment variables determine the NETWORK.
+-- | Using Environment variables determine the NETWORK.
 -- NETWORK can be "mainnet", "testnet" or "networkMagic number".
 -- If CARDANO_NODE_SOCKET_PATH environment variable is set,  the socket path is set to it's value
 -- Otherwise CARDANO_HOME or "$HOME/.cardano"  is used and the socket path becomes "$CARDANO_HOME/node.socket"
 chainInfoFromEnv :: IO ChainConnectInfo
 chainInfoFromEnv = chainInfoFromEnv' "NETWORK"
 
--- Read Network value from the environment variable and then determine connection info
+-- | Read Network value from the environment variable and then determine connection info
 -- If CARDANO_NODE_SOCKET_PATH environment variable is set,  the socket path is set to it's value
 -- Otherwise CARDANO_HOME or "$HOME/.cardano"  is used and the socket path becomes "$CARDANO_HOME/node.socket"
 chainInfoFromEnv' :: EnvVariable -> IO ChainConnectInfo
@@ -66,7 +66,7 @@ chainInfoFromEnv' envKey = do
   pure$  ChainConnectInfo conn
 
 
--- If CARDANO_NODE_SOCKET_PATH environment variable is set,  return ConnectInfo instance with the path
+-- | If CARDANO_NODE_SOCKET_PATH environment variable is set,  return ConnectInfo instance with the path
 -- Otherwise CARDANO_HOME or "$HOME/.cardano"  is used and the socket path becomes "$CARDANO_HOME/node.socket"
 getDefaultConnection :: String -> NetworkId ->  IO (LocalNodeConnectInfo CardanoMode)
 getDefaultConnection networkName networkId= do
@@ -80,7 +80,7 @@ getDefaultConnection networkName networkId= do
   pure (localNodeConnInfo networkId socketPath )
 
 
--- Given environment variable key, read the environmet variable and return network Id
+-- | Given environment variable key, read the environmet variable and return network Id. The value maybe network name or network magic.
 getNetworkFromEnv :: EnvVariable -> IO (String,NetworkId)
 getNetworkFromEnv envKey =  do
   networkEnv <- try $ getEnv envKey
@@ -97,7 +97,7 @@ getNetworkFromEnv envKey =  do
           Just v ->  ("",Testnet  (NetworkMagic  v))
           _ -> throw $ FrameworkError   ParserError ( "Invalid network id : " ++ val) 
 
--- get absolute path given a directoryor file path.
+-- | get absolute path given a directory or file path relative to work directory.
 -- the absolute path is "CARANO_HOME/...paths" value to the path
 getWorkPath :: [FilePath] -> IO  FilePath
 getWorkPath paths= do
@@ -105,7 +105,7 @@ getWorkPath paths= do
   pure $ f paths
 
 
--- Get WrokPath calculatin Function
+-- | Get WrokPath calculatin Function
 -- getWorkPath function can throw errors. The error is only during initialization
 -- So if the function succeeds, it returns pure function to calculate filepath which can be reused.
 getWorkPathFunc :: IO( [FilePath] -> FilePath )

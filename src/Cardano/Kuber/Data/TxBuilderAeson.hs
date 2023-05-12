@@ -632,7 +632,7 @@ collectUtxoPair (UTxO uMap) =  map txOutToKeyVal $ Map.toList uMap
               "value" .= toVal val ]
             ++ scriptToPair sc
             ++ datumToPair datum
-    toVal (TxOutValue _ v)=  A.String $ renderValue v
+    toVal (TxOutValue _ v)=  toJSON v
     toVal (TxOutAdaOnly _ l) = toJSON $ lovelaceToValue l
     scriptToPair sc = case sc of
           ReferenceScript rtisidsie sial ->  ["inlineScript" .= toHexString @T.Text ( case sial of { ScriptInAnyLang sl sc' -> serialiseToRawBytes $ hashScript sc' } )]

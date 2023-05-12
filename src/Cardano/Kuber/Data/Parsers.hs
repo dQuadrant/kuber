@@ -320,7 +320,10 @@ txinOrUtxoParser obj@(A.Object o) = do
     case (addrM,valueM) of
       (Just addrT , Just valT) -> do
           addr <- parseAddress addrT
-          val <- parseValueText valT
+          val <-  case valT of 
+                    A.String s -> parseValueText s
+                    A.Number n -> pure $  lovelaceToValue $ Lovelace  (round n)
+                    _ -> parseJSON valT
           refScript <-  o .:?*  ["referenceScript", "script","referencescript"]
           datumHash <-  o.:? "datumHash"
           inlineDatum <- o .:?* ["inlineDatum", "datum","inlinedatum"]
