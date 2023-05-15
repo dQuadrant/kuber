@@ -1,5 +1,4 @@
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use <$>" #-}
 {-# LANGUAGE BlockArguments #-}
@@ -86,6 +85,6 @@ kError t msg= KError (FrameworkError t msg)
 
 
 kWrapParser ::  Either String  r -> Kontract api w FrameworkError r
-kWrapParser m = case m  of 
+kWrapParser m = case m  of
   Left msg -> kError  ParserError msg
   Right v -> KResult v
