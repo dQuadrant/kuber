@@ -107,6 +107,7 @@ module Cardano.Kuber.Api(
     , Kontract(KLift, KError,KResult)
     , kError
     , kWrapParser
+    , kGetBackend
     , evaluateKontract
     , eitherToKontract
     , HasChainQueryAPI(..)
@@ -117,8 +118,8 @@ module Cardano.Kuber.Api(
     -- * Chain info Structures
     ,   ChainConnectInfo(..)
     ,   RemoteKuberConnection
-    ,   createRemoeKuberConnection
-    ,   createRemoeKuberConnection'
+    ,   createRemoteKuberConnection
+    ,   createRemoteKuberConnection'
     ,   chainInfoFromEnv
     ,   chainInfoFromEnv'
     ,   chainInfoMainnet

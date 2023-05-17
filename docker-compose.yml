@@ -16,7 +16,7 @@ services:
         max-size: "200k"
         max-file: "10"
   kuber:
-    image: dquadrant/kuber:${KUBER_VERSION:-2.2.0}
+    image: dquadrant/kuber:${KUBER_VERSION:-3.0.0-rc1}
     environment:
       NETWORK: ${NETWORK:- preprod}
     volumes:

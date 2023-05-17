@@ -158,13 +158,13 @@ mapClientError = \case
 
 type UrlString= String
 type ApiKeyString = String
-createRemoeKuberConnection :: NetworkId -> UrlString -> Maybe ApiKeyString -> IO  RemoteKuberConnection
-createRemoeKuberConnection net urlStr  apiKey= do
+createRemoteKuberConnection :: NetworkId -> UrlString -> Maybe ApiKeyString -> IO  RemoteKuberConnection
+createRemoteKuberConnection net urlStr  apiKey= do
     url <-  baseUrl urlStr
-    createRemoeKuberConnection' net  url apiKey
+    createRemoteKuberConnection' net  url apiKey
 
-createRemoeKuberConnection' :: NetworkId -> BaseUrl -> Maybe ApiKeyString -> IO RemoteKuberConnection
-createRemoeKuberConnection' net baseUrl apiKey = do
+createRemoteKuberConnection' :: NetworkId -> BaseUrl -> Maybe ApiKeyString -> IO RemoteKuberConnection
+createRemoteKuberConnection' net baseUrl apiKey = do
     managerSettings <- case baseUrlScheme baseUrl of
             Http -> case apiKey of
               Nothing -> pure defaultManagerSettings

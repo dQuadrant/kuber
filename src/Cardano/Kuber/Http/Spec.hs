@@ -2,6 +2,9 @@
 {-# LANGUAGE DataKinds #-}
 module Cardano.Kuber.Http.Spec(
         KuberServerApi
+      , QueryApi
+      , KuberApi
+      , UtilityApi
       , kuberApiServerProxy
       , CBORBinary
       , CBORText

@@ -77,7 +77,7 @@ evaluateKontract api  contract = do
     KError e -> pure $ Left e
     KLift f -> f api
 
-kGetBackend ::  Kontract  a w FrameworkError a
+kGetBackend :: Exception e =>  Kontract  a w e a
 kGetBackend = KLift $ \api  -> pure (pure api)
 
 kError :: ErrorType -> String -> Kontract api w FrameworkError r
