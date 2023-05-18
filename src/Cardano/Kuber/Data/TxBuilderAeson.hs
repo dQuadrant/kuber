@@ -34,7 +34,7 @@ import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes, isNothing, fromMaybe, maybeToList)
 import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
-import Plutus.V2.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, TxOut, CurrencySymbol)
+import Plutus.V2.Ledger.Api (PubKeyHash(PubKeyHash, getPubKeyHash), Validator (Validator), unValidatorScript, TxOut, CurrencySymbol, toBuiltin, fromBuiltin)
 import Data.Aeson.Types (FromJSON(parseJSON), (.:), Parser, parseMaybe, parseEither)
 import qualified Data.Aeson as A
 import qualified Data.Aeson.KeyMap as A
@@ -43,7 +43,7 @@ import qualified Data.Aeson.Types as A
 
 import qualified Data.Text as T
 import Cardano.Kuber.Data.Models ( unAddressModal)
-import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBech32, parseAddressCbor, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex, parseCbor, txinOrUtxoParser)
+import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBech32, parseAddressCbor, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex, parseCbor, txinOrUtxoParser, parseAddressBinary)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey), fromJSON)
 import qualified Data.Vector as V
@@ -67,6 +67,7 @@ import Control.Applicative ((<|>))
 import Data.Bifunctor (second)
 import Cardano.Kuber.Utility.DataTransformation (pkhToPaymentKeyHash, addressInEraToAddressAny)
 import qualified Data.ByteString.Lazy.Char8 as BSL8
+import qualified Data.ByteString as BS
 
 
 
@@ -396,7 +397,7 @@ collectColalteral (TxCollateralUtxo utxo) = utxoToAeson  utxo
 
 instance ToJSON TxSignature where
   toJSON (TxSignatureAddr _sigAddr) = toJSON _sigAddr
-  toJSON (TxSignaturePkh pkh) = toJSON  $  "Pkh: " ++ show pkh
+  toJSON (TxSignaturePkh pkh) = toJSON  $  toHexString @T.Text $  fromBuiltin $ getPubKeyHash  pkh
   toJSON (TxSignatureSkey skey  ) = toJSON $ serialiseToBech32 skey
 
 instance FromJSON TxInputSelection where
@@ -613,14 +614,18 @@ instance FromJSON TxCollateral where
 
 
 instance FromJSON TxSignature where
-  parseJSON (A.String v) = case parseAddress v of
-      Nothing -> case parseSignKey v of
-        Just sk -> pure $ TxSignatureSkey sk
-        Nothing -> fail $ "Invalid address string: " ++ T.unpack v
-      Just aie -> pure $ TxSignatureAddr aie
+  parseJSON (A.String v) = case parseHexString v of 
+      Just uhHexStr -> if BS.length uhHexStr == 28 
+        then pure $ TxSignaturePkh (PubKeyHash $toBuiltin uhHexStr) 
+        else parseAddressBinary uhHexStr <&> TxSignatureAddr
+      Nothing -> 
+        case parseAddressBech32 v of
+          Nothing -> case parseSignKey v of
+            Just sk -> pure $ TxSignatureSkey sk
+            Nothing -> fail $ "Invalid address string: " ++ T.unpack v
+          Just aie -> pure $ TxSignatureAddr aie
 
-
-  parseJSON _ = fail "TxSignature must be an String Address or PubKeyHash "
+  parseJSON _ = fail "TxSignature must be an String Address or PubKeyHash"
 
 
 collectUtxoPair :: KeyValue a => UTxO era -> [[a]]
