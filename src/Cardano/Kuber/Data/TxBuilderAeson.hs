@@ -348,40 +348,41 @@ outputContentJsonPair v = case v of
   TxOutScript tps va ha -> [
       "script" .= tps
     , "value" .= va
-    , "dataHash" .= ha
+    , "datumHash" .= serialiseToRawBytesHexText ha
     ]
   TxOutScriptInline tps va ha -> [
       "script" .= tps
     , "value" .= va
-    , "data" .= ha]
+    , "datumHash" .= serialiseToRawBytesHexText ha]
   TxOutScriptWithScript tps va ha ts -> [
       "address" .= tps,
       "script"  .= ts
     , "value" .= va
-    , "data" .= ts]
+    , "datumHash" .= serialiseToRawBytesHexText ha
+    , "inlineScript" .= ts]
   TxOutScriptWithData script va sd -> [
-      "script" .= script
+      "address" .= script
     , "value" .= va
-    , "data" .= sd]
+    , "datum" .= scriptDataToJsonDetailedSchema sd]
   TxOutScriptWithDataAndScript tps va sd ts -> [
       "address" .= tps,
-      "script" .= ts
+      "inlineScript" .= ts
     , "value" .= va
-    , "data" .= sd]
+    , "datum" .= scriptDataToJsonDetailedSchema sd]
   TxOutScriptWithDataAndReference tps va sd -> [
       "script" .= tps
     , "value" .= va
-    , "data" .= sd]
+    , "datum" .= scriptDataToJsonDetailedSchema sd]
   TxOutNative (TxOut addr (TxOutValue _ v) txoutData refScript) ->
         ["address" .= addr]
     ++  ["value" .= v]
     ++ (case txoutData of
       TxOutDatumHash sdsie ha -> ["datumHash" .= serialiseToRawBytesHexText ha ]
-      TxOutDatumInline rtisidsie sd -> ["datum" .= sd]
+      TxOutDatumInline rtisidsie sd -> ["datum" .= scriptDataToJsonDetailedSchema sd]
       _ -> []
       )
     ++ (case refScript of
-     ReferenceScript rtisidsie sial -> ["referenceScript" .= sial ]
+     ReferenceScript rtisidsie sial -> ["inlineScript" .= sial ]
      ReferenceScriptNone -> [])
   TxOutNative _ -> error "Unexpected"
 
