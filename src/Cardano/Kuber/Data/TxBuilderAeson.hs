@@ -7,6 +7,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE InstanceSigs #-}
 module Cardano.Kuber.Data.TxBuilderAeson
 where
 
@@ -189,7 +190,7 @@ instance ToJSON TxBuilder where
     nonEmpyPair :: [A.Pair]
     nonEmpyPair =  "selections"     >= concatMap collectSelection selections
               <+>  "inputs"         >= concatMap  collectInputs inputs
-              <+>  "referenceInputs">= map (\(TxInputReferenceTxin tin) ->renderTxIn tin) refInputs
+              <+>  "referenceInputs">= concatMap collectRefInputs refInputs
               <+>  "collaterals"    >= concatMap collectColalteral collaterals
               <+>  "mint"           >= mintData
               <+>  "outputs"        >= outputs
@@ -235,6 +236,9 @@ instance ToJSON TxInput where
 
 collectInputs (TxInputUnResolved txInputTxin) = [toJSON txInputTxin]
 collectInputs (TxInputResolved val) = collectResolvedInputs val
+
+collectRefInputs (TxInputReferenceTxin txInputTxin) = [ toJSON $  renderTxIn txInputTxin]
+collectRefInputs (TxInputReferenceUtxo utxo) = utxoToAeson utxo
 
 instance ToJSON TxInputUnResolved_ where
   toJSON (TxInputTxin txin) = A.String  $ renderTxIn txin
