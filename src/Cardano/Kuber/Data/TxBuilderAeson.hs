@@ -46,7 +46,7 @@ import qualified Data.Text as T
 import Cardano.Kuber.Data.Models ( unAddressModal)
 import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBech32, parseAddressCbor, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex, parseCbor, txinOrUtxoParser, parseAddressBinary)
 import Control.Monad.IO.Class (MonadIO(liftIO))
-import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey), fromJSON)
+import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey))
 import qualified Data.Vector as V
 import qualified Data.Text.Encoding as T
 import qualified Data.ByteString            as B
@@ -108,14 +108,17 @@ instance FromJSON TxBuilder where
             mVal2<- obj .:? A.fromText  (key <>"s")
             case mVal2 of
               Nothing -> pure []
-              Just any -> returnVal any
-          Just val  -> returnVal val
-
-      returnVal  val =  case val of
-            A.Array vec -> mapM parseJSON $ V.toList vec
-            _ ->  do
-              v<- parseJSON  val
-              pure [v]
+              Just any -> doReturn any  $ A.fromText  (key <>"s")
+          Just val  -> doReturn val  $ A.fromText  key
+        where
+          doReturn v resultKey = if isArray v 
+                            then  obj .: resultKey
+                            else do 
+                                v<- obj .: resultKey
+                                pure [v]
+      isArray val = case val of 
+        A.Array vec -> True
+        _           -> False
 
   parseJSON _ = fail "TxBuilder must be an object"
 
@@ -552,7 +555,7 @@ instance FromJSON (TxOutput TxOutputContent ) where
     -- from script code has increased the code drastically )
     output <-  case destination of
           Nothing -> case mScript of
-            Nothing -> fail "missing  both inlineScript and address"
+            Nothing -> fail "missing both inlineScript and address"
             Just obj -> do
               sc <- parseJSON   obj
               case txOutDatum of
