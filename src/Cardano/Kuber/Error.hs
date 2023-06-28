@@ -38,7 +38,7 @@ data ErrorType =  ConnectionError
                 | TxValidationError
                 | BadMetadata
                 | TxSubmissionError
-                | WrongScriptType deriving Show
+                | WrongScriptType deriving (Show,Eq)
 
 
 
@@ -46,7 +46,8 @@ data FrameworkError =  FrameworkError{
                     feType:: ErrorType,
                     feMessage :: String
                   }
-        | FrameworkErrors [FrameworkError]
+        | FrameworkErrors [FrameworkError] 
+      deriving (Eq)
 
 instance FromJSON FrameworkError where
   parseJSON (A.Object o) = do
