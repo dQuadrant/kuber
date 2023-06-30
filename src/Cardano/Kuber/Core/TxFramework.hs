@@ -37,7 +37,7 @@ import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes, fromMaybe, maybeToList)
 import Data.List (intercalate, sortBy, minimumBy, find)
 import qualified Data.Foldable as Foldable
-import Plutus.V2.Ledger.Api (PubKeyHash(PubKeyHash), Validator (Validator), unValidatorScript, fromBuiltin)
+import PlutusLedgerApi.V2 (PubKeyHash(PubKeyHash), fromBuiltin)
 import Cardano.Kuber.Core.TxBuilder
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Cardano.Api.Crypto.Ed25519Bip32 (xPrvFromBytes)
@@ -58,7 +58,6 @@ import qualified Data.Text.Encoding as T
 import Data.Int (Int64)
 import Cardano.Api.Byron (Address(ByronAddress))
 import Cardano.Ledger.Shelley.API (Credential(KeyHashObj), KeyHash (KeyHash), Globals (systemStart))
-import Cardano.Ledger.DescribeEras (StandardCrypto)
 import Cardano.Binary (ToCBOR(toCBOR))
 import qualified Cardano.Binary as Cborg
 import Cardano.Kuber.Utility.ScriptUtil
@@ -237,7 +236,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       )
       else (
           let iteratedBalancing n lastBody lastFee=do
-                (inputExmap,mintExmap) <- evaluateExUnitMapWithUtxos pParam  systemStart eraHistory  ( UTxO availableUtxo) lastBody
+                (inputExmap,mintExmap) <- evaluateExUnitMapWithUtxos pParam  systemStart (Cardano.Api.Shelley.toLedgerEpochInfo eraHistory)  ( UTxO availableUtxo) lastBody
                 inputs' <- usedInputs  (Map.map Right inputExmap ) (Right defaultExunits)  resolvedInputs
                 exUnitAppliedMints <- applyMintExUnits mintExmap (\p -> Left $ FrameworkError BalancingError ("Missing Exunits for minting" ++ show p)) unresolvedMints
                 case calculator (txMintValue' exUnitAppliedMints) inputs'  lastFee  of
@@ -336,8 +335,8 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                       (TxMintData (PolicyId,  ExecutionUnits -> ScriptWitness WitCtxMint BabbageEra)))
     classifyMint (UTxO mp)  (TxMintData source amount meta) = case source of
       TxMintingSimpleScript tss ->pure $ Left $ transform $ case tss of
-        TxSimpleScriptV1 ss -> (PolicyId $ hashScript ( SimpleScript SimpleScriptV1 ss ), SimpleScriptWitness SimpleScriptV1InBabbage SimpleScriptV1 (SScript  ss))
-        TxSimpleScriptV2 ss -> (PolicyId $ hashScript ( SimpleScript SimpleScriptV2 ss ), SimpleScriptWitness SimpleScriptV2InBabbage SimpleScriptV2 (SScript  ss))
+        TxSimpleScriptV1 ss -> (PolicyId $ hashScript ( SimpleScript ss ), SimpleScriptWitness SimpleScriptInBabbage (SScript  ss))
+        TxSimpleScriptV2 ss -> (PolicyId $ hashScript ( SimpleScript ss ), SimpleScriptWitness SimpleScriptInBabbage (SScript  ss))
       TxMintingPlutusScript tps m_eu sd ->
         let f = case tps of
               TxPlutusScriptV1 ps -> PlutusScriptWitness PlutusScriptV1InBabbage PlutusScriptV1 (PScript ps) NoScriptDatumForMint sd
@@ -351,7 +350,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
               Just (TxOut _ _ _ (ReferenceScript _ anySc@(ScriptInAnyLang sl sc'))) ->do
                 ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anySc
                 case script' of
-                  SimpleScript ssv ss -> pure $ Left $ transform (PolicyId $ hashScript script' , SimpleScriptWitness langInEra ssv (SReferenceScript  ti Nothing))
+                  SimpleScript ss -> pure $ Left $ transform (PolicyId $ hashScript script' , SimpleScriptWitness langInEra (SReferenceScript  ti Nothing))
                   PlutusScript psv ps -> case m_sd of
                     Nothing -> Left $ FrameworkError WrongScriptType "Plutus script referenced but ScriptData is missing"
                     Just sd -> let  f =  PlutusScriptWitness langInEra psv (PReferenceScript ti Nothing) NoScriptDatumForMint sd
@@ -367,13 +366,13 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
 
     appendMintingScriptSignatures :: Set (Hash PaymentKey) -> [ScriptWitness witctx BabbageEra]  ->   Set (Hash PaymentKey)
     appendMintingScriptSignatures    = foldl (\_set mints -> case mints of
-        SimpleScriptWitness slie ssv (SScript ss) -> getScriptSignatures ss <> _set
+        SimpleScriptWitness slie (SScript ss) -> getScriptSignatures ss <> _set
         _ -> _set)
       where
         getScriptSignatures s = case  s of
           RequireSignature pkh -> Set.singleton pkh
-          RequireTimeBefore tls sn -> mempty
-          RequireTimeAfter tls sn -> mempty
+          RequireTimeBefore sn -> mempty
+          RequireTimeAfter sn -> mempty
           RequireAllOf sss -> foldMap getScriptSignatures sss
           RequireAnyOf sss -> foldMap getScriptSignatures sss
           RequireMOf n sss -> foldMap getScriptSignatures sss
@@ -441,10 +440,15 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
               else do
                 changeaddr <-  monadFailChangeAddr
                 pure $ bodyContent (outputs++ [TxOut changeaddr (TxOutValue MultiAssetInBabbageEra change) TxOutDatumNone ReferenceScriptNone ])
-      case makeTransactionBody bc of
+      
+      bpparams <- case bundleProtocolParams cardanoEra pParam of
+        Left ppce -> error "Couldn't Convert protocol parameters."
+        Right bpp -> pure bpp
+  
+      case createAndValidateTransactionBody bc of
           Left tbe ->Left  $ FrameworkError  LibraryError  (show tbe)
           Right tb -> do
-            pure (tb,requiredSignatories,evaluateTransactionFee pParam tb signatureCount 0)
+            pure (tb,requiredSignatories,evaluateTransactionFee bpparams tb signatureCount 0)
 
       where
         fixedOutputSum = foldMap txOutputVal fixedOutputs
@@ -524,8 +528,8 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                             TxSignaturePkh (PubKeyHash pkh) -> case
                                 deserialiseFromRawBytes (AsHash AsPaymentKey) $ fromBuiltin pkh
                                     of
-                                      Nothing -> list
-                                      Just ha -> ha:list  ) [] extraSignatures
+                                      Left _ -> list
+                                      Right ha -> ha:list  ) [] extraSignatures
     zeroValue = valueFromList []
 
     referenceInputsFromScriptReference = foldl (\coll input  -> case input of
@@ -776,7 +780,9 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     defaultExunits=ExecutionUnits {executionMemory=100000,executionSteps= 60000000 }
 
     toSlot  =  timestampToSlot systemStart  eraHistory
-    ledgerPParam = toLedgerPParams ShelleyBasedEraBabbage pParam
+    ledgerPParam = case toLedgerPParams ShelleyBasedEraBabbage pParam of
+      Left ppce -> error "Failed to convert pparams"
+      Right pp -> pp
 
 toLedgerEpochInfo :: EraHistory mode -> EpochInfo (Either Text.Text)
 toLedgerEpochInfo (EraHistory _ interpreter) =

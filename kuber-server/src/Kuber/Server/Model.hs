@@ -11,8 +11,8 @@ import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.ByteString as BS
-import qualified Plutus.V1.Ledger.Api as Plutus
-import Plutus.ApiCommon (EvaluationError(..))
+import qualified PlutusLedgerApi.V1 as Plutus
+import PlutusLedgerApi.Common (EvaluationError(..))
 import Cardano.Kuber.Api (FrameworkError)
 import Data.Aeson.Types ((.:?))
 import Data.Functor ((<&>))

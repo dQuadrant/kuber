@@ -35,7 +35,7 @@ import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes, isNothing, fromMaybe, maybeToList)
 import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
-import Plutus.V2.Ledger.Api (PubKeyHash(PubKeyHash, getPubKeyHash), Validator (Validator), unValidatorScript, TxOut, CurrencySymbol, toBuiltin, fromBuiltin)
+import PlutusLedgerApi.V2 (PubKeyHash(PubKeyHash,getPubKeyHash), TxOut, CurrencySymbol)
 import Data.Aeson.Types (FromJSON(parseJSON), (.:), Parser, parseMaybe, parseEither)
 import qualified Data.Aeson as A
 import qualified Data.Aeson.KeyMap as A
@@ -44,7 +44,7 @@ import qualified Data.Aeson.Types as A
 
 import qualified Data.Text as T
 import Cardano.Kuber.Data.Models ( unAddressModal)
-import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBech32, parseAddressCbor, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex, parseCbor, txinOrUtxoParser, parseAddressBinary)
+import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBech32, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex, parseCbor, txinOrUtxoParser)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey))
 import qualified Data.Vector as V
@@ -314,7 +314,7 @@ instance FromJSON  TxScript where
     where
       tryPlutus = parseJSON v <&> TxScriptPlutus
       trySimple = do
-        v ::(SimpleScript SimpleScriptV2 ) <- parseJSON v
+        v :: SimpleScript <- parseJSON v
         pure $ TxScriptSimple $TxSimpleScriptV2 v
 
   parseJSON  _ = error "Expected Object"
@@ -330,7 +330,7 @@ instance ToJSON TxScript where
     TxScriptPlutus tps -> toJSON tps
 
 
-instance ToJSON ScriptData where
+instance ToJSON HashableScriptData where
   toJSON scriptData = scriptDataToJson ScriptDataJsonNoSchema scriptData
 
 
@@ -411,7 +411,7 @@ instance ToJSON TxSignature where
 instance FromJSON TxInputSelection where
   parseJSON v@(A.String txt) = do
     case parseHexString txt of
-      Just str -> case parseAddressCbor  str of
+      Just str -> case Nothing of
         Nothing -> case parseUtxoCbor str of
           Just utxo ->  pure $ TxSelectableUtxos  utxo
           Nothing -> fail "Invalid InputSelection Hex:  It must be  address, txHash#index or  utxoCbor"
@@ -472,7 +472,7 @@ instance FromJSON TxInput where
         
   parseJSON v@(A.String s) = do
     case parseHexString s of
-      Just str -> case parseAddressCbor  str of
+      Just str -> case Nothing of
         Nothing -> case parseUtxoCbor str of
           Just utxo ->  pure $ TxInputResolved $ TxInputUtxo utxo
           Nothing -> do
@@ -593,7 +593,7 @@ instance FromJSON (TxOutput TxOutputContent ) where
     pure $ TxOutput output deductFee' addChange' insuffientUtxoAda
     where
 
-      parseData :: Parser  (Maybe (Either ScriptData (Hash ScriptData)))
+      parseData :: Parser  (Maybe (Either HashableScriptData (Hash ScriptData)))
       parseData = do
         mDatum <- v .:? "datum"
         case mDatum of

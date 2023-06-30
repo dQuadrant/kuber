@@ -20,7 +20,7 @@ module Cardano.Kuber.Data.Models where
 import Cardano.Api
 import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData, scriptDataFromJsonDetailedSchema, scriptDataToJsonDetailedSchema, ReferenceScript (ReferenceScript, ReferenceScriptNone))
 import Cardano.Binary (ToCBOR (toCBOR), decodeFull, fromCBOR)
-import Cardano.Ledger.Babbage.Tx (TxBody (txfee))
+import Cardano.Ledger.Babbage.Tx (BabbageTxBody (btbTxFee))
 import Codec.CBOR.Write (toLazyByteString)
 import Data.Aeson (KeyValue ((.=)), encode, object, (.!=))
 import Data.Aeson.Types (FromJSON (parseJSON), Parser, ToJSON (toJSON), Value (Object, String), (.:), (.:?))

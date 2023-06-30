@@ -16,13 +16,13 @@ import Data.Time.Clock.POSIX (POSIXTime)
 import Cardano.Kuber.Utility.Misc
 import Data.Functor ((<&>))
 import Data.Map (Map)
-import qualified Cardano.Ledger.Babbage.TxBody  as Ledger (inputs, TxBody (referenceInputs))
 import Cardano.Api.Shelley (TxBody(ShelleyTxBody), fromShelleyTxIn)
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Debug.Trace as Debug
 import Cardano.Kuber.Core.LocalNodeChainApi (kEvaluateExUnits', HasLocalNodeAPI (..), ChainConnectInfo)
 import Cardano.Kuber.Core.TxFramework (executeTxBuilder)
+import Cardano.Ledger.Babbage.TxBody (BabbageTxBody (btbInputs, btbReferenceInputs))
 
 
 
@@ -108,8 +108,8 @@ kSlotToTime'   slot = slotToTimestamp <$> kQuerySystemStart <*> kQueryEraHistory
 
 kEvaluateExUnits'' tx  = do
     let txBody = getTxBody tx
-        ins =  case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> Ledger.inputs tb } 
-        refs = case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> Ledger.referenceInputs tb } 
+        ins =  case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> btbInputs tb } 
+        refs = case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> btbReferenceInputs tb } 
         allInputs =  Set.map fromShelleyTxIn (ins <> refs)
     utxos <-kQueryUtxoByTxin allInputs
     kEvaluateExUnits' (getTxBody tx) utxos
@@ -119,7 +119,10 @@ kCalculateMinFee' tx = do
 
 kCalculateMinFee'' txbody shelleyWitnesses byronWitnesses = do 
     protocolParams <- kQueryProtocolParams
-    pure $ evaluateTransactionFee protocolParams  txbody shelleyWitnesses byronWitnesses
+    bpparams <- case bundleProtocolParams cardanoEra protocolParams of
+        Left ppce -> error "Couldn't Convert protocol parameters."
+        Right bpp -> pure bpp
+    pure $ evaluateTransactionFee bpparams  txbody shelleyWitnesses byronWitnesses
 
 
 kBuildAndSubmit'  builder =  do

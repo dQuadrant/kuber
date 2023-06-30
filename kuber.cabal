@@ -52,7 +52,7 @@ library
 
   hs-source-dirs: src
   build-depends:
-      base >= 4.9 && <5
+      base >= 4.14 && <4.17
     , containers
     , bytestring
     , serialise
@@ -61,20 +61,20 @@ library
     , text
     , filepath
     , directory
-    , aeson
+    , aeson >= 1.5.6.0
     , text-conversions
     , cardano-api
-    , cardano-ledger-core
-    , cardano-ledger-babbage
-    , cardano-ledger-alonzo
-    , cardano-ledger-shelley
+    , cardano-ledger-core >= 1.2
+    , cardano-ledger-babbage >= 1.1
+    , cardano-ledger-alonzo >= 1.1.1
+    , cardano-ledger-shelley >= 1.1.1
     , cardano-ledger-shelley-ma
-    , cardano-slotting
---    , shelley-spec-ledger
-    , plutus-ledger-api
+    , cardano-slotting >= 0.1
+    , plutus-ledger-api ^>=1.5
     , plutus-tx
-    , ouroboros-consensus
+    , ouroboros-consensus >= 0.7
     , ouroboros-network
+    , ouroboros-network-protocols
     , vector
     , transformers
     , unordered-containers
@@ -86,6 +86,7 @@ library
     , network-uri
     , http-types
     , http-client-tls
+
 test-suite test
   default-language: Haskell2010
   type: exitcode-stdio-1.0

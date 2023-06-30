@@ -2,8 +2,8 @@
 {-# LANGUAGE LambdaCase #-}
 
 module Cardano.Kuber.Core.LocalNodeChainApi where
-import Cardano.Api
-import Cardano.Api.Shelley
+import Cardano.Api hiding (queryEraHistory, queryChainPoint, querySystemStart)
+import Cardano.Api.Shelley hiding (queryEraHistory, queryChainPoint, querySystemStart)
 
 import Cardano.Kuber.Core.ChainAPI
 import Cardano.Kuber.Core.Kontract
@@ -72,11 +72,16 @@ kEvaluateExUnits' txbody utxos = do
   sStart <- kQuerySystemStart
   eHhistory <- kQueryEraHistory
   pParams <- kQueryProtocolParams
-  case
-      evaluateTransactionExecutionUnits
-        BabbageEraInCardanoMode sStart eHhistory pParams utxos txbody
-    of
+  bpparams <- case bundleProtocolParams cardanoEra pParams of
+        Left ppce -> error "Couldn't Convert protocol parameters."
+        Right bpp -> pure bpp
+  case evaluateTransactionExecutionUnits
+    sStart
+    (toLedgerEpochInfo eHhistory)
+    bpparams
+    utxos
+    txbody of
       Left tve -> KError $  FrameworkError ExUnitCalculationError (show tve)
       Right map -> pure $ Map.map (\case
-            Left see -> Left (fromScriptExecutionError  see txbody)
-            Right eu -> pure eu ) map
+             Left see -> Left (fromScriptExecutionError  see txbody)
+             Right eu -> pure eu ) map

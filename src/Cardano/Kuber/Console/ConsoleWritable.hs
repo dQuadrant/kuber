@@ -1,5 +1,6 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
 module Cardano.Kuber.Console.ConsoleWritable
 where
 
@@ -72,6 +73,6 @@ showStr x = init $ tail $ show x
 
 showRefScript refScript = case refScript of 
       ReferenceScript rtisidsie sial ->  case sial of { ScriptInAnyLang sl sc -> (case sl of
-                                                          SimpleScriptLanguage ssv -> " + SimpleScript("
+                                                          SimpleScriptLanguage -> " + SimpleScript("
                                                           PlutusScriptLanguage psv -> " + PlutusScript(" ) ++ show (  hashScript sc) ++ ")" } 
       ReferenceScriptNone -> ""

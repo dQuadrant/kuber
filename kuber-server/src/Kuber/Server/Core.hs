@@ -17,7 +17,6 @@ import System.FilePath (joinPath)
 import Cardano.Ledger.Alonzo.Scripts (ExUnits(ExUnits))
 import Data.Text.Conversions (Base16(Base16), convertText)
 import Cardano.Api.Shelley (TxBody(ShelleyTxBody), fromShelleyTxIn)
-import Cardano.Ledger.Shelley.API (TxBody(_inputs))
 import qualified Cardano.Ledger.TxIn as Ledger
 import qualified Cardano.Ledger.Core as Ledger
 import Cardano.Ledger.Alonzo.TxBody (inputs')

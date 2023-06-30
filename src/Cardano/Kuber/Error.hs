@@ -7,15 +7,15 @@ import GHC.Exception.Type (Exception)
 import Data.Aeson (object, ToJSON (toJSON), KeyValue ((.=)), FromJSON (parseJSON))
 import Control.Exception (throw)
 import Cardano.Api
-import Plutus.ApiCommon (EvaluationError(..))
+import PlutusLedgerApi.V1 (EvaluationError(..))
 import qualified Data.Map as Map
 import qualified Data.ByteString as BS
 import qualified Data.Text as T
 import qualified Data.ByteString.Char8 as BS8
 import Cardano.Api.Shelley
-import Cardano.Ledger.Babbage.Tx (ValidatedTx(ValidatedTx), ScriptPurpose)
+import Cardano.Ledger.Babbage.Tx (ScriptPurpose)
 import Cardano.Ledger.Shelley.LedgerState (witsFromTxWitnesses)
-import Cardano.Ledger.Alonzo.TxWitness (RdmrPtr)
+import Cardano.Ledger.Alonzo.TxWits (RdmrPtr)
 import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Hashes as Ledger
 import Cardano.Kuber.Utility.Text (toHexString)
@@ -117,7 +117,6 @@ fromScriptExecutionError see  txbody=  case see of
                   CekError ewc -> mkPlutusErr ("CekError : " ++ show ewc ++ " : " ++ show txts)
                   DeBruijnError fve -> mkPlutusErr ("DeBruijnError : " ++ show fve ++ " : " ++ show txts)
                   CodecError df -> mkPlutusErr ("CodecError Deserialization : " ++ show df ++ " : " ++ show txts)
-                  IncompatibleVersionError ver -> mkPlutusErr ("Incompatible version  : " ++ show ver)
                   CostModelParameterMismatch -> mkPlutusErr "Unexpected costModel Parameter Mismatch"
                 ScriptErrorExecutionUnitsOverflow -> makeErr "Execution Units Overflowed "
                 ScriptErrorNotPlutusWitnessedTxIn swi sh -> makeErr $ "Trying to execute non-plutus script : " ++  BS8.unpack (serialiseToRawBytesHex sh)

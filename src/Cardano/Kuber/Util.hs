@@ -21,10 +21,10 @@ module Cardano.Kuber.Util
     , toPlutusCredential
     , addrInEraToPlutusAddress
     , addressToPlutusCredential
-    , fromPlutusV1Script
-    , fromPlutusV2Script
-    , fromPlutusV2Validator
-    , fromPlutusV1Validator
+    -- , fromPlutusV1Script
+    -- , fromPlutusV2Script
+    -- , fromPlutusV2Validator
+    -- , fromPlutusV1Validator
 
     -- Value utility and utxoto Value
     , isNullValue
@@ -77,7 +77,7 @@ import Control.Exception (try, throw)
 import System.Environment (getEnv)
 import System.Directory (doesFileExist)
 import Cardano.Kuber.Error ( FrameworkError(FrameworkError), ErrorType(WrongScriptType, ExUnitCalculationError, FeatureNotSupported, PlutusScriptError) )
-import Plutus.V2.Ledger.Api (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), PubKeyHash (PubKeyHash), Address)
+import PlutusLedgerApi.V2 (fromBuiltin, toBuiltin, ToData, toData, CurrencySymbol (CurrencySymbol), TokenName (TokenName), PubKeyHash (PubKeyHash), Address)
 import System.FilePath (joinPath)
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamUTxOCostPerWord, protocolParamUTxOCostPerByte), fromPlutusData, TxBody (ShelleyTxBody), Lovelace (Lovelace), toShelleyTxOut, Address (ShelleyAddress), fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyAddr, toShelleyAddr, fromShelleyPaymentCredential, fromShelleyTxIn, fromShelleyScriptHash)
 import qualified Cardano.Ledger.Babbage.Tx as LedgerBody
@@ -107,7 +107,7 @@ import qualified Codec.CBOR.Write as Cborg
 import qualified Codec.CBOR.Encoding as Cborg
 import qualified Cardano.Binary as Cborg
 import Cardano.Slotting.Time (SystemStart, RelativeTime, toRelativeTime, fromRelativeTime)
-import Cardano.Ledger.Babbage.TxBody (inputs, mint')
+import Cardano.Ledger.Babbage.TxBody (btbInputs, mint')
 import Cardano.Ledger.Shelley.UTxO (txins)
 import Cardano.Kuber.Utility.ChainInfoUtil
 import qualified Data.Aeson as A
@@ -127,7 +127,7 @@ import qualified Data.ByteString.Builder as BSL
 import Data.ByteString.Builder (charUtf8)
 import Cardano.Kuber.Utility.WalletUtil (readSignKey, getDefaultSignKey)
 import Cardano.Kuber.Utility.Text
-import qualified Cardano.Ledger.Mary.Value as Ledger
+-- import qualified Cardano.Ledger.Mary.Value as Ledger
 import Data.Either (partitionEithers)
 import Data.Bifunctor (Bifunctor(bimap))
 import qualified Cardano.Ledger.Shelley.API as Ledger
@@ -135,7 +135,7 @@ import qualified Debug.Trace as Debug
 import Data.List (intercalate)
 import qualified Cardano.Ledger.Alonzo as Alonzo
 import Cardano.Ledger.Crypto (StandardCrypto)
-import Cardano.Kuber.Utility.ScriptUtil (fromPlutusV1Script, fromPlutusV2Script, fromPlutusV1Validator, fromPlutusV2Validator)
+-- import Cardano.Kuber.Utility.ScriptUtil (fromPlutusV1Script, fromPlutusV2Script, fromPlutusV1Validator, fromPlutusV2Validator)
 import qualified Ouroboros.Consensus.HardFork.History as Qry
 import Data.Time (NominalDiffTime, UTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, POSIXTime, utcTimeToPOSIXSeconds)

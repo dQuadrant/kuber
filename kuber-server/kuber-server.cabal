@@ -45,8 +45,8 @@ library
     , bytestring
     , containers
     , filepath
-    , base
-    , aeson
+    , base >= 4.14 && < 4.17
+    , aeson             >= 1.5.6.0
     , cardano-binary
     , http-media
     , wai
@@ -83,10 +83,10 @@ executable kuber-server
     , aeson
     , text-conversions
     , cardano-api
-    , cardano-ledger-alonzo
-    , cardano-ledger-shelley
-    , cardano-slotting
-    , plutus-ledger-api
+    , cardano-ledger-alonzo >= 1.1.1
+    , cardano-ledger-shelley >= 1.1.1
+    , cardano-slotting >= 0.1
+    , plutus-ledger-api ^>=1.5
     , plutus-tx
     , ouroboros-network
     , kuber

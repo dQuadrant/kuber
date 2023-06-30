@@ -13,8 +13,7 @@ import           Cardano.Kuber.Utility.Text
 import qualified Cardano.Ledger.Alonzo       as Alonzo
 import qualified Cardano.Ledger.Babbage       as Babbage
 
-import           Cardano.Ledger.DescribeEras  (StandardCrypto, Witness (Alonzo))
-import qualified Cardano.Ledger.Mary.Value    as Mary
+-- import           Cardano.Ledger.DescribeEras  (StandardCrypto, Witness (Alonzo))
 import qualified Cardano.Ledger.Shelley.API   as Shelley
 import           Control.Exception            (SomeException, catch, throw)
 import           Data.Aeson                   ((.:), (.:?), FromJSON (parseJSON), eitherDecode)
@@ -46,6 +45,8 @@ import           Text.Read                    (readMaybe)
 import qualified Debug.Trace as Debug
 import qualified Data.Aeson.Types as A
 import Data.Aeson.Parser (eitherDecodeWith)
+import Cardano.Ledger.Crypto (StandardCrypto)
+import qualified Cardano.Ledger.Babbage.TxOut as Babbage
 
 
 parseSignKey :: MonadFail m => Text -> m (SigningKey PaymentKey)
@@ -101,15 +102,15 @@ parseAssetId assetText
               case policyId of
                 Left _  -> fail "ParserError : Invalid policy name"
                 Right  pi -> case assetName of
-                  Nothing -> fail "ParserError : Invalid token name"
-                  Just an -> pure $ AssetId pi an
+                  Left _ -> fail "ParserError : Invalid token name"
+                  Right an -> pure $ AssetId pi an
 
 parseAssetName :: MonadFail f =>Text -> f AssetName
 parseAssetName txt =case deserialiseFromRawBytesHex AsAssetName utf8
       of
         Left _  -> case deserialiseFromRawBytes AsAssetName utf8 of
-          Nothing -> fail $  "Invalid assetname :" ++ T.unpack txt
-          Just an -> pure an
+          Left _ -> fail $  "Invalid assetname :" ++ T.unpack txt
+          Right an -> pure an
         Right an -> pure an
   where
     utf8 =encodeUtf8 txt
@@ -153,7 +154,7 @@ parseAssetNQuantity textStr = do
     parseFail = fail $ "Value parse failed : invalid value token `" ++ T.unpack textStr ++ "`"
     performBreak = T.break isSeparator (T.stripStart textStr)
 
-parseScriptData :: MonadFail m => Text -> m ScriptData
+parseScriptData :: MonadFail m => Text -> m HashableScriptData
 parseScriptData jsonText = do
   case decodeJson of
     Nothing -> fail "Script data string must be json format"
@@ -184,44 +185,44 @@ anyScriptParser v@(A.Object o) =do
       sc <- o.: "cborHex"  >>= parseCborHex @T.Text
       pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2) (PlutusScript PlutusScriptV2 sc)
     _ -> do
-      v ::(SimpleScript SimpleScriptV2 ) <- parseJSON v
-      pure $ ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV2) (SimpleScript SimpleScriptV2 v )
+      v ::SimpleScript <- parseJSON v
+      pure $ ScriptInAnyLang SimpleScriptLanguage $ SimpleScript v
 anyScriptParser _ = fail "Expected json object type"
 
-parseAddressBinary :: MonadFail m => ByteString -> m (AddressInEra BabbageEra )
-parseAddressBinary bs = case parseAddressCbor (LBS.fromStrict bs) of
-  Just addr -> pure addr
-  Nothing -> parseAddressRaw bs
+-- parseAddressBinary :: MonadFail m => ByteString -> m (AddressInEra BabbageEra )
+-- parseAddressBinary bs = case parseAddressCbor (LBS.fromStrict bs) of
+--   Just addr -> pure addr
+--   Nothing -> parseAddressRaw bs
 
 parseAddressRaw :: MonadFail m =>  ByteString -> m(AddressInEra BabbageEra)
 parseAddressRaw addrBs = case deserialiseFromRawBytes (AsAddressInEra AsBabbageEra) addrBs of
-            Nothing -> fail  "Invalid Address Hex "
-            Just addr -> pure addr
+            Left _  -> fail  "Invalid Address Hex "
+            Right addr -> pure addr
 
 parseAddress :: MonadFail m => Text -> m (AddressInEra BabbageEra)
 parseAddress addrText = case deserialiseAddress (AsAddressInEra AsBabbageEra) addrText of
   Nothing -> do
      let hex :: Maybe  ByteString = parseHexString addrText
      case  hex of
-      Just hex -> case parseAddressBinary hex of
+      Just hex -> case Nothing of
         Just addr -> pure addr
         Nothing -> case deserialiseFromRawBytes (AsAddressInEra AsBabbageEra) hex of
-            Nothing -> fail  $ "Address is neither bech32 nor cborHex : "++ T.unpack addrText
-            Just addr -> pure addr
+            Left _ -> fail  $ "Address is neither bech32 nor cborHex : "++ T.unpack addrText
+            Right addr -> pure addr
       Nothing -> fail $ "Address is neither bech32 nor cborHex : "++ T.unpack addrText
   Just aie -> pure aie
 
-parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra BabbageEra)
-parseAddressCbor  cbor = do
-  aie <-  parseCbor cbor
-  pure $ fromShelleyAddr ShelleyBasedEraBabbage  aie
+-- parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra BabbageEra)
+-- parseAddressCbor  cbor = do
+--   aie <-  parseCbor cbor
+--   pure $ fromShelleyAddr ShelleyBasedEraBabbage  aie
 
 parseAddressBech32 :: MonadFail m => Text -> m (AddressInEra BabbageEra)
 parseAddressBech32 txt = case deserialiseAddress (AsAddressInEra AsBabbageEra) txt of
   Nothing -> fail "Address is not in bech32 format"
   Just aie -> pure aie
 
-scriptDataParser :: MonadFail m =>  Aeson.Value  -> m ScriptData
+scriptDataParser :: MonadFail m =>  Aeson.Value  -> m HashableScriptData
 scriptDataParser v = doParsing v
   where
     doParsing (Aeson.String v) =  parseScriptData  v
@@ -229,7 +230,7 @@ scriptDataParser v = doParsing v
        Left sdje -> case sdje of
         ScriptDataJsonSchemaError va sdjse -> fail $  "Wrong schema" ++ show sdjse
         ScriptDataRangeError va sdre -> fail $  "Invalid data " ++ show sdre
-       Right sd -> pure  sd
+       Right sd -> pure sd
     doParsing val  = fail $ "Script data Must be either string or object: got:" ++  show val
 
 
@@ -280,8 +281,8 @@ parseUtxoCbor :: MonadFail m => LBS.ByteString -> m (UTxO BabbageEra)
 parseUtxoCbor val = do
   ((txHash,index ),txout) <- parseCbor val
   txIn <- case deserialiseFromRawBytes AsTxId txHash of
-          Just txid -> pure $ TxIn txid (TxIx index)
-          Nothing -> fail $ "Failed to parse value as txHash " ++ toHexString  txHash
+          Right txid -> pure $ TxIn txid (TxIx index)
+          Left _ -> fail $ "Failed to parse value as txHash " ++ toHexString  txHash
   pure $ UTxO (Map.singleton txIn (fromShelleyTxOut ShelleyBasedEraBabbage txout))
 
 
