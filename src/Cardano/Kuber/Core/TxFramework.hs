@@ -334,9 +334,8 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
               (Either (TxMintData (PolicyId, ScriptWitness WitCtxMint BabbageEra))
                       (TxMintData (PolicyId,  ExecutionUnits -> ScriptWitness WitCtxMint BabbageEra)))
     classifyMint (UTxO mp)  (TxMintData source amount meta) = case source of
-      TxMintingSimpleScript tss ->pure $ Left $ transform $ case tss of
-        TxSimpleScriptV1 ss -> (PolicyId $ hashScript ( SimpleScript ss ), SimpleScriptWitness SimpleScriptInBabbage (SScript  ss))
-        TxSimpleScriptV2 ss -> (PolicyId $ hashScript ( SimpleScript ss ), SimpleScriptWitness SimpleScriptInBabbage (SScript  ss))
+      TxMintingSimpleScript (TxSimpleScript tss) ->pure $ Left $ transform 
+                  (PolicyId $ hashScript ( SimpleScript tss ), SimpleScriptWitness SimpleScriptInBabbage (SScript  tss))
       TxMintingPlutusScript tps m_eu sd ->
         let f = case tps of
               TxPlutusScriptV1 ps -> PlutusScriptWitness PlutusScriptV1InBabbage PlutusScriptV1 (PScript ps) NoScriptDatumForMint sd

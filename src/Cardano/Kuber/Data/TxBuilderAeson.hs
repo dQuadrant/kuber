@@ -35,7 +35,7 @@ import Data.Set (Set)
 import Data.Maybe (mapMaybe, catMaybes, isNothing, fromMaybe, maybeToList)
 import Data.List (intercalate, sortBy)
 import qualified Data.Foldable as Foldable
-import PlutusLedgerApi.V2 (PubKeyHash(PubKeyHash,getPubKeyHash), TxOut, CurrencySymbol)
+import PlutusLedgerApi.V2 (PubKeyHash(PubKeyHash,getPubKeyHash), TxOut, CurrencySymbol, toBuiltin, fromBuiltin)
 import Data.Aeson.Types (FromJSON(parseJSON), (.:), Parser, parseMaybe, parseEither)
 import qualified Data.Aeson as A
 import qualified Data.Aeson.KeyMap as A
@@ -44,7 +44,7 @@ import qualified Data.Aeson.Types as A
 
 import qualified Data.Text as T
 import Cardano.Kuber.Data.Models ( unAddressModal)
-import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBech32, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex, parseCbor, txinOrUtxoParser)
+import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBech32, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex, parseCbor, txinOrUtxoParser, parseAddressBinary, parseAddressRaw)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey))
 import qualified Data.Vector as V
@@ -111,12 +111,12 @@ instance FromJSON TxBuilder where
               Just any -> doReturn any  $ A.fromText  (key <>"s")
           Just val  -> doReturn val  $ A.fromText  key
         where
-          doReturn v resultKey = if isArray v 
+          doReturn v resultKey = if isArray v
                             then  obj .: resultKey
-                            else do 
+                            else do
                                 v<- obj .: resultKey
                                 pure [v]
-      isArray val = case val of 
+      isArray val = case val of
         A.Array vec -> True
         _           -> False
 
@@ -315,14 +315,12 @@ instance FromJSON  TxScript where
       tryPlutus = parseJSON v <&> TxScriptPlutus
       trySimple = do
         v :: SimpleScript <- parseJSON v
-        pure $ TxScriptSimple $TxSimpleScriptV2 v
+        pure $ TxScriptSimple $TxSimpleScript v
 
   parseJSON  _ = error "Expected Object"
 
 instance ToJSON TxSimpleScript where
-  toJSON tss = case tss of
-    TxSimpleScriptV1 ss -> toJSON ss
-    TxSimpleScriptV2 ss -> toJSON ss
+  toJSON (TxSimpleScript ss) =toJSON ss
 
 instance ToJSON TxScript where
   toJSON script = case script of
@@ -411,7 +409,7 @@ instance ToJSON TxSignature where
 instance FromJSON TxInputSelection where
   parseJSON v@(A.String txt) = do
     case parseHexString txt of
-      Just str -> case Nothing of
+      Just str -> case parseAddressRaw (LBS.toStrict  str) of
         Nothing -> case parseUtxoCbor str of
           Just utxo ->  pure $ TxSelectableUtxos  utxo
           Nothing -> fail "Invalid InputSelection Hex:  It must be  address, txHash#index or  utxoCbor"
@@ -425,9 +423,9 @@ instance FromJSON TxInputSelection where
             Nothing -> fail "Invalid InputSelection String : It must be  address, txHash#index,  or  utxoCbor"
   parseJSON v@(A.Object o) = do
     _type :: Maybe String <- o .:? "type"
-    case _type of 
+    case _type of
       Nothing -> txinOrUtxoParser' (\x -> TxSelectableTxIn [x]) TxSelectableUtxos  v
-      Just envelopeType ->  do 
+      Just envelopeType ->  do
         envelope <- parseJSON  v
         case deserialiseFromTextEnvelope (AsSigningKey AsPaymentKey) envelope of
           Left tee -> fail $ ".selections " ++ "Got type=\"" ++ envelopeType ++ "\" But parse failed."
@@ -443,7 +441,7 @@ instance FromJSON TxInput where
     case mScript of
       Nothing ->  pure  (case utxoOrTxin of
          Left ti -> TxInputUnResolved $ TxInputTxin ti
-         Right uto -> TxInputResolved $ TxInputUtxo uto)  
+         Right uto -> TxInputResolved $ TxInputUtxo uto)
       Just scriptJson -> do
         mData <- v .:? "datum"
         redeemer <- v .: "redeemer" >>= scriptDataParser
@@ -456,23 +454,23 @@ instance FromJSON TxInput where
           Just datum -> do
             sd <-scriptDataParser  datum
             pure $ Just sd
-        case utxoOrTxin of 
-          Left ti ->do 
+        case utxoOrTxin of
+          Left ti ->do
             inputFunc<-case scriptJson of
                 A.String txt -> parseTxIn txt <&> TxInputReferenceScriptTxin
                 _  ->  parseJSON   scriptJson
                         <&> TxInputScriptTxin
             pure $ TxInputUnResolved $ inputFunc mParsedData  redeemer exUnits ti
-          Right uto ->  do 
+          Right uto ->  do
             inputFunc'<-case scriptJson of
               A.String txt -> parseTxIn txt <&> TxInputReferenceScriptUtxo
               _  ->  parseJSON   scriptJson
                       <&> TxInputScriptUtxo
             pure $ TxInputResolved $ inputFunc' mParsedData  redeemer exUnits uto
-        
+
   parseJSON v@(A.String s) = do
     case parseHexString s of
-      Just str -> case Nothing of
+      Just str -> case parseAddressRaw $ LBS.toStrict str of
         Nothing -> case parseUtxoCbor str of
           Just utxo ->  pure $ TxInputResolved $ TxInputUtxo utxo
           Nothing -> do
@@ -543,7 +541,7 @@ instance FromJSON (TxOutput TxOutputContent ) where
                                   Just (Left sd) -> TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra sd
                                   Just (Right dh) -> TxOutDatumHash ScriptDataInBabbageEra dh
                                 else (case datumHashE of
-                                  Just (Left datum) -> TxOutDatumHash ScriptDataInBabbageEra (hashScriptData datum)
+                                  Just (Left datum) -> TxOutDatumHash ScriptDataInBabbageEra (hashScriptDataBytes datum)
                                   Just (Right dh)   -> TxOutDatumHash ScriptDataInBabbageEra dh
                                   _ -> TxOutDatumNone
                                 )
@@ -622,11 +620,11 @@ instance FromJSON TxCollateral where
 
 
 instance FromJSON TxSignature where
-  parseJSON (A.String v) = case parseHexString v of 
-      Just uhHexStr -> if BS.length uhHexStr == 28 
-        then pure $ TxSignaturePkh (PubKeyHash $toBuiltin uhHexStr) 
+  parseJSON (A.String v) = case parseHexString v of
+      Just uhHexStr -> if BS.length uhHexStr == 28
+        then pure $ TxSignaturePkh (PubKeyHash $toBuiltin uhHexStr)
         else parseAddressBinary uhHexStr <&> TxSignatureAddr
-      Nothing -> 
+      Nothing ->
         case parseAddressBech32 v of
           Nothing -> case parseSignKey v of
             Just sk -> pure $ TxSignatureSkey sk
@@ -664,5 +662,5 @@ utxoToAeson  uMap =  map  (A.Object . A.fromList) $ collectUtxoPair uMap
 
 txinOrUtxoParser' f1 f2 o = txinOrUtxoParser o >>= (\case
    Left ti -> pure $  f1 ti
-   Right uto -> pure  $ f2 uto)  
+   Right uto -> pure  $ f2 uto)
 

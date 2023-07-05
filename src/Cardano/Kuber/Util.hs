@@ -21,10 +21,8 @@ module Cardano.Kuber.Util
     , toPlutusCredential
     , addrInEraToPlutusAddress
     , addressToPlutusCredential
-    -- , fromPlutusV1Script
-    -- , fromPlutusV2Script
-    -- , fromPlutusV2Validator
-    -- , fromPlutusV1Validator
+    , fromPlutusV1Script
+    , fromPlutusV2Script
 
     -- Value utility and utxoto Value
     , isNullValue
@@ -135,7 +133,7 @@ import qualified Debug.Trace as Debug
 import Data.List (intercalate)
 import qualified Cardano.Ledger.Alonzo as Alonzo
 import Cardano.Ledger.Crypto (StandardCrypto)
--- import Cardano.Kuber.Utility.ScriptUtil (fromPlutusV1Script, fromPlutusV2Script, fromPlutusV1Validator, fromPlutusV2Validator)
+import Cardano.Kuber.Utility.ScriptUtil (fromPlutusV1Script, fromPlutusV2Script)
 import qualified Ouroboros.Consensus.HardFork.History as Qry
 import Data.Time (NominalDiffTime, UTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, POSIXTime, utcTimeToPOSIXSeconds)

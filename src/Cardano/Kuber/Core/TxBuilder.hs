@@ -57,9 +57,8 @@ import Data.Time.Clock.POSIX
 import Foreign.C (CTime)
 
 
-data TxSimpleScript = TxSimpleScriptV1 (SimpleScript  )
-              |        TxSimpleScriptV2 (SimpleScript )
-                            deriving(Show)
+newtype TxSimpleScript = TxSimpleScript SimpleScript  
+    deriving(Show)
 
 data TxScript = TxScriptSimple TxSimpleScript
         |   TxScriptPlutus   TxPlutusScript
@@ -295,9 +294,9 @@ txMintSimpleScript script amounts = _txMint $ TxMintData (TxMintingSimpleScript 
 txPayTo:: AddressInEra BabbageEra ->Value ->TxBuilder
 txPayTo addr v=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) TxOutDatumNone ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
 
--- -- | Pay to address  and inline the script in resulting utxo.
--- txPayToWithReferenceScript:: AddressInEra BabbageEra ->Value -> Plutus.Script  ->TxBuilder
--- txPayToWithReferenceScript  addr v pScript=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) TxOutDatumNone (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra (ScriptInAnyLang (PlutusScriptLanguage  PlutusScriptV2) $ fromPlutusV2Script  pScript) ))False False OnInsufficientUtxoAdaUnset
+-- | Pay to address  and inline the script in resulting utxo.
+txPayToWithReferenceScript:: AddressInEra BabbageEra ->Value -> TxScript  ->TxBuilder
+txPayToWithReferenceScript  addr v pScript=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) TxOutDatumNone (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra (txScriptToScriptAny pScript) ))False False OnInsufficientUtxoAdaUnset
 
 -- | Pay to the enterprise address of this PublicKeyHash
 txPayToPkh:: PubKeyHash  ->Value ->TxBuilder
@@ -311,14 +310,14 @@ txPayToScript addr v d = txOutput $TxOutput (TxOutNative $TxOut addr  (TxOutValu
 txPayToScriptWithData :: AddressInEra BabbageEra -> Value -> HashableScriptData -> TxBuilder
 txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValue MultiAssetInBabbageEra v)  (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
 
--- -- | Pay to the script and inline it in the utxo. Script enterprise address is derrived from script hash
--- txPayToScriptWithReference :: Plutus.Script -> Value -> Hash ScriptData -> TxBuilder
--- txPayToScriptWithReference pScript v d = txOutput $ TxOutput (TxOutScript (toTxPlutusScript (fromPlutusV2Script pScript)) v d) False False OnInsufficientUtxoAdaUnset
+-- | Pay to the script and inline it in the utxo. Script enterprise address is derrived from script hash
+txPayToScriptWithReference :: IsPlutusScript sc => sc -> Value -> Hash ScriptData -> TxBuilder
+txPayToScriptWithReference pScript v d = txOutput $ TxOutput (TxOutScript (toTxPlutusScript pScript) v d) False False OnInsufficientUtxoAdaUnset
 
--- -- | Pay to script  with inline both datum and inline it in datum. Script enterprise address is derrived from script hash
--- txPayToScriptWithDataAndReference :: Plutus.Script -> Value -> ScriptData -> TxBuilder
--- txPayToScriptWithDataAndReference pScript v d  =
---   txOutput $ TxOutput (TxOutScriptWithData (toTxPlutusScript $ fromPlutusV2Script pScript) v d) False False OnInsufficientUtxoAdaUnset
+-- | Pay to script  with inline both datum and inline it in datum. Script enterprise address is derrived from script hash
+txPayToScriptWithDataAndReference :: IsPlutusScript sc => sc -> Value -> HashableScriptData -> TxBuilder
+txPayToScriptWithDataAndReference pScript v d  =
+  txOutput $ TxOutput (TxOutScriptWithData (toTxPlutusScript  pScript) v d) False False OnInsufficientUtxoAdaUnset
 
 -- input consmptions
 
@@ -365,13 +364,6 @@ txSetFee v = TxBuilder  [] [] [] [] [] mempty mempty [] [] (Just v) Nothing Map.
 txMetadata :: Map Word64 Aeson.Value -> TxBuilder
 txMetadata  =  TxBuilder  [] [] [] [] [] mempty mempty [] [] Nothing Nothing
 
--- Redeem from a Script. The script address and value in the TxIn is determined automatically by querying the utxo from cardano node
--- txRedeemTxin:: TxIn ->  ->ScriptData -> ScriptData  -> TxBuilder
--- txRedeemTxin txin script _data _redeemer = txInput $ TxInputUnResolved $ TxInputScriptTxin  ( TxValidatorScript $ script)  (Just  _data)  _redeemer  Nothing txin
-
---   from Script Address.
--- TxOut is provided so the address and value need not be queried from the caradno-node
-
 class IsPlutusVersion v where
   toTxPlutusScriptInstance :: PlutusScript v -> TxPlutusScript
 
@@ -381,14 +373,6 @@ instance IsPlutusVersion PlutusScriptV1  where
 instance IsPlutusVersion PlutusScriptV2  where
    toTxPlutusScriptInstance = TxPlutusScriptV2
 
--- class IsSScriptVersion v where
---   toTxSimpleScriptInstance :: SimpleScript -> TxSimpleScript
-
--- instance IsSScriptVersion SimpleScriptV1  where
---    toTxSimpleScriptInstance = TxSimpleScriptV1
-
--- instance IsSScriptVersion SimpleScriptV2  where
---    toTxSimpleScriptInstance = TxSimpleScriptV2
 
 class IsPlutusScript sc where
   toTxPlutusScript :: sc -> TxPlutusScript
@@ -401,14 +385,6 @@ instance IsPlutusScript TxPlutusScript where
 
 instance IsSimpleScript TxSimpleScript where
   toTxSimpleScript = id
-
--- instance (IsSScriptVersion ver =>  IsSimpleScript (SimpleScript ver)) where
---   toTxSimpleScript  = toTxSimpleScriptInstance
-
--- instance (IsSScriptVersion ver =>  IsSimpleScript (Script ver)) where
---   toTxSimpleScript  (SimpleScript _ sc) = toTxSimpleScriptInstance sc
---   toTxSimpleScript _ = error "Impossible"
-
 
 hashPlutusScript :: TxPlutusScript -> ScriptHash
 hashPlutusScript sc = case sc of
@@ -435,9 +411,6 @@ instance (IsPlutusVersion ver =>  IsPlutusScript (Script ver)) where
   toTxPlutusScript _ = error "Impossible"
 
 
--- class IsSimpleScriptVersion v where
---   toTxMintingScriptInstance :: SimpleScript -> TxScript
-
 class IsMintingScript sc where
   toTxMintingScript:: sc -> TxScript
 
@@ -453,21 +426,15 @@ txScriptHash = hashTxScript
 
 hashTxScript :: TxScript -> ScriptHash
 hashTxScript sc = case sc of
-  TxScriptSimple tss -> case tss of
-      TxSimpleScriptV1 ss -> hashScript $ SimpleScript ss
-      TxSimpleScriptV2 ss -> hashScript $ SimpleScript ss
+  TxScriptSimple (TxSimpleScript ss) -> hashScript (SimpleScript ss)
   TxScriptPlutus tps -> hashPlutusScript tps
-
 
 
 txScriptToScriptAny :: TxScript -> ScriptInAnyLang
 txScriptToScriptAny sc = case sc of
-  TxScriptSimple tss ->  case tss of
-    TxSimpleScriptV1 ss -> ScriptInAnyLang SimpleScriptLanguage (SimpleScript ss)
-    TxSimpleScriptV2 ss -> ScriptInAnyLang SimpleScriptLanguage (SimpleScript ss)
+  TxScriptSimple (TxSimpleScript ss) ->  ScriptInAnyLang SimpleScriptLanguage (SimpleScript ss)
   TxScriptPlutus tps -> plutusScriptToScriptAny tps
 
- -- TxPlutusMintingScript tps -> plutusScriptToScriptAny tps
 
 
 class IsScriptVersion v where
@@ -479,24 +446,6 @@ instance IsScriptVersion PlutusScriptV1  where
 instance IsScriptVersion PlutusScriptV2  where
   translationFunc (PlutusScript psv ps)= TxScriptPlutus $ toTxPlutusScript  ps
 
--- instance IsScriptVersion SimpleScriptV1   where
---   translationFunc (SimpleScript psv ps)=  toTxMintingScript  ps
-
--- instance IsScriptVersion SimpleScriptV2   where
---   translationFunc (SimpleScript psv ps)=  toTxMintingScript  ps
-
--- instance IsScriptVersion v  => IsMintingScript (Script v) where
---   toTxMintingScript sc = translationFunc sc
-
--- instance IsSimpleScriptVersion SimpleScriptV1  where
---   toTxMintingScriptInstance  i = TxScriptSimple $  TxSimpleScriptV1  i
-
--- instance IsSimpleScriptVersion SimpleScriptV2  where
---   toTxMintingScriptInstance i = TxScriptSimple $  TxSimpleScriptV2  i
-
-
--- instance (IsSimpleScriptVersion ver) =>  IsMintingScript (SimpleScript)  where
---   toTxMintingScript = toTxMintingScriptInstance
 
 instance (IsPlutusVersion ver =>  IsMintingScript (PlutusScript ver)) where
   toTxMintingScript  v = TxScriptPlutus (toTxPlutusScript v)

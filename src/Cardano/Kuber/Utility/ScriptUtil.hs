@@ -8,6 +8,10 @@ import qualified Data.ByteString.Short as SBS
 import Codec.Serialise (serialise)
 import qualified PlutusLedgerApi.V2 as PV2
 import qualified PlutusLedgerApi.V1 as PV1
+import qualified PlutusLedgerApi.V2
+import qualified PlutusLedgerApi.V1
+import PlutusTx (CompiledCode, BuiltinData)
+import PlutusLedgerApi.Common (serialiseCompiledCode)
 
 createTxInScriptWitness :: ScriptInAnyLang -> Maybe HashableScriptData -> HashableScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn BabbageEra)
 createTxInScriptWitness anyScript mDatum redeemer exUnits = do
@@ -48,15 +52,8 @@ validateScriptSupportedInEra' era script@(ScriptInAnyLang lang _) =
     Nothing -> Left $ FrameworkError WrongScriptType   (show lang ++ " not supported in " ++ show era ++ " era")
     Just script' -> pure script'
 
--- fromPlutusV2Validator :: Validator -> Script PlutusScriptV2
--- fromPlutusV2Validator validator = fromPlutusV2Script  $ unValidatorScript validator
+fromPlutusV2Script :: CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ()) -> Script PlutusScriptV2
+fromPlutusV2Script plutusScript = PlutusScript PlutusScriptV2 $ PlutusScriptSerialised $  serialiseCompiledCode plutusScript
 
--- fromPlutusV1Validator :: Validator -> Script PlutusScriptV1
--- fromPlutusV1Validator validator = fromPlutusV1Script $ unValidatorScript validator
-
-
--- fromPlutusV2Script :: PV2.Script -> Script PlutusScriptV2
--- fromPlutusV2Script plutusScript = PlutusScript PlutusScriptV2 $ PlutusScriptSerialised . SBS.toShort . LBS.toStrict $ serialise plutusScript
-
--- fromPlutusV1Script :: PV1.Script -> Script PlutusScriptV1
--- fromPlutusV1Script plutusScript = PlutusScript PlutusScriptV1 $ PlutusScriptSerialised . SBS.toShort . LBS.toStrict $ serialise plutusScript
+fromPlutusV1Script :: CompiledCode (BuiltinData -> BuiltinData  -> BuiltinData-> ()) -> Script PlutusScriptV1
+fromPlutusV1Script plutusScript = PlutusScript PlutusScriptV1 $ PlutusScriptSerialised $ serialiseCompiledCode plutusScript

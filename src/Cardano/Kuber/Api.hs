@@ -36,19 +36,12 @@ module Cardano.Kuber.Api(
 
    -- *** Payment functions
     ,    txPayTo
-    
     ,   txPayToPkh
-    
     ,   txPayToScript
-    
     ,   txPayToScriptWithData 
-    
-    -- ,   txPayToScriptWithReference
-    
-    -- ,   txPayToScriptWithDataAndReference
-   
-    -- ,   txPayToWithReferenceScript
-   -- $ Payment functions
+    ,   txPayToScriptWithReference
+    ,   txPayToScriptWithDataAndReference
+    ,   txPayToWithReferenceScript
 
     -- *** Minting functions
     ,   txMintSimpleScript

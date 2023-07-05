@@ -48,6 +48,7 @@ import Data.Aeson.Parser (eitherDecodeWith)
 import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Babbage.TxOut as Babbage
 
+import Cardano.Ledger.Address
 
 parseSignKey :: MonadFail m => Text -> m (SigningKey PaymentKey)
 parseSignKey txt
@@ -189,10 +190,10 @@ anyScriptParser v@(A.Object o) =do
       pure $ ScriptInAnyLang SimpleScriptLanguage $ SimpleScript v
 anyScriptParser _ = fail "Expected json object type"
 
--- parseAddressBinary :: MonadFail m => ByteString -> m (AddressInEra BabbageEra )
--- parseAddressBinary bs = case parseAddressCbor (LBS.fromStrict bs) of
---   Just addr -> pure addr
---   Nothing -> parseAddressRaw bs
+parseAddressBinary :: MonadFail m => ByteString -> m (AddressInEra BabbageEra )
+parseAddressBinary bs = case parseAddressCbor (LBS.fromStrict bs) of
+  Just addr -> pure addr
+  Nothing -> parseAddressRaw bs
 
 parseAddressRaw :: MonadFail m =>  ByteString -> m(AddressInEra BabbageEra)
 parseAddressRaw addrBs = case deserialiseFromRawBytes (AsAddressInEra AsBabbageEra) addrBs of
@@ -204,7 +205,7 @@ parseAddress addrText = case deserialiseAddress (AsAddressInEra AsBabbageEra) ad
   Nothing -> do
      let hex :: Maybe  ByteString = parseHexString addrText
      case  hex of
-      Just hex -> case Nothing of
+      Just hex -> case parseAddressBinary hex of
         Just addr -> pure addr
         Nothing -> case deserialiseFromRawBytes (AsAddressInEra AsBabbageEra) hex of
             Left _ -> fail  $ "Address is neither bech32 nor cborHex : "++ T.unpack addrText
@@ -212,10 +213,14 @@ parseAddress addrText = case deserialiseAddress (AsAddressInEra AsBabbageEra) ad
       Nothing -> fail $ "Address is neither bech32 nor cborHex : "++ T.unpack addrText
   Just aie -> pure aie
 
--- parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra BabbageEra)
--- parseAddressCbor  cbor = do
---   aie <-  parseCbor cbor
---   pure $ fromShelleyAddr ShelleyBasedEraBabbage  aie
+parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra BabbageEra)
+parseAddressCbor  cbor = do
+  aie <-  case deserialiseFromRawBytes AsAddressAny (LBS.toStrict cbor) of
+      Left e -> fail $ show e
+      Right v -> pure v
+  case anyAddressInEra BabbageEra aie of
+     Left s -> fail $ "Error parsing address CBOR " ++ s
+     Right aie' -> pure aie'
 
 parseAddressBech32 :: MonadFail m => Text -> m (AddressInEra BabbageEra)
 parseAddressBech32 txt = case deserialiseAddress (AsAddressInEra AsBabbageEra) txt of
