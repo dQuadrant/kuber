@@ -134,6 +134,12 @@ toPlutusCredential = Alonzo.transCred
 addressToPlutusCredential :: Cardano.Api.Shelley.Address ShelleyAddr -> Plutus.Credential
 addressToPlutusCredential (ShelleyAddress net cre sr) = toPlutusCredential cre
 
+-- | Get Network Id from address
+addressNetworkId :: Cardano.Api.Shelley.Address ShelleyAddr -> NetworkId
+addressNetworkId (ShelleyAddress net cre sr) = case net of 
+  Ledger.Testnet  -> Cardano.Api.Testnet  (NetworkMagic 1)
+  Ledger.Mainnet -> Cardano.Api.Mainnet
+
 -- | Convert Shelley Address (cardano-api type) to Address (plutus type)
 toPlutusAddress :: Address ShelleyAddr -> Plutus.Address
 toPlutusAddress (ShelleyAddress net cre sr) = Plutus.Address (toPlutusCredential cre) (Alonzo.transStakeReference sr)

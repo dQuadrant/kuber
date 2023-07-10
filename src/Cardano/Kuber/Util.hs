@@ -10,7 +10,7 @@ module Cardano.Kuber.Util
     , addrToMaybePkh
     , addrInEraToPkh
     , addressInEraToPaymentKeyHash
-
+    , addressNetworkId
 
     -- TypeCast/Conversion Utilities (PlutusTypes)
     , dataToScriptData
@@ -139,3 +139,7 @@ import Data.Time (NominalDiffTime, UTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, POSIXTime, utcTimeToPOSIXSeconds)
 import Ouroboros.Consensus.HardFork.History (unsafeExtendSafeZone)
 import Cardano.Kuber.Utility.Misc
+
+
+
+
