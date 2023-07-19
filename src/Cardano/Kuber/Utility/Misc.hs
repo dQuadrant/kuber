@@ -10,7 +10,7 @@ import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (kQueryProtocolParams, kQue
 import Cardano.Kuber.Core.Kontract (Kontract (KError))
 import Cardano.Kuber.Error
 import Cardano.Kuber.Utility.QueryHelper
-import Cardano.Ledger.Babbage.TxBody (mint')
+import Cardano.Ledger.Babbage.TxBody (mint', MaryEraTxBody (mintTxBodyL))
 import qualified Cardano.Ledger.Shelley.API as Ledger
 import Cardano.Ledger.Shelley.UTxO (txins)
 import Cardano.Slotting.Time (SystemStart, fromRelativeTime, toRelativeTime)
@@ -38,6 +38,10 @@ import Ouroboros.Consensus.HardFork.History (unsafeExtendSafeZone)
 import qualified Ouroboros.Consensus.HardFork.History.Qry as Qry
 import qualified PlutusLedgerApi.V1 as Plutus
 import qualified Cardano.Ledger.Alonzo.Core as Ledger
+import Control.Lens.Getter ((^.))
+import Cardano.Ledger.Mary.Value as L (MaryValue (..), MultiAsset (MultiAsset), PolicyID (PolicyID))
+import Cardano.Ledger.Alonzo.TxInfo (transPolicyID)
+
 
 calculateTxoutMinLovelaceOrErr :: TxOut CtxTx BabbageEra -> ProtocolParameters -> Lovelace
 calculateTxoutMinLovelaceOrErr t p = case calculateTxoutMinLovelace t p of
@@ -128,15 +132,16 @@ evaluateExUnitMapWithUtxos protocolParams systemStart eraHistory usedUtxos txbod
   eithers <- mapM doMap (Map.toList exMap)
   pure $ bimap Map.fromList Map.fromList $ partitionEithers eithers
   where
+    lTxBody = case txbody of ShelleyTxBody sbe tb scs tbsd m_ad tsv ->  tb
     inputList = case txbody of ShelleyTxBody sbe tb scs tbsd m_ad tsv -> Set.toList (txins tb)
-    mints = []
-    --  case txbody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> case mint' tb of { Value n mp ->  map (\(PolicyId sh) -> PolicyId $ fromShelleyScriptHash sh ) ( Set.toAscList$  Map.keysSet mp) } }
+    policyList  =  case txbody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> case mint' tb of { MultiAsset  mp ->  map  (\(PolicyID sh) -> PolicyId $ fromShelleyScriptHash sh )  $ Set.toAscList$  Map.keysSet mp } }
+    
     inputLookup = Map.fromAscList $ zip [0 ..] inputList
 
     doMap (i, mExUnitResult) = case i of
       ScriptWitnessIndexTxIn wo -> do
         unEitherExUnits (fromShelleyTxIn (inputList !! fromIntegral wo),) mExUnitResult <&> Left
-      ScriptWitnessIndexMint wo -> unEitherExUnits (mints !! fromIntegral wo,) mExUnitResult <&> Right
+      ScriptWitnessIndexMint wo -> unEitherExUnits (policyList !! fromIntegral wo,) mExUnitResult <&> Right
       ScriptWitnessIndexCertificate wo -> Left $ FrameworkError FeatureNotSupported "Witness for Certificates is not supported"
       ScriptWitnessIndexWithdrawal wo -> Left $ FrameworkError FeatureNotSupported "Plutus script for withdrawl is not supported"
 
