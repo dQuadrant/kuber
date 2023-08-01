@@ -4,13 +4,14 @@ Kuber
 Haskell library and API server for composing balanced Cardano transactions.
 
 
-**Notice:** Playground for kuber has been moved to [dquadrant/kuber-playground](https://dquadrant.github.io/kuber-playgrounnd/)
-
-
+**Notice:** Playground for kuber has been moved to [dquadrant/kuber-playground](https://dquadrant.github.io/kuber-playground/)
 
 ## Docs
  - [JSON API](https://kuberide.com/kuber/docs/intro)
  - [Kuber Haskel Library](https://dquadrant.github.io/kuber)
+
+## IDE
+ Official IDE with Plutus compilation support is available at [kuberide.com/ide](https://kuberide.com/kuber/login/?state=\%2fide)
 
 ## Example Project using Kuber (v2)
 [cardano-marketplace](https://github.com/dQuadrant/cardano-marketplace)
