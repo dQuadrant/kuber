@@ -422,9 +422,9 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     isJust _ = False
 
     computeBody meta  signatories   fixedInputSum availableInputs collaterals fixedOutputs txMintValue' fixedInputs fee = do
-      Debug.traceM $ "ComputeBody:" 
-                  ++  "\n mintValue: " ++ show txMintValue'
-                  ++  "\n fee: " ++ show fee
+      -- Debug.traceM $ "ComputeBody:" 
+      --            ++  "\n mintValue: " ++ show txMintValue'
+      --            ++  "\n fee: " ++ show fee
       changeTxOut <-case findChange fixedOutputs of
         Nothing -> do
           changeaddr <- monadFailChangeAddr
@@ -432,8 +432,8 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         Just to -> pure to
 
       (extraUtxos,change) <- selectUtxosConsideringChange (babbageMinLovelace ledgerPParam) (toCtxUTxOTxOut  changeTxOut) availableInputs startingChange
-      Debug.traceM $ " change: " ++ show change
-      Debug.traceM $ " Utxos : " ++ BS8.unpack (prettyPrintJSON extraUtxos )
+      -- Debug.traceM $ " change: " ++ show change
+      -- Debug.traceM $ " Utxos : " ++ BS8.unpack (prettyPrintJSON extraUtxos )
       bpparams <- case convertToLedgerProtocolParameters ShelleyBasedEraConway pParam of
         Left ppce -> error "Couldn't Convert protocol parameters."
         Right bpp -> pure bpp
@@ -441,7 +441,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         maxChange = utxoListSum availableInputs <> startingChange
         missing = filterNegativeQuantity maxChange
         (feeUsed,changeUsed,outputs) = updateOutputs   fee change fixedOutputs
-        bodyContent allOutputs = Debug.trace (" Outs: " ++ BS8.unpack (prettyPrintJSON allOutputs))
+        bodyContent allOutputs = -- Debug.trace (" Outs: " ++ BS8.unpack (prettyPrintJSON allOutputs))
           mkBodyContent bpparams meta fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
         requiredSignatories = foldl (\acc (_,TxOut a _ _ _) -> fromMaybe acc (addressInEraToPaymentKeyHash a <&> flip Set.insert acc)) signatories  extraUtxos
         signatureCount=fromIntegral $ length requiredSignatories
