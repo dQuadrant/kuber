@@ -55,6 +55,7 @@ library
       base >= 4.14 && <4.17
     , containers
     , bytestring
+    , bech32
     , serialise
     , cborg
     , cardano-binary
@@ -63,18 +64,19 @@ library
     , directory
     , aeson >= 1.5.6.0
     , text-conversions
-    , cardano-api
-    , cardano-ledger-core >= 1.2
-    , cardano-ledger-babbage >= 1.1
-    , cardano-ledger-alonzo >= 1.1.1
-    , cardano-ledger-shelley >= 1.1.1
+    , cardano-api == 8.23.2.0
+    , cardano-ledger-binary
+    , cardano-ledger-core 
+    , cardano-ledger-babbage
+    , cardano-ledger-alonzo
+    , cardano-ledger-shelley
     , cardano-ledger-api 
     , cardano-ledger-mary
 
-    , cardano-slotting >= 0.1
-    , plutus-ledger-api ^>=1.5
+    , cardano-slotting
+    , plutus-ledger-api
     , plutus-tx
-    , ouroboros-consensus >= 0.7
+    , ouroboros-consensus
     , ouroboros-network
     , ouroboros-network-protocols
     , vector
@@ -115,6 +117,7 @@ test-suite test
     , cardano-api
     , cardano-ledger-alonzo
     , cardano-ledger-shelley
+    , cardano-ledger-conway
     , cardano-slotting
     , plutus-ledger-api
     , plutus-tx

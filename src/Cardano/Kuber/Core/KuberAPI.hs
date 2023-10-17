@@ -16,13 +16,15 @@ import Data.Time.Clock.POSIX (POSIXTime)
 import Cardano.Kuber.Utility.Misc
 import Data.Functor ((<&>))
 import Data.Map (Map)
-import Cardano.Api.Shelley (TxBody(ShelleyTxBody), fromShelleyTxIn)
+import Cardano.Api.Shelley (TxBody(ShelleyTxBody), fromShelleyTxIn, convertToLedgerProtocolParameters, LedgerProtocolParameters (unLedgerProtocolParameters))
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Debug.Trace as Debug
 import Cardano.Kuber.Core.LocalNodeChainApi (kEvaluateExUnits', HasLocalNodeAPI (..), ChainConnectInfo)
 import Cardano.Kuber.Core.TxFramework (executeTxBuilder)
-import Cardano.Ledger.Babbage.TxBody (BabbageTxBody (btbInputs, btbReferenceInputs))
+import Cardano.Ledger.Babbage.TxBody (BabbageTxBody (btbInputs, btbReferenceInputs), BabbageEraTxBody (referenceInputsTxBodyL))
+import Cardano.Ledger.Api (EraTxBody(inputsTxBodyL))
+import Control.Lens ((^.))
 
 
 
@@ -30,22 +32,22 @@ type ShelleyWitCount  = Word
 type ByronWitCount    = Word
 
 class HasKuberAPI a  where
-  kTxBuildTxBody    :: TxBuilder ->  Kontract a w FrameworkError (TxBody BabbageEra)
-  kBuildTx       :: TxBuilder -> Kontract a w FrameworkError (Tx BabbageEra)
+  kTxBuildTxBody    :: TxBuilder ->  Kontract a w FrameworkError (TxBody ConwayEra)
+  kBuildTx       :: TxBuilder -> Kontract a w FrameworkError (Tx ConwayEra)
   kTimeToSlot           :: POSIXTime -> Kontract a w FrameworkError SlotNo
   kSlotToTime           ::  SlotNo    -> Kontract a  w FrameworkError POSIXTime
-  kEvaluateExUnits :: Tx BabbageEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
-  kCalculateMinFee :: Tx BabbageEra -> Kontract a  w FrameworkError  Lovelace
-  kBuildAndSubmit :: TxBuilder -> Kontract a w FrameworkError (Tx BabbageEra)
+  kEvaluateExUnits :: Tx ConwayEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
+  kCalculateMinFee :: Tx ConwayEra -> Kontract a  w FrameworkError  Lovelace
+  kBuildAndSubmit :: TxBuilder -> Kontract a w FrameworkError (Tx ConwayEra)
 
 
 
 -- instance {-# OVERLAPPABLE #-}   (HasChainQueryAPI a,HasSubmitApi a,HasLocalNodeAPI a ) => HasKuberAPI a where
 
---   kTxBuildTxBody    :: TxBuilder ->  Kontract a w FrameworkError (TxBody BabbageEra)
+--   kTxBuildTxBody    :: TxBuilder ->  Kontract a w FrameworkError (TxBody ConwayEra)
 --   kTxBuildTxBody builder = executeTxBuilder builder <&> fst
 
---   kBuildTx       :: TxBuilder -> Kontract a w FrameworkError (Tx BabbageEra)
+--   kBuildTx       :: TxBuilder -> Kontract a w FrameworkError (Tx ConwayEra)
 --   kBuildTx  builder =  executeTxBuilder builder <&> snd
 
 --   kTimeToSlot           :: POSIXTime -> Kontract a w FrameworkError SlotNo
@@ -54,7 +56,7 @@ class HasKuberAPI a  where
 --   kSlotToTime           ::  SlotNo    -> Kontract a  w FrameworkError POSIXTime
 --   kSlotToTime   slot = slotToTimestamp <$> kQuerySystemStart <*> kQueryEraHistory <*>  pure slot
 
---   kEvaluateExUnits :: Tx BabbageEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
+--   kEvaluateExUnits :: Tx ConwayEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
 --   kEvaluateExUnits tx  = do
 --     let txBody = getTxBody tx
 --         ins =  case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> Ledger.inputs tb } 
@@ -64,12 +66,12 @@ class HasKuberAPI a  where
 --     kEvaluateExUnits' (getTxBody tx) utxos
 
 
---   kCalculateMinFee :: Tx BabbageEra -> Kontract a  w FrameworkError  Lovelace
+--   kCalculateMinFee :: Tx ConwayEra -> Kontract a  w FrameworkError  Lovelace
 --   kCalculateMinFee tx = do 
 --       kCalculateMinFee' (getTxBody tx) (fromInteger $ toInteger $  length (getTxWitnesses tx)) 0
 
 
---   kBuildAndSubmit :: TxBuilder -> Kontract a w FrameworkError (Tx BabbageEra)
+--   kBuildAndSubmit :: TxBuilder -> Kontract a w FrameworkError (Tx ConwayEra)
 --   kBuildAndSubmit  builder =  do
 --       tx <- executeTxBuilder builder <&> snd
 --       kSubmitTx tx
@@ -108,8 +110,9 @@ kSlotToTime'   slot = slotToTimestamp <$> kQuerySystemStart <*> kQueryEraHistory
 
 kEvaluateExUnits'' tx  = do
     let txBody = getTxBody tx
-        ins =  case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> btbInputs tb } 
-        refs = case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> btbReferenceInputs tb } 
+        ledgerTxBody = case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> tb}
+        ins =   ledgerTxBody ^. inputsTxBodyL
+        refs =   ledgerTxBody ^. referenceInputsTxBodyL --case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> btbReferenceInputs tb } 
         allInputs =  Set.map fromShelleyTxIn (ins <> refs)
     utxos <-kQueryUtxoByTxin allInputs
     kEvaluateExUnits' (getTxBody tx) utxos
@@ -119,10 +122,10 @@ kCalculateMinFee' tx = do
 
 kCalculateMinFee'' txbody shelleyWitnesses byronWitnesses = do 
     protocolParams <- kQueryProtocolParams
-    bpparams <- case bundleProtocolParams cardanoEra protocolParams of
+    bpparams <- case convertToLedgerProtocolParameters ShelleyBasedEraConway protocolParams  of
         Left ppce -> error "Couldn't Convert protocol parameters."
         Right bpp -> pure bpp
-    pure $ evaluateTransactionFee bpparams  txbody shelleyWitnesses byronWitnesses
+    pure $ evaluateTransactionFee (unLedgerProtocolParameters bpparams)  txbody shelleyWitnesses byronWitnesses
 
 
 kBuildAndSubmit'  builder =  do

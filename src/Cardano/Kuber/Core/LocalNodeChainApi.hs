@@ -67,12 +67,12 @@ liftCinfoQuery2 q p =  KLift $ \(ChainConnectInfo c)  -> q c p
 liftLnciQuery q =  KLift $ \c  -> q c
 liftLnciQuery2 q p =  KLift $ \c  -> q c p
 
-kEvaluateExUnits' ::  (HasChainQueryAPI a, HasLocalNodeAPI a) =>   TxBody BabbageEra -> UTxO BabbageEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
+kEvaluateExUnits' ::  (HasChainQueryAPI a, HasLocalNodeAPI a) =>   TxBody ConwayEra -> UTxO ConwayEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
 kEvaluateExUnits' txbody utxos = do
   sStart <- kQuerySystemStart
   eHhistory <- kQueryEraHistory
   pParams <- kQueryProtocolParams
-  bpparams <- case bundleProtocolParams cardanoEra pParams of
+  bpparams <- case convertToLedgerProtocolParameters ShelleyBasedEraConway pParams of
         Left ppce -> error "Couldn't Convert protocol parameters."
         Right bpp -> pure bpp
   case evaluateTransactionExecutionUnits

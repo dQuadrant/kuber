@@ -14,11 +14,12 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Cardano.Kuber.Data.Models where
 
 import Cardano.Api
-import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData, scriptDataFromJsonDetailedSchema, scriptDataToJsonDetailedSchema, ReferenceScript (ReferenceScript, ReferenceScriptNone))
+import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData, scriptDataFromJsonDetailedSchema, scriptDataToJsonDetailedSchema, ReferenceScript (ReferenceScript, ReferenceScriptNone), Proposal, ShelleyLedgerEra, StakeAddress (StakeAddress), StakePoolKey, Hash (unStakePoolKeyHash))
 import Cardano.Binary (ToCBOR (toCBOR), decodeFull, fromCBOR)
 import Cardano.Ledger.Babbage.Tx (BabbageTxBody (btbTxFee))
 import Codec.CBOR.Write (toLazyByteString)
@@ -35,7 +36,7 @@ import qualified Data.Text.Encoding as TSE
 import GHC.Generics (Generic)
 import Text.Read (readMaybe)
 import Cardano.Kuber.Utility.Text (toHexString)
-import Cardano.Kuber.Data.Parsers (signKeyParser, txinOrUtxoParser)
+import Cardano.Kuber.Data.Parsers (signKeyParser, txinOrUtxoParser, parseHexString, parseRawBytes', parseRawBytes, parseBech32OrCBOR', parseRawBech32, parseBech32Type)
 import Cardano.Slotting.Time (SystemStart(SystemStart))
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, POSIXTime)
 import Cardano.Kuber.Error (FrameworkError)
@@ -45,35 +46,55 @@ import Data.Word (Word64)
 import qualified Data.Map as Map
 import Data.Vector.Primitive (Vector(Vector))
 import qualified Data.Vector as Vector
+import Cardano.Api.Ledger (ConwayTxCert(..), ConwayGovCert (..), StrictMaybe (SNothing, SJust), Credential (KeyHashObj, ScriptHashObj), Coin (Coin), StandardCrypto, Url, textToUrl, ShelleyTxCert (ShelleyTxCertDelegCert), ShelleyDelegCert (..), ConwayDelegCert (..), KeyHash (KeyHash), Delegatee (..))
+import Data.Text.Encoding (encodeUtf8)
+import Cardano.Ledger.Api (Constitution (Constitution), Anchor (Anchor), GovAction (..), ProposalProcedure (ProposalProcedure))
+import qualified Cardano.Ledger.Api as Ledger
+import Cardano.Ledger.SafeHash (unsafeMakeSafeHash)
+import Cardano.Ledger.Core (EraCrypto,DRep(..))
+import qualified Cardano.Api.Shelley as CAPI
+import qualified Data.ByteString as BS
+import Data.Typeable (Typeable)
+import qualified Data.Set as Set
 
 class Wrapper  m a  where
   unWrap :: m  ->  a
 
 newtype AssetModal = AssetModal AssetId deriving (Show)
 
-newtype AddressModal = AddressModal (AddressInEra BabbageEra) deriving (Show)
+newtype AddressModal = AddressModal (AddressInEra ConwayEra) deriving (Show)
 
 newtype SignKeyModal = SignKeyModal (SigningKey PaymentKey) deriving (Show)
 
-newtype UtxoModal = UtxoModal (UTxO BabbageEra) deriving (Show)
+newtype UtxoModal = UtxoModal (UTxO ConwayEra) deriving (Show)
 
 newtype UtxoIdModal = UtxoIdModal (TxId, TxIx) deriving (Show)
 
-newtype WitnessModal = WitnessModal (KeyWitness BabbageEra) deriving (Show)
+newtype WitnessModal = WitnessModal (KeyWitness ConwayEra) deriving (Show)
 
-newtype TxModal = TxModal (Tx BabbageEra) deriving (Show)
+newtype TxModal = TxModal (Tx ConwayEra) deriving (Show)
 
+newtype TxCertificateModal era = TxCertificateModal (Certificate era)
 
+newtype ProposalModal = ProposalModal (Proposal ConwayEra)
+
+newtype GovActionModal era = GovActionModal (GovAction era)
+
+newtype ConstitutionModal era  = ConstitutionModal (Constitution era)
+
+newtype AnchorModal era = AnchorModal (Anchor era)
+newtype ProposalProcedureModal  era = ProposalProcedureModal (ProposalProcedure era)
 
 newtype SystemStartModal = SystemStartModal SystemStart
 newtype EraHistoryModal = EraHistoryModal (EraHistory CardanoMode)
-newtype GenesisParamModal = GenesisParamModal GenesisParameters
+newtype GenesisParamModal era = GenesisParamModal (GenesisParameters era)
+newtype DrepModal era = DrepModal (DRep era)
 
 
-instance Wrapper UtxoModal (UTxO BabbageEra) where
+instance Wrapper UtxoModal (UTxO ConwayEra) where
   unWrap (UtxoModal utxos) = utxos
 
-instance Wrapper  (UTxO BabbageEra) (Map.Map TxIn (TxOut CtxUTxO BabbageEra)) where
+instance Wrapper  (UTxO ConwayEra) (Map.Map TxIn (TxOut CtxUTxO ConwayEra)) where
   unWrap (UTxO utxos) = utxos
 
 instance Wrapper SystemStartModal SystemStart where
@@ -82,12 +103,30 @@ instance Wrapper SystemStartModal SystemStart where
 instance Wrapper  EraHistoryModal (EraHistory CardanoMode) where
   unWrap (EraHistoryModal eh) = eh
 
-instance Wrapper  GenesisParamModal GenesisParameters where
+instance Wrapper  (GenesisParamModal era) (GenesisParameters era) where
   unWrap (GenesisParamModal gp) = gp
 
-instance Wrapper TxModal (Tx BabbageEra) where
+instance Wrapper TxModal (Tx ConwayEra) where
     unWrap (TxModal v) = v
 
+instance Wrapper (TxCertificateModal era)  (Certificate era) where
+    unWrap (TxCertificateModal v) = v
+
+instance Wrapper (ConstitutionModal era) (Constitution era) where
+  unWrap (ConstitutionModal v) = v
+
+
+instance Wrapper ProposalModal (Proposal ConwayEra) where
+  unWrap (ProposalModal v) = v
+
+instance Wrapper (AnchorModal era) (Anchor era) where
+  unWrap (AnchorModal a) = a
+
+instance Wrapper (GovActionModal era) (GovAction era) where
+  unWrap (GovActionModal a) = a
+
+instance Wrapper (ProposalProcedureModal era) (ProposalProcedure era) where
+  unWrap (ProposalProcedureModal p) =p
 
 unAssetModal (AssetModal a) = a
 
@@ -101,9 +140,8 @@ unWitnessModal (WitnessModal w) = w
 
 unUtxoIdModal (UtxoIdModal x) = x
 
-
 data BalanceResponse = BalanceResponse
-  { utxos :: UTxO BabbageEra
+  { utxos :: UTxO ConwayEra
   }
   deriving (Generic, Show, ToJSON)
 
@@ -114,8 +152,8 @@ data KeyHashResponse = KeyHashResponse
 
 
 data SubmitTxModal = SubmitTxModal
-  { rawTx :: Tx BabbageEra,
-    witness :: Maybe (KeyWitness BabbageEra)
+  { rawTx :: Tx ConwayEra,
+    witness :: Maybe (KeyWitness ConwayEra)
   }
 
 
@@ -141,7 +179,7 @@ instance FromJSON WitnessModal where
           Just txt -> T.concat ["8200", txt]
     case convertText cborHexText of
       Nothing -> fail "Witness string is not hex encoded"
-      Just (Base16 bs) -> case deserialiseFromCBOR (AsKeyWitness AsBabbageEra) bs of
+      Just (Base16 bs) -> case deserialiseFromCBOR (AsKeyWitness AsConwayEra) bs of
         Left e -> fail $ "Witness string: Invalid CBOR format : " ++ show e
         Right witness -> pure $ WitnessModal witness
   parseJSON _ = fail "Expecte Witness Modal cbor hex string"
@@ -150,7 +188,7 @@ instance FromJSON TxModal where
   parseJSON (String txStr) = do
     case convertText txStr of
       Nothing -> fail "Tx string is not hex encoded"
-      Just (Base16 bs) -> case deserialiseFromCBOR (AsTx AsBabbageEra) bs of
+      Just (Base16 bs) -> case deserialiseFromCBOR (AsTx AsConwayEra) bs of
         Left e -> fail $ "Tx string: Invalid CBOR format : " ++ show e
         Right tx -> pure $ TxModal tx
   parseJSON (Object o) = o .: "cborHex"  >>= parseJSON
@@ -161,7 +199,7 @@ instance ToJSON TxModal where
 
 
 instance FromJSON AddressModal where
-  parseJSON (String s)=  case deserialiseAddress (AsAddressInEra AsBabbageEra) s of
+  parseJSON (String s)=  case deserialiseAddress (AsAddressInEra AsConwayEra) s of
       Nothing -> fail "Invalid address string. Couldn't be parsed as valid address for babbage era"
       Just aie -> pure $ AddressModal aie
   parseJSON _ = fail "Expected Address to be String"
@@ -181,7 +219,7 @@ instance FromJSON SystemStartModal where
     pure (SystemStartModal $ SystemStart ss)
   parseJSON _ = fail "expected SystemStart Object"
 
-instance ToJSON GenesisParamModal where
+instance ToJSON (GenesisParamModal ShelleyEra) where
   toJSON (GenesisParamModal ss)= case ss of { GenesisParameters ut ni ra n es sl i j x lo pp -> A.object[
         "systemStartTime" .= ut
       , "networkId" .= (case ni of
@@ -198,7 +236,7 @@ instance ToJSON GenesisParamModal where
       , "initialUpdateableProtocolParameters" .= pp
   ] }
 
-instance FromJSON GenesisParamModal where
+instance FromJSON (GenesisParamModal ShelleyEra) where
   parseJSON (A.Object o) = GenesisParameters
                 <$> o .:  "systemStartTime"
                 <*> (o .: "networkId" >>= parseNetwork )
@@ -221,7 +259,6 @@ instance FromJSON GenesisParamModal where
       parseNetwork _ = fail "Expected NetworkId"
 
   parseJSON _ = fail "Expected GenesisParameters Object"
-
 
 
 data QueryTipResponse  = QueryTipResponse{
@@ -292,27 +329,27 @@ instance ToJSON ChainPointModal where
 
 instance FromJSON ChainPointModal where
   -- parseJSON (A.Object o) =QueryTipResponse <$> o A..: "slot" <*> o A..: "block"
-    parseJSON (A.Object o) =do 
+    parseJSON (A.Object o) =do
         block :: Text <- o  A..: "block"
-        case block of 
+        case block of
           "genesis" -> pure (ChainPointModal ChainPointAtGenesis)
           _ -> do
-            hHash <- o A..: "block"  
+            hHash <- o A..: "block"
             slot <- o A..: "slot"
             pure $ ChainPointModal $ ChainPoint  (SlotNo slot) hHash
     parseJSON _ = fail "Expected ChainPoint Modal"
 
 
 instance FromJSON UtxoModal where
-  parseJSON v = case v of 
+  parseJSON v = case v of
     Object km -> doparse v
     String txt -> doparse v
     A.Array vs -> mconcat $ map doparse  $ Vector.toList  vs
     _ -> fail "parseError : Expected Utxo Modal Object"
-    where 
-      doparse obj = do 
+    where
+      doparse obj = do
         result <- txinOrUtxoParser obj
-        case result of 
+        case result of
           Left ti -> fail "Parse Utxo Failed, missing address, value "
           Right uto -> pure $ UtxoModal uto
 
@@ -326,14 +363,14 @@ instance ToJSON UtxoModal where
                 A.object $ (baseUtxo  ++ (case datum of
                  TxOutDatumNone -> []
                  TxOutDatumHash sdsie ha -> [ "datumHash" .= ha]
-                 TxOutDatumInline rtisidsie sd -> [ "datum" .= scriptDataToJsonDetailedSchema sd]) 
+                 TxOutDatumInline rtisidsie sd -> [ "datum" .= scriptDataToJsonDetailedSchema sd])
                 )   ++ (case sc of
                 ReferenceScript rtisidsie sial -> ["script" .= sial]
                 ReferenceScriptNone -> []
                 )
 
     ) $ Map.toList utxoMp)
-    where 
+    where
     appendNonEmpty :: (Foldable t, KeyValue a1, ToJSON (t a2)) => A.Key -> t a2 -> [a1] -> [a1]
     appendNonEmpty  key  val obj   =  if null val then obj else (key .= val) : obj
 
@@ -352,7 +389,7 @@ newtype ExUnitsResponseModal = ExUnitsResponseModal (Map.Map ScriptWitnessIndex 
 
 
 instance Wrapper ExUnitsResponseModal (Map.Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits)) where
-  unWrap (ExUnitsResponseModal m) =m 
+  unWrap (ExUnitsResponseModal m) =m
 
 instance ToJSON ExUnitsResponseModal where
   toJSON (ExUnitsResponseModal mp) = let
@@ -415,3 +452,381 @@ instance FromJSON ExUnitsResponseModal where
 
     parseJSON _ = fail "parseError : Expected Object"
 
+
+
+-- data ProposalProcedure era = ProposalProcedure
+--   { pProcDeposit :: !Coin
+--   , pProcReturnAddr :: !(RewardAcnt (EraCrypto era))
+--   , pProcGovAction :: !(GovAction era)
+--   , pProcAnchor :: !(Anchor (EraCrypto era))
+--   }
+
+-- data GovAction era
+--   = ParameterChange
+--       -- | Previous governance action id of `ParameterChange` type, which corresponds to
+--       -- `PParamUpdatePurpose`.
+--       !(StrictMaybe (PrevGovActionId 'PParamUpdatePurpose (EraCrypto era)))
+--       -- | Proposed changes to PParams
+--       !(PParamsUpdate era)
+--   | HardForkInitiation
+--       -- | Previous governance action id of `HardForkInitiation` type, which corresponds
+--       -- to `HardForkPurpose`
+--       !(StrictMaybe (PrevGovActionId 'HardForkPurpose (EraCrypto era)))
+--       -- | Proposed new protocol version
+--       !ProtVer
+--   | TreasuryWithdrawals
+--       -- | Proposed treasury withdrawals
+--       !(Map (RewardAcnt (EraCrypto era)) Coin)
+--   | NoConfidence
+--       -- | Previous governance action id of `NoConfidence` or `NewCommittee` type, which
+--       -- corresponds to `CommitteePurpose`
+--       !(StrictMaybe (PrevGovActionId 'CommitteePurpose (EraCrypto era)))
+--   | NewCommittee
+--       -- | Previous governance action id of `NewCommittee` or `NoConfidence` type, which
+--       -- corresponds to `CommitteePurpose`
+--       !(StrictMaybe (PrevGovActionId 'CommitteePurpose (EraCrypto era)))
+--       -- | Old committee
+--       !(Set (Credential 'ColdCommitteeRole (EraCrypto era)))
+--       -- | New Committee
+--       !(Committee era)
+--   | NewConstitution
+--       -- | Previous governance action id of `NewConstitution` type, which corresponds to
+--       -- `ConstitutionPurpose`
+--       !(StrictMaybe (PrevGovActionId 'ConstitutionPurpose (EraCrypto era)))
+--       !(Constitution era)
+--   | InfoAction
+
+-- data Constitution era = Constitution
+--   { constitutionAnchor :: !(Anchor (EraCrypto era))
+--   , constitutionScript :: !(StrictMaybe (ScriptHash (EraCrypto era)))
+--   }
+
+
+instance Ledger.Crypto era => FromJSON (AnchorModal era) where
+
+  parseJSON (A.Object o) = do
+     url <- o .: "url"
+     dataHash <- o .:? "dataHash"
+     dataHash' <- o.:? "hash"
+     hash<-case (dataHash,dataHash') of
+       (Just dh,_) -> pure dh
+       (_,Just dh) -> pure dh
+       _ -> fail "Expected .dataHash or .hash to be present"
+     pure $ AnchorModal $ Anchor  url hash
+
+  parseJSON  _ = fail "Expected Anchor Object"
+
+
+instance  EraCrypto ledgerera ~ StandardCrypto =>  FromJSON  (ConstitutionModal ledgerera) where
+  parseJSON (A.Object o) = do
+      url <- o .: "url"
+      dataHash <- o .: "dataHash"
+      scriptHash :: Maybe T.Text <- o .:? "scriptHash"
+      pure $ ConstitutionModal $ Constitution (Anchor  url dataHash) SNothing
+
+  parseJSON  _ = fail "Expected Proposal Object"
+
+
+instance  EraCrypto ledgerera ~ StandardCrypto =>  FromJSON  (GovActionModal ledgerera) where
+  parseJSON (A.Object o) = do
+    certType <- o .: "type"
+    case T.toLower certType of
+      "newconstitution" -> do
+          (ConstitutionModal constitution) <- o .: "constitution"
+          pure $ GovActionModal $ NewConstitution SNothing constitution
+      _ -> fail "We only support  \"newconstitution\"|"
+
+  parseJSON  _ = fail "Expected GovActionModal Object"
+
+instance  EraCrypto ledgerera ~ StandardCrypto  =>  FromJSON  (ProposalProcedureModal ledgerera) where
+  parseJSON (A.Object o) = do
+    deposit :: Integer <- o.:? "deposit" .!= 0
+    returnAddress <- o .: "refundAccount"
+    (AnchorModal anchor) <- o .: "anchor"
+    let chain :: FromJSON v =>  A.Key ->( v ->  Parser a) -> Parser a -> Parser a
+        chain key mapper onMissing =do
+         result <- o.:? key
+         maybe onMissing mapper result
+
+    govAction <-
+          chain  "newconstitution"  parseNewConstitution
+        $ chain "noconfidence" parseNoConfidence
+        $ chain "info" parseInfo
+        $ pure InfoAction
+
+
+    pure $ ProposalProcedureModal $
+          ProposalProcedure (Coin deposit) returnAddress  govAction  anchor
+
+    where
+        parseNewConstitution (ConstitutionModal constitution) = pure $ NewConstitution SNothing constitution
+
+        parseNoConfidence (A.Object o) = do
+           pure $ NoConfidence SNothing
+        parseNoConfidence _ = pure $ NoConfidence SNothing
+
+        parseInfo (A.Bool True) = pure InfoAction
+        parseInfo _ = fail "Expected \"info\" value to be true"
+
+  parseJSON  _ = fail "Expected GovActionModal Object"
+
+-- data GovAction era
+--   = ParameterChange
+--       -- | Previous governance action id of `ParameterChange` type, which corresponds to
+--       -- `PParamUpdatePurpose`.
+--       !(StrictMaybe (PrevGovActionId 'PParamUpdatePurpose (EraCrypto era)))
+--       -- | Proposed changes to PParams
+--       !(PParamsUpdate era)
+--   | HardForkInitiation
+--       -- | Previous governance action id of `HardForkInitiation` type, which corresponds
+--       -- to `HardForkPurpose`
+--       !(StrictMaybe (PrevGovActionId 'HardForkPurpose (EraCrypto era)))
+--       -- | Proposed new protocol version
+--       !ProtVer
+--   | TreasuryWithdrawals
+--       -- | Proposed treasury withdrawals
+--       !(Map (RewardAcnt (EraCrypto era)) Coin)
+--   | NoConfidence
+--       -- | Previous governance action id of `NoConfidence` or `NewCommittee` type, which
+--       -- corresponds to `CommitteePurpose`
+--       !(StrictMaybe (PrevGovActionId 'CommitteePurpose (EraCrypto era)))
+--   | NewCommittee
+--       -- | Previous governance action id of `NewCommittee` or `NoConfidence` type, which
+--       -- corresponds to `CommitteePurpose`
+--       !(StrictMaybe (PrevGovActionId 'CommitteePurpose (EraCrypto era)))
+--       -- | Old committee
+--       !(Set (Credential 'ColdCommitteeRole (EraCrypto era)))
+--       -- | New Committee
+--       !(Committee era)
+--   | NewConstitution
+--       -- | Previous governance action id of `NewConstitution` type, which corresponds to
+--       -- `ConstitutionPurpose`
+--       !(StrictMaybe (PrevGovActionId 'ConstitutionPurpose (EraCrypto era)))
+--       !(Constitution era)
+--   | InfoAction
+
+-- data ProposalProcedure era = ProposalProcedure
+--   { pProcDeposit :: !Coin
+--   , pProcReturnAddr :: !(RewardAcnt (EraCrypto era))
+--   , pProcGovAction :: !(GovAction era)
+--   , pProcAnchor :: !(Anchor (EraCrypto era))
+--   }
+instance (era ~ ConwayEra)  =>  FromJSON (TxCertificateModal era) where
+
+  parseJSON :: A.Value -> Parser (TxCertificateModal era)
+  parseJSON (A.Object o ) = do
+    certType <- o .: "type"
+    mDeposit <- o .:? "deposit"
+    let depositAmount = case mDeposit of
+                                  Nothing -> SNothing
+                                  Just lovelace -> SJust (Coin lovelace)
+    case T.toLower certType of
+      "registerstake" -> do
+          key <- o .: "key"
+          let bytes = encodeUtf8 key
+          let stakeKey = deserialiseFromRawBytesHex (AsHash AsStakeKey) (encodeUtf8 key)
+          stakeCred <-case stakeKey of
+            Left rbhe -> fail "Invalid stake Key"
+            Right (CAPI.StakeKeyHash drk) -> pure $  KeyHashObj  drk
+          pure $  TxCertificateModal $  ConwayCertificate ConwayEraOnwardsConway
+                                  . ConwayTxCertDeleg
+                                  $ ConwayRegCert
+                                      stakeCred
+                                      depositAmount
+      "deregisterstake" -> do
+          key <- o .: "key"
+          let bytes = encodeUtf8 key
+          let stakeKey = deserialiseFromRawBytesHex (AsHash AsStakeKey) (encodeUtf8 key)
+          stakeCred <-case stakeKey of
+            Left rbhe -> fail "Invalid stake Key"
+            Right (CAPI.StakeKeyHash drk) -> pure $  KeyHashObj  drk
+          pure $  TxCertificateModal $  ConwayCertificate ConwayEraOnwardsConway
+                                  . ConwayTxCertDeleg
+                                  $ ConwayUnRegCert
+                                      stakeCred
+                                      depositAmount
+      "delegate" -> do
+          let spoParser :: MonadFail m =>  T.Text -> m (Hash StakePoolKey)
+              spoParser val= do
+                v <- case parseBech32Type val (AsHash AsStakePoolKey) of
+                    Just p -> fail "sad"
+                    Nothing -> parseHexString val >>= parseRawBytes (AsHash AsStakePoolKey)
+                fail "sad"
+          key <- o .: "key"
+          mSpo1 <- o .:? "spo"
+          mSpo  <- case mSpo1 of
+            Nothing ->  o .:? "pool"
+            Just txt -> pure $ pure txt
+          mDrep <- o.:? "drep"
+          delegatee<-case mSpo of
+            Nothing -> maybe (fail "expecting either \"spo\" or \"spo\" or both") (\(DrepModal d) -> pure $ DelegVote d) mDrep
+            Just spoTxt ->do
+                poolHash <- spoParser spoTxt <&> unStakePoolKeyHash
+                let spo =  poolHash
+                pure $ maybe (DelegStake spo) (\(DrepModal d)  ->  DelegStakeVote spo d) mDrep
+
+          let bytes = encodeUtf8 key
+          let stakeKey = deserialiseFromRawBytesHex (AsHash AsStakeKey) (encodeUtf8 key)
+
+          stakeCred <-case stakeKey of
+            Left rbhe -> fail "Invalid stake Key"
+            Right (CAPI.StakeKeyHash drk) -> pure $  KeyHashObj  drk
+          pure $  TxCertificateModal $  ConwayCertificate ConwayEraOnwardsConway
+                                  $ ConwayTxCertDeleg $ ConwayDelegCert
+                                      stakeCred
+                                      delegatee
+
+-- -- | First type argument is the deposit
+-- data Delegatee c
+--   = DelegStake !(KeyHash 'StakePool c)
+--   | DelegVote !(DRep c)
+--   | DelegStakeVote !(KeyHash 'StakePool c) !(DRep c)
+
+
+      "registerdrep" -> do
+          key <- o .: "key"
+          deposit <- o .: "deposit"
+          mAnchor <- o .:? "anchor"
+          let drepKey = deserialiseFromRawBytesHex (AsHash AsDRepKey) (encodeUtf8 key)
+          drepCred <-case drepKey of
+            Left rbhe -> fail "Invalid drep Key"
+            Right (CAPI.DRepKeyHash drk) -> pure $  KeyHashObj  drk
+          pure $  TxCertificateModal $  ConwayCertificate ConwayEraOnwardsConway
+                        . ConwayTxCertGov
+                        $ ConwayRegDRep
+                            drepCred
+                            (Coin deposit)
+                            (case mAnchor of
+                              Nothing -> SNothing
+                              Just (AnchorModal a) -> SJust a  )
+
+      _ -> fail "Only Drep/Stake registration, drep delegation and stake de-registration certificate are supported"
+
+  parseJSON  _ = fail "Expected Certificate Object"
+
+
+-- data DRep c
+--   = DRepKeyHash !(KeyHash 'DRepRole c)
+--   | DRepScriptHash !(ScriptHash c)
+--   | DRepAlwaysAbstain
+--   | DRepAlwaysNoConfidence
+
+instance (era ~ StandardCrypto) =>  FromJSON  (DrepModal era) where
+
+  parseJSON :: A.Value -> Parser (DrepModal era)
+  parseJSON (A.Object o ) = do
+      fail "Delegating is WIP"
+      mKeyHash <- o .:? "keyHash"
+      case  mKeyHash of
+        Just (keyHash :: T.Text) -> case parseHexString keyHash  of
+          Just (unHexed :: BS.ByteString) -> parseFromDrepKeyBytes unHexed
+          Nothing -> fail "keyHash is not hex encoded "
+        Nothing -> do
+              mScriptHash <- o .:? "scriptHash"
+              case  mScriptHash of
+                Just (keyHash :: T.Text) -> case parseHexString keyHash  of
+                        Just (unHexed :: BS.ByteString) -> case parseRawBytes AsScriptHash unHexed   of
+                          Just ( CAPI.ScriptHash drepkey) ->  let
+                                        scHashObj = ScriptHashObj drepkey
+                                      in pure $ DrepModal $  DRepCredential scHashObj
+                          Nothing -> fail "scriptHash is not a valid Drep KeyHash"
+                        Nothing -> fail "scriptHash is not hex encoded "
+                Nothing -> fail "both .keyHash and .scriptHash are missing"
+
+  parseJSON (A.String s) = case T.toLower s of
+    "abstain" -> pure  $ DrepModal DRepAlwaysAbstain
+    "noconfidence" -> pure  $ DrepModal DRepAlwaysNoConfidence
+    bech32 -> do
+      case parseHexString bech32 of
+        Just (unHexed ::BS.ByteString) -> fromHash unHexed  (fail $  "Invalid encoding of drep : " ++ T.unpack bech32 )
+        Nothing -> do
+              rawBytes <- parseRawBech32 (Set.fromList $ map T.pack ["drep_", "drep_test", "stake_", "stake_test"]) bech32
+              fromHash rawBytes (do
+                  case deserialiseFromRawBytes AsStakeAddress rawBytes of
+                    Left sarbe -> fail "Invalid drep Key"
+                    Right sa ->pure $ DrepModal $  DRepCredential $ case sa of { StakeAddress net cre -> case cre of
+                                               ScriptHashObj sh ->  ScriptHashObj sh
+                                               KeyHashObj kh -> KeyHashObj  (case kh of { KeyHash ha ->  KeyHash ha } )
+                                            }
+
+                )
+              let drepKeyHash =  "invalid drep id"
+              let drepScriptHash = error "sad"
+              fail "sad"
+    where
+      fromHash unHexed f =
+          if BS.length unHexed == 28
+            then parseFromDrepKeyBytes unHexed
+            else f
+
+  parseJSON  _ = fail "Expected Drep Object"
+
+
+
+parseFromDrepKeyBytes unHexed = case parseRawBytes (AsHash AsDRepKey) unHexed   of
+    Just ( CAPI.DRepKeyHash drepkey) ->  let
+                  keyHashobj = KeyHashObj drepkey
+                in pure $ DrepModal $  DRepCredential keyHashobj
+    Nothing -> fail "keyHash is not a valid Drep KeyHash"
+
+data AsDrepModal
+
+
+
+
+-- data ConwayGovCert c
+--   = ConwayRegDRep !(Credential 'DRepRole c) !Coin !(StrictMaybe (Anchor c))
+--   | ConwayUnRegDRep !(Credential 'DRepRole c) !Coin
+--   | ConwayUpdateDRep !(Credential 'DRepRole c) !(StrictMaybe (Anchor c))
+--   | ConwayAuthCommitteeHotKey !(Credential 'ColdCommitteeRole c) !(Credential 'HotCommitteeRole c)
+--   | ConwayResignCommitteeColdKey !(Credential 'ColdCommitteeRole c)
+
+-- data ShelleyTxCert era
+--   = ShelleyTxCertDelegCert !(ShelleyDelegCert (EraCrypto era))
+--   | ShelleyTxCertPool !(PoolCert (EraCrypto era))
+--   | ShelleyTxCertGenesisDeleg !(GenesisDelegCert (EraCrypto era))
+--   | ShelleyTxCertMir !(MIRCert (EraCrypto era))
+
+-- data ConwayTxCert era
+--   = ConwayTxCertDeleg !(ConwayDelegCert (EraCrypto era))
+--   | ConwayTxCertPool !(PoolCert (EraCrypto era))
+--   | ConwayTxCertGov !(ConwayGovCert (EraCrypto era))
+
+    -- data Certificate era where
+    --  -- Pre-Conway
+    --  --   1. Stake registration
+    --  --   2. Stake unregistration
+    --  --   3. Stake delegation
+    --  --   4. Pool retirement
+    --  --   5. Pool registration
+    --  --   6. Genesis delegation
+    --  --   7. MIR certificates
+    --  ShelleyRelatedCertificate
+    --    :: ShelleyToBabbageEra era
+    --    -> Ledger.ShelleyTxCert (ShelleyLedgerEra era)
+    --    -> Certificate era
+
+    --  -- Conway onwards
+    --  -- TODO: Add comments about the new types of certificates
+    --  ConwayCertificate
+    --    :: ConwayEraOnwards era
+    --    -> Ledger.ConwayTxCert (ShelleyLedgerEra era)
+    --    -> Certificate era
+
+toStrictMaybe :: StrictMaybe a -> Maybe a
+toStrictMaybe (SJust v) = Just v
+toStrictMaybe SNothing = Nothing
+
+mapStrictMaybe :: StrictMaybe a -> (a -> b) -> Maybe b
+mapStrictMaybe (SJust v) f = Just (f v)
+mapStrictMaybe SNothing _ = Nothing
+
+type PrevGovAction purpose = (StrictMaybe (Ledger.PrevGovActionId purpose StandardCrypto))
+type LedgerAnchor = (Ledger.Anchor StandardCrypto)
+
+toGovernanceAction
+  ::   EraCrypto ledgerera ~ StandardCrypto
+  =>
+  PrevGovAction purpose -> LedgerAnchor
+  -> Ledger.Constitution ledgerera
+toGovernanceAction  prevGovAction anchor =  Constitution anchor SNothing

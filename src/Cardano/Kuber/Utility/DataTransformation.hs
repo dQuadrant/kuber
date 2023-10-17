@@ -30,7 +30,7 @@ skeyToAddr skey network =
     credential = PaymentCredentialByKey $ verificationKeyHash $ getVerificationKey skey
 
 -- | Create enterprise  address from SignKey
-skeyToAddrInEra :: SigningKey PaymentKey -> NetworkId -> AddressInEra BabbageEra
+skeyToAddrInEra :: SigningKey PaymentKey -> NetworkId -> AddressInEra ConwayEra
 skeyToAddrInEra skey network = makeShelleyAddressInEra network credential NoStakeAddress
   where
     credential = PaymentCredentialByKey $ verificationKeyHash $ getVerificationKey skey
@@ -57,7 +57,7 @@ skeyToPaymentKeyHash skey = verificationKeyHash $ getVerificationKey skey
 
 -- | Convert AddressInEra (cardano-api type) to Hash PaymentKey (cardano-api type).
 -- Will return `Nothing` if address is  an Byron Address
-addressInEraToPaymentKeyHash :: AddressInEra BabbageEra -> Maybe (Hash PaymentKey)
+addressInEraToPaymentKeyHash :: AddressInEra ConwayEra -> Maybe (Hash PaymentKey)
 addressInEraToPaymentKeyHash a = case a of
   AddressInEra atie ad -> case ad of
     ByronAddress ad' -> Nothing
@@ -68,7 +68,7 @@ addressInEraToPaymentKeyHash a = case a of
 -- | convert PubKeyhash (plutus tupe) to corresponding Enterprise address (cardano-api type).
 -- Note that the transformation  Address <-> Pkh is not symmetrical for all addresses
 -- It's symmetrical for Enterprise addresses (because enterprise addresses have no stake Key in it)
-pkhToMaybeAddr :: NetworkId -> PubKeyHash -> Maybe (AddressInEra BabbageEra)
+pkhToMaybeAddr :: NetworkId -> PubKeyHash -> Maybe (AddressInEra ConwayEra)
 pkhToMaybeAddr network (PubKeyHash pkh) = do
   key <- vKey
   Just $ makeShelleyAddressInEra network (PaymentCredentialByKey key) NoStakeAddress
@@ -108,7 +108,7 @@ addrInEraToValHash a = case a of
 
 -- | Convert the address to Enterprise Address.
 -- Enterprise address is an address having no stakeKey. Returns same address if the address is a Byron era address.
-unstakeAddr :: AddressInEra BabbageEra -> AddressInEra BabbageEra
+unstakeAddr :: AddressInEra ConwayEra -> AddressInEra ConwayEra
 unstakeAddr a = case a of
   AddressInEra atie ad -> case ad of
     ByronAddress ad' -> a

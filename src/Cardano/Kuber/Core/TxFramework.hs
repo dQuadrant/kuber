@@ -42,7 +42,6 @@ import Cardano.Kuber.Core.TxBuilder
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Cardano.Api.Crypto.Ed25519Bip32 (xPrvFromBytes)
 import qualified Data.Aeson as A
-import GHC.Num (wordToInteger)
 import qualified Data.Map.Strict as StrictMap
 import qualified Debug.Trace as Debug
 import Data.Aeson (ToJSON(toJSON))
@@ -64,7 +63,7 @@ import Cardano.Kuber.Utility.ScriptUtil
 import Cardano.Kuber.Utility.QueryHelper (queryUtxos, queryTxins)
 import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable(toConsoleTextNoPrefix, toConsoleText))
 import Cardano.Kuber.Utility.DataTransformation
-import Data.Foldable (foldlM)
+import Data.Foldable (foldlM, Foldable (toList))
 import Data.Bifunctor (first)
 import Cardano.Ledger.Coin (Coin(Coin))
 import qualified Data.Aeson.KeyMap as A
@@ -83,16 +82,19 @@ import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (..))
 import Cardano.Kuber.Utility.Misc
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Core.LocalNodeChainApi (HasLocalNodeAPI (..))
+import Control.Lens ((^.))
+import Cardano.Ledger.Api (EraTxBody(..), MaryEraTxBody (mintTxBodyL), proposalProceduresTxBodyL, ProposalProcedure (..))
+import Cardano.Api.Ledger (ConwayTxCert(..), ConwayDelegCert (..), PoolCert (..), ConwayGovCert (..), PoolParams (PoolParams), StrictMaybe (..))
 
 type BoolChange   = Bool
 type BoolFee = Bool
-type  ParsedInput   = Either (Witness WitCtxTxIn BabbageEra,TxOut CtxUTxO BabbageEra ) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn BabbageEra ,TxOut CtxUTxO  BabbageEra )
-type  ParsedOutput  = TxOutput (TxOut CtxTx BabbageEra)
+type  ParsedInput   = Either (Witness WitCtxTxIn ConwayEra,TxOut CtxUTxO ConwayEra ) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn ConwayEra ,TxOut CtxUTxO  ConwayEra )
+type  ParsedOutput  = TxOutput (TxOut CtxTx ConwayEra)
 
 -- Given TxBuilder object, Construct a txBody
 -- This IO code, constructs detailedChainInfo(protocolParam,costPerWord,eraHistory,SystemHistory)
 -- then queries required utxos used in inputs and calls  txBuilderToTxBody
-executeTxBuilder::  (HasChainQueryAPI api ,HasLocalNodeAPI api)  =>    TxBuilder  -> Kontract  api w FrameworkError (TxBody BabbageEra,Tx BabbageEra)
+executeTxBuilder::  (HasChainQueryAPI api ,HasLocalNodeAPI api)  =>    TxBuilder  -> Kontract  api w FrameworkError (Cardano.Api.TxBody ConwayEra,Tx ConwayEra)
 executeTxBuilder builder = do
   -- first determine the addresses and txins that need to be queried for value and address.
   network<- kGetNetworkId
@@ -122,7 +124,7 @@ executeTxBuilder builder = do
       _ -> Nothing
 
     mergeInputs = foldl  getInputTxins  (Set.empty,Map.empty) (txInputs  builder)
-    getInputTxins :: (Set TxIn,Map TxIn (TxOut CtxUTxO BabbageEra)) -> TxInput -> (Set TxIn,Map TxIn (TxOut CtxUTxO BabbageEra))
+    getInputTxins :: (Set TxIn,Map TxIn (TxOut CtxUTxO ConwayEra)) -> TxInput -> (Set TxIn,Map TxIn (TxOut CtxUTxO ConwayEra))
     getInputTxins v@(ins,utxo) input = case input of
       TxInputResolved tir -> case tir of
         TxInputUtxo (UTxO uto) -> (ins, utxo <> uto)
@@ -134,12 +136,12 @@ executeTxBuilder builder = do
         TxInputScriptTxin tvs sd sd' m_eu ti -> (Set.insert ti ins, utxo)
         TxInputReferenceScriptTxin  ref sd sd' m_eu  ti -> (Set.insert ref $ Set.insert ti ins, utxo)
         TxInputSkey skey -> v
-    mergeColaterals :: (Set TxIn,Map TxIn (TxOut CtxUTxO BabbageEra) )
+    mergeColaterals :: (Set TxIn,Map TxIn (TxOut CtxUTxO ConwayEra) )
     mergeColaterals  =foldl (\(s,m) collateral -> case collateral of
                     TxCollateralTxin ti -> (Set.insert ti s,m)
                     TxCollateralUtxo (UTxO uto) -> (s,uto <> m) ) (mempty,mempty) (txCollaterals builder)
 
-    refUtxos :: Map TxIn (TxOut CtxUTxO BabbageEra)
+    refUtxos :: Map TxIn (TxOut CtxUTxO ConwayEra)
     refUtxos =  foldl  (\s ref -> case ref of
       TxInputReferenceTxin ti -> s
       TxInputReferenceUtxo (UTxO uto) -> uto <> s ) mempty $   txInputReferences builder
@@ -149,7 +151,7 @@ executeTxBuilder builder = do
       TxInputReferenceTxin ti -> Set.insert ti s
       TxInputReferenceUtxo uto -> s ) Set.empty $   txInputReferences builder
 
-    mergeSelection :: NetworkId -> ( Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO BabbageEra))  -> TxInputSelection  -> (Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO BabbageEra))
+    mergeSelection :: NetworkId -> ( Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO ConwayEra))  -> TxInputSelection  -> (Set AddressAny,Set TxIn, Map TxIn (TxOut CtxUTxO ConwayEra))
     mergeSelection networkId (a,i,u) sel = case sel of
         TxSelectableAddresses aies -> (Set.union a  (Set.fromList $ map addressInEraToAddressAny aies),i,u)
         TxSelectableUtxos (UTxO uto) -> (a,i, uto <> u)
@@ -158,10 +160,10 @@ executeTxBuilder builder = do
 
 -- Construct TxBody from TxBuilder specification.
 -- Utxos map must be provided for the utxos that are available in wallet and used in input
-txBuilderToTxBody:: NetworkId -> ProtocolParameters -> SystemStart -> EraHistory CardanoMode ->  UTxO BabbageEra -> TxBuilder   -> Either FrameworkError  (TxBody BabbageEra,Tx BabbageEra )
+txBuilderToTxBody:: NetworkId -> ProtocolParameters -> SystemStart -> EraHistory CardanoMode ->  UTxO ConwayEra -> TxBuilder   -> Either FrameworkError  (Cardano.Api.TxBody ConwayEra,Tx ConwayEra )
 txBuilderToTxBody   network  pParam  systemStart eraHistory
                     (UTxO availableUtxo)
-                    (TxBuilder selections _inputs _inputRefs _outputs _collaterals validityStart validityEnd mintData extraSignatures explicitFee mChangeAddr metadata )
+                    (TxBuilder selections _inputs _inputRefs _outputs _collaterals validityStart validityEnd mintData extraSignatures proposals votes certs explicitFee mChangeAddr metadata )
   = do
   (resolvedMints, unresolvedMints) <- classifyMints (UTxO availableUtxo) mintData <&> partitionEithers
   let mergedMetadata = foldl injectMetadataPolicy (foldl  injectMetadataPolicy metadata resolvedMints) unresolvedMints
@@ -182,7 +184,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         else  do
           case metadataFromJson TxMetadataJsonNoSchema (toJSON $ splitMetadataStrings  metadata) of
             Left tmje -> Left $ FrameworkError BadMetadata  (show tmje)
-            Right tm -> Right $ TxMetadataInEra  TxMetadataInBabbageEra tm
+            Right tm -> Right $ TxMetadataInEra  ShelleyBasedEraConway tm
   resolvedInputs <- mapM resolveInputs _inputs
   fixedInputs <- usedInputs Map.empty (Right defaultExunits) resolvedInputs
   parsedOutputs <- mapM (parseOutputs network) _outputs
@@ -202,7 +204,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                           concatMap mintDataAssetList resolvedMints
                       ++  concatMap mintDataAssetList unresolvedMints
       resolvedMintsMp = Map.fromList $ map (\(TxMintData (policyId,sw) _ _)->(policyId,sw)) resolvedMints
-      txMintValue' postResolved = if null (valueToList mintValue) then TxMintNone  else  TxMintValue MultiAssetInBabbageEra mintValue $ BuildTxWith (resolvedMintsMp <> postResolved)
+      txMintValue' postResolved = if null (valueToList mintValue) then TxMintNone  else  TxMintValue MaryEraOnwardsConway mintValue $ BuildTxWith (resolvedMintsMp <> postResolved)
       fixedInputSum =  usedInputSum fixedInputs <> mintValue
       fee=case explicitFee of
         Nothing ->  Lovelace 400_000
@@ -253,8 +255,8 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
   where
     applyMintExUnits :: Map PolicyId ExecutionUnits
         -> (PolicyId -> Either FrameworkError ExecutionUnits)
-        -> [TxMintData (PolicyId, ExecutionUnits -> ScriptWitness WitCtxMint BabbageEra)]
-        -> Either FrameworkError (Map PolicyId (ScriptWitness WitCtxMint BabbageEra))
+        -> [TxMintData (PolicyId, ExecutionUnits -> ScriptWitness WitCtxMint ConwayEra)]
+        -> Either FrameworkError (Map PolicyId (ScriptWitness WitCtxMint ConwayEra))
     applyMintExUnits mp onMissing unresolvedMints =  mapM  (\(TxMintData (p,f) _ _ ) -> case Map.lookup p mp of
       Nothing ->  onMissing p >>= (\x -> pure (p,f x))
       Just eu -> pure (p,f eu)   ) unresolvedMints <&> Map.fromList
@@ -292,7 +294,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       TxSignatureSkey sk -> Just sk
       _ -> Nothing) extraSignatures
 
-    -- mapPolicyIdAndWitness :: TxMintData -> (PolicyId, ScriptWitness WitCtxMint BabbageEra)
+    -- mapPolicyIdAndWitness :: TxMintData -> (PolicyId, ScriptWitness WitCtxMint ConwayEra)
     -- mapPolicyIdAndWitness (TxMintData pId sw _)= (pId, sw)
 
     hasScriptInput = any (\case
@@ -331,15 +333,15 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     classifyMint :: UTxO era
       -> TxMintData TxMintingScriptSource
       -> Either FrameworkError
-              (Either (TxMintData (PolicyId, ScriptWitness WitCtxMint BabbageEra))
-                      (TxMintData (PolicyId,  ExecutionUnits -> ScriptWitness WitCtxMint BabbageEra)))
+              (Either (TxMintData (PolicyId, ScriptWitness WitCtxMint ConwayEra))
+                      (TxMintData (PolicyId,  ExecutionUnits -> ScriptWitness WitCtxMint ConwayEra)))
     classifyMint (UTxO mp)  (TxMintData source amount meta) = case source of
-      TxMintingSimpleScript (TxSimpleScript tss) ->pure $ Left $ transform 
-                  (PolicyId $ hashScript ( SimpleScript tss ), SimpleScriptWitness SimpleScriptInBabbage (SScript  tss))
+      TxMintingSimpleScript (TxSimpleScript tss) ->pure $ Left $ transform
+                  (PolicyId $ hashScript ( SimpleScript tss ), SimpleScriptWitness SimpleScriptInConway (SScript  tss))
       TxMintingPlutusScript tps m_eu sd ->
         let f = case tps of
-              TxPlutusScriptV1 ps -> PlutusScriptWitness PlutusScriptV1InBabbage PlutusScriptV1 (PScript ps) NoScriptDatumForMint sd
-              TxPlutusScriptV2 ps -> PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2 (PScript ps) NoScriptDatumForMint sd
+              TxPlutusScriptV1 ps -> PlutusScriptWitness PlutusScriptV1InConway PlutusScriptV1 (PScript ps) NoScriptDatumForMint sd
+              TxPlutusScriptV2 ps -> PlutusScriptWitness PlutusScriptV2InConway PlutusScriptV2 (PScript ps) NoScriptDatumForMint sd
             policy = PolicyId $ hashPlutusScript tps
         in case m_eu of
           Nothing -> pure $ Right $ transform (policy,f)
@@ -347,7 +349,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       TxMintingReferenceScript ti m_eu m_sd -> case Map.lookup ti mp of
               Nothing -> Left $ FrameworkError BalancingError  $ "Reference Script Utxo is missing :" ++ T.unpack ( renderTxIn ti)
               Just (TxOut _ _ _ (ReferenceScript _ anySc@(ScriptInAnyLang sl sc'))) ->do
-                ScriptInEra langInEra script' <- validateScriptSupportedInEra' BabbageEra anySc
+                ScriptInEra langInEra script' <- validateScriptSupportedInEra' ConwayEra anySc
                 case script' of
                   SimpleScript ss -> pure $ Left $ transform (PolicyId $ hashScript script' , SimpleScriptWitness langInEra (SReferenceScript  ti Nothing))
                   PlutusScript psv ps -> case m_sd of
@@ -363,7 +365,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         transform v = TxMintData v amount meta
 
 
-    appendMintingScriptSignatures :: Set (Hash PaymentKey) -> [ScriptWitness witctx BabbageEra]  ->   Set (Hash PaymentKey)
+    appendMintingScriptSignatures :: Set (Hash PaymentKey) -> [ScriptWitness witctx ConwayEra]  ->   Set (Hash PaymentKey)
     appendMintingScriptSignatures    = foldl (\_set mints -> case mints of
         SimpleScriptWitness slie (SScript ss) -> getScriptSignatures ss <> _set
         _ -> _set)
@@ -384,7 +386,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                             v -> let  (tin,pkh,_) =minimumBy sortingFunc v in Just [(tin,pkh)]
                           v-> Just v
         where
-        canBeCollateral :: (TxIn  , TxOut ctx BabbageEra) -> Maybe (TxIn, Hash PaymentKey, Integer)
+        canBeCollateral :: (TxIn  , TxOut ctx ConwayEra) -> Maybe (TxIn, Hash PaymentKey, Integer)
         canBeCollateral v@(ti, to@(TxOut addr val mDatumHash _)) = case mDatumHash of
                               TxOutDatumNone -> case val of
                                 TxOutAdaOnly _ (Lovelace v) ->  addressInEraToPaymentKeyHash  addr >>= (\pkh -> Just (ti,pkh,v))
@@ -420,42 +422,49 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     isJust _ = False
 
     computeBody meta  signatories   fixedInputSum availableInputs collaterals fixedOutputs txMintValue' fixedInputs fee = do
+      Debug.traceM $ "ComputeBody:" 
+                  ++  "\n mintValue: " ++ show txMintValue'
+                  ++  "\n fee: " ++ show fee
       changeTxOut <-case findChange fixedOutputs of
         Nothing -> do
           changeaddr <- monadFailChangeAddr
-          pure (TxOut changeaddr  ( TxOutValue MultiAssetInBabbageEra  (valueFromList [(AdaAssetId ,0)])) TxOutDatumNone ReferenceScriptNone )
+          pure (TxOut changeaddr  ( TxOutValue MaryEraOnwardsConway  (valueFromList [(AdaAssetId ,0)])) TxOutDatumNone ReferenceScriptNone )
         Just to -> pure to
 
       (extraUtxos,change) <- selectUtxosConsideringChange (babbageMinLovelace ledgerPParam) (toCtxUTxOTxOut  changeTxOut) availableInputs startingChange
+      Debug.traceM $ " change: " ++ show change
+      Debug.traceM $ " Utxos : " ++ BS8.unpack (prettyPrintJSON extraUtxos )
+      bpparams <- case convertToLedgerProtocolParameters ShelleyBasedEraConway pParam of
+        Left ppce -> error "Couldn't Convert protocol parameters."
+        Right bpp -> pure bpp
       let
         maxChange = utxoListSum availableInputs <> startingChange
         missing = filterNegativeQuantity maxChange
         (feeUsed,changeUsed,outputs) = updateOutputs   fee change fixedOutputs
-        bodyContent allOutputs = mkBodyContent meta fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
+        bodyContent allOutputs = Debug.trace (" Outs: " ++ BS8.unpack (prettyPrintJSON allOutputs))
+          mkBodyContent bpparams meta fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
         requiredSignatories = foldl (\acc (_,TxOut a _ _ _) -> fromMaybe acc (addressInEraToPaymentKeyHash a <&> flip Set.insert acc)) signatories  extraUtxos
         signatureCount=fromIntegral $ length requiredSignatories
+
       bc <- if changeUsed
               then pure $ bodyContent outputs
               else do
                 changeaddr <-  monadFailChangeAddr
-                pure $ bodyContent (outputs++ [TxOut changeaddr (TxOutValue MultiAssetInBabbageEra change) TxOutDatumNone ReferenceScriptNone ])
-      
-      bpparams <- case bundleProtocolParams cardanoEra pParam of
-        Left ppce -> error "Couldn't Convert protocol parameters."
-        Right bpp -> pure bpp
-  
+                pure $ bodyContent (outputs++ [TxOut changeaddr (TxOutValue MaryEraOnwardsConway change) TxOutDatumNone ReferenceScriptNone ])
+
       case createAndValidateTransactionBody bc of
           Left tbe ->Left  $ FrameworkError  LibraryError  (show tbe)
           Right tb -> do
-            pure (tb,requiredSignatories,evaluateTransactionFee bpparams tb signatureCount 0)
+            pure (tb,requiredSignatories,evaluateTransactionFee (unLedgerProtocolParameters bpparams) tb signatureCount 0)
 
       where
         fixedOutputSum = foldMap txOutputVal fixedOutputs
           where
           txOutputVal :: ParsedOutput -> Value
           txOutputVal (TxOutput (TxOut _ (TxOutValue _ v) _ _) _  _ _) = v
+          txOutputVal (TxOutput (TxOut _ (TxOutAdaOnly _ a) _ _) _  _ _) = lovelaceToValue a
 
-        startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> if _hasFeeUtxo then mempty else lovelaceToValue fee )
+        startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> (if _hasFeeUtxo then mempty else lovelaceToValue fee ) <> totalDeposit )
         _hasFeeUtxo = any (\(TxOutput _ f _ _)->f) fixedOutputs
 
 
@@ -467,9 +476,9 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                         else pure $ head usableAddresses
 
           Just aie -> pure aie
-        usableAddresses :: [AddressInEra BabbageEra]
+        usableAddresses :: [AddressInEra ConwayEra]
         usableAddresses=concat $ mapMaybe findInput selections
-        findInput :: TxInputSelection ->Maybe [AddressInEra BabbageEra]
+        findInput :: TxInputSelection ->Maybe [AddressInEra ConwayEra]
         findInput v= case v of
           TxSelectableAddresses aies -> Just aies
           TxSelectableUtxos (UTxO mp) -> Just $ map (\(TxOut aie tov tod _) -> aie ) $ Map.elems mp
@@ -477,17 +486,18 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                     Nothing -> addrs
                     Just (TxOut aie tov tod _) -> aie: addrs) [] tis
           TxSelectableSkey sk -> Just $ foldl (\addrs sk -> addrs ++ [skeyToAddrInEra sk network]) [] sk
-    getTxin :: Map TxIn ParsedInput -> [(TxIn,TxOut CtxUTxO BabbageEra )]-> [(TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn BabbageEra ))]
+    getTxin :: Map TxIn ParsedInput -> [(TxIn,TxOut CtxUTxO ConwayEra )]-> [(TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn ConwayEra ))]
     getTxin v  v2 = map ( uncurry totxIn)  (Map.toList v) ++ map toPubKeyTxin v2
 
-    toPubKeyTxin :: (TxIn,a) -> (TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn BabbageEra ))
+    toPubKeyTxin :: (TxIn,a) -> (TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn ConwayEra ))
     toPubKeyTxin (v1,v2) =(v1,BuildTxWith $ KeyWitness KeyWitnessForSpending )
 
-    totxIn :: TxIn ->  ParsedInput -> (TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn BabbageEra ))
+    totxIn :: TxIn ->  ParsedInput -> (TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn ConwayEra ))
     totxIn  i  parsedInput = case parsedInput of
       Left (a,b) -> (i,BuildTxWith a)
       Right (e,a,b) -> (i,BuildTxWith  ( ScriptWitness ScriptWitnessForSpending a )  )
-    mkBodyContent meta fixedInputs extraUtxos outs collateral  txMintValue' fee =  bodyContent
+    mkBodyContent lPParam meta fixedInputs extraUtxos outs collateral  txMintValue' fee =  bodyContent lPParam
+
       where
       references =
           foldl (\accum v -> case v of
@@ -497,28 +507,44 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
          <> referenceInputsFromScriptReference
          <> referenceInputsFromMint
 
-      bodyContent=(TxBodyContent {
-        txIns= getTxin fixedInputs extraUtxos ,
-        txInsCollateral= if null collateral then TxInsCollateralNone  else TxInsCollateral CollateralInBabbageEra collateral,
+      bodyContent lPParam =(TxBodyContent {
+        txIns=  getTxin fixedInputs extraUtxos ,
+        txInsCollateral= if null collateral then TxInsCollateralNone  else TxInsCollateral AlonzoEraOnwardsConway collateral,
         txOuts=outs,
-        txInsReference = if Set.null references then TxInsReferenceNone else TxInsReference ReferenceTxInsScriptsInlineDatumsInBabbageEra (Set.toList references) ,
+        txInsReference = if Set.null references then TxInsReferenceNone else TxInsReference BabbageEraOnwardsConway (Set.toList references) ,
         txTotalCollateral= TxTotalCollateralNone  ,
         txReturnCollateral = TxReturnCollateralNone ,
-        Cardano.Api.Shelley.txFee=TxFeeExplicit TxFeesExplicitInBabbageEra  fee,
+        Cardano.Api.Shelley.txFee=TxFeeExplicit ShelleyBasedEraConway  fee,
         txValidityRange= (txLowerBound,txUpperBound),
         Cardano.Api.Shelley.txMetadata=meta  ,
         txAuxScripts=TxAuxScriptsNone,
         txExtraKeyWits=keyWitnesses,
-        txProtocolParams=BuildTxWith (Just  pParam),
+        txProtocolParams=BuildTxWith (Just  lPParam),
         txWithdrawals=TxWithdrawalsNone,
-        txCertificates=TxCertificatesNone,
+        Cardano.Api.Shelley.txCertificates= Cardano.Api.Shelley.TxCertificates ShelleyBasedEraConway certs (BuildTxWith mempty),
         txUpdateProposal=TxUpdateProposalNone,
         txMintValue=txMintValue',
-        txScriptValidity=TxScriptValidityNone
+        txScriptValidity=TxScriptValidityNone,
+        txProposalProcedures  = if null proposals
+                                  then Nothing
+                                  else Just $ Featured ConwayEraOnwardsConway proposals
+
+          , -- No:: Maybe (Featured ConwayEraOnwards era [Proposal era]),
+        txVotingProcedures  = if null votes
+                                  then Nothing
+                                  else Just $ Featured ConwayEraOnwardsConway (head votes) 
+        --  :: Maybe (Featured ConwayEraOnwards era (VotingProcedures era))
           })
+          -- CertificatesSupportedInEra era
+          --               -> [Certificate era]
+          --               -> BuildTxWith build
+          --                    (Map StakeCredential (Witness WitCtxStake era))
+
+    -- totalDeposits = map (\(Proposal v) -> case v of ) proposals
+    -- certificates = map (\x ->  ) certs
     keyWitnesses = if null extraSignatures
                     then TxExtraKeyWitnessesNone
-                    else TxExtraKeyWitnesses ExtraKeyWitnessesInBabbageEra $
+                    else TxExtraKeyWitnesses AlonzoEraOnwardsConway $
                         foldl (\list x -> case x of
                             TxSignatureSkey sk -> skeyToPaymentKeyHash sk:list
                             TxSignatureAddr aie -> case addressInEraToPaymentKeyHash aie of
@@ -539,10 +565,11 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       TxMintingPlutusScript tps m_eu sd -> s
       TxMintingReferenceScript ti m_eu m_sd -> Set.insert ti s
       TxMintingSimpleScript tss -> s   ) Set.empty mintData
-    findChange :: [ParsedOutput] -> Maybe (TxOut CtxTx BabbageEra )
+    findChange :: [ParsedOutput] -> Maybe (TxOut CtxTx ConwayEra )
     findChange ous =   find (\(TxOutput _ _ c _)  -> c ) ous <&> (\(TxOutput v _ _ _)-> v)
+
     updateOutputs  fee change outputs' = updateOutput False False  network fee change outputs'
-    updateOutput ::   BoolFee -> BoolChange -> NetworkId -> Lovelace -> Value -> [ParsedOutput] ->  (BoolFee,BoolChange,[TxOut CtxTx BabbageEra])
+    updateOutput ::   BoolFee -> BoolChange -> NetworkId -> Lovelace -> Value -> [ParsedOutput] ->  (BoolFee,BoolChange,[TxOut CtxTx ConwayEra])
     updateOutput  _ _ _ _ _ []  =  (False,False,[])
     updateOutput  _fUsed _cUsed network (Lovelace fee) change (txOutput:outs) =let
         (feeUsed,changeUsed,result) = transformOut _fUsed _cUsed txOutput
@@ -553,7 +580,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         transformOut feeUsed changeUsed  (TxOutput  tout@(TxOut aie v@(TxOutValue _ va) ha sref) addFee addChange minAdaAction)=
             (feeUsed',changeUsed',modifiedTxOut)
           where
-            modifiedTxOut = TxOut aie (TxOutValue MultiAssetInBabbageEra changeNFeeIncluded) ha sref
+            modifiedTxOut = TxOut aie (TxOutValue MaryEraOnwardsConway changeNFeeIncluded) ha sref
             (feeUsed',feeIncluded) = includeFee va
             (changeUsed', changeNFeeIncluded) = includeChange feeIncluded
 
@@ -605,37 +632,37 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     parseOutputs  networkId output = case output of { TxOutput toc b b' _ -> case toc of
       TxOutScriptWithScript sc va sd tms ->
           transformer $ TxOut (plutusScriptAddr sc networkId)
-                      (TxOutValue MultiAssetInBabbageEra va)
-                      (TxOutDatumHash ScriptDataInBabbageEra sd)
-                      (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra $ txScriptToScriptAny   tms)
+                      (TxOutValue MaryEraOnwardsConway va)
+                      (TxOutDatumHash AlonzoEraOnwardsConway sd)
+                      (ReferenceScript BabbageEraOnwardsConway $ txScriptToScriptAny   tms)
       TxOutScriptWithDataAndScript sc va sd tms ->
           transformer $ TxOut (plutusScriptAddr sc networkId)
-                      (TxOutValue MultiAssetInBabbageEra va)
-                      (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra   sd )
-                      (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra $ txScriptToScriptAny  tms)
+                      (TxOutValue MaryEraOnwardsConway va)
+                      (TxOutDatumInline BabbageEraOnwardsConway   sd )
+                      (ReferenceScript BabbageEraOnwardsConway $ txScriptToScriptAny  tms)
       TxOutScriptWithDataAndReference sc va sd ->
           transformer $ TxOut (plutusScriptAddr sc networkId)
-                      (TxOutValue MultiAssetInBabbageEra va)
-                      (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra   sd )
-                      (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra $ plutusScriptToScriptAny sc)
+                      (TxOutValue MaryEraOnwardsConway va)
+                      (TxOutDatumInline BabbageEraOnwardsConway   sd )
+                      (ReferenceScript BabbageEraOnwardsConway $ plutusScriptToScriptAny sc)
       TxOutNative to -> pure $ transfrormOutput output to
       TxOutPkh pkh va -> case pkhToMaybeAddr network pkh of
         Nothing -> Left  $ FrameworkError ParserError  ("Cannot convert PubKeyHash to Address : "++ show pkh)
-        Just aie ->  transformer $ TxOut aie  (TxOutValue MultiAssetInBabbageEra va ) TxOutDatumNone ReferenceScriptNone
+        Just aie ->  transformer $ TxOut aie  (TxOutValue MaryEraOnwardsConway va ) TxOutDatumNone ReferenceScriptNone
       TxOutScript sc va ha ->
         transformer $ TxOut (plutusScriptAddr sc networkId)
-                            (TxOutValue MultiAssetInBabbageEra va)
-                            (TxOutDatumHash ScriptDataInBabbageEra ha )
+                            (TxOutValue MaryEraOnwardsConway va)
+                            (TxOutDatumHash AlonzoEraOnwardsConway ha )
                             ReferenceScriptNone
       TxOutScriptInline sc va ha ->
         transformer $ TxOut (plutusScriptAddr sc networkId)
-                            (TxOutValue MultiAssetInBabbageEra va)
-                            (TxOutDatumHash ScriptDataInBabbageEra ha )
-                            (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra $ plutusScriptToScriptAny sc)
+                            (TxOutValue MaryEraOnwardsConway va)
+                            (TxOutDatumHash AlonzoEraOnwardsConway ha )
+                            (ReferenceScript BabbageEraOnwardsConway $ plutusScriptToScriptAny sc)
       TxOutScriptWithData  sc va sd ->
         transformer $ TxOut (plutusScriptAddr sc networkId)
-                            (TxOutValue MultiAssetInBabbageEra  va)
-                            (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra  sd)
+                            (TxOutValue MaryEraOnwardsConway  va)
+                            (TxOutDatumInline BabbageEraOnwardsConway  sd)
                             ReferenceScriptNone
                             }
       where
@@ -661,8 +688,8 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       TxInputScriptUtxo sc mData r mExunit (UTxO txin) ->mapM (\(_in,val) ->  do
           exUnit <- getExUnit _in mExunit
           let witnessFunc = case sc of
-                TxPlutusScriptV1 ps -> PlutusScriptWitness PlutusScriptV1InBabbage PlutusScriptV1 (PScript ps)
-                TxPlutusScriptV2 ps -> PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2 (PScript ps)
+                TxPlutusScriptV1 ps -> PlutusScriptWitness PlutusScriptV1InConway PlutusScriptV1 (PScript ps)
+                TxPlutusScriptV2 ps -> PlutusScriptWitness PlutusScriptV2InConway PlutusScriptV2 (PScript ps)
           -- TODO check if the utxo in case of inline datum
           pure (_in,Right (mExunit, witnessFunc  (datumForTxin mData) r exUnit,val )) ) $ Map.toList txin
       TxInputReferenceScriptUtxo scriptRefTin mData r mExunit (UTxO txin) -> mapM (\(_in,val) -> do
@@ -698,7 +725,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
 
       in foldMap inputValue $ Map.elems mp
 
-    sortUtxos :: UTxO BabbageEra ->  [(TxIn,TxOut CtxUTxO BabbageEra )]
+    sortUtxos :: UTxO ConwayEra ->  [(TxIn,TxOut CtxUTxO ConwayEra )]
     sortUtxos  ( UTxO utxoMap) = sortBy sortingFunc ( Map.toList  $ Map.difference  utxoMap (Map.fromList collaterals)) ++ collaterals
         where
         collaterals = mapMaybe  (\(x,pkh) -> Map.lookup x utxoMap <&> (x,) )txContextCollaterals
@@ -707,7 +734,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         -- - the ones with multiple assets comes then
         -- - then the ones with lower lovelace amount come
         -- - then the ones with higher lovelace amount come
-        sortingFunc :: (TxIn,TxOut CtxUTxO BabbageEra) -> (TxIn,TxOut CtxUTxO BabbageEra)-> Ordering
+        sortingFunc :: (TxIn,TxOut CtxUTxO ConwayEra) -> (TxIn,TxOut CtxUTxO ConwayEra)-> Ordering
         sortingFunc (_,TxOut _ (TxOutAdaOnly _ v1) _ _) (_, TxOut _ (TxOutAdaOnly _ v2)  _ _)         = v1 `compare` v2
         sortingFunc (_,TxOut _ (TxOutAdaOnly _ (Lovelace v))  _ _) (_, TxOut _ (TxOutValue _ v2) _ _) = LT
         sortingFunc (_,TxOut _ _ _ (ReferenceScript _ _)) (_, _)                                      =  LT
@@ -763,27 +790,70 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
               val= txOutValue_ utxo
               selectLove = case selectAsset val AdaAssetId of { Quantity n -> n }
         txoutWithChange c = case txout of { TxOut addr v md _-> case v of
-                                              TxOutAdaOnly oasie lo -> TxOut addr (TxOutValue MultiAssetInBabbageEra (lovelaceToValue lo <> c)) md ReferenceScriptNone
-                                              TxOutValue masie va -> TxOut addr (TxOutValue MultiAssetInBabbageEra (va <> c)) md ReferenceScriptNone}
+                                              TxOutAdaOnly oasie lo -> TxOut addr (TxOutValue MaryEraOnwardsConway (lovelaceToValue lo <> c)) md ReferenceScriptNone
+                                              TxOutValue masie va -> TxOut addr (TxOutValue MaryEraOnwardsConway (va <> c)) md ReferenceScriptNone}
 
         txOutValue_ txout= case txout of { TxOut aie tov tod _-> txOutValueToValue tov }
+    --TODO: FIX THIS AFTER it's fixed in cardano-api 
     txLowerBound = case validityStart of
       NoValidityTime -> TxValidityNoLowerBound
-      ValidityPosixTime ndt ->  TxValidityLowerBound ValidityLowerBoundInBabbageEra   (toSlot ndt)
-      ValiditySlot sn -> TxValidityLowerBound ValidityLowerBoundInBabbageEra sn
+      ValidityPosixTime ndt ->  TxValidityNoLowerBound  -- TxValidityLowerBound  (ByronAndAllegraEraOnwardsConway )   (toSlot ndt)
+      ValiditySlot sn -> TxValidityNoLowerBound -- TxValidityLowerBound ValidityLowerBoundInConwayEra sn
     txUpperBound = case validityEnd of
-      NoValidityTime ->  TxValidityNoUpperBound ValidityNoUpperBoundInBabbageEra
-      ValidityPosixTime ndt -> TxValidityUpperBound ValidityUpperBoundInBabbageEra (toSlot ndt)
-      ValiditySlot sn -> TxValidityUpperBound ValidityUpperBoundInBabbageEra sn
+      NoValidityTime ->  TxValidityNoUpperBound ByronAndAllegraEraOnwardsConway
+      ValidityPosixTime ndt -> TxValidityUpperBound ShelleyBasedEraConway (toSlot ndt)
+      ValiditySlot sn -> TxValidityUpperBound ShelleyBasedEraConway sn
 
     defaultExunits=ExecutionUnits {executionMemory=100000,executionSteps= 60000000 }
 
     toSlot  =  timestampToSlot systemStart  eraHistory
-    ledgerPParam = case toLedgerPParams ShelleyBasedEraBabbage pParam of
+    ledgerPParam = case toLedgerPParams ShelleyBasedEraConway pParam of
       Left ppce -> error "Failed to convert pparams"
       Right pp -> pp
 
+    totalDeposit = lovelaceToValue $ Lovelace $  totalProposalDeposit + totalCertDeposit
+      where
+      proposalDeposit (Proposal (ProposalProcedure (Coin co) ra ga an)) = co
+      totalProposalDeposit = sum $ map proposalDeposit proposals
+      totalCertDeposit = sum $ map certDeposit certs
+      certDeposit cert =  case cert of 
+        ShelleyRelatedCertificate stbe stc -> 0
+        ConwayCertificate ceo ctc -> case ctc of 
+          ConwayTxCertDeleg cdc -> case cdc of 
+            ConwayRegCert cre sm ->maybeToCoin sm
+            ConwayUnRegCert cre sm -> negate $  maybeToCoin sm
+            ConwayDelegCert cre del -> 0
+            ConwayRegDelegCert cre del (Coin co) -> co
+          ConwayTxCertPool pc -> case pc of 
+            RegPool pp -> 0
+            RetirePool kh en -> 0
+          ConwayTxCertGov cgc -> case cgc of 
+            ConwayRegDRep cre (Coin co) sm -> co
+            ConwayUnRegDRep cre co -> 0
+            ConwayUpdateDRep cre sm -> 0
+            ConwayAuthCommitteeHotKey cre cre' -> 0
+            ConwayResignCommitteeColdKey cre -> 0
+      maybeToCoin sm = case sm of 
+            SNothing -> 0
+            SJust (Coin co) -> co
 toLedgerEpochInfo :: EraHistory mode -> EpochInfo (Either Text.Text)
 toLedgerEpochInfo (EraHistory _ interpreter) =
     hoistEpochInfo (first (Text.pack . show) . runExcept) $
       interpreterToEpochInfo interpreter
+
+
+txBuilderFromTx :: Tx ConwayEra -> TxBuilder
+txBuilderFromTx tx = let
+      ledgerTx= case tx of { ShelleyTx sbe tx' -> tx'   }
+      ShelleyTxBody _ txBody scripts scriptData mAuxData scriptValidity   =  getTxBody tx
+      inputs =  mconcat $ map
+              txConsumeTxIn
+            $ Set.toList $  Set.map fromShelleyTxIn  $ txBody ^. inputsTxBodyL
+
+      outputs_ :: [TxOut CtxTx ConwayEra]
+      outputs_ = map  (fromShelleyTxOut ShelleyBasedEraConway) $  toList  $ txBody ^. outputsTxBodyL
+
+      outputs =  foldMap (\x -> txOutput$ TxOutput (TxOutNative $  x) False False ErrorOnInsufficientUtxoAda )  outputs_
+
+      proposals = txBody ^. proposalProceduresTxBodyL
+    in mempty

@@ -10,7 +10,6 @@ import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (kQueryProtocolParams, kQue
 import Cardano.Kuber.Core.Kontract (Kontract (KError))
 import Cardano.Kuber.Error
 import Cardano.Kuber.Utility.QueryHelper
-import Cardano.Ledger.Babbage.TxBody (mint', MaryEraTxBody (mintTxBodyL))
 import qualified Cardano.Ledger.Shelley.API as Ledger
 import Cardano.Ledger.Shelley.UTxO (txins)
 import Cardano.Slotting.Time (SystemStart, fromRelativeTime, toRelativeTime)
@@ -41,21 +40,22 @@ import qualified Cardano.Ledger.Alonzo.Core as Ledger
 import Control.Lens.Getter ((^.))
 import Cardano.Ledger.Mary.Value as L (MaryValue (..), MultiAsset (MultiAsset), PolicyID (PolicyID))
 import Cardano.Ledger.Alonzo.TxInfo (transPolicyID)
+import Cardano.Ledger.Api (MaryEraTxBody(mintTxBodyL))
 
 
-calculateTxoutMinLovelaceOrErr :: TxOut CtxTx BabbageEra -> ProtocolParameters -> Lovelace
+calculateTxoutMinLovelaceOrErr :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Lovelace
 calculateTxoutMinLovelaceOrErr t p = case calculateTxoutMinLovelace t p of
   Nothing -> error "Error calculating minlovelace"
   Just lo -> lo
 
-calculateTxoutMinLovelace :: TxOut CtxTx BabbageEra -> ProtocolParameters -> Maybe Lovelace
+calculateTxoutMinLovelace :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Maybe Lovelace
 calculateTxoutMinLovelace txout pParams = do
-  bpparams <- case bundleProtocolParams cardanoEra pParams of
+  bpparams <- case convertToLedgerProtocolParameters ShelleyBasedEraConway pParams  of
     Left ppce -> fail "Couldn't conver protocol parameters."
     Right bpp -> pure bpp
-  pure $ calculateMinimumUTxO ShelleyBasedEraBabbage txout bpparams
+  pure $ calculateMinimumUTxO ShelleyBasedEraConway txout (unLedgerProtocolParameters bpparams)
 
-babbageMinLovelace pparam txout = Ledger.getMinCoinTxOut pparam (toShelleyTxOut ShelleyBasedEraBabbage txout)
+babbageMinLovelace pparam txout = Ledger.getMinCoinTxOut pparam (toShelleyTxOut ShelleyBasedEraConway txout)
 
 isNullValue :: Value -> Bool
 isNullValue v = not $ any (\(aid, Quantity q) -> q > 0) (valueToList v)
@@ -86,22 +86,22 @@ utxoListSum l = txoutListSum (map snd l)
 utxoMapSum :: Map a (TxOut ctx era) -> Value
 utxoMapSum x = txoutListSum $ Map.elems x
 
-utxoSum :: UTxO BabbageEra -> Value
+utxoSum :: UTxO ConwayEra -> Value
 utxoSum (UTxO uMap) = utxoMapSum uMap
 
-evaluateFee :: HasChainQueryAPI a => Tx BabbageEra -> Kontract a w FrameworkError Integer
+evaluateFee :: HasChainQueryAPI a => Tx ConwayEra -> Kontract a w FrameworkError Integer
 evaluateFee tx = do
   pParam <- kQueryProtocolParams
-  let bPParams =case bundleProtocolParams cardanoEra pParam of
+  let bPParams =case convertToLedgerProtocolParameters ShelleyBasedEraConway pParam of
         Left ppce -> error "Couldn't convert protocol parameters."
         Right bpp -> bpp
   let txbody = getTxBody tx
       -- _inputs :: Set.Set TxIn
       -- _inputs = case txbody of ShelleyTxBody sbe tb scripts scriptData mAuxData validity -> Set.map fromShelleyTxIn $ inputs tb
-      (Lovelace fee) = evaluateTransactionFee bPParams txbody (fromIntegral $ length $ getTxWitnesses tx) 0
+      (Lovelace fee) = evaluateTransactionFee (unLedgerProtocolParameters bPParams) txbody (fromIntegral $ length $ getTxWitnesses tx) 0
   pure fee
 
--- evaluateExUnitMap ::  HasChainQueryAPI a =>    TxBody BabbageEra -> Kontract a  w FrameworkError   (Map TxIn ExecutionUnits,Map PolicyId  ExecutionUnits)
+-- evaluateExUnitMap ::  HasChainQueryAPI a =>    TxBody ConwayEra -> Kontract a  w FrameworkError   (Map TxIn ExecutionUnits,Map PolicyId  ExecutionUnits)
 -- evaluateExUnitMap  txbody = do
 --   let
 --       _inputs :: Set.Set TxIn
@@ -113,11 +113,12 @@ evaluateExUnitMapWithUtxos ::
   ProtocolParameters ->
   SystemStart ->
   LedgerEpochInfo ->
-  UTxO BabbageEra ->
-  TxBody BabbageEra ->
+  UTxO ConwayEra ->
+  TxBody ConwayEra ->
   Either FrameworkError (Map TxIn ExecutionUnits, Map PolicyId ExecutionUnits)
 evaluateExUnitMapWithUtxos protocolParams systemStart eraHistory usedUtxos txbody = do
-  bpparams <- case bundleProtocolParams cardanoEra protocolParams of
+
+  bpparams <- case convertToLedgerProtocolParameters (ShelleyBasedEraConway) protocolParams of
         Left ppce -> error "Couldn't Convert protocol parameters."
         Right bpp -> pure bpp
   exMap <- case evaluateTransactionExecutionUnits
@@ -134,8 +135,8 @@ evaluateExUnitMapWithUtxos protocolParams systemStart eraHistory usedUtxos txbod
   where
     lTxBody = case txbody of ShelleyTxBody sbe tb scs tbsd m_ad tsv ->  tb
     inputList = case txbody of ShelleyTxBody sbe tb scs tbsd m_ad tsv -> Set.toList (txins tb)
-    policyList  =  case txbody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> case mint' tb of { MultiAsset  mp ->  map  (\(PolicyID sh) -> PolicyId $ fromShelleyScriptHash sh )  $ Set.toAscList$  Map.keysSet mp } }
-    
+    policyList  =  case txbody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> case  tb ^. mintTxBodyL of { MultiAsset  mp ->  map  (\(PolicyID sh) -> PolicyId $ fromShelleyScriptHash sh )  $ Set.toAscList$  Map.keysSet mp } }
+
     inputLookup = Map.fromAscList $ zip [0 ..] inputList
 
     doMap (i, mExUnitResult) = case i of

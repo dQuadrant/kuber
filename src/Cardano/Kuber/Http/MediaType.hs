@@ -21,7 +21,7 @@ import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
 import Cardano.Binary (FromCBOR)
 import qualified Cardano.Binary as CBOR
-import Cardano.Api (Tx, BabbageEra, SerialiseAsCBOR (deserialiseFromCBOR, serialiseToCBOR), AsType (AsTx, AsBabbageEra))
+import Cardano.Api (Tx, ConwayEra, SerialiseAsCBOR (deserialiseFromCBOR, serialiseToCBOR), AsType (AsTx, AsConwayEra))
 import Data.Text.Conversions (Base16(Base16), convertText)
 import Data.Data (Proxy (Proxy))
 import Data.ByteString (ByteString)
@@ -50,8 +50,8 @@ data CBORBinary =CBORBinary
 instance Accept CBORBinary where
    contentTypes _ =  "octet" // "stream" :| [  "application" // "cbor"]
 
-instance  MimeUnrender  CBORBinary  ( Tx BabbageEra ) where
-    mimeUnrender  _ bs = case deserialiseFromCBOR (AsTx AsBabbageEra) ( Data.ByteString.Lazy.toStrict bs) of
+instance  MimeUnrender  CBORBinary  ( Tx ConwayEra ) where
+    mimeUnrender  _ bs = case deserialiseFromCBOR (AsTx AsConwayEra) ( Data.ByteString.Lazy.toStrict bs) of
         Left e -> Left $ "Tx string: Invalid CBOR format : " ++ show e
         Right tx -> pure  tx
 
@@ -67,7 +67,7 @@ instance MimeRender CBORBinary TxModal where
 
 
 instance MimeUnrender CBORBinary  SubmitTxModal where
-   mimeUnrender  _ bs  = case deserialiseFromCBOR (AsTx AsBabbageEra) ( Data.ByteString.Lazy.toStrict bs) of
+   mimeUnrender  _ bs  = case deserialiseFromCBOR (AsTx AsConwayEra) ( Data.ByteString.Lazy.toStrict bs) of
         Left e -> Left $ "Tx string: Invalid CBOR format : " ++ show e
         Right tx -> pure  $ SubmitTxModal tx Nothing
 

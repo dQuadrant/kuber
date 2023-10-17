@@ -12,7 +12,7 @@
 module Kuber.Server.Spec where
 
 import Cardano.Api
-import Cardano.Api.Shelley (BabbageEra, ProtocolParameters)
+import Cardano.Api.Shelley (ConwayEra, ProtocolParameters)
 import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Http.Spec
 

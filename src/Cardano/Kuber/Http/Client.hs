@@ -47,7 +47,7 @@ cQueryPParams         :: ClientM ProtocolParameters
 cQueryChainPoint      :: ClientM ChainPointModal
 cQueryUtxos           :: [Text]     -> [Text]     -> ClientM UtxoModal
 cQuerySystemStart     :: ClientM SystemStartModal
-cQueryGenesisParams   :: ClientM GenesisParamModal
+cQueryGenesisParams   :: ClientM (GenesisParamModal ShelleyEra)
 cBuildTx              :: Maybe Bool     -> TxBuilder    -> ClientM TxModal
 cSubmitTx             :: SubmitTxModal     -> ClientM TxModal
 cQueryTime            :: ClientM TranslationResponse
@@ -78,10 +78,10 @@ instance HasChainQueryAPI   RemoteKuberConnection where
   kQueryChainPoint  = liftHttpReq cQueryChainPoint <&> unWrap
 
 instance {-# OVERLAPS #-}  HasKuberAPI RemoteKuberConnection where
-  kTxBuildTxBody    :: TxBuilder ->  Kontract RemoteKuberConnection w FrameworkError (TxBody BabbageEra)
+  kTxBuildTxBody    :: TxBuilder ->  Kontract RemoteKuberConnection w FrameworkError (TxBody ConwayEra)
   kTxBuildTxBody builder = liftHttpReq (cBuildTx (Just True) builder ) <&> (getTxBody .  unWrap )
 
-  kBuildTx       :: TxBuilder -> Kontract RemoteKuberConnection w FrameworkError (Tx BabbageEra)
+  kBuildTx       :: TxBuilder -> Kontract RemoteKuberConnection w FrameworkError (Tx ConwayEra)
   kBuildTx  builder = liftHttpReq (cBuildTx (Just True) builder ) <&> unWrap
 
   kTimeToSlot           :: POSIXTime -> Kontract RemoteKuberConnection w FrameworkError SlotNo
@@ -89,20 +89,20 @@ instance {-# OVERLAPS #-}  HasKuberAPI RemoteKuberConnection where
   kSlotToTime           ::  SlotNo    -> Kontract RemoteKuberConnection  w FrameworkError POSIXTime
   kSlotToTime time = liftHttpReq ( cTimeFromSlot (SlotTranslationReq time) ) <&> tResTimestamp
 
-  kEvaluateExUnits :: Tx BabbageEra -> Kontract RemoteKuberConnection  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
+  kEvaluateExUnits :: Tx ConwayEra -> Kontract RemoteKuberConnection  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
   kEvaluateExUnits tx = liftHttpReq (cEvaluateExUnits (TxModal tx)) <&> unWrap
---   kEvaluateExUnits' ::    TxBody BabbageEra -> UTxO BabbageEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
+--   kEvaluateExUnits' ::    TxBody ConwayEra -> UTxO ConwayEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
 
-  kCalculateMinFee :: Tx BabbageEra -> Kontract RemoteKuberConnection  w FrameworkError  Lovelace
+  kCalculateMinFee :: Tx ConwayEra -> Kontract RemoteKuberConnection  w FrameworkError  Lovelace
   kCalculateMinFee tx = liftHttpReq (cCalculateFee (TxModal tx))
 
---   kCalculateMinFee' :: TxBody BabbageEra ->  ShelleyWitCount ->  ByronWitCount-> Kontract a  w FrameworkError  Lovelace
-  kBuildAndSubmit :: TxBuilder -> Kontract RemoteKuberConnection w FrameworkError (Tx BabbageEra)
+--   kCalculateMinFee' :: TxBody ConwayEra ->  ShelleyWitCount ->  ByronWitCount-> Kontract a  w FrameworkError  Lovelace
+  kBuildAndSubmit :: TxBuilder -> Kontract RemoteKuberConnection w FrameworkError (Tx ConwayEra)
   kBuildAndSubmit  builder = liftHttpReq (cBuildTx Nothing builder ) <&> unWrap
 
 
 instance HasSubmitApi RemoteKuberConnection where
-    kSubmitTx :: Tx BabbageEra -> Kontract RemoteKuberConnection w FrameworkError ()
+    kSubmitTx :: Tx ConwayEra -> Kontract RemoteKuberConnection w FrameworkError ()
     kSubmitTx tx = liftHttpReq (cSubmitTx (SubmitTxModal tx Nothing) ) $> ()
 
 

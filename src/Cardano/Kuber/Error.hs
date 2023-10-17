@@ -23,6 +23,7 @@ import Data.List (intercalate)
 import Codec.Serialise (serialise)
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Aeson as A
+import Cardano.Ledger.Alonzo.Language (Language)
 
 data ErrorType =  ConnectionError
                 | BalancingError
@@ -109,7 +110,7 @@ throwFrameworkError = \case
     Right v -> pure v
 
 
-fromScriptExecutionError :: ScriptExecutionError -> TxBody BabbageEra -> FrameworkError
+fromScriptExecutionError :: ScriptExecutionError -> TxBody ConwayEra -> FrameworkError
 fromScriptExecutionError see  txbody=  case see of
                 ScriptErrorMissingTxIn ti -> makeErr  ("Input Missing : " ++ T.unpack (renderTxIn ti))
                 ScriptErrorTxInWithoutDatum ti -> makeErr  ("Input doesn't have datum " ++  T.unpack (renderTxIn ti))
@@ -126,20 +127,14 @@ fromScriptExecutionError see  txbody=  case see of
                    ScriptWitnessIndexMint wo -> "Minting Script at index: " ++ show wo
                    ScriptWitnessIndexCertificate wo -> "Certificate Script at index : " ++ show wo
                    ScriptWitnessIndexWithdrawal wo -> "Withdrawal Script at index  : " ++ show wo) --TODO Show script Hash too
-                ScriptErrorMissingScript rp map -> makeErr  $ "Missing script : " ++ renderResolvablePointers map
+                ScriptErrorMissingScript rp (ResolvablePointers era map) -> makeErr  $ "Missing script : " ++ show map
                 ScriptErrorMissingCostModel lan -> makeErr "Unexpected costModel Parameter Mismatch"
   where
           -- wits = case tx' of { ValidatedTx tb tw iv sm -> witsFromTxWitnesses tb  }
           makeErr t  = FrameworkError PlutusExecutionError t
           mkPlutusErr t = FrameworkError PlutusScriptError t
-          renderResolvablePointers ::
-            Map.Map
-                RdmrPtr
-                ( ScriptPurpose StandardCrypto
-                , a
-                , Ledger.ScriptHash StandardCrypto
-                ) -> String
-          renderResolvablePointers mp = intercalate ", " $ map (\( _, (sp, ma, sh)) -> show sp ++  show  sh)  $ Map.toList mp
+          
+          renderResolvablePointers mp = intercalate ", " $ map (\ (_ , (sp, mScript,scHash)) -> show sp ++ show scHash) $ Map.toList mp
 
           hex  :: BSL.ByteString -> String
           hex d = toHexString d

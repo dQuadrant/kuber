@@ -52,11 +52,11 @@ hashPlutusScript sc = case sc of
   TxPlutusScriptV1 ps -> hashScript (PlutusScript  PlutusScriptV1 ps)
   TxPlutusScriptV2 ps -> hashScript (PlutusScript  PlutusScriptV2 ps)
 
-plutusScriptAddr :: TxPlutusScript -> NetworkId -> AddressInEra BabbageEra
+plutusScriptAddr :: TxPlutusScript -> NetworkId -> AddressInEra ConwayEra
 plutusScriptAddr sc networkId =
     let payCred = PaymentCredentialByScript (hashPlutusScript sc)
         addr = makeShelleyAddress networkId payCred NoStakeAddress
-        addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) addr
+        addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraConway) addr
     in addrInEra
 
 plutusScriptToScriptAny :: TxPlutusScript -> ScriptInAnyLang
@@ -79,7 +79,7 @@ txScriptPolicyId :: TxScript -> PolicyId
 txScriptPolicyId sc = PolicyId (hashTxScript sc)
 
 
-txScriptAddress :: TxScript -> NetworkId ->  StakeAddressReference  -> AddressInEra BabbageEra
+txScriptAddress :: TxScript -> NetworkId ->  StakeAddressReference  -> AddressInEra ConwayEra
 txScriptAddress sc net = makeShelleyAddressInEra net   (PaymentCredentialByScript $ txScriptHash sc)
 
 txScriptHash :: TxScript -> ScriptHash

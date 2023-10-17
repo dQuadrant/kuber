@@ -17,16 +17,16 @@ class HasChainQueryAPI a  where
   kGetNetworkId         :: Kontract  a w FrameworkError NetworkId
   kQueryProtocolParams  :: Kontract  a w FrameworkError ProtocolParameters
   kQuerySystemStart     :: Kontract a w FrameworkError  SystemStart
-  kQueryGenesisParams   :: Kontract a w FrameworkError GenesisParameters
-  kQueryUtxoByAddress   :: Set AddressAny -> Kontract  a w FrameworkError (UTxO BabbageEra)
-  kQueryUtxoByTxin      :: Set TxIn -> Kontract a w FrameworkError (UTxO BabbageEra)
+  kQueryGenesisParams   :: Kontract a w FrameworkError (GenesisParameters ShelleyEra)
+  kQueryUtxoByAddress   :: Set AddressAny -> Kontract  a w FrameworkError (UTxO ConwayEra)
+  kQueryUtxoByTxin      :: Set TxIn -> Kontract a w FrameworkError (UTxO ConwayEra)
   kQueryChainPoint      :: Kontract a w FrameworkError ChainPoint
 
 
 class HasSubmitApi a where
-  kSubmitTx :: Tx BabbageEra ->  Kontract  a w FrameworkError ()
+  kSubmitTx :: Tx ConwayEra ->  Kontract  a w FrameworkError ()
 
-data  CachedApi  a = CachedApi a  SystemStart ProtocolParameters (EraHistory CardanoMode) GenesisParameters
+data  CachedApi  a = CachedApi a  SystemStart ProtocolParameters (EraHistory CardanoMode) (GenesisParameters ShelleyEra)
 
 
 -- instance HasChainQueryAPI a => HasChainQueryAPI (CachedApi a ) where

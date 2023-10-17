@@ -83,10 +83,10 @@ executable kuber-server
     , aeson
     , text-conversions
     , cardano-api
-    , cardano-ledger-alonzo >= 1.1.1
-    , cardano-ledger-shelley >= 1.1.1
-    , cardano-slotting >= 0.1
-    , plutus-ledger-api ^>=1.5
+    , cardano-ledger-alonzo
+    , cardano-ledger-shelley
+    , cardano-slotting 
+    , plutus-ledger-api
     , plutus-tx
     , ouroboros-network
     , kuber

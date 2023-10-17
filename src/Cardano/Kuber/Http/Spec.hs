@@ -30,7 +30,7 @@ type QueryApi =
       :<|>  "chain-point" :>  Get '[JSON] ChainPointModal
       :<|>  "utxo" :> QueryParams "address" Text :> QueryParams "txin" Text :>  Get '[JSON] UtxoModal
       :<|>  "system-start" :>  Get '[JSON] SystemStartModal
-      :<|>  "genesis-params"  :> Get '[JSON] GenesisParamModal
+      :<|>  "genesis-params"  :> Get '[JSON] (GenesisParamModal ShelleyEra)
 
 
 type KuberApi =
@@ -45,7 +45,6 @@ type UtilityApi =
 --  "tx" :> "fee" :> QueryParams "shelleyWitCount" :> QueryParams "ByronWitCount" :> ReqBody '[ CBORBinary,CBORText,JSON ] TxModal :> Post '[JSON] Lovelace
             "tx" :> "fee" :> ReqBody '[ CBORBinary,CBORText,JSON ] TxModal :> Post '[JSON] Lovelace
        :<|> "tx" :> "exUnits" :> ReqBody '[CBORBinary, CBORText,CBORText] TxModal :> Post '[JSON] ExUnitsResponseModal
-
 
 
 kuberApiServerProxy :: Proxy KuberServerApi

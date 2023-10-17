@@ -14,10 +14,10 @@ where
 
 import Cardano.Api hiding(txMetadata, txFee)
 import Cardano.Api.Shelley
-    ( ReferenceTxInsScriptsInlineDatumsSupportedInEra(ReferenceTxInsScriptsInlineDatumsInBabbageEra),
+    ( 
       ReferenceScript(ReferenceScript, ReferenceScriptNone),
       ReferenceScript(ReferenceScript, ReferenceScriptNone),
-      scriptDataToJsonDetailedSchema )
+      scriptDataToJsonDetailedSchema, Proposal (unProposal), VotingProcedures (unVotingProcedures), fromLedgerPParamsUpdate )
 import Cardano.Kuber.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
@@ -43,7 +43,7 @@ import qualified Data.Aeson.Key as A
 import qualified Data.Aeson.Types as A
 
 import qualified Data.Text as T
-import Cardano.Kuber.Data.Models ( unAddressModal)
+import Cardano.Kuber.Data.Models ( unAddressModal, Wrapper (unWrap), TxCertificateModal, GovActionModal (GovActionModal), ProposalProcedureModal (ProposalProcedureModal))
 import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBech32, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex, parseCbor, txinOrUtxoParser, parseAddressBinary, parseAddressRaw)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey))
@@ -69,6 +69,19 @@ import Data.Bifunctor (second)
 import Cardano.Kuber.Utility.DataTransformation (pkhToPaymentKeyHash, addressInEraToAddressAny)
 import qualified Data.ByteString.Lazy.Char8 as BSL8
 import qualified Data.ByteString as BS
+import Cardano.Api.Ledger (ConwayTxCert(..), ShelleyTxCert (..), StrictMaybe (..))
+import Cardano.Ledger.Api (ProposalProcedure(..), GovAction (..), PrevGovActionId (PrevGovActionId), serialiseRewardAcnt, Anchor (Anchor), VotingProcedures)
+import Cardano.Ledger.Binary (
+  Annotator (..),
+  DecCBOR (decCBOR),
+  EncCBOR (encCBOR),
+  ToCBOR (..), serialize, shelleyProtVer,
+ )
+import Cardano.Binary (serializeEncoding)
+import Cardano.Ledger.Core (PParamsUpdate(..))
+import qualified Cardano.Api.Shelley as CApi
+import qualified Cardano.Api.Ledger as Ledger
+
 
 
 
@@ -76,6 +89,7 @@ import qualified Data.ByteString as BS
 
 instance FromJSON TxBuilder where
   parseJSON (A.Object v) =do
+    proposals   <- v .?< "proposal"
     TxBuilder
       <$> (v .?< "selection")
       <*> v .?<  "input"
@@ -86,6 +100,11 @@ instance FromJSON TxBuilder where
       <*> v `parseValidity` "validityEnd"
       <*> v .?< "mint"
       <*> v .?< "signature"
+      <*> pure (map (\(ProposalProcedureModal p ) -> CApi.Proposal p) proposals)
+      <*> pure []
+      <*>  (do
+        res :: [TxCertificateModal ConwayEra] <- v .?< "certificate"
+        pure $ map  unWrap res )
       <*> v .:? "fee"
       <*> (v .:? "changeAddress" <&> fmap unAddressModal)
       <*> (v.:? "metadata" .!= Map.empty)
@@ -178,7 +197,7 @@ instance IsString a =>  MonadFail (Either a ) where
   fail msg = Left $ fromString msg
 
 instance ToJSON TxBuilder where
-  toJSON (TxBuilder selections inputs refInputs outputs collaterals validityStart validityEnd mintData signatures fee defaultChangeAddr metadata) =
+  toJSON (TxBuilder selections inputs refInputs outputs collaterals validityStart validityEnd mintData signatures proposals votes certs fee defaultChangeAddr metadata) =
     A.object  nonEmpyPair
 
     where
@@ -190,6 +209,7 @@ instance ToJSON TxBuilder where
       ValidityPosixTime ndt -> (key .= ndt) : obj
       ValiditySlot sn -> ((key <> "Slot" ) .= sn) : obj
 
+
     nonEmpyPair :: [A.Pair]
     nonEmpyPair =  "selections"     >= concatMap collectSelection selections
               <+>  "inputs"         >= concatMap  collectInputs inputs
@@ -200,6 +220,9 @@ instance ToJSON TxBuilder where
               <+>  "validityStart"  `appendValidity` validityStart
               <+>  "validityEnd"    `appendValidity` validityEnd
               <+>  "signatures"     >= signatures
+              <+>  "proposals"      >= map translateProposal proposals
+              <+>  "votes"          >= map unVotingProcedures votes
+              <+>  "certificates"   >= map certToJson certs
               <+>  "fee"            >= fee
               <+>  "changeAddress"  >= defaultChangeAddr
               <#>  "metadata"       >= metadata
@@ -209,6 +232,80 @@ instance ToJSON TxBuilder where
     (<#>)  f  f2  =  f $ f2 []
     infixr 6 <+>
     (<+>) f  v = f v
+
+translateProposal :: Proposal ConwayEra  -> A.Value
+translateProposal p = case unProposal p of
+           ProposalProcedure co ra ga an ->A.object $  [
+                  "deposit" .= show co
+                , "rewardAccount" .= (toHexString @T.Text . serialiseRewardAcnt) ra
+                , "anchor" .= (case an of { Anchor url sh -> A.object [ "url" .= show url, "hash" .=  (toHexString @T.Text $ serialize shelleyProtVer sh)] })
+            ] ++ case ga of
+                ParameterChange sm ppu ->   [
+                            "type" .= A.String "parameterUpdate"
+                          , "parameters" .= show ppu
+                        ] ++ convPrevGovActionId' sm
+                HardForkInitiation sm pv -> [
+                    "type" .= A.String "hardfork",
+                    "protocolVersion" .= show pv
+                  ]  ++ convPrevGovActionId' sm
+                TreasuryWithdrawals map ->[
+                      "type" .= A.String "treasuryWithdrawal",
+                      "accounts" .= Map.mapKeys (toHexString @T.Text . serialiseRewardAcnt) map
+                      ]
+                NoConfidence sm ->("type" .= A.String "hardfork") : convPrevGovActionId' sm
+                NewCommittee sm set com ->  [
+                            "type" .= A.String "newCommittee"
+                          , "members" .= Set.toList  set
+                        ] ++ convPrevGovActionId' sm
+                NewConstitution sm con ->   [
+                            "type" .= A.String "newConstitution"
+                          , "constitution" .= show   con
+                        ] ++ convPrevGovActionId' sm
+                InfoAction -> [
+                            "type" .= A.String "info"
+                      ]
+
+    where
+       convPrevGovActionId' mPgai=  case mPgai of
+            SNothing -> []
+            SJust pgai -> [convPrevGovActionId pgai]
+       convPrevGovActionId pgai=  "previousGovernanceActionId" .= A.String (toHexString @T.Text (serialize shelleyProtVer $ encCBOR pgai))
+
+certToJson :: Certificate ConwayEra -> A.Value
+certToJson c  = case c of
+  ShelleyRelatedCertificate stbe stc -> case stc of
+    ShelleyTxCertDelegCert sdc -> A.String $ T.pack $ show sdc
+    ShelleyTxCertPool pc -> A.String $ T.pack $ show pc
+    ShelleyTxCertGenesisDeleg gdc -> A.String $ T.pack $ show gdc
+    ShelleyTxCertMir mc -> A.String $ T.pack $ show mc
+  ConwayCertificate ceo ctc -> case ctc of
+    ConwayTxCertDeleg cdc -> A.String $ T.pack $ show cdc
+    ConwayTxCertPool pc -> A.String $ T.pack $ show pc
+    ConwayTxCertGov cgc -> A.String $ T.pack $ show cgc
+
+-- data Delegatee c
+--   = DelegStake !(KeyHash 'StakePool c)
+--   | DelegVote !(DRep c)
+--   | DelegStakeVote !(KeyHash 'StakePool c) !(DRep c)
+-- data DRep c
+--   = DRepKeyHash !(KeyHash 'DRepRole c)
+--   | DRepScriptHash !(ScriptHash c)
+--   | DRepAlwaysAbstain
+--   | DRepAlwaysNoConfidence
+
+-- data ConwayDelegCert c
+--   = -- | Register staking credential. Deposit, when present, must match the expected deposit
+--     -- amount specified by `ppKeyDepositL` in the protocol parameters.
+--     ConwayRegCert !(StakeCredential c) !(StrictMaybe Coin)
+--   | -- | De-Register the staking credential. Deposit, if present, must match the amount
+--     -- that was left as a deposit upon stake credential registration.
+--     ConwayUnRegCert !(StakeCredential c) !(StrictMaybe Coin)
+--   | -- | Redelegate to another delegatee. Staking credential must already be registered.
+--     ConwayDelegCert !(StakeCredential c) !(Delegatee c)
+--   | -- | This is a new type of certificate, which allows to register staking credential
+--     -- and delegate within a single certificate. Deposit is required and must match the
+--     -- expected deposit amount specified by `ppKeyDepositL` in the protocol parameters.
+--     ConwayRegDelegCert !(StakeCredential c) !(Delegatee c) !Coin
 
 instance ToJSON (TxMintData TxMintingScriptSource) where
   toJSON (TxMintData script value metadata) =
@@ -517,7 +614,7 @@ instance FromJSON (TxOutput TxOutputContent ) where
     insuffientUtxoAda <- v.:? "insuffientUtxoAda" .!=OnInsufficientUtxoAdaUnset
     addressTextM  :: Maybe A.Value <- v .:? "address"
 
-    destination :: Maybe (Either (AddressInEra  BabbageEra) TxPlutusScript) <- case addressTextM of
+    destination :: Maybe (Either (AddressInEra  ConwayEra) TxPlutusScript) <- case addressTextM of
       Nothing -> pure Nothing
       Just v@(A.Object  o) -> do
         v<- parseJSON  v
@@ -538,11 +635,11 @@ instance FromJSON (TxOutput TxOutputContent ) where
     let txOutDatum=if shouldEmbed
                                 then case datumHashE of
                                   Nothing -> TxOutDatumNone
-                                  Just (Left sd) -> TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra sd
-                                  Just (Right dh) -> TxOutDatumHash ScriptDataInBabbageEra dh
+                                  Just (Left sd) -> TxOutDatumInline BabbageEraOnwardsConway sd
+                                  Just (Right dh) -> TxOutDatumHash AlonzoEraOnwardsConway dh
                                 else (case datumHashE of
-                                  Just (Left datum) -> TxOutDatumHash ScriptDataInBabbageEra (hashScriptDataBytes datum)
-                                  Just (Right dh)   -> TxOutDatumHash ScriptDataInBabbageEra dh
+                                  Just (Left datum) -> TxOutDatumHash AlonzoEraOnwardsConway (hashScriptDataBytes datum)
+                                  Just (Right dh)   -> TxOutDatumHash AlonzoEraOnwardsConway dh
                                   _ -> TxOutDatumNone
                                 )
     mScript_ <- v .:? "script"
@@ -562,11 +659,11 @@ instance FromJSON (TxOutput TxOutputContent ) where
                 TxOutDatumInline rtisidsie sd ->pure $  TxOutScriptWithDataAndReference sc  value sd
                 _  -> error "Unexpected"
           Just (Left addr) -> case mScript of
-            Nothing ->  pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInBabbageEra value) txOutDatum ReferenceScriptNone
-            Just (A.Bool _) ->  pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInBabbageEra value) txOutDatum ReferenceScriptNone
+            Nothing ->  pure $ TxOutNative $ TxOut addr (TxOutValue MaryEraOnwardsConway value) txOutDatum ReferenceScriptNone
+            Just (A.Bool _) ->  pure $ TxOutNative $ TxOut addr (TxOutValue MaryEraOnwardsConway value) txOutDatum ReferenceScriptNone
             Just obj -> do
               sc <- anyScriptParser  obj
-              pure $ TxOutNative $ TxOut addr (TxOutValue MultiAssetInBabbageEra value) txOutDatum (ReferenceScript ReferenceTxInsScriptsInlineDatumsInBabbageEra sc)
+              pure $ TxOutNative $ TxOut addr (TxOutValue MaryEraOnwardsConway value) txOutDatum (ReferenceScript BabbageEraOnwardsConway sc)
           Just (Right script) ->
             let defaultAct = case txOutDatum of
                   TxOutDatumNone -> fail "Missing datum in script output"
