@@ -14,10 +14,10 @@ where
 
 import Cardano.Api hiding(txMetadata, txFee)
 import Cardano.Api.Shelley
-    ( 
+    (
       ReferenceScript(ReferenceScript, ReferenceScriptNone),
       ReferenceScript(ReferenceScript, ReferenceScriptNone),
-      scriptDataToJsonDetailedSchema, Proposal (unProposal), VotingProcedures (unVotingProcedures), fromLedgerPParamsUpdate )
+      scriptDataToJsonDetailedSchema, Proposal (unProposal), VotingProcedures (unVotingProcedures), fromLedgerPParamsUpdate, fromShelleyStakeAddr )
 import Cardano.Kuber.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
@@ -69,7 +69,7 @@ import Data.Bifunctor (second)
 import Cardano.Kuber.Utility.DataTransformation (pkhToPaymentKeyHash, addressInEraToAddressAny)
 import qualified Data.ByteString.Lazy.Char8 as BSL8
 import qualified Data.ByteString as BS
-import Cardano.Api.Ledger (ConwayTxCert(..), ShelleyTxCert (..), StrictMaybe (..))
+import Cardano.Api.Ledger (ConwayTxCert(..), ShelleyTxCert (..), StrictMaybe (..), unboundRational, Coin (Coin))
 import Cardano.Ledger.Api (ProposalProcedure(..), GovAction (..), PrevGovActionId (PrevGovActionId), serialiseRewardAcnt, Anchor (Anchor), VotingProcedures)
 import Cardano.Ledger.Binary (
   Annotator (..),
@@ -81,6 +81,7 @@ import Cardano.Binary (serializeEncoding)
 import Cardano.Ledger.Core (PParamsUpdate(..))
 import qualified Cardano.Api.Shelley as CApi
 import qualified Cardano.Api.Ledger as Ledger
+import Data.Ratio (denominator, numerator)
 
 
 
@@ -237,7 +238,7 @@ translateProposal :: Proposal ConwayEra  -> A.Value
 translateProposal p = case unProposal p of
            ProposalProcedure co ra ga an ->A.object $  [
                   "deposit" .= show co
-                , "rewardAccount" .= (toHexString @T.Text . serialiseRewardAcnt) ra
+                , "rewardAccount" .= serialiseAddress ( fromShelleyStakeAddr ra)
                 , "anchor" .= (case an of { Anchor url sh -> A.object [ "url" .= show url, "hash" .=  (toHexString @T.Text $ serialize shelleyProtVer sh)] })
             ] ++ case ga of
                 ParameterChange sm ppu ->   [
@@ -250,12 +251,14 @@ translateProposal p = case unProposal p of
                   ]  ++ convPrevGovActionId' sm
                 TreasuryWithdrawals map ->[
                       "type" .= A.String "treasuryWithdrawal",
-                      "accounts" .= Map.mapKeys (toHexString @T.Text . serialiseRewardAcnt) map
+                      "accounts" .=  Map.map (\(Coin x) -> show x) (Map.mapKeys (serialiseAddress . fromShelleyStakeAddr) map)
                       ]
                 NoConfidence sm ->("type" .= A.String "hardfork") : convPrevGovActionId' sm
-                NewCommittee sm set com ->  [
-                            "type" .= A.String "newCommittee"
+                UpdateCommittee sm set com  quorum->  [
+                            "type"    .= A.String "newCommittee"
                           , "members" .= Set.toList  set
+                          , "quorumSize"  .=  numerator (unboundRational quorum)
+                          , "quorumMin"  .= denominator (unboundRational quorum)
                         ] ++ convPrevGovActionId' sm
                 NewConstitution sm con ->   [
                             "type" .= A.String "newConstitution"

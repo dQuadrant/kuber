@@ -63,7 +63,7 @@ function execute-isolated() {
 	-e HOME=$HOME \
 	--entrypoint /bin/bash \
 	--workdir $WORKDIR \
-	dquadrant/cardano-ci -c  "$*"
+	cardanoapi/haskell:8.10.7 -c  "$*"
 }
 
 if [[ "$1" == cabal* ]] ; then

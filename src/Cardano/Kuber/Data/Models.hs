@@ -15,15 +15,16 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DataKinds #-}
 
 module Cardano.Kuber.Data.Models where
 
 import Cardano.Api
-import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData, scriptDataFromJsonDetailedSchema, scriptDataToJsonDetailedSchema, ReferenceScript (ReferenceScript, ReferenceScriptNone), Proposal, ShelleyLedgerEra, StakeAddress (StakeAddress), StakePoolKey, Hash (unStakePoolKeyHash))
+import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData, scriptDataFromJsonDetailedSchema, scriptDataToJsonDetailedSchema, ReferenceScript (ReferenceScript, ReferenceScriptNone), Proposal, ShelleyLedgerEra, StakeAddress (StakeAddress), StakePoolKey, Hash (unStakePoolKeyHash), toShelleyStakeAddr)
 import Cardano.Binary (ToCBOR (toCBOR), decodeFull, fromCBOR)
 import Cardano.Ledger.Babbage.Tx (BabbageTxBody (btbTxFee))
 import Codec.CBOR.Write (toLazyByteString)
-import Data.Aeson (KeyValue ((.=)), encode, object, (.!=))
+import Data.Aeson (KeyValue ((.=)), encode, object, (.!=), ToJSONKey, FromJSONKey)
 import Data.Aeson.Types (FromJSON (parseJSON), Parser, ToJSON (toJSON), Value (Object, String), (.:), (.:?))
 import qualified Data.ByteString.Lazy as LBS
 import Data.ByteString.Lazy.Char8 (toStrict)
@@ -36,7 +37,7 @@ import qualified Data.Text.Encoding as TSE
 import GHC.Generics (Generic)
 import Text.Read (readMaybe)
 import Cardano.Kuber.Utility.Text (toHexString)
-import Cardano.Kuber.Data.Parsers (signKeyParser, txinOrUtxoParser, parseHexString, parseRawBytes', parseRawBytes, parseBech32OrCBOR', parseRawBech32, parseBech32Type)
+import Cardano.Kuber.Data.Parsers (signKeyParser, txinOrUtxoParser, parseHexString, parseRawBytes', parseRawBytes, parseBech32OrCBOR', parseRawBech32, parseBech32Type, parseHexString', parseRawBech32')
 import Cardano.Slotting.Time (SystemStart(SystemStart))
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, POSIXTime)
 import Cardano.Kuber.Error (FrameworkError)
@@ -46,9 +47,9 @@ import Data.Word (Word64)
 import qualified Data.Map as Map
 import Data.Vector.Primitive (Vector(Vector))
 import qualified Data.Vector as Vector
-import Cardano.Api.Ledger (ConwayTxCert(..), ConwayGovCert (..), StrictMaybe (SNothing, SJust), Credential (KeyHashObj, ScriptHashObj), Coin (Coin), StandardCrypto, Url, textToUrl, ShelleyTxCert (ShelleyTxCertDelegCert), ShelleyDelegCert (..), ConwayDelegCert (..), KeyHash (KeyHash), Delegatee (..))
+import Cardano.Api.Ledger (ConwayTxCert(..), ConwayGovCert (..), StrictMaybe (SNothing, SJust), Credential (KeyHashObj, ScriptHashObj), Coin (Coin), StandardCrypto, Url, textToUrl, ShelleyTxCert (ShelleyTxCertDelegCert), ShelleyDelegCert (..), ConwayDelegCert (..), KeyHash (KeyHash), Delegatee (..), KeyRole, hashFromBytes)
 import Data.Text.Encoding (encodeUtf8)
-import Cardano.Ledger.Api (Constitution (Constitution), Anchor (Anchor), GovAction (..), ProposalProcedure (ProposalProcedure))
+import Cardano.Ledger.Api (Constitution (Constitution), Anchor (Anchor), GovAction (..), ProposalProcedure (ProposalProcedure), Crypto (ADDRHASH))
 import qualified Cardano.Ledger.Api as Ledger
 import Cardano.Ledger.SafeHash (unsafeMakeSafeHash)
 import Cardano.Ledger.Core (EraCrypto,DRep(..))
@@ -56,6 +57,17 @@ import qualified Cardano.Api.Shelley as CAPI
 import qualified Data.ByteString as BS
 import Data.Typeable (Typeable)
 import qualified Data.Set as Set
+import Data.Aeson.KeyMap (toHashMapText)
+import qualified Data.Map as HM
+import qualified Data.Foldable as Foldable
+import Cardano.Crypto.Hash (HashAlgorithm, hashToStringAsHex, hashToTextAsHex)
+import qualified Data.ByteString.Char8 as BS8
+import Control.Applicative ((<|>))
+import Data.Foldable (asum)
+import Data.Map (Map)
+import Data.Ratio ((%))
+import Cardano.Ledger.BaseTypes (UnitInterval)
+import Data.Default (def)
 
 class Wrapper  m a  where
   unWrap :: m  ->  a
@@ -63,6 +75,8 @@ class Wrapper  m a  where
 newtype AssetModal = AssetModal AssetId deriving (Show)
 
 newtype AddressModal = AddressModal (AddressInEra ConwayEra) deriving (Show)
+newtype RewardAcntModal crypto = RewardAcntModal (Ledger.RewardAcnt crypto) deriving (Show)
+
 
 newtype SignKeyModal = SignKeyModal (SigningKey PaymentKey) deriving (Show)
 
@@ -90,6 +104,7 @@ newtype EraHistoryModal = EraHistoryModal (EraHistory CardanoMode)
 newtype GenesisParamModal era = GenesisParamModal (GenesisParameters era)
 newtype DrepModal era = DrepModal (DRep era)
 
+data CredentialModal (r::KeyRole)  era = CredentialModal (Credential r era) deriving (Show, Eq)
 
 instance Wrapper UtxoModal (UTxO ConwayEra) where
   unWrap (UtxoModal utxos) = utxos
@@ -292,6 +307,22 @@ instance FromJSON  TimeTranslationReq where
     pure $ TimeTranslationReq  (fromInteger dateInt)
   parseJSON (A.Number n) = pure $ TimeTranslationReq ( fromInteger (round n))
   parseJSON _ = fail "Expected TimeTranslationReq object or number"
+
+
+-- instance  (StandardCrypto ~ crypto) => FromJSON (RewardAcntModal crypto) where
+--   parseJSON (A.Object v) = do  fail "sad"
+--   parseJSON (A.String s) = do
+--       v <-  case parseHexString s  of
+--           Just p -> parseRawBytes'  (AsStakeAddress) p "Hex value is not valid stake address"
+--           Nothing ->
+--             case parseBech32Type s AsStakeAddress of
+--               Just v -> pure $ Left p
+--               Nothing -> parseRawBech32' errorMsg <&> Right
+--       pure $ RewardAcntModal $ toShelleyStakeAddr s
+--     where errorMsg = "Neither encoded bech32 or hex"
+
+--   parseJSON _ = fail "Expected Reward Account  bech32 or cbor or keyhash hex "
+
 
 
 instance ToJSON TimeTranslationReq where
@@ -552,6 +583,9 @@ instance  EraCrypto ledgerera ~ StandardCrypto  =>  FromJSON  (ProposalProcedure
           chain  "newconstitution"  parseNewConstitution
         $ chain "noconfidence" parseNoConfidence
         $ chain "info" parseInfo
+        $ chain "withdraw" parseTreasuryWithdrawal
+        $ chain "hardfork" parseHardforkInitiation
+        $ chain "updatecommittee" parseUpdateCommittee
         $ pure InfoAction
 
 
@@ -559,11 +593,50 @@ instance  EraCrypto ledgerera ~ StandardCrypto  =>  FromJSON  (ProposalProcedure
           ProposalProcedure (Coin deposit) returnAddress  govAction  anchor
 
     where
+        parseUpdateCommittee (A.Object  obj)= do
+           addMap  <- obj .:? "add" .!= mempty
+           remove  <- obj .:? "remove" .!= mempty
+           let toAdd = HM.mapKeys (\(CredentialModal c) -> c) $  HM.map fromInteger addMap
+           let toRemove = Set.map (\(CredentialModal c) -> c)  remove
+           pure $ UpdateCommittee SNothing  toRemove toAdd def -- TODO DO NOT USE THIS DEF
+
+
+        parseUpdateCommittee _ = fail "Expected updateCommittee Object"
+
         parseNewConstitution (ConstitutionModal constitution) = pure $ NewConstitution SNothing constitution
 
         parseNoConfidence (A.Object o) = do
            pure $ NoConfidence SNothing
         parseNoConfidence _ = pure $ NoConfidence SNothing
+
+        parseHardforkInitiation (A.Object protObj) = do
+          pVersion <- protObj .: "protocolVersion"
+          pure $ HardForkInitiation SNothing pVersion
+
+        parseHardforkInitiation v = do
+          pVersion<-parseJSON v
+          pure $ HardForkInitiation SNothing pVersion
+
+        parseNoConfidenceProposasl _ = pure $ Ledger.NoConfidence SNothing
+
+        parseTreasuryWithdrawal (A.Object treasuryObj ) = do
+          hmap <- o .: "withdraw"
+          let
+              mapKeysM f hm = mapM (\(k,v)->do
+                    k' <- f k
+                    pure (k',v)
+                ) (HM.toList hm) <&> HM.fromList
+          hmap' <- mapKeysM (\x -> do
+                  case parseBech32Type x AsStakeAddress of
+                      Just p -> pure p
+                      Nothing -> case  parseHexString x >>= parseRawBytes AsStakeAddress of
+                        Just v-> pure v
+                        Nothing -> fail $ "Invalid stake address \"" ++ T.unpack x ++ "\""
+                ) hmap
+          let hmap'' = HM.mapKeys toShelleyStakeAddr hmap'
+
+          pure $ TreasuryWithdrawals hmap''
+        parseTreasuryWithdrawal _ = fail "Expected \"accounts\" to be present for treasuryWithdrawal"
 
         parseInfo (A.Bool True) = pure InfoAction
         parseInfo _ = fail "Expected \"info\" value to be true"
@@ -660,11 +733,8 @@ instance (era ~ ConwayEra)  =>  FromJSON (TxCertificateModal era) where
           mDrep <- o.:? "drep"
           delegatee<-case mSpo of
             Nothing -> maybe (fail "expecting either \"spo\" or \"spo\" or both") (\(DrepModal d) -> pure $ DelegVote d) mDrep
-            Just spoTxt ->do
-                poolHash <- spoParser spoTxt <&> unStakePoolKeyHash
-                let spo =  poolHash
-                pure $ maybe (DelegStake spo) (\(DrepModal d)  ->  DelegStakeVote spo d) mDrep
-
+            Just spoCred ->do
+                pure $ maybe (DelegStake spoCred) (\(DrepModal d)  ->  DelegStakeVote spoCred d) mDrep
           let bytes = encodeUtf8 key
           let stakeKey = deserialiseFromRawBytesHex (AsHash AsStakeKey) (encodeUtf8 key)
 
@@ -676,6 +746,7 @@ instance (era ~ ConwayEra)  =>  FromJSON (TxCertificateModal era) where
                                       stakeCred
                                       delegatee
 
+
 -- -- | First type argument is the deposit
 -- data Delegatee c
 --   = DelegStake !(KeyHash 'StakePool c)
@@ -684,17 +755,13 @@ instance (era ~ ConwayEra)  =>  FromJSON (TxCertificateModal era) where
 
 
       "registerdrep" -> do
-          key <- o .: "key"
+          (CredentialModal key) <- o .: "key"
           deposit <- o .: "deposit"
           mAnchor <- o .:? "anchor"
-          let drepKey = deserialiseFromRawBytesHex (AsHash AsDRepKey) (encodeUtf8 key)
-          drepCred <-case drepKey of
-            Left rbhe -> fail "Invalid drep Key"
-            Right (CAPI.DRepKeyHash drk) -> pure $  KeyHashObj  drk
           pure $  TxCertificateModal $  ConwayCertificate ConwayEraOnwardsConway
                         . ConwayTxCertGov
                         $ ConwayRegDRep
-                            drepCred
+                            key
                             (Coin deposit)
                             (case mAnchor of
                               Nothing -> SNothing
@@ -711,11 +778,46 @@ instance (era ~ ConwayEra)  =>  FromJSON (TxCertificateModal era) where
 --   | DRepAlwaysAbstain
 --   | DRepAlwaysNoConfidence
 
+instance ( ledgerera ~ StandardCrypto ,Crypto ledgerera) => FromJSON (CredentialModal r ledgerera) where
+  parseJSON :: A.Value -> Parser (CredentialModal r ledgerera)
+  parseJSON (A.Object o) = do
+    cred <- asum [parser1 o, parser2 o]
+    pure $ CredentialModal cred
+      where
+        parser1 obj = ScriptHashObj <$> (obj .: "scriptHash" <|> obj .: "scripthash" <|> obj .: "scripthash")
+        parser2 obj = KeyHashObj <$> (obj .: "keyHash" <|> obj .: "keyhash"  <|> obj .: "key hash")
+  parseJSON (A.String txt) = case parseHexString txt of
+    Just parsed -> parseKeyHash parsed
+    Nothing -> case parseRawBech32'  txt of
+      Just parsed ->parseKeyHash parsed
+      Nothing -> fail "Neither bech32 encoded credential nor  hex encoded"
+    where
+      parseKeyHash bytes=  do
+                hash <- rawBytesToHash bytes
+                pure $ CredentialModal $ KeyHashObj ( KeyHash hash)
+  parseJSON  _ = fail "Expected  Credential object or string"
+
+instance ( cre ~ StandardCrypto ,Crypto cre) => FromJSONKey (CredentialModal r cre) where
+
+instance Ord (CredentialModal r cre) where
+  compare (CredentialModal c1) (CredentialModal c2) = compare c1 c2
+
+instance Crypto cre => ToJSON  (CredentialModal r cre) where
+   toJSON (CredentialModal (KeyHashObj (KeyHash kh))) = A.String $   hashToTextAsHex kh
+   toJSON (CredentialModal (ScriptHashObj sh)) = toJSON sh
+
+rawBytesToHash bytes =
+  if BS.length bytes ==28
+  then case hashFromBytes bytes of
+      Nothing -> fail "Credential Hash is not of 28 byte length"
+      Just ha -> pure ha
+  else fail "Credential Hash is not of 28 byte length"
+
+
 instance (era ~ StandardCrypto) =>  FromJSON  (DrepModal era) where
 
   parseJSON :: A.Value -> Parser (DrepModal era)
   parseJSON (A.Object o ) = do
-      fail "Delegating is WIP"
       mKeyHash <- o .:? "keyHash"
       case  mKeyHash of
         Just (keyHash :: T.Text) -> case parseHexString keyHash  of

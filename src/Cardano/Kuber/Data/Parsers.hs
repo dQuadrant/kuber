@@ -307,11 +307,15 @@ parseTxOut  val = decodeCbor <&> fromShelleyTxOut ShelleyBasedEraConway
     decodeCbor :: MonadFail m => m (Babbage.TxOut (Conway.ConwayEra StandardCrypto))
     decodeCbor = parseHexString  val >>= parseCbor
 
-
 parseHexString :: (FromText (Maybe (Base16 a1)), ToText a2, MonadFail f) =>a2 -> f a1
 parseHexString  v = case unHex v  of
   Just bs ->pure bs
   Nothing -> fail $ "Invalid Hex string: " ++ convertText v
+
+parseHexString' :: (FromText (Maybe (Base16 a1)), ToText a2, MonadFail f) =>a2 -> ErrorMessage-> f a1
+parseHexString'  v msg= case unHex v  of
+  Just bs ->pure bs
+  Nothing -> fail msg
 
 parseCbor :: (FromCBOR a, MonadFail m) =>LBS.ByteString -> m a
 parseCbor  v = case decodeFull v of
@@ -367,6 +371,8 @@ parseRawBech32'   bech32Str = do
       Nothing -> fail "String not in Bech32 format"
       Just bs -> pure bs
 
+
+
 parseBech32Type' :: (SerialiseAsBech32 a, MonadFail m) => Text -> AsType a -> ErrorMessage -> m a
 parseBech32Type' bs  t msg = case deserialiseFromBech32  t bs of 
     Left e ->  fail  msg
@@ -398,7 +404,7 @@ txinOrUtxoParser obj@(A.Object o) = do
     case (addrM,valueM) of
       (Just addrT , Just valT) -> do
           addr <- parseAddress addrT
-          val <-  case valT of 
+          val <-  case valT of  
                     A.String s -> parseValueText s
                     A.Number n -> pure $  lovelaceToValue $ Lovelace  (round n)
                     _ -> parseJSON valT
