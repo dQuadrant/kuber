@@ -69,6 +69,7 @@ import Data.Ratio ((%))
 import Cardano.Ledger.BaseTypes (UnitInterval)
 import Data.Default (def)
 
+
 class Wrapper  m a  where
   unWrap :: m  ->  a
 
@@ -578,7 +579,7 @@ instance  EraCrypto ledgerera ~ StandardCrypto  =>  FromJSON  (ProposalProcedure
         chain key mapper onMissing =do
          result <- o.:? key
          maybe onMissing mapper result
-
+    let knownKeys = ["newconstitution","noconfidence","info","withdraw","hardfork","updatecommittee"]
     govAction <-
           chain  "newconstitution"  parseNewConstitution
         $ chain "noconfidence" parseNoConfidence
@@ -784,35 +785,38 @@ instance ( ledgerera ~ StandardCrypto ,Crypto ledgerera) => FromJSON (Credential
     cred <- asum [parser1 o, parser2 o]
     pure $ CredentialModal cred
       where
-        parser1 obj = ScriptHashObj <$> (obj .: "scriptHash" <|> obj .: "scripthash" <|> obj .: "scripthash")
+        parser1 obj = ScriptHashObj <$> (obj .: "scriptHash" <|> obj .: "scripthash" <|> obj .: "script hash")
         parser2 obj = KeyHashObj <$> (obj .: "keyHash" <|> obj .: "keyhash"  <|> obj .: "key hash")
-  parseJSON (A.String txt) = case parseHexString txt of
-    Just parsed -> parseKeyHash parsed
-    Nothing -> case parseRawBech32'  txt of
-      Just parsed ->parseKeyHash parsed
-      Nothing -> fail "Neither bech32 encoded credential nor  hex encoded"
-    where
-      parseKeyHash bytes=  do
-                hash <- rawBytesToHash bytes
-                pure $ CredentialModal $ KeyHashObj ( KeyHash hash)
+  parseJSON (A.String txt) = parseCredentialText txt
   parseJSON  _ = fail "Expected  Credential object or string"
 
-instance ( cre ~ StandardCrypto ,Crypto cre) => FromJSONKey (CredentialModal r cre) where
+parseCredentialText txt = case parseHexString txt of
+    Just unHexed -> parseKeyHash unHexed False
+    Nothing -> case parseRawBech32'  txt of
+      Just parsed ->parseKeyHash parsed True
+      Nothing -> fail "Neither bech32 encoded credential nor  hex encoded"
+    where
+      parseKeyHash bytes stripPrefix=  do -- TODO: this is incorrect and can convert scriptHash object to keyHash
+                hash <- rawBytesToHash bytes stripPrefix
+                pure $ CredentialModal $ KeyHashObj ( KeyHash hash)
 
 instance Ord (CredentialModal r cre) where
   compare (CredentialModal c1) (CredentialModal c2) = compare c1 c2
 
-instance Crypto cre => ToJSON  (CredentialModal r cre) where
-   toJSON (CredentialModal (KeyHashObj (KeyHash kh))) = A.String $   hashToTextAsHex kh
-   toJSON (CredentialModal (ScriptHashObj sh)) = toJSON sh
 
-rawBytesToHash bytes =
-  if BS.length bytes ==28
-  then case hashFromBytes bytes of
-      Nothing -> fail "Credential Hash is not of 28 byte length"
-      Just ha -> pure ha
-  else fail "Credential Hash is not of 28 byte length"
+instance ( ledgerera ~ StandardCrypto ,Crypto ledgerera) => FromJSONKey (CredentialModal r ledgerera) where
+  fromJSONKey  = A.FromJSONKeyTextParser  parseCredentialText
 
+rawBytesToHash bytes stripPrefix
+  | BS.length bytes == 28 = doConvert bytes
+  | BS.length bytes ==29 && stripPrefix = doConvert (BS.drop 1 bytes)
+  | otherwise = fail "Credential Hash is not of 28 byte length "
+  where
+      doConvert bytes
+        = case hashFromBytes bytes of
+                Nothing
+                  -> fail "Credential Hash .fromBytes, invalid credentialHash"
+                Just ha -> pure ha
 
 instance (era ~ StandardCrypto) =>  FromJSON  (DrepModal era) where
 
