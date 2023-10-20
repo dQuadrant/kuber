@@ -214,11 +214,12 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       colalteralSignatories = Set.fromList ( map snd collaterals)
       withExtraSigs = appendExtraSignatures  colalteralSignatories extraSignatures
       withMintSignatures = appendMintingScriptSignatures withExtraSigs (map (\(TxMintData (_,wit) _ _)-> wit) resolvedMints)
+      withCertSignatures = appendCertSignatures withMintSignatures certs
       compulsarySignatories = foldl (\acc x -> case x of
                           Left (_,TxOut a _ _ _) -> case addressInEraToPaymentKeyHash  a of
                                                     Nothing -> acc
                                                     Just pkh -> Set.insert pkh acc
-                          Right _ -> acc ) withMintSignatures   $ Map.elems  fixedInputs
+                          Right _ -> acc ) withCertSignatures   $ Map.elems  fixedInputs
   mintWithDefaultExunits <- applyMintExUnits Map.empty  (\p -> pure defaultExunits) unresolvedMints
   iteration1@(txBody1,signatories,fee1) <-  calculator  (txMintValue' mintWithDefaultExunits) fixedInputs   fee
   (finalBody,finalSignatories,finalFee) <- (
@@ -327,8 +328,32 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                                 Nothing -> set
         TxSignatureSkey sk -> Set.insert (skeyToPaymentKeyHash   sk) set
       )
+    appendCertSignatures old certs = foldl  (\set item -> case getPaymentKey item of
+      Nothing -> set
+      Just ha -> Set.insert ha set ) old certs 
 
+    getPaymentKey cert = case cert of 
+      ShelleyRelatedCertificate stbe stc -> Nothing
+      ConwayCertificate ceo ctc -> case ctc of 
+        ConwayTxCertDeleg cdc -> case cdc of 
+          ConwayRegCert cre sm -> Nothing 
+          ConwayUnRegCert cre sm -> getPaymentCre cre
+          ConwayDelegCert cre del -> getPaymentCre cre
+          ConwayRegDelegCert cre del co -> Nothing
+        ConwayTxCertPool pc -> case pc of 
+          RegPool pp -> Nothing
+          RetirePool kh en -> Just $ mapKeyHash kh
+        ConwayTxCertGov cgc -> case cgc of 
+          ConwayRegDRep cre co sm -> Nothing
+          ConwayUnRegDRep cre co -> getPaymentCre cre
+          ConwayUpdateDRep cre sm -> getPaymentCre cre
+          ConwayAuthCommitteeHotKey cre cre' -> getPaymentCre cre
+          ConwayResignCommitteeColdKey cre -> getPaymentCre cre
     classifyMints mp  = mapM  (classifyMint mp)
+    getPaymentCre cre =  case cre of 
+        KeyHashObj (KeyHash ha) -> Just $  PaymentKeyHash (KeyHash ha)
+        _ -> Nothing
+    mapKeyHash  (KeyHash ha) = PaymentKeyHash (KeyHash ha)
 
     classifyMint :: UTxO era
       -> TxMintData TxMintingScriptSource
