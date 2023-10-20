@@ -43,12 +43,13 @@ import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, POSIXTime)
 import Cardano.Kuber.Error (FrameworkError)
 import qualified Data.Aeson.Key as A
 import qualified Data.Aeson as A
-import Data.Word (Word64)
+import Data.Word (Word64, Word8)
 import qualified Data.Map as Map
 import Data.Vector.Primitive (Vector(Vector))
 import qualified Data.Vector as Vector
 import Cardano.Api.Ledger (ConwayTxCert(..), ConwayGovCert (..), StrictMaybe (SNothing, SJust), Credential (KeyHashObj, ScriptHashObj), Coin (Coin), StandardCrypto, Url, textToUrl, ShelleyTxCert (ShelleyTxCertDelegCert), ShelleyDelegCert (..), ConwayDelegCert (..), KeyHash (KeyHash), Delegatee (..), KeyRole, hashFromBytes)
 import Data.Text.Encoding (encodeUtf8)
+import Cardano.Ledger.Hashes as Hashes
 import Cardano.Ledger.Api (Constitution (Constitution), Anchor (Anchor), GovAction (..), ProposalProcedure (ProposalProcedure), Crypto (ADDRHASH))
 import qualified Cardano.Ledger.Api as Ledger
 import Cardano.Ledger.SafeHash (unsafeMakeSafeHash)
@@ -68,6 +69,8 @@ import Data.Map (Map)
 import Data.Ratio ((%))
 import Cardano.Ledger.BaseTypes (UnitInterval)
 import Data.Default (def)
+import Data.Bits ((.&.))
+import qualified Cardano.Crypto.Hash as Crypto
 
 
 class Wrapper  m a  where
@@ -797,8 +800,8 @@ parseCredentialText txt = case parseHexString txt of
       Nothing -> fail "Neither bech32 encoded credential nor  hex encoded"
     where
       parseKeyHash bytes stripPrefix=  do -- TODO: this is incorrect and can convert scriptHash object to keyHash
-                hash <- rawBytesToHash bytes stripPrefix
-                pure $ CredentialModal $ KeyHashObj ( KeyHash hash)
+                hash <- rawBytesToCred bytes stripPrefix
+                pure $ CredentialModal  hash
 
 instance Ord (CredentialModal r cre) where
   compare (CredentialModal c1) (CredentialModal c2) = compare c1 c2
@@ -807,16 +810,37 @@ instance Ord (CredentialModal r cre) where
 instance ( ledgerera ~ StandardCrypto ,Crypto ledgerera) => FromJSONKey (CredentialModal r ledgerera) where
   fromJSONKey  = A.FromJSONKeyTextParser  parseCredentialText
 
-rawBytesToHash bytes stripPrefix
-  | BS.length bytes == 28 = doConvert bytes
-  | BS.length bytes ==29 && stripPrefix = doConvert (BS.drop 1 bytes)
+-- Serialization format  header for stake address
+-- -- ┏━━━━━━━━━━━━━━━━┳━┯━┯━┯━┯━┯━┯━┯━┓
+-- -- ┃ Reward Account ┃1┊1┊1┊x┊0┊0┊0┊x┃
+-- -- ┗━━━━━━━━━━━━━━━━╋━┿━┿━┿━┿━┿━┿━┿━╋━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+-- --                  ┃1┊1┊1┊0┊0┊0┊0┊0┃ Testnet PaymentKey    StakingKey    ┃
+-- --                  ┃1┊1┊1┊0┊0┊0┊0┊1┃ Mainnet PaymentKey    StakingKey    ┃
+-- --                  ┃1┊1┊1┊1┊0┊0┊0┊0┃ Testnet PaymentScript StakingKey    ┃
+-- --                  ┃1┊1┊1┊1┊0┊0┊0┊1┃ Mainnet PaymentScript StakingKey    ┃
+-- --                  ┗━┷━┷━┷━┷━┷━┷━┷━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+-- --                          \       \
+-- --                           \       `Is Mainnet Address
+-- --                            `Account Credential is a Script
+
+rawBytesToCred :: (HashAlgorithm (ADDRHASH c), MonadFail f) => Crypto.ByteString -> Bool -> f (Credential kr c)
+rawBytesToCred bytes stripPrefix
+  | BS.length bytes == 28 =  doConvert bytes <&> KeyHashObj. KeyHash
+  | BS.length bytes ==29 && stripPrefix = let 
+              headerByte = BS.index bytes 0
+              isScript = (headerByte .&. 0x1f ::Word8) ==0
+              hash =doConvert (BS.drop 1 bytes)
+         in  if isScript
+                then   hash <&> KeyHashObj . KeyHash 
+                else doConvert (BS.drop 1 bytes) <&> ScriptHashObj . Hashes.ScriptHash 
   | otherwise = fail "Credential Hash is not of 28 byte length "
   where
-      doConvert bytes
-        = case hashFromBytes bytes of
-                Nothing
-                  -> fail "Credential Hash .fromBytes, invalid credentialHash"
-                Just ha -> pure ha
+    doConvert :: (HashAlgorithm h, MonadFail m) => BS8.ByteString -> m (Crypto.Hash h a)
+    doConvert bytes
+      = case hashFromBytes bytes of
+              Nothing
+                -> fail "Credential Hash .fromBytes, invalid credentialHash"
+              Just ha -> pure ha
 
 instance (era ~ StandardCrypto) =>  FromJSON  (DrepModal era) where
 
