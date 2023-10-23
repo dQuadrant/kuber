@@ -336,7 +336,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       ShelleyRelatedCertificate stbe stc -> Nothing
       ConwayCertificate ceo ctc -> case ctc of 
         ConwayTxCertDeleg cdc -> case cdc of 
-          ConwayRegCert cre sm -> Nothing 
+          ConwayRegCert cre sm -> getPaymentCre cre 
           ConwayUnRegCert cre sm -> getPaymentCre cre
           ConwayDelegCert cre del -> getPaymentCre cre
           ConwayRegDelegCert cre del co -> Nothing
