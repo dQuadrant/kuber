@@ -98,7 +98,7 @@ evaluateFee tx = do
   let txbody = getTxBody tx
       -- _inputs :: Set.Set TxIn
       -- _inputs = case txbody of ShelleyTxBody sbe tb scripts scriptData mAuxData validity -> Set.map fromShelleyTxIn $ inputs tb
-      (Lovelace fee) = evaluateTransactionFee (unLedgerProtocolParameters bPParams) txbody (fromIntegral $ length $ getTxWitnesses tx) 0
+      (Lovelace fee) = evaluateTransactionFee shelleyBasedEra (unLedgerProtocolParameters bPParams) txbody (fromIntegral $ length $ getTxWitnesses tx) 0
   pure fee
 
 -- evaluateExUnitMap ::  HasChainQueryAPI a =>    TxBody ConwayEra -> Kontract a  w FrameworkError   (Map TxIn ExecutionUnits,Map PolicyId  ExecutionUnits)

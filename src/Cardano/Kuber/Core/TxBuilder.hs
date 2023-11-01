@@ -438,8 +438,8 @@ txScriptPolicyId :: TxScript -> PolicyId
 txScriptPolicyId sc = PolicyId (hashTxScript sc)
 
 
-txScriptAddress :: TxScript -> NetworkId ->  StakeAddressReference  -> AddressInEra ConwayEra
-txScriptAddress sc net = makeShelleyAddressInEra net   (PaymentCredentialByScript $ txScriptHash sc)
+txScriptAddress :: IsShelleyBasedEra era => TxScript -> NetworkId -> StakeAddressReference -> AddressInEra era
+txScriptAddress sc net = makeShelleyAddressInEra  shelleyBasedEra net   (PaymentCredentialByScript $ txScriptHash sc)
 
 txScriptHash :: TxScript -> ScriptHash
 txScriptHash = hashTxScript

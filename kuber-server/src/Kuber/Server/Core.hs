@@ -45,7 +45,7 @@ makeHandler2 a  f p1 p2= makeHandler a (f p1 p2)
 
 
 queryUtxosHandler :: HasChainQueryAPI api =>   [Text] ->  [Text] -> Kontract api w FrameworkError UtxoModal
-queryUtxosHandler   [] [] = KError (FrameworkError ParserError "Missing both address and txins")
+queryUtxosHandler   [] [] = KError (FrameworkError ParserError "Missing both address and txin in query param")
 queryUtxosHandler   addrTxts txinTxts = do
       if null addrTxts
         then do
@@ -62,7 +62,7 @@ queryUtxosHandler   addrTxts txinTxts = do
                 ) addrTxts
           kQueryUtxoByAddress (Set.fromList addrs) <&> UtxoModal
       else
-        KError (FrameworkError ParserError "Expected either addresses or txins in parameter")
+        KError (FrameworkError ParserError "Expected either address or txin in parameter")
 
 
 getKeyHashHandler :: AddressModal -> IO KeyHashResponse

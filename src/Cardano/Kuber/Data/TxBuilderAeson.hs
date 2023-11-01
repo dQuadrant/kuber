@@ -43,7 +43,7 @@ import qualified Data.Aeson.Key as A
 import qualified Data.Aeson.Types as A
 
 import qualified Data.Text as T
-import Cardano.Kuber.Data.Models ( unAddressModal, Wrapper (unWrap), TxCertificateModal, GovActionModal (GovActionModal), ProposalProcedureModal (ProposalProcedureModal))
+import Cardano.Kuber.Data.Models ( unAddressModal, Wrapper (unWrap), CertificateModal (CertificateModal), GovActionModal (GovActionModal), ProposalProcedureModal (ProposalProcedureModal), ProposalModal (ProposalModal))
 import Cardano.Kuber.Data.Parsers (parseSignKey,parseValueText, parseScriptData, parseAnyScript, parseAddress, parseAssetNQuantity, parseValueToAsset, parseAssetId, scriptDataParser, txInParser, parseUtxo, parseTxIn, parseHexString, parseAddressBech32, parseUtxoCbor, anyScriptParser, parseAssetName, parseCborHex, parseCbor, txinOrUtxoParser, parseAddressBinary, parseAddressRaw)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Aeson ((.:?), (.!=), KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey))
@@ -85,9 +85,6 @@ import Data.Ratio (denominator, numerator)
 
 
 
-
-
-
 instance FromJSON TxBuilder where
   parseJSON (A.Object v) =do
     proposals   <- v .?< "proposal"
@@ -104,7 +101,7 @@ instance FromJSON TxBuilder where
       <*> pure (map (\(ProposalProcedureModal p ) -> CApi.Proposal p) proposals)
       <*> pure []
       <*>  (do
-        res :: [TxCertificateModal ConwayEra] <- v .?< "certificate"
+        res :: [CertificateModal cardanoEra] <- v .?< "certificate"
         pure $ map  unWrap res )
       <*> v .:? "fee"
       <*> (v .:? "changeAddress" <&> fmap unAddressModal)
@@ -223,7 +220,7 @@ instance ToJSON TxBuilder where
               <+>  "signatures"     >= signatures
               <+>  "proposals"      >= map translateProposal proposals
               <+>  "votes"          >= map unVotingProcedures votes
-              <+>  "certificates"   >= map certToJson certs
+              <+>  "certificates"   >= map CertificateModal certs
               <+>  "fee"            >= fee
               <+>  "changeAddress"  >= defaultChangeAddr
               <#>  "metadata"       >= metadata
@@ -234,57 +231,9 @@ instance ToJSON TxBuilder where
     infixr 6 <+>
     (<+>) f  v = f v
 
-translateProposal :: Proposal ConwayEra  -> A.Value
-translateProposal p = case unProposal p of
-           ProposalProcedure co ra ga an ->A.object $  [
-                  "deposit" .= show co
-                , "rewardAccount" .= serialiseAddress ( fromShelleyStakeAddr ra)
-                , "anchor" .= (case an of { Anchor url sh -> A.object [ "url" .= show url, "hash" .=  (toHexString @T.Text $ serialize shelleyProtVer sh)] })
-            ] ++ case ga of
-                ParameterChange sm ppu ->   [
-                            "type" .= A.String "parameterUpdate"
-                          , "parameters" .= show ppu
-                        ] ++ convPrevGovActionId' sm
-                HardForkInitiation sm pv -> [
-                    "type" .= A.String "hardfork",
-                    "protocolVersion" .= show pv
-                  ]  ++ convPrevGovActionId' sm
-                TreasuryWithdrawals map ->[
-                      "type" .= A.String "treasuryWithdrawal",
-                      "accounts" .=  Map.map (\(Coin x) -> show x) (Map.mapKeys (serialiseAddress . fromShelleyStakeAddr) map)
-                      ]
-                NoConfidence sm ->("type" .= A.String "hardfork") : convPrevGovActionId' sm
-                UpdateCommittee sm set com  quorum->  [
-                            "type"    .= A.String "newCommittee"
-                          , "members" .= Set.toList  set
-                          , "quorumSize"  .=  numerator (unboundRational quorum)
-                          , "quorumMin"  .= denominator (unboundRational quorum)
-                        ] ++ convPrevGovActionId' sm
-                NewConstitution sm con ->   [
-                            "type" .= A.String "newConstitution"
-                          , "constitution" .= show   con
-                        ] ++ convPrevGovActionId' sm
-                InfoAction -> [
-                            "type" .= A.String "info"
-                      ]
+translateProposal :: Proposal era -> ProposalProcedureModal (CApi.ShelleyLedgerEra era)
+translateProposal (CApi.Proposal proposal) = ProposalProcedureModal proposal
 
-    where
-       convPrevGovActionId' mPgai=  case mPgai of
-            SNothing -> []
-            SJust pgai -> [convPrevGovActionId pgai]
-       convPrevGovActionId pgai=  "previousGovernanceActionId" .= A.String (toHexString @T.Text (serialize shelleyProtVer $ encCBOR pgai))
-
-certToJson :: Certificate ConwayEra -> A.Value
-certToJson c  = case c of
-  ShelleyRelatedCertificate stbe stc -> case stc of
-    ShelleyTxCertDelegCert sdc -> A.String $ T.pack $ show sdc
-    ShelleyTxCertPool pc -> A.String $ T.pack $ show pc
-    ShelleyTxCertGenesisDeleg gdc -> A.String $ T.pack $ show gdc
-    ShelleyTxCertMir mc -> A.String $ T.pack $ show mc
-  ConwayCertificate ceo ctc -> case ctc of
-    ConwayTxCertDeleg cdc -> A.String $ T.pack $ show cdc
-    ConwayTxCertPool pc -> A.String $ T.pack $ show pc
-    ConwayTxCertGov cgc -> A.String $ T.pack $ show cgc
 
 -- data Delegatee c
 --   = DelegStake !(KeyHash 'StakePool c)
@@ -635,16 +584,16 @@ instance FromJSON (TxOutput TxOutputContent ) where
         _ -> pure $ valueFromList []
     datumHashE <- parseData
     shouldEmbed <- v .:? "inlineDatum" .!= True
-    let txOutDatum=if shouldEmbed
-                                then case datumHashE of
-                                  Nothing -> TxOutDatumNone
-                                  Just (Left sd) -> TxOutDatumInline BabbageEraOnwardsConway sd
-                                  Just (Right dh) -> TxOutDatumHash AlonzoEraOnwardsConway dh
-                                else (case datumHashE of
-                                  Just (Left datum) -> TxOutDatumHash AlonzoEraOnwardsConway (hashScriptDataBytes datum)
-                                  Just (Right dh)   -> TxOutDatumHash AlonzoEraOnwardsConway dh
-                                  _ -> TxOutDatumNone
-                                )
+    let txOutDatum= if shouldEmbed
+                    then case datumHashE of
+                      Nothing -> TxOutDatumNone
+                      Just (Left sd) -> TxOutDatumInline BabbageEraOnwardsConway sd
+                      Just (Right dh) -> TxOutDatumHash AlonzoEraOnwardsConway dh
+                    else (case datumHashE of
+                      Just (Left datum) -> TxOutDatumHash AlonzoEraOnwardsConway (hashScriptDataBytes datum)
+                      Just (Right dh)   -> TxOutDatumHash AlonzoEraOnwardsConway dh
+                      _ -> TxOutDatumNone
+                    )
     mScript_ <- v .:? "script"
     mScript <- case mScript_ of
       Nothing ->  v .:? "inlineScript"

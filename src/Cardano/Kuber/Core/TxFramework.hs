@@ -5,6 +5,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeApplications #-}
 module Cardano.Kuber.Core.TxFramework where
 
 
@@ -184,7 +185,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         else  do
           case metadataFromJson TxMetadataJsonNoSchema (toJSON $ splitMetadataStrings  metadata) of
             Left tmje -> Left $ FrameworkError BadMetadata  (show tmje)
-            Right tm -> Right $ TxMetadataInEra  ShelleyBasedEraConway tm
+            Right tm -> Right $ TxMetadataInEra  shelleyBasedEra tm
   resolvedInputs <- mapM resolveInputs _inputs
   fixedInputs <- usedInputs Map.empty (Right defaultExunits) resolvedInputs
   parsedOutputs <- mapM (parseOutputs network) _outputs
@@ -274,7 +275,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
             TxSelectableAddresses aies -> Set.fromList (map toShelleyAddr aies) <>s
             TxSelectableUtxos uto -> s
             TxSelectableTxIn tis -> s
-            TxSelectableSkey sks -> Set.fromList (map (\x -> toShelleyAddr $ skeyToAddrInEra x network) sks) <> s  ) Set.empty  selections
+            TxSelectableSkey sks -> Set.fromList (map (\x -> toShelleyAddr $ skeyToAddrInEra @ConwayEra x network) sks) <> s  ) Set.empty  selections
     spendableUtxos = foldl (\mp (ti , tout@(TxOut addr _ _ _ ))-> if Set.member (toShelleyAddr addr) selectableAddrs then Map.insert ti tout mp else mp ) selectableUtxos  (Map.toList availableUtxo)
     selectableUtxos = foldl  (\s selection -> case selection of
           TxSelectableAddresses aies -> s
@@ -285,7 +286,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
           TxSelectableSkey sks -> s  ) Map.empty  selections
 
     respond txBody signatories = pure (txBody,makeSignedTransaction (map (toWitness txBody) $ mapMaybe (`Map.lookup` availableSkeys) $ Set.toList signatories) txBody)
-    toWitness body skey = makeShelleyKeyWitness body (WitnessPaymentKey skey)
+    toWitness body skey = makeShelleyKeyWitness shelleyBasedEra body (WitnessPaymentKey skey)
     availableSkeys = foldl (\set v  -> case v of
       TxInputUnResolved (TxInputSkey sk) -> Map.insert  (skeyToPaymentKeyHash sk) sk set
       _ -> set ) selectableSkeys _inputs
@@ -348,7 +349,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
           ConwayUnRegDRep cre co -> getPaymentCre cre
           ConwayUpdateDRep cre sm -> getPaymentCre cre
           ConwayAuthCommitteeHotKey cre cre' -> getPaymentCre cre
-          ConwayResignCommitteeColdKey cre -> getPaymentCre cre
+          ConwayResignCommitteeColdKey cre _anchor-> getPaymentCre cre
     classifyMints mp  = mapM  (classifyMint mp)
     getPaymentCre cre =  case cre of 
         KeyHashObj (KeyHash ha) -> Just $  PaymentKeyHash (KeyHash ha)
@@ -459,7 +460,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       (extraUtxos,change) <- selectUtxosConsideringChange (babbageMinLovelace ledgerPParam) (toCtxUTxOTxOut  changeTxOut) availableInputs startingChange
       -- Debug.traceM $ " change: " ++ show change
       -- Debug.traceM $ " Utxos : " ++ BS8.unpack (prettyPrintJSON extraUtxos )
-      bpparams <- case convertToLedgerProtocolParameters ShelleyBasedEraConway pParam of
+      bpparams <- case convertToLedgerProtocolParameters shelleyBasedEra pParam of
         Left ppce -> error "Couldn't Convert protocol parameters."
         Right bpp -> pure bpp
       let
@@ -477,10 +478,10 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                 changeaddr <-  monadFailChangeAddr
                 pure $ bodyContent (outputs++ [TxOut changeaddr (TxOutValue MaryEraOnwardsConway change) TxOutDatumNone ReferenceScriptNone ])
 
-      case createAndValidateTransactionBody bc of
+      case createAndValidateTransactionBody  cardanoEra bc of
           Left tbe ->Left  $ FrameworkError  LibraryError  (show tbe)
           Right tb -> do
-            pure (tb,requiredSignatories,evaluateTransactionFee (unLedgerProtocolParameters bpparams) tb signatureCount 0)
+            pure (tb,requiredSignatories,evaluateTransactionFee shelleyBasedEra (unLedgerProtocolParameters bpparams) tb signatureCount 0)
 
       where
         fixedOutputSum = foldMap txOutputVal fixedOutputs
@@ -540,7 +541,8 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         txTotalCollateral= TxTotalCollateralNone  ,
         txReturnCollateral = TxReturnCollateralNone ,
         Cardano.Api.Shelley.txFee=TxFeeExplicit ShelleyBasedEraConway  fee,
-        txValidityRange= (txLowerBound,txUpperBound),
+        txValidityLowerBound = txLowerBound,
+        txValidityUpperBound = txUpperBound,
         Cardano.Api.Shelley.txMetadata=meta  ,
         txAuxScripts=TxAuxScriptsNone,
         txExtraKeyWits=keyWitnesses,
@@ -822,17 +824,17 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     --TODO: FIX THIS AFTER it's fixed in cardano-api 
     txLowerBound = case validityStart of
       NoValidityTime -> TxValidityNoLowerBound
-      ValidityPosixTime ndt ->  TxValidityNoLowerBound  -- TxValidityLowerBound  (ByronAndAllegraEraOnwardsConway )   (toSlot ndt)
-      ValiditySlot sn -> TxValidityNoLowerBound -- TxValidityLowerBound ValidityLowerBoundInConwayEra sn
+      ValidityPosixTime ndt -> TxValidityNoLowerBound   -- TxValidityLowerBound  (ByronAndAllegraEraOnwards   )   (toSlot ndt)
+      ValiditySlot sn -> TxValidityNoLowerBound -- TxValidityLowerBound allegraEraOnwardsToByronAndAllegraOnwardsEra sn
     txUpperBound = case validityEnd of
-      NoValidityTime ->  TxValidityNoUpperBound ByronAndAllegraEraOnwardsConway
-      ValidityPosixTime ndt -> TxValidityUpperBound ShelleyBasedEraConway (toSlot ndt)
-      ValiditySlot sn -> TxValidityUpperBound ShelleyBasedEraConway sn
+      NoValidityTime ->  TxValidityUpperBound shelleyBasedEra Nothing
+      ValidityPosixTime ndt -> TxValidityUpperBound shelleyBasedEra (Just$ toSlot ndt)
+      ValiditySlot sn -> TxValidityUpperBound shelleyBasedEra (Just sn)
 
     defaultExunits=ExecutionUnits {executionMemory=100000,executionSteps= 60000000 }
 
     toSlot  =  timestampToSlot systemStart  eraHistory
-    ledgerPParam = case toLedgerPParams ShelleyBasedEraConway pParam of
+    ledgerPParam = case toLedgerPParams shelleyBasedEra pParam of
       Left ppce -> error "Failed to convert pparams"
       Right pp -> pp
 
@@ -857,7 +859,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
             ConwayUnRegDRep cre co -> 0
             ConwayUpdateDRep cre sm -> 0
             ConwayAuthCommitteeHotKey cre cre' -> 0
-            ConwayResignCommitteeColdKey cre -> 0
+            ConwayResignCommitteeColdKey cre _anchor-> 0
       maybeToCoin sm = case sm of 
             SNothing -> 0
             SJust (Coin co) -> co
@@ -876,7 +878,7 @@ txBuilderFromTx tx = let
             $ Set.toList $  Set.map fromShelleyTxIn  $ txBody ^. inputsTxBodyL
 
       outputs_ :: [TxOut CtxTx ConwayEra]
-      outputs_ = map  (fromShelleyTxOut ShelleyBasedEraConway) $  toList  $ txBody ^. outputsTxBodyL
+      outputs_ = map  (fromShelleyTxOut shelleyBasedEra) $  toList  $ txBody ^. outputsTxBodyL
 
       outputs =  foldMap (\x -> txOutput$ TxOutput (TxOutNative $  x) False False ErrorOnInsufficientUtxoAda )  outputs_
 

@@ -235,8 +235,6 @@ parseAddressBech32 txt = case deserialiseAddress (AsAddressInEra AsConwayEra) tx
   Nothing -> fail "Address is not in bech32 format"
   Just aie -> pure aie
 
-
-
 scriptDataParser :: MonadFail m =>  Aeson.Value  -> m HashableScriptData
 scriptDataParser v = doParsing v
   where

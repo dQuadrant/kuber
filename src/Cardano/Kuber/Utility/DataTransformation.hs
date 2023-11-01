@@ -30,8 +30,8 @@ skeyToAddr skey network =
     credential = PaymentCredentialByKey $ verificationKeyHash $ getVerificationKey skey
 
 -- | Create enterprise  address from SignKey
-skeyToAddrInEra :: SigningKey PaymentKey -> NetworkId -> AddressInEra ConwayEra
-skeyToAddrInEra skey network = makeShelleyAddressInEra network credential NoStakeAddress
+skeyToAddrInEra :: IsShelleyBasedEra era => SigningKey PaymentKey -> NetworkId -> AddressInEra era
+skeyToAddrInEra skey network = makeShelleyAddressInEra shelleyBasedEra network credential NoStakeAddress
   where
     credential = PaymentCredentialByKey $ verificationKeyHash $ getVerificationKey skey
 
@@ -57,7 +57,7 @@ skeyToPaymentKeyHash skey = verificationKeyHash $ getVerificationKey skey
 
 -- | Convert AddressInEra (cardano-api type) to Hash PaymentKey (cardano-api type).
 -- Will return `Nothing` if address is  an Byron Address
-addressInEraToPaymentKeyHash :: AddressInEra ConwayEra -> Maybe (Hash PaymentKey)
+addressInEraToPaymentKeyHash ::IsShelleyBasedEra era =>  AddressInEra era -> Maybe (Hash PaymentKey)
 addressInEraToPaymentKeyHash a = case a of
   AddressInEra atie ad -> case ad of
     ByronAddress ad' -> Nothing
@@ -68,10 +68,10 @@ addressInEraToPaymentKeyHash a = case a of
 -- | convert PubKeyhash (plutus tupe) to corresponding Enterprise address (cardano-api type).
 -- Note that the transformation  Address <-> Pkh is not symmetrical for all addresses
 -- It's symmetrical for Enterprise addresses (because enterprise addresses have no stake Key in it)
-pkhToMaybeAddr :: NetworkId -> PubKeyHash -> Maybe (AddressInEra ConwayEra)
+pkhToMaybeAddr :: IsShelleyBasedEra era => NetworkId -> PubKeyHash -> Maybe (AddressInEra era)
 pkhToMaybeAddr network (PubKeyHash pkh) = do
   key <- vKey
-  Just $ makeShelleyAddressInEra network (PaymentCredentialByKey key) NoStakeAddress
+  Just $ makeShelleyAddressInEra shelleyBasedEra network (PaymentCredentialByKey key) NoStakeAddress
   where
     paymentCredential _vkey = PaymentCredentialByKey _vkey
     vKey = case deserialiseFromRawBytes (AsHash AsPaymentKey) $ fromBuiltin pkh of
@@ -108,11 +108,11 @@ addrInEraToValHash a = case a of
 
 -- | Convert the address to Enterprise Address.
 -- Enterprise address is an address having no stakeKey. Returns same address if the address is a Byron era address.
-unstakeAddr :: AddressInEra ConwayEra -> AddressInEra ConwayEra
+unstakeAddr :: IsShelleyBasedEra era => AddressInEra era -> AddressInEra era
 unstakeAddr a = case a of
   AddressInEra atie ad -> case ad of
     ByronAddress ad' -> a
-    ShelleyAddress net cre sr -> shelleyAddressInEra $ ShelleyAddress net cre StakeRefNull
+    ShelleyAddress net cre sr -> shelleyAddressInEra shelleyBasedEra $ ShelleyAddress net cre StakeRefNull
 
 -- | Create Plutus library AssetClass structure from Cardano.Api's AssetId
 toPlutusAssetClass :: AssetId -> AssetClass

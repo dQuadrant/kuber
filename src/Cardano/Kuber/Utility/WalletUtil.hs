@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Cardano.Kuber.Utility.WalletUtil where
-import Cardano.Api (SigningKey, PaymentKey, TxBody, ConwayEra, Tx, makeSignedTransaction, makeShelleyKeyWitness, ShelleyWitnessSigningKey (WitnessPaymentKey))
+import Cardano.Api (SigningKey, PaymentKey, TxBody, ConwayEra, Tx, makeSignedTransaction, makeShelleyKeyWitness, ShelleyWitnessSigningKey (WitnessPaymentKey), IsShelleyBasedEra (shelleyBasedEra))
 import qualified Data.Text as T
 import qualified Data.Text.IO as TextIO
 import System.Directory ( doesFileExist )
@@ -38,4 +38,4 @@ signTxBody :: TxBody ConwayEra -> [SigningKey PaymentKey] -> Tx ConwayEra
 signTxBody txBody skeys= do
           makeSignedTransaction (map toWitness skeys) txBody
   where
-    toWitness skey = makeShelleyKeyWitness txBody (WitnessPaymentKey skey)
+    toWitness skey = makeShelleyKeyWitness shelleyBasedEra txBody (WitnessPaymentKey skey)

@@ -117,15 +117,17 @@ kEvaluateExUnits'' tx  = do
     utxos <-kQueryUtxoByTxin allInputs
     kEvaluateExUnits' (getTxBody tx) utxos
 
+kCalculateMinFee' :: (HasChainQueryAPI a, IsShelleyBasedEra era) => Tx era -> Kontract a w FrameworkError Lovelace
 kCalculateMinFee' tx = do 
     kCalculateMinFee'' (getTxBody tx) (fromInteger $ toInteger $  length (getTxWitnesses tx)) 0
 
+kCalculateMinFee'' :: (HasChainQueryAPI a, IsShelleyBasedEra era) => TxBody era -> Word -> Word -> Kontract a w FrameworkError Lovelace
 kCalculateMinFee'' txbody shelleyWitnesses byronWitnesses = do 
     protocolParams <- kQueryProtocolParams
-    bpparams <- case convertToLedgerProtocolParameters ShelleyBasedEraConway protocolParams  of
+    bpparams <- case convertToLedgerProtocolParameters shelleyBasedEra protocolParams  of
         Left ppce -> error "Couldn't Convert protocol parameters."
         Right bpp -> pure bpp
-    pure $ evaluateTransactionFee (unLedgerProtocolParameters bpparams)  txbody shelleyWitnesses byronWitnesses
+    pure $ evaluateTransactionFee shelleyBasedEra (unLedgerProtocolParameters bpparams)  txbody shelleyWitnesses byronWitnesses
 
 
 kBuildAndSubmit'  builder =  do
