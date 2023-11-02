@@ -856,7 +856,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
             RetirePool kh en -> 0
           ConwayTxCertGov cgc -> case cgc of 
             ConwayRegDRep cre (Coin co) sm -> co
-            ConwayUnRegDRep cre co -> 0
+            ConwayUnRegDRep cre (Coin co) -> negate co
             ConwayUpdateDRep cre sm -> 0
             ConwayAuthCommitteeHotKey cre cre' -> 0
             ConwayResignCommitteeColdKey cre _anchor-> 0
