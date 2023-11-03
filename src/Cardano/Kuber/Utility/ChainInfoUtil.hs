@@ -90,6 +90,8 @@ getNetworkFromEnv envKey = do
       "testnet" -> ("testnet", Testnet (NetworkMagic 1097911063))
       "preprod" -> ("preprod", Testnet (NetworkMagic 1))
       "preview" -> ("preview", Testnet (NetworkMagic 2))
+      "sancho" -> pure (Testnet $ NetworkMagic 4)
+      "sanchonet" -> pure (Testnet $ NetworkMagic 4)
       val -> do
         case readMaybe s of
           Just v -> ("", Testnet (NetworkMagic v))

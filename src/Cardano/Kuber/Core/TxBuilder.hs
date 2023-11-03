@@ -55,9 +55,12 @@ import Data.Bifunctor
 import GHC.Generics (Generic)
 import Data.Time.Clock.POSIX
 import Foreign.C (CTime)
+import Cardano.Kuber.Data.Models (TxVote)
+import Cardano.Api.Ledger (StandardCrypto)
+import qualified Cardano.Ledger.Api.Era as Ledger
 
 
-newtype TxSimpleScript = TxSimpleScript SimpleScript  
+newtype TxSimpleScript = TxSimpleScript SimpleScript
     deriving(Show)
 
 data TxScript = TxScriptSimple TxSimpleScript
@@ -185,7 +188,7 @@ data TxBuilder=TxBuilder{
     txMintData :: [TxMintData TxMintingScriptSource],
     txSignatures :: [TxSignature],
     txProposals :: [Proposal ConwayEra],
-    txVotes :: [VotingProcedures ConwayEra],
+    txVotes :: [TxVote  ConwayEra],
     txCertificates :: [Certificate ConwayEra],
     txFee :: Maybe Integer,
     txDefaultChangeAddr :: Maybe (AddressInEra ConwayEra),
@@ -193,7 +196,7 @@ data TxBuilder=TxBuilder{
   } deriving (Show)
 
 instance Monoid TxBuilder where
-  mempty = TxBuilder  [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty 
+  mempty = TxBuilder  [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
 
 instance Semigroup TxBuilder where
   (<>)  txb1 txb2 =TxBuilder{
@@ -282,7 +285,7 @@ txProposal :: Proposal ConwayEra -> TxBuilder
 txProposal p =TxBuilder  [] [] [] [] [] mempty mempty [] [] [p] [] [] Nothing Nothing Map.empty
 
 -- voting
-txVote :: VotingProcedures ConwayEra -> TxBuilder
+txVote :: TxVote ConwayEra -> TxBuilder
 txVote v =TxBuilder  [] [] [] [] [] mempty mempty [] [] [] [v] [] Nothing Nothing Map.empty
 
 -- voting

@@ -369,6 +369,17 @@ parseRawBech32'   bech32Str = do
       Nothing -> fail "String not in Bech32 format"
       Just bs -> pure bs
 
+parseRawBech32_:: MonadFail m => Text ->   m (Text,ByteString)
+parseRawBech32_   bech32Str = do
+    (prefix, dataPart) <-case Bech32.decodeLenient bech32Str of
+      Left de -> fail "Invalid bech 32"
+      Right x0 -> pure x0
+
+    case Bech32.dataPartToBytes dataPart of 
+      Nothing -> fail "String not in Bech32 format"
+      Just bs -> pure (Bech32.humanReadablePartToText prefix,bs)
+
+
 
 
 parseBech32Type' :: (SerialiseAsBech32 a, MonadFail m) => Text -> AsType a -> ErrorMessage -> m a

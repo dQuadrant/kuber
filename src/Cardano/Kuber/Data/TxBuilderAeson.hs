@@ -17,7 +17,7 @@ import Cardano.Api.Shelley
     (
       ReferenceScript(ReferenceScript, ReferenceScriptNone),
       ReferenceScript(ReferenceScript, ReferenceScriptNone),
-      scriptDataToJsonDetailedSchema, Proposal (unProposal), VotingProcedures (unVotingProcedures), fromLedgerPParamsUpdate, fromShelleyStakeAddr )
+      scriptDataToJsonDetailedSchema, Proposal (unProposal), VotingProcedures (unVotingProcedures, VotingProcedures), fromLedgerPParamsUpdate, fromShelleyStakeAddr, VotingProcedure (unVotingProcedure) )
 import Cardano.Kuber.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
@@ -99,7 +99,7 @@ instance FromJSON TxBuilder where
       <*> v .?< "mint"
       <*> v .?< "signature"
       <*> pure (map (\(ProposalProcedureModal p ) -> CApi.Proposal p) proposals)
-      <*> pure []
+      <*> (v .?< "vote")
       <*>  (do
         res :: [CertificateModal cardanoEra] <- v .?< "certificate"
         pure $ map  unWrap res )
@@ -219,7 +219,7 @@ instance ToJSON TxBuilder where
               <+>  "validityEnd"    `appendValidity` validityEnd
               <+>  "signatures"     >= signatures
               <+>  "proposals"      >= map translateProposal proposals
-              <+>  "votes"          >= map unVotingProcedures votes
+              <+>  "votes"          >=  votes
               <+>  "certificates"   >= map CertificateModal certs
               <+>  "fee"            >= fee
               <+>  "changeAddress"  >= defaultChangeAddr

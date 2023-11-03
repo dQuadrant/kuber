@@ -16,7 +16,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 
 module Cardano.Kuber.Data.Models where
 
@@ -38,7 +39,7 @@ import qualified Data.Text.Encoding as TSE
 import GHC.Generics (Generic)
 import Text.Read (readMaybe)
 import Cardano.Kuber.Utility.Text (toHexString)
-import Cardano.Kuber.Data.Parsers (signKeyParser, txinOrUtxoParser, parseHexString, parseRawBytes', parseRawBytes, parseBech32OrCBOR', parseRawBech32, parseBech32Type, parseHexString', parseRawBech32', txInParser)
+import Cardano.Kuber.Data.Parsers (signKeyParser, txinOrUtxoParser, parseHexString, parseRawBytes', parseRawBytes, parseBech32OrCBOR', parseRawBech32, parseBech32Type, parseHexString', parseRawBech32', txInParser, parseRawBech32_)
 import Cardano.Slotting.Time (SystemStart(SystemStart))
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, POSIXTime)
 import Cardano.Kuber.Error (FrameworkError)
@@ -72,7 +73,7 @@ import Cardano.Ledger.BaseTypes (UnitInterval)
 import Data.Default (def)
 import Data.Bits ((.&.))
 import qualified Cardano.Crypto.Hash as Crypto
-import Control.Lens ((&), (.~), ASetter, Lens')
+import Control.Lens ((&), (.~), ASetter, Lens', (^.), Getting)
 import Cardano.Ledger.HKD
 import GHC.Natural (Natural)
 import qualified Data.Aeson.Types as A
@@ -84,8 +85,8 @@ import Data.List (intercalate)
 import qualified Cardano.Ledger.TxIn as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
-import Cardano.Ledger.Credential (parseCredential)
 import Cardano.Ledger.Binary.Plain (serializeAsHexText)
+import Cardano.Ledger.Credential (parseCredential)
 
 class Wrapper  m a  where
   unWrap :: m  ->  a
@@ -121,16 +122,44 @@ newtype SystemStartModal = SystemStartModal SystemStart
 newtype EraHistoryModal = EraHistoryModal (EraHistory CardanoMode)
 newtype GenesisParamModal era = GenesisParamModal (GenesisParameters era)
 
+newtype VotingProcedureModal era = VotingProcedureModal (Ledger.VotingProcedure era)
+
+instance Wrapper (VotingProcedureModal era) (Ledger.VotingProcedure era) where
+  unWrap(VotingProcedureModal vp)=vp
+
+newtype VoteModal = VoteModal Ledger.Vote
+
+instance Wrapper VoteModal Ledger.Vote where
+  unWrap (VoteModal vote) = vote
+
+
+-- ledger
+-- newtype VotingProcedures era = VotingProcedures
+--   { unVotingProcedures ::
+--       Map (Voter (EraCrypto era)) (Map (GovActionId (EraCrypto era)) (VotingProcedure era))
+--   }
+-- CAPI
+-- newtype VotingProcedures era = VotingProcedures
+  -- { unVotingProcedures  :: L.VotingProcedures (ShelleyLedgerEra era)
+  -- }
+data  TxVoteL (ledgerera) = TxVoteL
+                        (Ledger.GovActionId (EraCrypto ledgerera))
+                        (Ledger.VotingProcedure  ledgerera)
+                        (Ledger.Voter (EraCrypto ledgerera))
+                      deriving (Show,Eq)
+
+newtype (TxVote era) = TxVote (TxVoteL (ShelleyLedgerEra era)) deriving (Show,Eq)
+
+
+
 
 newtype DrepModal era = DrepModal (DRep era)
 
 instance Wrapper (DrepModal era) (DRep era) where
   unWrap(DrepModal drep) = drep
 
-newtype ConwayPramaterChangeModal  = ConwayPramaterChangeModal (PParamsUpdate ConwayEra)
-
-
 data CredentialModal (r::KeyRole)  era = CredentialModal (Credential r era) deriving (Show, Eq)
+
 
 instance Wrapper UtxoModal (UTxO ConwayEra) where
   unWrap (UtxoModal utxos) = utxos
@@ -295,6 +324,8 @@ instance FromJSON (GenesisParamModal ShelleyEra) where
           "mainnet" -> pure Mainnet
           "preview" -> pure (Testnet $ NetworkMagic 1)
           "preprod" -> pure (Testnet $ NetworkMagic 2)
+          "sancho" -> pure (Testnet $ NetworkMagic 4)
+          "sanchonet" -> pure (Testnet $ NetworkMagic 4)
           _         -> fail $ "Unknown network name: " ++ T.unpack str
       parseNetwork (A.Number n) = pure $ Testnet (NetworkMagic $ fromInteger $ round n)
       parseNetwork _ = fail "Expected NetworkId"
@@ -696,10 +727,10 @@ instance  (EraCrypto ledgerera ~ StandardCrypto, Ledger.EraPParams ledgerera,Led
   parseJSON  _ = fail "Expected GovActionModal Object"
 
 
-instance (Crypto (EraCrypto era),EraCrypto era ~ StandardCrypto, Ledger.Era era) => ToJSON (ProposalProcedureModal era) where
+instance (Crypto (EraCrypto era),EraCrypto era ~ StandardCrypto, Ledger.Era era, EraPParams era,Ledger.ConwayEraPParams era) => ToJSON (ProposalProcedureModal era) where
   toJSON (ProposalProcedureModal (ProposalProcedure (Coin co) refundAccnt ga an))
     = A.object $ ["anchor" .= an, "deposit" .= co , "refundAccount" .= RewardAcntModal refundAccnt ] ++  (case ga of
-   ParameterChange sm ppu -> addPrevGovAction sm [A.fromString "parameterUpdate" .= A.Null ]
+   ParameterChange sm ppu -> addPrevGovAction sm [A.fromString "parameterUpdate" .= parameterUpdateJson ppu ]
    HardForkInitiation sm pv -> addPrevGovAction sm ["hardFork" .= A.object ["protocolVersion" .= pv] ]
    TreasuryWithdrawals map ->  ["withdraw" .= Map.mapKeys RewardAcntModal map ]
    NoConfidence sm -> addPrevGovAction sm ["noConfidence" .= True ]
@@ -715,6 +746,41 @@ instance (Crypto (EraCrypto era),EraCrypto era ~ StandardCrypto, Ledger.Era era)
       addPrevGovAction (SJust (PrevGovActionId (GovActionId txid (GovActionIx index)))) v = ("prevGovAction"  .=  renderTxIn ( fromShelleyTxIn  $ Ledger.TxIn txid ( Ledger.TxIx $ fromIntegral index))) : v
       addPrevGovAction SNothing v = v
 
+      parameterUpdateJson ppu = let
+                paramUpdateField :: (ToJSON a) => A.Key-> Getting (StrictMaybe v) (PParamsUpdate era) (StrictMaybe v)-> (v -> a)-> [A.Pair]
+                paramUpdateField k getter f = case ppu ^. getter  of
+                  SJust v -> [ k .= toJSON (f v)]
+                  SNothing -> []
+            in
+             paramUpdateField "Maxblocksize" Ledger.ppuMaxBBSizeL id
+          <> paramUpdateField "MinFeeA"   Ledger.ppuMinFeeAL id
+          <> paramUpdateField "MaxBBSize" Ledger.ppuMaxBBSizeL id
+          <> paramUpdateField "MaxTxSize" Ledger.ppuMaxTxSizeL id
+          <> paramUpdateField "MaxBHSize" Ledger.ppuMaxBHSizeL id
+          <> paramUpdateField "KeyDeposit" Ledger.ppuKeyDepositL id
+          <> paramUpdateField "PoolDeposit" Ledger.ppuPoolDepositL id
+          <> paramUpdateField "EMax" Ledger.ppuEMaxL id
+          <> paramUpdateField "NOpt" Ledger.ppuNOptL id
+          <> paramUpdateField "A0" Ledger.ppuA0L id
+          <> paramUpdateField "Rho" Ledger.ppuRhoL id
+          <> paramUpdateField "Tau" Ledger.ppuTauL id
+          <> paramUpdateField "MinPoolCost" Ledger.ppuMinPoolCostL id
+          <> paramUpdateField "CoinsPerUTxOByte" Ledger.ppuCoinsPerUTxOByteL id
+          <> paramUpdateField "CostModels" Ledger.ppuCostModelsL id
+          <> paramUpdateField "Prices" Ledger.ppuPricesL id
+          <> paramUpdateField "MaxTxExUnits" Ledger.ppuMaxTxExUnitsL id
+          <> paramUpdateField "MaxBlockExUnits" Ledger.ppuMaxBlockExUnitsL id
+          <> paramUpdateField "MaxValSize" Ledger.ppuMaxValSizeL id
+          <> paramUpdateField "CollateralPercentage" Ledger.ppuCollateralPercentageL id
+          <> paramUpdateField "MaxCollateralInputs" Ledger.ppuMaxCollateralInputsL id
+          <> paramUpdateField "PoolVotingThresholds" Ledger.ppuPoolVotingThresholdsL id
+          <> paramUpdateField "DRepVotingThresholds" Ledger.ppuDRepVotingThresholdsL id
+          <> paramUpdateField "CommitteeMinSize" Ledger.ppuCommitteeMinSizeL id
+          <> paramUpdateField "CommitteeMaxTermLength" Ledger.ppuCommitteeMaxTermLengthL id
+          <> paramUpdateField "GovActionLifetime" Ledger.ppuGovActionLifetimeL id
+          <> paramUpdateField "GovActionDeposit" Ledger.ppuGovActionDepositL id
+          <> paramUpdateField "DRepDeposit" Ledger.ppuDRepDepositL id
+          <> paramUpdateField "DRepActivity" Ledger.ppuDRepActivityL id
 
 instance (era ~ ConwayEra)  =>  FromJSON (CertificateModal era) where
   parseJSON :: A.Value -> Parser (CertificateModal era)
@@ -811,24 +877,19 @@ instance ( ConwayEra ~ era) => ToJSON (CertificateModal era ) where
         RegPool pp -> ["type" .=  A.String "registerpool","params" .= pp]
         RetirePool kh en -> ["type" .=  A.String "retirepool","epoch" .= en]
       ConwayTxCertGov cgc -> case cgc of
-        ConwayRegDRep cre co sm -> ["type" .= A.String  "registerdrep",keyJson cre,"deposit" .= co ] ++ withAnchor sm
+        ConwayRegDRep cre co sm -> ["type" .= A.String  "registerdrep",keyJson cre,"deposit" .= co ] ++ anchorToKeyValue sm
         ConwayUnRegDRep cre co -> ["type" .= A.String "deregisterdrep",keyJson cre,"deposit" .= co ]
-        ConwayUpdateDRep cre sm -> ["type" .= A.String "updatedrep",keyJson cre] ++ withAnchor sm
-        ConwayAuthCommitteeHotKey cre_cold cre_hot -> ["type" .= A.String "authcommittee", keyJson cre_cold, "hotkey" .= (CredentialModal cre_hot)]
-        ConwayResignCommitteeColdKey cre sm -> ("type" .= A.String"resigncommittee") : withAnchor sm
+        ConwayUpdateDRep cre sm -> ["type" .= A.String "updatedrep",keyJson cre] ++ anchorToKeyValue sm
+        ConwayAuthCommitteeHotKey cre_cold cre_hot -> ["type" .= A.String "authcommittee", keyJson cre_cold, "hotkey" .= CredentialModal cre_hot]
+        ConwayResignCommitteeColdKey cre sm -> ("type" .= A.String"resigncommittee") : anchorToKeyValue sm
 
     where
-      keyJson cre = "key" .= (CredentialModal cre)
+      keyJson cre = "key" .= CredentialModal cre
       delegateeToJson del =  case del of
           DelegStake kh -> ["pool" .= kh]
           DelegVote c -> ["drep" .= DrepModal c]
           DelegStakeVote kh dr -> ["pool" .= kh,"drep" .= DrepModal dr ]
 
-      addKeyIfJust  k = \case
-        SJust val ->  [  k .= val]
-        SNothing -> []
-
-      withAnchor  ma = addKeyIfJust "anchor" ma
       withDeposit md = addKeyIfJust "deposit" md
 
 
@@ -863,17 +924,89 @@ instance ( era ~ StandardCrypto, Typeable r ) => ToJSONKey (CredentialModal r er
   toJSONKey  =A.toJSONKeyText anctToJsonKey
     where
       anctToJsonKey (CredentialModal cre) = case cre of
-        ScriptHashObj sh -> Ledger.credToText cre 
+        ScriptHashObj sh -> Ledger.credToText cre
         KeyHashObj kh ->T.drop 4 $ serializeAsHexText kh --TODO do this properly
 
+instance FromJSON VoteModal where
+  parseJSON (A.String txt) = case T.toLower txt of
+    "abstain" -> pure $ VoteModal Ledger.Abstain
+    "yes" -> pure $ VoteModal Ledger.VoteYes
+    "no"  -> pure $ VoteModal Ledger.VoteNo
+    _ ->  fail  $ "Expected  \"yes\", \"no\" or \"abstain\" " ++"got: \"" ++ T.unpack txt ++ "\""
+  parseJSON (A.Bool b) = pure $ VoteModal $ if b then  Ledger.VoteYes else Ledger.VoteNo
+  parseJSON (A.Number n) = pure $ VoteModal if round n ==0 then Ledger.VoteNo else Ledger.VoteYes
+  parseJSON _ = fail "Expected vote to be boolean or \"yes\", \"no\" or \"abstain\""
+
+instance ToJSON VoteModal where
+  toJSON (VoteModal vote) = case vote of
+    Ledger.VoteNo -> A.Bool False
+    Ledger.VoteYes -> A.Bool True
+    Ledger.Abstain -> "abstain"
+
+instance (Crypto (EraCrypto era)) => FromJSON (VotingProcedureModal era) where
+  parseJSON (A.Object o) = do
+     mAnchor <- o .:? "anchor"
+     (VoteModal vote) <- o .: "vote"
+     pure $ VotingProcedureModal (Ledger.VotingProcedure vote (toStrictMaybe mAnchor))
+  parseJSON _ = fail "Expected VotingProcedure Object"
+
+instance   FromJSON (TxVote ConwayEra) where
+  parseJSON (A.Object o) = do
+      govAction <- o .: "govAction" <|> o .: "proposal"
+      mAnchor <- o.:? "anchor"
+      (VoteModal vote) <- o .: "vote"
+      voter <-  o.: "voter" 
+      let
+          mkTxVote f = do
+            pure $ TxVote $ TxVoteL (govActionId govAction) (Ledger.VotingProcedure vote (toStrictMaybe mAnchor)) f
+          getCred credBytes= rawBytesToCred credBytes  True <|> fail ".voter bech32 is not valid credential"
+      case parseRawBech32_ voter  of
+        Just (header,credBytes) -> do
+            case header of
+              "drep" ->  getCred credBytes >>= (mkTxVote . Ledger.DRepVoter)
+              "cc_hot" -> getCred credBytes >>= (mkTxVote . Ledger.CommitteeVoter)
+              "pool" -> case hashFromBytes credBytes of
+                  Nothing -> fail $  "Invalid key :" ++ T.unpack voter
+                  Just ha -> mkTxVote $ Ledger.StakePoolVoter (KeyHash ha)
+              _ -> fail $ "Invalid credential type : " ++ T.unpack header
+
+        Nothing  -> do
+          role <- o.: "role" <|> fail ".role is required when voter is not bech32 credential"
+          credBytes <- parseHexString' voter ".voter cannot parse as bech32 or hex "
+          if role == "drep"
+            then  getCred credBytes >>= (mkTxVote . Ledger.DRepVoter)
+          else if role == "cc" || role == "committee"  || role == "cc_hot"
+            then getCred credBytes >>= (mkTxVote . Ledger.CommitteeVoter)
+          else if role == "pool" || role =="stakepool" || role=="stakePool"
+            then case hashFromBytes credBytes of
+                  Nothing -> fail $  "Invalid key :" ++ T.unpack voter
+                  Just ha -> mkTxVote $ Ledger.StakePoolVoter (KeyHash ha)
+          else fail $ ".role expected: drep, pool or cc but got: " ++ T.unpack role
+    where
+        govActionId
+            (UtxoIdModal ( prevGovTxId, TxIx prevGovTxIx))
+                =  GovActionId (toShelleyTxId prevGovTxId) (GovActionIx $ fromIntegral prevGovTxIx)
+  parseJSON _ = fail "Expected Vote Object"
+
+instance   ToJSON (TxVote ConwayEra) where
+  toJSON (TxVote ( TxVoteL (GovActionId txid (GovActionIx index)) (Ledger.VotingProcedure vote mAnchor) voter) ) = A.object $ [
+          "vote" .= VoteModal vote
+        , "proposal" .= renderTxIn ( fromShelleyTxIn  $ Ledger.TxIn txid ( Ledger.TxIx $ fromIntegral index))
+    ] ++ anchorToKeyValue mAnchor 
+      ++  (case voter of
+          Ledger.CommitteeVoter cre -> ["voter" .=CredentialModal cre, "role" .= A.String "committee"]
+          Ledger.DRepVoter cre -> ["voter" .=CredentialModal cre,"role" .= A.String "drep"]
+          Ledger.StakePoolVoter kh -> ["voter" .=CredentialModal (KeyHashObj kh) , "role" .= A.String "stakePool"])
 
 instance ( ledgerera ~ StandardCrypto ,Crypto ledgerera) => FromJSONKey (CredentialModal r ledgerera) where
   fromJSONKey  = A.FromJSONKeyTextParser  parseCredentialText
 
-instance (Crypto ledgerera) => ToJSON (CredentialModal r ledgerera) where
+instance (Crypto ledgerera, Typeable r) => ToJSON (CredentialModal r ledgerera) where
   toJSON (CredentialModal cre) = case cre of
     ScriptHashObj sh -> A.object ["scriptHash" .= sh ]
-    KeyHashObj kh -> toJSON kh
+    KeyHashObj kh -> A.String $ T.drop 4 $ serializeAsHexText kh
+
+
 -- Serialization format  header for stake address
 -- -- ┏━━━━━━━━━━━━━━━━┳━┯━┯━┯━┯━┯━┯━┯━┓
 -- -- ┃ Reward Account ┃1┊1┊1┊x┊0┊0┊0┊x┃
@@ -947,7 +1080,7 @@ instance FromJSON UtxoIdModal where
   parseJSON v = txInParser v <&> (\(TxIn txid ix)-> UtxoIdModal (txid,ix))
 
 toStrictMaybe (Just v) = SJust v
-toStrictMaybe (Nothing) =SNothing
+toStrictMaybe Nothing =SNothing
 
 fromStrictMaybe :: StrictMaybe a -> Maybe a
 fromStrictMaybe (SJust v) = Just v
@@ -966,3 +1099,10 @@ toGovernanceAction
   PrevGovAction purpose -> LedgerAnchor
   -> Ledger.Constitution ledgerera
 toGovernanceAction  prevGovAction anchor =  Constitution anchor SNothing
+
+
+anchorToKeyValue  ma = addKeyIfJust "anchor" ma
+
+addKeyIfJust  k = \case
+  SJust val ->  [  k .= val]
+  SNothing -> []

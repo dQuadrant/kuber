@@ -84,15 +84,18 @@ import Cardano.Kuber.Utility.Misc
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Core.LocalNodeChainApi (HasLocalNodeAPI (..))
 import Control.Lens ((^.))
-import Cardano.Ledger.Api (EraTxBody(..), MaryEraTxBody (mintTxBodyL), proposalProceduresTxBodyL, ProposalProcedure (..))
+import Cardano.Ledger.Api (EraTxBody(..), MaryEraTxBody (mintTxBodyL), proposalProceduresTxBodyL, ProposalProcedure (..), GovActionId)
 import Cardano.Api.Ledger (ConwayTxCert(..), ConwayDelegCert (..), PoolCert (..), ConwayGovCert (..), PoolParams (PoolParams), StrictMaybe (..))
+import Cardano.Kuber.Data.Models (TxVote(..), TxVoteL (TxVoteL))
+import qualified Cardano.Ledger.Api as Ledger
+import qualified Cardano.Api.Shelley as CAPI
 
 type BoolChange   = Bool
 type BoolFee = Bool
 type  ParsedInput   = Either (Witness WitCtxTxIn ConwayEra,TxOut CtxUTxO ConwayEra ) (Maybe ExecutionUnits,ScriptWitness WitCtxTxIn ConwayEra ,TxOut CtxUTxO  ConwayEra )
 type  ParsedOutput  = TxOutput (TxOut CtxTx ConwayEra)
 
--- Given TxBuilder object, Construct a txBody
+-- Given TxBuilder object, Construct a txBody3
 -- This IO code, constructs detailedChainInfo(protocolParam,costPerWord,eraHistory,SystemHistory)
 -- then queries required utxos used in inputs and calls  txBuilderToTxBody
 executeTxBuilder::  (HasChainQueryAPI api ,HasLocalNodeAPI api)  =>    TxBuilder  -> Kontract  api w FrameworkError (Cardano.Api.TxBody ConwayEra,Tx ConwayEra)
@@ -559,7 +562,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
           , -- No:: Maybe (Featured ConwayEraOnwards era [Proposal era]),
         txVotingProcedures  = if null votes
                                   then Nothing
-                                  else Just $ Featured ConwayEraOnwardsConway (head votes) 
+                                  else Just $ Featured ConwayEraOnwardsConway (CAPI.VotingProcedures $ Ledger.VotingProcedures txVoteToVotingProcedure) 
         --  :: Maybe (Featured ConwayEraOnwards era (VotingProcedures era))
           })
           -- CertificatesSupportedInEra era
@@ -567,6 +570,22 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
           --               -> BuildTxWith build
           --                    (Map StakeCredential (Witness WitCtxStake era))
 
+                -- Map (Voter (EraCrypto era)) (Map (GovActionId (EraCrypto era)) (VotingProcedure era))
+
+
+
+    txVoteToVotingProcedure = foldl processVoteMap mempty votes
+      where
+        processVoteMap accMap (TxVote ( TxVoteL govActionId votingProcedure voter)) =
+          Map.insertWith (\old new -> old) 
+              voter (Map.singleton govActionId votingProcedure) accMap
+
+
+        -- insertVotingProcedure :: Ledger.GovActionId era -> Ledger.VotingProcedure era -> Map (Ledger.GovActionId era) (Ledger.VotingProcedure era) -> Map (Ledger.GovActionId era) (Ledger.VotingProcedure era)
+        -- insertVotingProcedure govActionId votingProcedure newMap = Map.insertWith (\_ old -> old) govActionId votingProcedure newMap
+
+-- Example usage:
+-- let result = txVoteToVotingProcedure yourListOfTxVotes
     -- totalDeposits = map (\(Proposal v) -> case v of ) proposals
     -- certificates = map (\x ->  ) certs
     keyWitnesses = if null extraSignatures
@@ -884,3 +903,6 @@ txBuilderFromTx tx = let
 
       proposals = txBody ^. proposalProceduresTxBodyL
     in mempty
+
+
+ 
