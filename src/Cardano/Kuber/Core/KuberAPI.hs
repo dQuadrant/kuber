@@ -16,7 +16,7 @@ import Data.Time.Clock.POSIX (POSIXTime)
 import Cardano.Kuber.Utility.Misc
 import Data.Functor ((<&>))
 import Data.Map (Map)
-import Cardano.Api.Shelley (TxBody(ShelleyTxBody), fromShelleyTxIn, convertToLedgerProtocolParameters, LedgerProtocolParameters (unLedgerProtocolParameters))
+import Cardano.Api.Shelley (TxBody(ShelleyTxBody), fromShelleyTxIn, convertToLedgerProtocolParameters, LedgerProtocolParameters (unLedgerProtocolParameters), ShelleyLedgerEra)
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Debug.Trace as Debug
@@ -124,7 +124,8 @@ kCalculateMinFee' tx = do
 kCalculateMinFee'' :: (HasChainQueryAPI a, IsShelleyBasedEra era) => TxBody era -> Word -> Word -> Kontract a w FrameworkError Lovelace
 kCalculateMinFee'' txbody shelleyWitnesses byronWitnesses = do 
     protocolParams <- kQueryProtocolParams
-    bpparams <- case convertToLedgerProtocolParameters shelleyBasedEra protocolParams  of
+    let capiParams = fromLedgerPParams ShelleyBasedEraConway (unLedgerProtocolParameters protocolParams)
+    bpparams <- case convertToLedgerProtocolParameters shelleyBasedEra capiParams  of
         Left ppce -> error "Couldn't Convert protocol parameters."
         Right bpp -> pure bpp
     pure $ evaluateTransactionFee shelleyBasedEra (unLedgerProtocolParameters bpparams)  txbody shelleyWitnesses byronWitnesses

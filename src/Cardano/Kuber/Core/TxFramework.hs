@@ -463,15 +463,12 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       (extraUtxos,change) <- selectUtxosConsideringChange (babbageMinLovelace ledgerPParam) (toCtxUTxOTxOut  changeTxOut) availableInputs startingChange
       -- Debug.traceM $ " change: " ++ show change
       -- Debug.traceM $ " Utxos : " ++ BS8.unpack (prettyPrintJSON extraUtxos )
-      bpparams <- case convertToLedgerProtocolParameters shelleyBasedEra pParam of
-        Left ppce -> error "Couldn't Convert protocol parameters."
-        Right bpp -> pure bpp
       let
         maxChange = utxoListSum availableInputs <> startingChange
         missing = filterNegativeQuantity maxChange
         (feeUsed,changeUsed,outputs) = updateOutputs   fee change fixedOutputs
         bodyContent allOutputs = -- Debug.trace (" Outs: " ++ BS8.unpack (prettyPrintJSON allOutputs))
-          mkBodyContent bpparams meta fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
+          mkBodyContent pParam meta fixedInputs extraUtxos allOutputs collaterals txMintValue' fee
         requiredSignatories = foldl (\acc (_,TxOut a _ _ _) -> fromMaybe acc (addressInEraToPaymentKeyHash a <&> flip Set.insert acc)) signatories  extraUtxos
         signatureCount=fromIntegral $ length requiredSignatories
 
@@ -484,7 +481,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       case createAndValidateTransactionBody  cardanoEra bc of
           Left tbe ->Left  $ FrameworkError  LibraryError  (show tbe)
           Right tb -> do
-            pure (tb,requiredSignatories,evaluateTransactionFee shelleyBasedEra (unLedgerProtocolParameters bpparams) tb signatureCount 0)
+            pure (tb,requiredSignatories,evaluateTransactionFee shelleyBasedEra ledgerPParam  tb signatureCount 0)
 
       where
         fixedOutputSum = foldMap txOutputVal fixedOutputs
@@ -853,9 +850,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     defaultExunits=ExecutionUnits {executionMemory=100000,executionSteps= 60000000 }
 
     toSlot  =  timestampToSlot systemStart  eraHistory
-    ledgerPParam = case toLedgerPParams shelleyBasedEra pParam of
-      Left ppce -> error "Failed to convert pparams"
-      Right pp -> pp
+    ledgerPParam = unLedgerProtocolParameters pParam
 
     totalDeposit = lovelaceToValue $ Lovelace $  totalProposalDeposit + totalCertDeposit
       where

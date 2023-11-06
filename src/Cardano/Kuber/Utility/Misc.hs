@@ -92,13 +92,10 @@ utxoSum (UTxO uMap) = utxoMapSum uMap
 evaluateFee :: HasChainQueryAPI a => Tx ConwayEra -> Kontract a w FrameworkError Integer
 evaluateFee tx = do
   pParam <- kQueryProtocolParams
-  let bPParams =case convertToLedgerProtocolParameters ShelleyBasedEraConway pParam of
-        Left ppce -> error "Couldn't convert protocol parameters."
-        Right bpp -> bpp
   let txbody = getTxBody tx
       -- _inputs :: Set.Set TxIn
       -- _inputs = case txbody of ShelleyTxBody sbe tb scripts scriptData mAuxData validity -> Set.map fromShelleyTxIn $ inputs tb
-      (Lovelace fee) = evaluateTransactionFee shelleyBasedEra (unLedgerProtocolParameters bPParams) txbody (fromIntegral $ length $ getTxWitnesses tx) 0
+      (Lovelace fee) = evaluateTransactionFee shelleyBasedEra (unLedgerProtocolParameters pParam) txbody (fromIntegral $ length $ getTxWitnesses tx) 0
   pure fee
 
 -- evaluateExUnitMap ::  HasChainQueryAPI a =>    TxBody ConwayEra -> Kontract a  w FrameworkError   (Map TxIn ExecutionUnits,Map PolicyId  ExecutionUnits)
@@ -110,7 +107,7 @@ evaluateFee tx = do
 --   evaluateExUnitMapWithUtxos txIns txbody
 
 evaluateExUnitMapWithUtxos ::
-  ProtocolParameters ->
+  LedgerProtocolParameters ConwayEra ->
   SystemStart ->
   LedgerEpochInfo ->
   UTxO ConwayEra ->
@@ -118,13 +115,10 @@ evaluateExUnitMapWithUtxos ::
   Either FrameworkError (Map TxIn ExecutionUnits, Map PolicyId ExecutionUnits)
 evaluateExUnitMapWithUtxos protocolParams systemStart eraHistory usedUtxos txbody = do
 
-  bpparams <- case convertToLedgerProtocolParameters (ShelleyBasedEraConway) protocolParams of
-        Left ppce -> error "Couldn't Convert protocol parameters."
-        Right bpp -> pure bpp
   exMap <- case evaluateTransactionExecutionUnits
     systemStart
     eraHistory
-    bpparams
+    protocolParams
     usedUtxos
     txbody of
     Left tve -> Left $ FrameworkError ExUnitCalculationError (show tve)

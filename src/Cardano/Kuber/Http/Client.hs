@@ -43,7 +43,7 @@ import qualified Data.ByteString.Char8 as BS8
 
 
 
-cQueryPParams         :: ClientM ProtocolParameters
+cQueryPParams         :: ClientM (LedgerProtocolParameters ConwayEra)
 cQueryChainPoint      :: ClientM ChainPointModal
 cQueryUtxos           :: [Text]     -> [Text]     -> ClientM UtxoModal
 cQuerySystemStart     :: ClientM SystemStartModal

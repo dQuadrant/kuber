@@ -72,13 +72,10 @@ kEvaluateExUnits' txbody utxos = do
   sStart <- kQuerySystemStart
   eHhistory <- kQueryEraHistory
   pParams <- kQueryProtocolParams
-  bpparams <- case convertToLedgerProtocolParameters ShelleyBasedEraConway pParams of
-        Left ppce -> error "Couldn't Convert protocol parameters."
-        Right bpp -> pure bpp
   case evaluateTransactionExecutionUnits
     sStart
     (toLedgerEpochInfo eHhistory)
-    bpparams
+    pParams
     utxos
     txbody of
       Left tve -> KError $  FrameworkError ExUnitCalculationError (show tve)

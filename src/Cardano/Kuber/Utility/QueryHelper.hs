@@ -16,6 +16,8 @@ import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (EraMismatch(EraMismat
 import qualified Data.Text as T
 import Control.Exception (throw)
 import Cardano.Kuber.Data.Parsers (parseAnyScript)
+import qualified Cardano.Ledger.Api as Ledger
+import Cardano.Api.Ledger (StandardCrypto)
 
 
 performShelleyQuery :: LocalNodeConnectInfo CardanoMode -> QueryInShelleyBasedEra ConwayEra b -> IO (Either FrameworkError b)
@@ -52,12 +54,12 @@ queryGenesesisParams con = performShelleyQuery con QueryGenesisParameters
 queryChainPoint ::LocalNodeConnectInfo CardanoMode -> IO(Either FrameworkError ChainPoint)
 queryChainPoint conn = perfomEraIndependentQuery  conn (QueryChainPoint CardanoMode)
 
-queryProtocolParam :: LocalNodeConnectInfo CardanoMode -> IO (Either FrameworkError ProtocolParameters)
+queryProtocolParam :: LocalNodeConnectInfo CardanoMode -> IO (Either FrameworkError (LedgerProtocolParameters ConwayEra))
 queryProtocolParam conn= do
   v <- performShelleyQuery conn QueryProtocolParameters
   pure $ case v of
     Left fe -> Left fe
-    Right pp -> Right $ fromLedgerPParams ShelleyBasedEraConway   pp
+    Right pp -> Right $    LedgerProtocolParameters pp
 
 
 querySystemStart :: LocalNodeConnectInfo mode -> IO ( Either FrameworkError SystemStart)

@@ -22,7 +22,7 @@
 module Cardano.Kuber.Data.Models where
 
 import Cardano.Api
-import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData, scriptDataFromJsonDetailedSchema, scriptDataToJsonDetailedSchema, ReferenceScript (ReferenceScript, ReferenceScriptNone), Proposal, ShelleyLedgerEra, StakeAddress (StakeAddress), StakePoolKey, Hash (..), toShelleyStakeAddr, toShelleyTxId, fromShelleyTxIn, fromShelleyStakeAddr)
+import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData, scriptDataFromJsonDetailedSchema, scriptDataToJsonDetailedSchema, ReferenceScript (ReferenceScript, ReferenceScriptNone), Proposal, ShelleyLedgerEra, StakeAddress (StakeAddress), StakePoolKey, Hash (..), toShelleyStakeAddr, toShelleyTxId, fromShelleyTxIn, fromShelleyStakeAddr, LedgerProtocolParameters (LedgerProtocolParameters))
 import Cardano.Binary (ToCBOR (toCBOR), decodeFull, fromCBOR)
 import Cardano.Ledger.Babbage.Tx (BabbageTxBody (btbTxFee))
 import Codec.CBOR.Write (toLazyByteString)
@@ -52,7 +52,7 @@ import qualified Data.Vector as Vector
 import Cardano.Api.Ledger (ConwayTxCert(..), ConwayGovCert (..), StrictMaybe (SNothing, SJust), Credential (KeyHashObj, ScriptHashObj), Coin (Coin), StandardCrypto, Url, textToUrl, ShelleyTxCert (..), ShelleyDelegCert (..), ConwayDelegCert (..), KeyHash (KeyHash), Delegatee (..), KeyRole (DRepRole), hashFromBytes, DRep (..), GovActionId (GovActionId), boundRational, unboundRational, PoolCert (..))
 import Data.Text.Encoding (encodeUtf8)
 import Cardano.Ledger.Hashes as Hashes
-import Cardano.Ledger.Api (Constitution (Constitution), Anchor (Anchor), GovAction (..), ProposalProcedure (ProposalProcedure), Crypto (ADDRHASH), PParamsUpdate, emptyPParamsUpdate, ppuMaxBBSizeL, PrevGovActionId (PrevGovActionId), GovActionIx (GovActionIx))
+import Cardano.Ledger.Api (Constitution (Constitution), Anchor (Anchor), GovAction (..), ProposalProcedure (ProposalProcedure), Crypto (ADDRHASH), PParamsUpdate, emptyPParamsUpdate, ppuMaxBBSizeL, PrevGovActionId (PrevGovActionId), GovActionIx (GovActionIx), PParams)
 import qualified Cardano.Ledger.Api as Ledger
 import Cardano.Ledger.SafeHash (unsafeMakeSafeHash)
 import Cardano.Ledger.Core (EraCrypto, PParamsUpdate (..), EraPParams (..))
@@ -132,8 +132,56 @@ newtype VoteModal = VoteModal Ledger.Vote
 instance Wrapper VoteModal Ledger.Vote where
   unWrap (VoteModal vote) = vote
 
+instance   ToJSON (LedgerProtocolParameters ConwayEra)where
+  toJSON (LedgerProtocolParameters param)=toJSON param
 
--- ledger
+instance   FromJSON (LedgerProtocolParameters ConwayEra)where
+  parseJSON (A.Object obj)= 
+    let hmap=  A.fromHashMapText $  HM.mapKeys (T.toLower . A.toText ) $ toHashMap obj
+        pparams=Ledger.emptyPParams
+        paramParser :: (FromJSON a , EraCrypto ledgerera ~ StandardCrypto,Ledger.ConwayEraPParams ledgerera,
+                EraPParams ledgerera) => T.Text
+            -> Lens' (PParams ledgerera) ( b)
+            -> (a -> b)
+            -> PParams ledgerera
+            -> Parser (PParams ledgerera)
+        paramParser k f f2 pUpdate   = do
+          minSize <- hmap .:? A.fromText (T.toLower k)
+          pure $ case minSize of
+            Nothing ->  pUpdate
+            Just val ->   pUpdate  & f .~  f2 val
+    in  (   paramParser  "maxblocksize" Ledger.ppMaxBBSizeL id pparams
+        >>= paramParser  "minFeeA"   Ledger.ppMinFeeAL id
+        >>= paramParser "MaxBBSize" Ledger.ppMaxBBSizeL id
+        >>= paramParser "MaxTxSize" Ledger.ppMaxTxSizeL id
+        >>= paramParser "MaxBHSize" Ledger.ppMaxBHSizeL id
+        >>= paramParser "KeyDeposit" Ledger.ppKeyDepositL id
+        >>= paramParser "PoolDeposit" Ledger.ppPoolDepositL id
+        >>= paramParser "EMax" Ledger.ppEMaxL id
+        >>= paramParser "NOpt" Ledger.ppNOptL id
+        >>= paramParser "A0" Ledger.ppA0L id
+        >>= paramParser "Rho" Ledger.ppRhoL id
+        >>= paramParser "Tau" Ledger.ppTauL id
+        >>= paramParser "ProtocolVersion" Ledger.ppProtocolVersionL id
+        >>= paramParser "MinPoolCost" Ledger.ppMinPoolCostL id
+        >>= paramParser "CoinsPerUTxOByte" Ledger.ppCoinsPerUTxOByteL id
+        >>= paramParser "CostModels" Ledger.ppCostModelsL id
+        >>= paramParser "Prices" Ledger.ppPricesL id
+        >>= paramParser "MaxTxExUnits" Ledger.ppMaxTxExUnitsL id
+        >>= paramParser "MaxBlockExUnits" Ledger.ppMaxBlockExUnitsL id
+        >>= paramParser "MaxValSize" Ledger.ppMaxValSizeL id
+        >>= paramParser "CollateralPercentage" Ledger.ppCollateralPercentageL id
+        >>= paramParser "MaxCollateralInputs" Ledger.ppMaxCollateralInputsL id
+        >>= paramParser "PoolVotingThresholds" Ledger.ppPoolVotingThresholdsL id
+        >>= paramParser "DRepVotingThresholds" Ledger.ppDRepVotingThresholdsL id
+        >>= paramParser "CommitteeMinSize" Ledger.ppCommitteeMinSizeL id
+        >>= paramParser "CommitteeMaxTermLength" Ledger.ppCommitteeMaxTermLengthL id
+        >>= paramParser "GovActionLifetime" Ledger.ppGovActionLifetimeL id
+        >>= paramParser "GovActionDeposit" Ledger.ppGovActionDepositL id
+        >>= paramParser "DRepDeposit" Ledger.ppDRepDepositL id
+        >>= paramParser "DRepActivity" Ledger.ppDRepActivityL id
+      ) <&> LedgerProtocolParameters
+  parseJSON _= fail "Expected pParams object" 
 -- newtype VotingProcedures era = VotingProcedures
 --   { unVotingProcedures ::
 --       Map (Voter (EraCrypto era)) (Map (GovActionId (EraCrypto era)) (VotingProcedure era))
@@ -642,7 +690,7 @@ instance  (EraCrypto ledgerera ~ StandardCrypto, Ledger.EraPParams ledgerera,Led
                 minSize <- hmap .:? A.fromText (T.toLower k)
                 pure $ case minSize of
                   Nothing ->  pUpdate
-                  Just val ->   pParamUpdate  & f .~ SJust  (f2 val)
+                  Just val ->   pUpdate  & f .~ SJust  (f2 val)
 
           param <-    paramParser  "maxblocksize" ppuMaxBBSizeL id pParamUpdate
                   >>= paramParser  "minFeeA"   Ledger.ppuMinFeeAL id
@@ -751,7 +799,7 @@ instance (Crypto (EraCrypto era),EraCrypto era ~ StandardCrypto, Ledger.Era era,
                 paramUpdateField k getter f = case ppu ^. getter  of
                   SJust v -> [ k .= toJSON (f v)]
                   SNothing -> []
-            in
+            in A.object $ 
              paramUpdateField "Maxblocksize" Ledger.ppuMaxBBSizeL id
           <> paramUpdateField "MinFeeA"   Ledger.ppuMinFeeAL id
           <> paramUpdateField "MaxBBSize" Ledger.ppuMaxBBSizeL id

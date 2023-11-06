@@ -26,7 +26,7 @@ type KuberServerApi =
     )
 
 type QueryApi =
-            "protocol-params" :>  Get '[JSON] ProtocolParameters
+            "protocol-params" :>  Get '[JSON] (LedgerProtocolParameters ConwayEra)
       :<|>  "chain-point" :>  Get '[JSON] ChainPointModal
       :<|>  "utxo" :> QueryParams "address" Text :> QueryParams "txin" Text :>  Get '[JSON] UtxoModal
       :<|>  "system-start" :>  Get '[JSON] SystemStartModal

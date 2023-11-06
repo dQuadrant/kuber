@@ -10,12 +10,14 @@ import Cardano.Slotting.Time (SystemStart)
 import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Set (Set)
 import PlutusTx.Prelude (traceError)
+import qualified Cardano.Ledger.Api as Ledger
+import Cardano.Api.Ledger (StandardCrypto)
 
 
 class HasChainQueryAPI a  where
   -- Core query functions
   kGetNetworkId         :: Kontract  a w FrameworkError NetworkId
-  kQueryProtocolParams  :: Kontract  a w FrameworkError ProtocolParameters
+  kQueryProtocolParams  :: Kontract  a w FrameworkError (LedgerProtocolParameters ConwayEra)
   kQuerySystemStart     :: Kontract a w FrameworkError  SystemStart
   kQueryGenesisParams   :: Kontract a w FrameworkError (GenesisParameters ShelleyEra)
   kQueryUtxoByAddress   :: Set AddressAny -> Kontract  a w FrameworkError (UTxO ConwayEra)
