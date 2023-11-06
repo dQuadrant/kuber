@@ -98,7 +98,7 @@ type  ParsedOutput  = TxOutput (TxOut CtxTx ConwayEra)
 -- Given TxBuilder object, Construct a txBody3
 -- This IO code, constructs detailedChainInfo(protocolParam,costPerWord,eraHistory,SystemHistory)
 -- then queries required utxos used in inputs and calls  txBuilderToTxBody
-executeTxBuilder::  (HasChainQueryAPI api ,HasLocalNodeAPI api)  =>    TxBuilder  -> Kontract  api w FrameworkError (Cardano.Api.TxBody ConwayEra,Tx ConwayEra)
+executeTxBuilder::  (HasChainQueryAPI api ,HasLocalNodeAPI api)  =>    TxBuilder  -> Kontract  api w FrameworkError (Cardano.Api.TxBody BabbageEra,Tx BabbageEra)
 executeTxBuilder builder = do
   -- first determine the addresses and txins that need to be queried for value and address.
   network<- kGetNetworkId
@@ -116,7 +116,7 @@ executeTxBuilder builder = do
   let combinedUtxos = uto<> utxo
   let missingTxins= Set.difference txins ( Map.keysSet combinedUtxos )
   (UTxO txInUtxos) <- queryIfNotEmpty missingTxins (kQueryUtxoByTxin  missingTxins) (UTxO  Map.empty)
-  eitherToKontract$  txBuilderToTxBody network pParam systemStart eraHistory (UTxO $ combinedUtxos <> txInUtxos) builder
+  eitherToKontract$  txBuilderToTxBody BabbageEraOnwardsBabbage network pParam systemStart eraHistory (UTxO $ combinedUtxos <> txInUtxos) builder
 
   where
 
@@ -164,9 +164,9 @@ executeTxBuilder builder = do
 
 -- Construct TxBody from TxBuilder specification.
 -- Utxos map must be provided for the utxos that are available in wallet and used in input
-txBuilderToTxBody:: NetworkId -> ProtocolParameters -> SystemStart -> EraHistory CardanoMode ->  UTxO ConwayEra -> TxBuilder   -> Either FrameworkError  (Cardano.Api.TxBody ConwayEra,Tx ConwayEra )
-txBuilderToTxBody   network  pParam  systemStart eraHistory
-                    (UTxO availableUtxo)
+txBuilderToTxBody::  BabbageEraOnwards  era -> NetworkId -> ProtocolParameters -> SystemStart -> EraHistory CardanoMode ->  UTxO era -> TxBuilder   -> Either FrameworkError  (Cardano.Api.TxBody era,Tx era )
+txBuilderToTxBody txBabbageEraOnwards  network  pParam  systemStart eraHistory
+                    ( UTxO availableUtxo)
                     (TxBuilder selections _inputs _inputRefs _outputs _collaterals validityStart validityEnd mintData extraSignatures proposals votes certs explicitFee mChangeAddr metadata )
   = do
   (resolvedMints, unresolvedMints) <- classifyMints (UTxO availableUtxo) mintData <&> partitionEithers
@@ -258,11 +258,44 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     )
 
   respond  finalBody finalSignatories
+
   where
+    transformUtxo ::   BabbageEraOnwards era ->  UTxO  era1 -> UTxO  era
+    transformUtxo era utxo=  UTxO $ case utxo of { UTxO mp -> Map.map (updateTxOutInEra era) mp }
+
+
+    updateTxOutInEra :: BabbageEraOnwards era  ->  TxOut ctx era1 -> TxOut ctx era
+    updateTxOutInEra sbe txout = case txout of { TxOut aie tov tod rs -> TxOut (updateAddressEra (babbageEraOnwardsToShelleyBasedEra sbe) aie) (updateToutValue sbe tov) (updateTxOutDatum sbe tod ) (updateRefScript sbe rs)  }
+
+    updateRefScript :: BabbageEraOnwards era -> ReferenceScript era1 -> ReferenceScript era
+    updateRefScript era = \case
+      ReferenceScript beo sial -> ReferenceScript era sial
+      ReferenceScriptNone -> ReferenceScriptNone
+
+    updateTxOutDatum :: BabbageEraOnwards era -> TxOutDatum ctx era1 -> TxOutDatum ctx era
+    updateTxOutDatum era datum = case datum of
+      TxOutDatumNone -> TxOutDatumNone
+      TxOutDatumHash aeo ha -> TxOutDatumHash (babbageEraOnwardsToAlonzoEraOnwards era) ha
+      TxOutDatumInline beo hsd ->TxOutDatumInline era hsd
+      _ -> error "Cardano.Kuber.Core.TxFramework.txBuilderToTxBody.updateTxOutDatum : Impossible"
+
+    updateToutValue :: BabbageEraOnwards era  ->  TxOutValue era1  ->  TxOutValue era
+    updateToutValue sbe val = case val of
+      TxOutAdaOnly btae lo -> TxOutValue (babbageEraOnwardsToMaryEraOnwards sbe) (lovelaceToValue lo)
+      TxOutValue meo va -> TxOutValue (babbageEraOnwardsToMaryEraOnwards sbe) va
+
+
+    updateAddressEra ::  ShelleyBasedEra era  ->  AddressInEra era1 -> AddressInEra era
+    updateAddressEra sbe addr = addrInfo
+        where
+          addrInfo = case addr of { AddressInEra atie ad -> case atie of
+                                      ByronAddressInAnyEra -> AddressInEra ByronAddressInAnyEra ad
+                                      ShelleyAddressInEra sbe' -> AddressInEra (ShelleyAddressInEra sbe) ad   }
+
     applyMintExUnits :: Map PolicyId ExecutionUnits
         -> (PolicyId -> Either FrameworkError ExecutionUnits)
-        -> [TxMintData (PolicyId, ExecutionUnits -> ScriptWitness WitCtxMint ConwayEra)]
-        -> Either FrameworkError (Map PolicyId (ScriptWitness WitCtxMint ConwayEra))
+        -> [TxMintData (PolicyId, ExecutionUnits -> ScriptWitness WitCtxMint era)]
+        -> Either FrameworkError (Map PolicyId (ScriptWitness WitCtxMint era))
     applyMintExUnits mp onMissing unresolvedMints =  mapM  (\(TxMintData (p,f) _ _ ) -> case Map.lookup p mp of
       Nothing ->  onMissing p >>= (\x -> pure (p,f x))
       Just eu -> pure (p,f eu)   ) unresolvedMints <&> Map.fromList
@@ -346,67 +379,94 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
 
     appendCertSignatures old certs = foldl  (\set item -> case getPaymentKey item of
       Nothing -> set
-      Just ha -> Set.insert ha set ) old certs 
+      Just ha -> Set.insert ha set ) old certs
 
-    getPaymentKey cert = case cert of 
+    getPaymentKey cert = case cert of
       ShelleyRelatedCertificate stbe stc -> Nothing
-      ConwayCertificate ceo ctc -> case ctc of 
-        ConwayTxCertDeleg cdc -> case cdc of 
-          ConwayRegCert cre sm -> getPaymentCre cre 
+      ConwayCertificate ceo ctc -> case ctc of
+        ConwayTxCertDeleg cdc -> case cdc of
+          ConwayRegCert cre sm -> getPaymentCre cre
           ConwayUnRegCert cre sm -> getPaymentCre cre
           ConwayDelegCert cre del -> getPaymentCre cre
           ConwayRegDelegCert cre del co -> Nothing
-        ConwayTxCertPool pc -> case pc of 
+        ConwayTxCertPool pc -> case pc of
           RegPool pp -> Nothing
           RetirePool kh en -> Just $ mapKeyHash kh
-        ConwayTxCertGov cgc -> case cgc of 
+        ConwayTxCertGov cgc -> case cgc of
           ConwayRegDRep cre co sm -> Nothing
           ConwayUnRegDRep cre co -> getPaymentCre cre
           ConwayUpdateDRep cre sm -> getPaymentCre cre
           ConwayAuthCommitteeHotKey cre cre' -> getPaymentCre cre
           ConwayResignCommitteeColdKey cre _anchor-> getPaymentCre cre
-    classifyMints mp  = mapM  (classifyMint mp)
-    getPaymentCre cre =  case cre of 
+    txEra = babbageEraOnwardsToCardanoEra txBabbageEraOnwards
+    classifyMints mp  = mapM  (classifyMint txBabbageEraOnwards mp)
+    getPaymentCre cre =  case cre of
         KeyHashObj (KeyHash ha) -> Just $  PaymentKeyHash (KeyHash ha)
         _ -> Nothing
     mapKeyHash  (KeyHash ha) = PaymentKeyHash (KeyHash ha)
 
-    classifyMint :: UTxO era
+    classifyMint :: BabbageEraOnwards era1 -> UTxO era1
       -> TxMintData TxMintingScriptSource
       -> Either FrameworkError
-              (Either (TxMintData (PolicyId, ScriptWitness WitCtxMint ConwayEra))
-                      (TxMintData (PolicyId,  ExecutionUnits -> ScriptWitness WitCtxMint ConwayEra)))
-    classifyMint (UTxO mp)  (TxMintData source amount meta) = case source of
-      TxMintingSimpleScript (TxSimpleScript tss) ->pure $ Left $ transform
-                  (PolicyId $ hashScript ( SimpleScript tss ), SimpleScriptWitness SimpleScriptInConway (SScript  tss))
-      TxMintingPlutusScript tps m_eu sd ->
-        let f = case tps of
-              TxPlutusScriptV1 ps -> PlutusScriptWitness PlutusScriptV1InConway PlutusScriptV1 (PScript ps) NoScriptDatumForMint sd
-              TxPlutusScriptV2 ps -> PlutusScriptWitness PlutusScriptV2InConway PlutusScriptV2 (PScript ps) NoScriptDatumForMint sd
-            policy = PolicyId $ hashPlutusScript tps
-        in case m_eu of
+              (Either (TxMintData (PolicyId, ScriptWitness WitCtxMint era1))
+                      (TxMintData (PolicyId,  ExecutionUnits -> ScriptWitness WitCtxMint era1)))
+    classifyMint era1 (UTxO mp)  (TxMintData source amount meta) =
+      let
+            isConway :: Bool
+            isConway = case era1 of
+                BabbageEraOnwardsBabbage -> True
+                BabbageEraOnwardsConway -> False
+            cardanoEra = babbageEraOnwardsToCardanoEra era1
+            validateLang ::  CardanoEra era2 ->  ScriptLanguage lang-> String-> Either FrameworkError (ScriptLanguageInEra lang era2)
+            validateLang  era2 lang msg = case scriptLanguageSupportedInEra era2 lang  of
+                  Nothing -> fail $ msg
+                  Just scInEra -> pure scInEra
+            validateSimpleScript = validateLang cardanoEra SimpleScriptLanguage ("Simple script not supported in era" ++ show era1)
+            validatePv1 = validateLang cardanoEra (PlutusScriptLanguage PlutusScriptV1) ("PlutusScriptV1 not supported in "++ show era1)
+            validatePv2 = validateLang cardanoEra (PlutusScriptLanguage PlutusScriptV2) ("PlutusScriptV2 not supported in "++ show era1)
+      in  case source of
+        TxMintingSimpleScript (TxSimpleScript tss) ->do
+          let script = SScript tss
+          scLangInEra <- validateSimpleScript
+          pure $ Left $ transform
+                    (PolicyId $ hashScript ( SimpleScript tss ), SimpleScriptWitness scLangInEra  (SScript  tss))
+        TxMintingPlutusScript tps m_eu sd ->do
+            let
+                policy = PolicyId $ hashPlutusScript tps
+            case tps of
+              TxPlutusScriptV1 ps -> do
+                scLangInEra<- validatePv1
+                result m_eu policy (PlutusScriptWitness scLangInEra PlutusScriptV1 (PScript ps) NoScriptDatumForMint sd)
+              TxPlutusScriptV2 ps ->do
+                scLangInEra<- validatePv2
+                result m_eu policy (PlutusScriptWitness scLangInEra PlutusScriptV2 (PScript ps) NoScriptDatumForMint sd)
+
+        TxMintingReferenceScript ti m_eu m_sd -> case Map.lookup ti mp of
+                Nothing -> Left $ FrameworkError BalancingError  $ "Reference Script Utxo is missing :" ++ T.unpack ( renderTxIn ti)
+                Just (TxOut _ _ _ (ReferenceScript _ anySc@(ScriptInAnyLang sl sc'))) ->do
+                  ScriptInEra langInEra script' <- validateScriptSupportedInEra' (babbageEraOnwardsToCardanoEra era1) anySc
+                  let policyId = PolicyId $ hashScript script'
+                  case script' of
+                    SimpleScript ss -> do
+                      scLangInEra <- validateSimpleScript
+                      pure $ Left $ transform (PolicyId $ hashScript script' , SimpleScriptWitness scLangInEra (SReferenceScript  ti Nothing))
+                    PlutusScript psv ps -> do
+                      scLangInEra <- validateLang cardanoEra (PlutusScriptLanguage psv) ( show psv ++ " not supported in "++ show era1)
+                      sd <- case m_sd of
+                        Nothing -> Left $ FrameworkError WrongScriptType "Plutus script referenced but ScriptData is missing"
+                        Just sd -> pure sd
+                      result m_eu policyId (PlutusScriptWitness scLangInEra psv (PScript ps) NoScriptDatumForMint sd)
+                Just _ -> Left $ FrameworkError BalancingError "Reference script Utxo used in minting doesn't have the script"
+      where
+        result m_eu policy f =  case m_eu of
           Nothing -> pure $ Right $ transform (policy,f)
           Just eu -> pure $ Left $ transform (policy, f eu)
-      TxMintingReferenceScript ti m_eu m_sd -> case Map.lookup ti mp of
-              Nothing -> Left $ FrameworkError BalancingError  $ "Reference Script Utxo is missing :" ++ T.unpack ( renderTxIn ti)
-              Just (TxOut _ _ _ (ReferenceScript _ anySc@(ScriptInAnyLang sl sc'))) ->do
-                ScriptInEra langInEra script' <- validateScriptSupportedInEra' ConwayEra anySc
-                case script' of
-                  SimpleScript ss -> pure $ Left $ transform (PolicyId $ hashScript script' , SimpleScriptWitness langInEra (SReferenceScript  ti Nothing))
-                  PlutusScript psv ps -> case m_sd of
-                    Nothing -> Left $ FrameworkError WrongScriptType "Plutus script referenced but ScriptData is missing"
-                    Just sd -> let  f =  PlutusScriptWitness langInEra psv (PReferenceScript ti Nothing) NoScriptDatumForMint sd
-                                    policy = PolicyId $ hashScript script'
-                                in pure $ case m_eu of
-                                 Nothing -> Right $ transform (policy,f)
-                                 Just eu -> Left $ transform (policy,f eu)
-              Just _ -> Left $ FrameworkError BalancingError "Reference script Utxo used in minting doesn't have the script"
-      where
+
         transform :: v -> TxMintData v
         transform v = TxMintData v amount meta
 
 
-    appendMintingScriptSignatures :: Set (Hash PaymentKey) -> [ScriptWitness witctx ConwayEra]  ->   Set (Hash PaymentKey)
+    appendMintingScriptSignatures :: Set (Hash PaymentKey) -> [ScriptWitness witctx era]  ->   Set (Hash PaymentKey)
     appendMintingScriptSignatures    = foldl (\_set mints -> case mints of
         SimpleScriptWitness slie (SScript ss) -> getScriptSignatures ss <> _set
         _ -> _set)
@@ -427,7 +487,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                             v -> let  (tin,pkh,_) =minimumBy sortingFunc v in Just [(tin,pkh)]
                           v-> Just v
         where
-        canBeCollateral :: (TxIn  , TxOut ctx ConwayEra) -> Maybe (TxIn, Hash PaymentKey, Integer)
+        canBeCollateral :: (TxIn  , TxOut ctx era) -> Maybe (TxIn, Hash PaymentKey, Integer)
         canBeCollateral v@(ti, to@(TxOut addr val mDatumHash _)) = case mDatumHash of
                               TxOutDatumNone -> case val of
                                 TxOutAdaOnly _ (Lovelace v) ->  addressInEraToPaymentKeyHash  addr >>= (\pkh -> Just (ti,pkh,v))
@@ -571,7 +631,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
           , -- No:: Maybe (Featured ConwayEraOnwards era [Proposal era]),
         txVotingProcedures  = if null votes
                                   then Nothing
-                                  else Just $ Featured ConwayEraOnwardsConway (CAPI.VotingProcedures $ Ledger.VotingProcedures txVoteToVotingProcedure) 
+                                  else Just $ Featured ConwayEraOnwardsConway (CAPI.VotingProcedures $ Ledger.VotingProcedures txVoteToVotingProcedure)
         --  :: Maybe (Featured ConwayEraOnwards era (VotingProcedures era))
           })
           -- CertificatesSupportedInEra era
@@ -581,12 +641,10 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
 
                 -- Map (Voter (EraCrypto era)) (Map (GovActionId (EraCrypto era)) (VotingProcedure era))
 
-
-
     txVoteToVotingProcedure = foldl processVoteMap mempty votes
       where
         processVoteMap accMap (TxVote ( TxVoteL govActionId votingProcedure voter)) =
-          Map.insertWith (\old new -> old) 
+          Map.insertWith (\old new -> old)
               voter (Map.singleton govActionId votingProcedure) accMap
 
 
@@ -869,24 +927,24 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       proposalDeposit (Proposal (ProposalProcedure (Coin co) ra ga an)) = co
       totalProposalDeposit = sum $ map proposalDeposit proposals
       totalCertDeposit = sum $ map certDeposit certs
-      certDeposit cert =  case cert of 
+      certDeposit cert =  case cert of
         ShelleyRelatedCertificate stbe stc -> 0
-        ConwayCertificate ceo ctc -> case ctc of 
-          ConwayTxCertDeleg cdc -> case cdc of 
+        ConwayCertificate ceo ctc -> case ctc of
+          ConwayTxCertDeleg cdc -> case cdc of
             ConwayRegCert cre sm ->maybeToCoin sm
             ConwayUnRegCert cre sm -> negate $  maybeToCoin sm
             ConwayDelegCert cre del -> 0
             ConwayRegDelegCert cre del (Coin co) -> co
-          ConwayTxCertPool pc -> case pc of 
+          ConwayTxCertPool pc -> case pc of
             RegPool pp -> 0
             RetirePool kh en -> 0
-          ConwayTxCertGov cgc -> case cgc of 
+          ConwayTxCertGov cgc -> case cgc of
             ConwayRegDRep cre (Coin co) sm -> co
             ConwayUnRegDRep cre (Coin co) -> negate co
             ConwayUpdateDRep cre sm -> 0
             ConwayAuthCommitteeHotKey cre cre' -> 0
             ConwayResignCommitteeColdKey cre _anchor-> 0
-      maybeToCoin sm = case sm of 
+      maybeToCoin sm = case sm of
             SNothing -> 0
             SJust (Coin co) -> co
 toLedgerEpochInfo :: EraHistory mode -> EpochInfo (Either Text.Text)
@@ -912,4 +970,3 @@ txBuilderFromTx tx = let
     in mempty
 
 
- 

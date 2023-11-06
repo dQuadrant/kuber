@@ -58,6 +58,7 @@ import Foreign.C (CTime)
 import Cardano.Kuber.Data.Models (TxVote)
 import Cardano.Api.Ledger (StandardCrypto)
 import qualified Cardano.Ledger.Api.Era as Ledger
+import qualified Cardano.Ledger.Address as Ledger
 
 
 newtype TxSimpleScript = TxSimpleScript SimpleScript
@@ -132,7 +133,8 @@ data TxSignature =  TxSignatureAddr (AddressInEra ConwayEra)
 data TxChangeAddr = TxChangeAddrUnset
                   | TxChangeAddr (AddressInEra ConwayEra) deriving (Show)
 
-data TxInputSelection = TxSelectableAddresses [AddressInEra ConwayEra]
+
+data TxInputSelection = TxSelectableAddresses [Ledger.Addr StandardCrypto]
                   | TxSelectableUtxos  (UTxO ConwayEra)
                   | TxSelectableTxIn [TxIn]
                   | TxSelectableSkey [SigningKey PaymentKey]
@@ -177,7 +179,10 @@ maxValidity _ v2 = v2
 -- |  
 -- `TxBuilder` is not to be directly used but, parts of it are constructed using helper functions.
 -- Multiple builder parts can be combined to construct full transaction specification
-data TxBuilder=TxBuilder{
+
+type TxBuilder =  (TxBuilder_ ConwayEra)
+
+data TxBuilder_  era  =TxBuilder{
     txSelections :: [TxInputSelection],
     txInputs:: [TxInput],
     txInputReferences:: [TxInputReference],
@@ -189,16 +194,16 @@ data TxBuilder=TxBuilder{
     txSignatures :: [TxSignature],
     txProposals :: [Proposal ConwayEra],
     txVotes :: [TxVote  ConwayEra],
-    txCertificates :: [Certificate ConwayEra],
+    txCertificates :: [Certificate era],
     txFee :: Maybe Integer,
-    txDefaultChangeAddr :: Maybe (AddressInEra ConwayEra),
+    txDefaultChangeAddr :: Maybe (AddressInEra era),
     txMetadata' :: Map Word64 Aeson.Value
   } deriving (Show)
 
-instance Monoid TxBuilder where
+instance Monoid (TxBuilder_ era) where
   mempty = TxBuilder  [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
 
-instance Semigroup TxBuilder where
+instance Semigroup (TxBuilder_ era) where
   (<>)  txb1 txb2 =TxBuilder{
     txSelections = txSelections txb1 ++ txSelections txb2,
     txInputs = txInputs txb1 ++ txInputs txb2,
@@ -223,10 +228,6 @@ instance Semigroup TxBuilder where
     txMetadata' = txMetadata' txb1 <> txMetadata' txb2
   }
 
-data TxContext = TxContext {
-  ctxAvailableUtxo :: UTxO ConwayEra,
-  ctxBuiler :: [TxBuilder]
-}
 
 txSelection :: TxInputSelection -> TxBuilder
 txSelection v = TxBuilder  [v] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
@@ -538,3 +539,13 @@ txCollateralUtxo tin tout =  txCollateral' $ TxCollateralUtxo  $ UTxO $ Map.sing
 
 txChangeAddress :: AddressInEra ConwayEra -> TxBuilder
 txChangeAddress addr = TxBuilder  [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing (Just addr) Map.empty
+
+
+root@gitlab ~ # ls /srv/gitlab/data/gitlab-rails/shared/registry/
+docker  lost+found
+root@gitlab ~ # ls /srv/gitlab/data/gitlab-rails/shared/registry/docker
+registry
+root@gitlab ~ # ls /srv/gitlab/data/gitlab-rails/shared/registry/docker/registry
+v2
+root@gitlab ~ # ls /srv/gitlab/data/gitlab-rails/shared/registry/docker/registry/v2
+blobs  repositories
