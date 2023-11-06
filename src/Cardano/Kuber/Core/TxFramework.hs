@@ -219,11 +219,12 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       withExtraSigs = appendExtraSignatures  colalteralSignatories extraSignatures
       withMintSignatures = appendMintingScriptSignatures withExtraSigs (map (\(TxMintData (_,wit) _ _)-> wit) resolvedMints)
       withCertSignatures = appendCertSignatures withMintSignatures certs
+      withVoteSigs = appendVotingSignatures withCertSignatures
       compulsarySignatories = foldl (\acc x -> case x of
                           Left (_,TxOut a _ _ _) -> case addressInEraToPaymentKeyHash  a of
                                                     Nothing -> acc
                                                     Just pkh -> Set.insert pkh acc
-                          Right _ -> acc ) withCertSignatures   $ Map.elems  fixedInputs
+                          Right _ -> acc ) withVoteSigs   $ Map.elems  fixedInputs
   mintWithDefaultExunits <- applyMintExUnits Map.empty  (\p -> pure defaultExunits) unresolvedMints
   iteration1@(txBody1,signatories,fee1) <-  calculator  (txMintValue' mintWithDefaultExunits) fixedInputs   fee
   (finalBody,finalSignatories,finalFee) <- (
@@ -323,15 +324,26 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
 
 
     appendExtraSignatures :: Set (Hash PaymentKey)  -> [TxSignature] -> Set (Hash PaymentKey)
-    appendExtraSignatures  = foldl (\set item -> case item of
-        TxSignatureAddr aie -> case addressInEraToPaymentKeyHash   aie of
-                                Just pkh -> Set.insert pkh set
-                                Nothing -> set
-        TxSignaturePkh pkh -> case pkhToPaymentKeyHash pkh of
-                                Just pkh' -> Set.insert pkh' set
-                                Nothing -> set
-        TxSignatureSkey sk -> Set.insert (skeyToPaymentKeyHash   sk) set
+    appendExtraSignatures  = foldl (\set item ->
+        let mCre= case item of
+              TxSignatureAddr aie -> addressInEraToPaymentKeyHash   aie
+              TxSignaturePkh pkh ->  pkhToPaymentKeyHash pkh 
+              TxSignatureSkey sk -> Just $ skeyToPaymentKeyHash   sk
+        in case mCre of 
+              Just pkh' -> Set.insert pkh' set
+              Nothing -> set
       )
+
+    appendVotingSignatures old  = foldl  (\set (TxVote (TxVoteL gai vp vo)) ->
+        let mCre=case vo of
+                      Ledger.CommitteeVoter cre -> getPaymentCre cre
+                      Ledger.DRepVoter cre -> getPaymentCre cre
+                      Ledger.StakePoolVoter (KeyHash kh) -> Just $ PaymentKeyHash (KeyHash kh )
+        in case mCre of 
+              Just pkh' -> Set.insert pkh' set
+              Nothing -> set   
+       ) old votes 
+
     appendCertSignatures old certs = foldl  (\set item -> case getPaymentKey item of
       Nothing -> set
       Just ha -> Set.insert ha set ) old certs 
