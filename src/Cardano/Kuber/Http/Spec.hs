@@ -15,26 +15,26 @@ import Servant.API
 import Cardano.Api.Shelley
 import Cardano.Kuber.Data.Models
 import Data.Text
-import Cardano.Kuber.Core.TxBuilder (TxBuilder)
+import Cardano.Kuber.Core.TxBuilder (TxBuilder, TxBuilder_)
 import Data.Data (Proxy (Proxy))
 import Cardano.Kuber.Http.MediaType
-type KuberServerApi =
-              "api" :>"v3"  :>    QueryApi
+type KuberServerApi era =
+              "api" :>"v3"  :>    QueryApi era
         :<|>  "api" :> "v1"  :> (
-                        KuberApi
+                        KuberApi era
                   :<|>  UtilityApi
     )
 
-type QueryApi =
-            "protocol-params" :>  Get '[JSON] (LedgerProtocolParameters ConwayEra)
+type QueryApi era =
+            "protocol-params" :>  Get '[JSON] (LedgerProtocolParameters era)
       :<|>  "chain-point" :>  Get '[JSON] ChainPointModal
-      :<|>  "utxo" :> QueryParams "address" Text :> QueryParams "txin" Text :>  Get '[JSON] UtxoModal
+      :<|>  "utxo" :> QueryParams "address" Text :> QueryParams "txin" Text :>  Get '[JSON] (UtxoModal ConwayEra )
       :<|>  "system-start" :>  Get '[JSON] SystemStartModal
       :<|>  "genesis-params"  :> Get '[JSON] (GenesisParamModal ShelleyEra)
 
 
-type KuberApi =
-            "tx"  :>  QueryParam "submit" Bool :> ReqBody '[JSON] TxBuilder :> Post '[JSON] TxModal
+type KuberApi era =
+            "tx"  :>  QueryParam "submit" Bool :> ReqBody '[JSON] (TxBuilder_ era) :> Post '[JSON] TxModal
       :<|> "tx"   :>  "submit" :> ReqBody '[JSON] SubmitTxModal :>   Post '[JSON] TxModal
       :<|> "time" :>  Get '[JSON] TranslationResponse
       :<|> "time" :>  "toslot"  :> ReqBody '[JSON] TimeTranslationReq :> Post '[JSON] TranslationResponse
@@ -47,5 +47,5 @@ type UtilityApi =
        :<|> "tx" :> "exUnits" :> ReqBody '[CBORBinary, CBORText,CBORText] TxModal :> Post '[JSON] ExUnitsResponseModal
 
 
-kuberApiServerProxy :: Proxy KuberServerApi
+kuberApiServerProxy :: Proxy (KuberServerApi era)
 kuberApiServerProxy = Proxy

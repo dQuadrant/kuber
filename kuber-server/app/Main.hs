@@ -2,12 +2,14 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use newtype instead of data" #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE GADTs #-}
 module Main where
 
 
 import Network.Wai.Handler.Warp (run, setPort, defaultSettings, setHost, runSettings)
-import Kuber.Server.Spec (app)
-import Cardano.Kuber.Api (chainInfoFromEnv, throwFrameworkError)
+import Kuber.Server.Spec (appWithBackenAndEra)
+import Cardano.Kuber.Api (chainInfoFromEnv, throwFrameworkError, ChainConnectInfo, HasChainQueryAPI (kQueryChainPoint, kQueryCurrentEra), evaluateKontract, FrameworkError (..))
 import System.Environment (getArgs)
 import Cardano.Kuber.Util (timestampToSlot)
 import Data.Text (stripStart)
@@ -27,17 +29,19 @@ import Data.Function ((&))
 
 import Options.Applicative
 import Data.Semigroup ((<>))
+import Cardano.Api (BabbageEraOnwards (BabbageEraOnwardsBabbage, BabbageEraOnwardsConway), AnyCardanoEra (AnyCardanoEra), CardanoEra (..))
+import Control.Concurrent (threadDelay)
 
 data KuberConfig = KuberConfig
   { host  :: Maybe String
   , port  :: Int
   , healthCheckUrl :: String
-  , healthCheck :: Bool 
+  , healthCheck :: Bool
   }
 
 sample :: Parser KuberConfig
 sample = KuberConfig
-      <$> option auto(     
+      <$> option auto(
             long "host"
         <>  short 'H'
         <>  metavar "IP-Address"
@@ -49,7 +53,7 @@ sample = KuberConfig
           ( long "port"
          <>   short 'p'
          <>   help "Port to listen on"
-         <>   showDefault 
+         <>   showDefault
          <>   value 8081)
       <*>  option auto
           ( long "url"
@@ -70,20 +74,42 @@ main :: IO ()
 main = do
   KuberConfig hostStr port healthCheckUrl doHealthCheck <- execParser  opts
 
-  if  doHealthCheck 
-    then 
+  if  doHealthCheck
+    then
      performRequest healthCheckUrl
 
-    else do 
-      dcinfo <- chainInfoFromEnv  
+    else do
+      dcinfo <- chainInfoFromEnv
 
       let settings = setPort port defaultSettings
       let settings2  = (case hostStr of
             Nothing -> settings
-            Just s -> setHost (fromString s) settings  ) 
-      putStrLn $ "Starting server on port " ++ show port ++"..."
-      runSettings settings2 $ app dcinfo
-      run port $ app dcinfo
+            Just s -> setHost (fromString s) settings  )
+      (AnyCardanoEra nodeEra) <- queryNodeEra dcinfo
+      let app =case nodeEra of  
+            ConwayEra -> appWithBackenAndEra dcinfo BabbageEraOnwardsBabbage
+            _ -> appWithBackenAndEra dcinfo BabbageEraOnwardsBabbage
+      putStrLn $ case nodeEra of
+        BabbageEra ->  "Starting Kuber in Babbage era"
+        ConwayEra ->  "Starting Kuber in Conway era"
+        era -> "Node is at " ++ show era ++" Kuber will start in BabbageEra"
+      
+      putStrLn $ "Server started listening on port " ++ show port ++ "."
+      
+      runSettings settings2 app
+
+queryNodeEra :: ChainConnectInfo -> IO AnyCardanoEra
+queryNodeEra cinfo = do
+  era <- evaluateKontract  cinfo  kQueryCurrentEra
+  case era of
+    Left fe -> do
+      case fe of
+        FrameworkError et s ->  putStrLn $ show   et ++ " -> " ++ s
+        FrameworkErrors fes -> print fes
+      putStrLn "Retrying Node connection in 10 seconds ..."
+      threadDelay 10_000_000
+      queryNodeEra cinfo
+    Right ace ->pure ace
 
 performRequest :: String -> IO ()
 performRequest  url = do

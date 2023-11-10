@@ -2,21 +2,22 @@
 {-# LANGUAGE LambdaCase #-}
 
 module Cardano.Kuber.Core.LocalNodeChainApi where
-import Cardano.Api hiding (queryEraHistory, queryChainPoint, querySystemStart)
-import Cardano.Api.Shelley hiding (queryEraHistory, queryChainPoint, querySystemStart)
+import Cardano.Api hiding (queryCurrentEra, queryEraHistory, queryChainPoint, querySystemStart)
+import Cardano.Api.Shelley hiding (queryCurrentEra, queryEraHistory, queryChainPoint, querySystemStart)
 
 import Cardano.Kuber.Core.ChainAPI
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Error
 import Cardano.Slotting.Time (SystemStart)
-import Cardano.Kuber.Utility.QueryHelper (queryProtocolParam, querySystemStart, queryEraHistory, queryGenesesisParams, queryUtxos, queryTxins, queryChainPoint, submitTx)
+import Cardano.Kuber.Utility.QueryHelper (queryProtocolParam, querySystemStart, queryEraHistory, queryGenesesisParams, queryUtxos, queryTxins, queryChainPoint, submitTx, queryGenesesisParams', queryCurrentEra)
 import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Map (Map)
 import qualified Cardano.Ledger.Babbage.Tx as Ledger
 import qualified Data.Set as Set
-import Cardano.Kuber.Core.TxBuilder (TxBuilder)
+import Cardano.Kuber.Core.TxBuilder (TxBuilder, IsTxBuilderEra (bCardanoEra))
 import qualified Data.Map as Map
 import Data.Functor ((<&>))
+import Cardano.Kuber.Data.EraUpdate (updatePParamEra)
 
 class ChainInfo v where
   getConnectInfo :: v-> LocalNodeConnectInfo CardanoMode
@@ -33,12 +34,12 @@ newtype ChainConnectInfo= ChainConnectInfo (LocalNodeConnectInfo CardanoMode)
 instance HasChainQueryAPI (LocalNodeConnectInfo CardanoMode) where
     kQueryProtocolParams = liftLnciQuery queryProtocolParam
     kQuerySystemStart = liftLnciQuery querySystemStart
-    kQueryGenesisParams = liftLnciQuery queryGenesesisParams
+    kQueryGenesisParams = liftLnciQuery queryGenesesisParams'
     kQueryUtxoByAddress = liftLnciQuery2 queryUtxos
     kQueryUtxoByTxin = liftLnciQuery2 queryTxins
     kQueryChainPoint  = liftLnciQuery queryChainPoint
     kGetNetworkId  = KLift $ \c  -> pure  $pure $ localNodeNetworkId c
-
+    kQueryCurrentEra = liftLnciQuery queryCurrentEra
 instance HasLocalNodeAPI (LocalNodeConnectInfo CardanoMode) where
     kQueryEraHistory = liftLnciQuery queryEraHistory
 
@@ -49,11 +50,12 @@ instance HasSubmitApi (LocalNodeConnectInfo CardanoMode) where
 instance HasChainQueryAPI ChainConnectInfo where
     kQueryProtocolParams = liftCinfoQuery queryProtocolParam
     kQuerySystemStart = liftCinfoQuery querySystemStart
-    kQueryGenesisParams = liftCinfoQuery queryGenesesisParams
+    kQueryGenesisParams = liftCinfoQuery queryGenesesisParams'
     kQueryUtxoByAddress = liftCinfoQuery2 queryUtxos
     kQueryUtxoByTxin = liftCinfoQuery2 queryTxins
     kQueryChainPoint  = liftCinfoQuery queryChainPoint
     kGetNetworkId = KLift $ \(ChainConnectInfo c)  -> pure  $pure $ localNodeNetworkId c
+    kQueryCurrentEra = liftCinfoQuery queryCurrentEra
 
 instance HasLocalNodeAPI ChainConnectInfo where
     kQueryEraHistory = liftCinfoQuery queryEraHistory
@@ -67,7 +69,7 @@ liftCinfoQuery2 q p =  KLift $ \(ChainConnectInfo c)  -> q c p
 liftLnciQuery q =  KLift $ \c  -> q c
 liftLnciQuery2 q p =  KLift $ \c  -> q c p
 
-kEvaluateExUnits' ::  (HasChainQueryAPI a, HasLocalNodeAPI a) =>   TxBody ConwayEra -> UTxO ConwayEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
+kEvaluateExUnits' ::  (HasChainQueryAPI a, HasLocalNodeAPI a,IsTxBuilderEra era) =>   TxBody era -> UTxO era -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
 kEvaluateExUnits' txbody utxos = do
   sStart <- kQuerySystemStart
   eHhistory <- kQueryEraHistory
@@ -75,7 +77,7 @@ kEvaluateExUnits' txbody utxos = do
   case evaluateTransactionExecutionUnits
     sStart
     (toLedgerEpochInfo eHhistory)
-    pParams
+    (updatePParamEra bCardanoEra pParams)
     utxos
     txbody of
       Left tve -> KError $  FrameworkError ExUnitCalculationError (show tve)

@@ -12,21 +12,22 @@ import Data.Set (Set)
 import PlutusTx.Prelude (traceError)
 import qualified Cardano.Ledger.Api as Ledger
 import Cardano.Api.Ledger (StandardCrypto)
+import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra)
 
 
 class HasChainQueryAPI a  where
   -- Core query functions
   kGetNetworkId         :: Kontract  a w FrameworkError NetworkId
-  kQueryProtocolParams  :: Kontract  a w FrameworkError (LedgerProtocolParameters ConwayEra)
+  kQueryProtocolParams  :: IsTxBuilderEra era => Kontract  a w FrameworkError (LedgerProtocolParameters era)
   kQuerySystemStart     :: Kontract a w FrameworkError  SystemStart
   kQueryGenesisParams   :: Kontract a w FrameworkError (GenesisParameters ShelleyEra)
-  kQueryUtxoByAddress   :: Set AddressAny -> Kontract  a w FrameworkError (UTxO ConwayEra)
-  kQueryUtxoByTxin      :: Set TxIn -> Kontract a w FrameworkError (UTxO ConwayEra)
+  kQueryUtxoByAddress   :: IsTxBuilderEra era => Set AddressAny -> Kontract  a w FrameworkError (UTxO era)
+  kQueryUtxoByTxin      :: IsTxBuilderEra era => Set TxIn -> Kontract a w FrameworkError (UTxO era)
   kQueryChainPoint      :: Kontract a w FrameworkError ChainPoint
-
+  kQueryCurrentEra      :: Kontract a w FrameworkError AnyCardanoEra
 
 class HasSubmitApi a where
-  kSubmitTx :: Tx ConwayEra ->  Kontract  a w FrameworkError ()
+  kSubmitTx :: InAnyCardanoEra Tx ->  Kontract  a w FrameworkError ()
 
 data  CachedApi  a = CachedApi a  SystemStart ProtocolParameters (EraHistory CardanoMode) (GenesisParameters ShelleyEra)
 

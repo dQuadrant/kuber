@@ -14,7 +14,7 @@ import Servant.Client hiding (baseUrl)
 import Cardano.Api.Shelley
 import Cardano.Kuber.Data.Models
 import Data.Text (Text)
-import Cardano.Kuber.Core.TxBuilder (TxBuilder)
+import Cardano.Kuber.Core.TxBuilder (TxBuilder, IsTxBuilderEra (bCardanoEra), TxBuilder_)
 import Servant.API.Alternative
 import Cardano.Kuber.Http.Spec (kuberApiServerProxy, KuberServerApi)
 import Cardano.Kuber.Data.TxBuilderAeson
@@ -40,15 +40,17 @@ import Control.Exception (fromException)
 import qualified Network.HTTP.Client  as Network (responseBody)
 import qualified Data.ByteString.Lazy.Char8 as BSL8
 import qualified Data.ByteString.Char8 as BS8
+import Data.Data (Proxy (Proxy))
+import Cardano.Kuber.Data.EraUpdate (updatePParamEra, updateUtxoEra)
 
 
 
 cQueryPParams         :: ClientM (LedgerProtocolParameters ConwayEra)
 cQueryChainPoint      :: ClientM ChainPointModal
-cQueryUtxos           :: [Text]     -> [Text]     -> ClientM UtxoModal
+cQueryUtxos           :: [Text]     -> [Text]     -> ClientM (UtxoModal ConwayEra)
 cQuerySystemStart     :: ClientM SystemStartModal
 cQueryGenesisParams   :: ClientM (GenesisParamModal ShelleyEra)
-cBuildTx              :: Maybe Bool     -> TxBuilder    -> ClientM TxModal
+cBuildTx              :: Maybe Bool     -> TxBuilder_ ConwayEra      -> ClientM TxModal
 cSubmitTx             :: SubmitTxModal     -> ClientM TxModal
 cQueryTime            :: ClientM TranslationResponse
 cTimeToSlot           :: TimeTranslationReq     -> ClientM TranslationResponse
@@ -57,11 +59,18 @@ cCalculateFee         :: TxModal      -> ClientM Lovelace
 cEvaluateExUnits      :: TxModal    -> ClientM ExUnitsResponseModal
 
 
-(cQueryPParams :<|> cQueryChainPoint :<|> cQueryUtxos
-  :<|> cQuerySystemStart :<|> cQueryGenesisParams )
-  :<|> (cBuildTx :<|> cSubmitTx :<|> cQueryTime
-  :<|> cTimeToSlot :<|> cTimeFromSlot ) :<|> (cCalculateFee
-  :<|> cEvaluateExUnits) = client kuberApiServerProxy
+( cQueryPParams 
+  :<|> cQueryChainPoint 
+  :<|> cQueryUtxos
+  :<|> cQuerySystemStart 
+  :<|> cQueryGenesisParams )
+  :<|> (cBuildTx 
+  :<|> cSubmitTx 
+  :<|> cQueryTime
+  :<|> cTimeToSlot 
+  :<|> cTimeFromSlot ) 
+  :<|> (cCalculateFee
+  :<|> cEvaluateExUnits) = client (Proxy :: Proxy (KuberServerApi era))
 
 
 data RemoteKuberConnection = RemoteKuberConnection  NetworkId ClientEnv
@@ -70,39 +79,48 @@ data RemoteKuberConnection = RemoteKuberConnection  NetworkId ClientEnv
 instance HasChainQueryAPI   RemoteKuberConnection where
   kGetNetworkId = KLift $ \(RemoteKuberConnection net c)  -> pure $ pure net
 
-  kQueryProtocolParams = liftHttpReq cQueryPParams
+  kQueryProtocolParams = liftHttpReq (cQueryPParams <&> updatePParamEra bCardanoEra )
   kQuerySystemStart = liftHttpReq cQuerySystemStart <&>  unWrap
   kQueryGenesisParams = liftHttpReq cQueryGenesisParams <&>  unWrap
-  kQueryUtxoByAddress addrs  = liftHttpReq (cQueryUtxos  (map serialiseAddress  $  Set.toList addrs ) []  <&> unWrap)
-  kQueryUtxoByTxin txins = liftHttpReq (cQueryUtxos  [] (map renderTxIn  $  Set.toList txins) <&> unWrap )
+  kQueryUtxoByAddress :: IsTxBuilderEra era =>
+    Set.Set AddressAny
+      -> Kontract RemoteKuberConnection w FrameworkError (UTxO era)
+  kQueryUtxoByAddress addrs  = liftHttpReq (cQueryUtxos  (map serialiseAddress  $  Set.toList addrs ) []  <&> (\(UtxoModal utxo) -> updateUtxoEra utxo))
+  kQueryUtxoByTxin txins = liftHttpReq (cQueryUtxos  [] (map renderTxIn  $  Set.toList txins) <&> (\(UtxoModal utxo) -> updateUtxoEra utxo) )
   kQueryChainPoint  = liftHttpReq cQueryChainPoint <&> unWrap
-
+  kQueryCurrentEra = error "TODO Cardano.Kuber.Http.Client.RemoteKuberConnection.queryCurrentEra"
 instance {-# OVERLAPS #-}  HasKuberAPI RemoteKuberConnection where
-  kTxBuildTxBody    :: TxBuilder ->  Kontract RemoteKuberConnection w FrameworkError (TxBody ConwayEra)
-  kTxBuildTxBody builder = liftHttpReq (cBuildTx (Just True) builder ) <&> (getTxBody .  unWrap )
+  kTxBuildTxBody    :: IsTxBuilderEra era =>  TxBuilder_ era ->  Kontract RemoteKuberConnection w FrameworkError (TxBody era)
+  kTxBuildTxBody builder = kError FeatureNotSupported "BuildTx Over Http is not supported"
+      --   TODO FIX THIS 
+      --  liftHttpReq (cBuildTx (Just True) builder ) <&> (getTxBody .  unWrap )
 
-  kBuildTx       :: TxBuilder -> Kontract RemoteKuberConnection w FrameworkError (Tx ConwayEra)
-  kBuildTx  builder = liftHttpReq (cBuildTx (Just True) builder ) <&> unWrap
+  kBuildTx       :: IsTxBuilderEra era =>  TxBuilder_ era -> Kontract RemoteKuberConnection w FrameworkError (Tx era)
+  kBuildTx  builder = kError FeatureNotSupported "BuildTx Over Http is not supported"
+    --   TODO FIX THIS
+    --liftHttpReq (cBuildTx (Just True) builder ) <&> unWrap
 
   kTimeToSlot           :: POSIXTime -> Kontract RemoteKuberConnection w FrameworkError SlotNo
   kTimeToSlot slot = liftHttpReq ( cTimeToSlot (TimeTranslationReq slot) ) <&> tResSlotNo
   kSlotToTime           ::  SlotNo    -> Kontract RemoteKuberConnection  w FrameworkError POSIXTime
   kSlotToTime time = liftHttpReq ( cTimeFromSlot (SlotTranslationReq time) ) <&> tResTimestamp
 
-  kEvaluateExUnits :: Tx ConwayEra -> Kontract RemoteKuberConnection  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
-  kEvaluateExUnits tx = liftHttpReq (cEvaluateExUnits (TxModal tx)) <&> unWrap
+  kEvaluateExUnits ::  IsTxBuilderEra era =>  Tx era -> Kontract RemoteKuberConnection  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
+  kEvaluateExUnits tx = liftHttpReq (cEvaluateExUnits (TxModal $ InAnyCardanoEra bCardanoEra tx )) <&> unWrap
 --   kEvaluateExUnits' ::    TxBody ConwayEra -> UTxO ConwayEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
 
-  kCalculateMinFee :: Tx ConwayEra -> Kontract RemoteKuberConnection  w FrameworkError  Lovelace
-  kCalculateMinFee tx = liftHttpReq (cCalculateFee (TxModal tx))
+  kCalculateMinFee :: IsTxBuilderEra era => Tx era -> Kontract RemoteKuberConnection  w FrameworkError  Lovelace
+  kCalculateMinFee tx = liftHttpReq (cCalculateFee (TxModal $ InAnyCardanoEra bCardanoEra tx))
 
 --   kCalculateMinFee' :: TxBody ConwayEra ->  ShelleyWitCount ->  ByronWitCount-> Kontract a  w FrameworkError  Lovelace
-  kBuildAndSubmit :: TxBuilder -> Kontract RemoteKuberConnection w FrameworkError (Tx ConwayEra)
-  kBuildAndSubmit  builder = liftHttpReq (cBuildTx Nothing builder ) <&> unWrap
+  kBuildAndSubmit :: IsTxBuilderEra era => TxBuilder_ era -> Kontract RemoteKuberConnection w FrameworkError (Tx era)
+  kBuildAndSubmit  builder = kError FeatureNotSupported "BuildTx Over Http is not supported"
+    -- TODO FIX THIS
+    --liftHttpReq (cBuildTx Nothing builder ) <&> unWrap
 
 
 instance HasSubmitApi RemoteKuberConnection where
-    kSubmitTx :: Tx ConwayEra -> Kontract RemoteKuberConnection w FrameworkError ()
+    kSubmitTx :: InAnyCardanoEra Tx -> Kontract RemoteKuberConnection w FrameworkError ()
     kSubmitTx tx = liftHttpReq (cSubmitTx (SubmitTxModal tx Nothing) ) $> ()
 
 
@@ -111,7 +129,7 @@ liftHttpReq q =  KLift $ \(RemoteKuberConnection net c)  -> runClientM q c <&> m
 mapClientError = \case
     Left (e ::ClientError) -> Left (case e of
        FailureResponse rf rf' -> case decode @FrameworkError (responseBody rf') of
-         Nothing ->  FrameworkError LibraryError   $  "Server Responsed with failure ["++  (case responseStatusCode rf' of { Status n bs -> show n ++ " " ++  BS.unpack bs } ) ++  "] "  ++ BSL8.unpack (responseBody rf')
+         Nothing ->  FrameworkError LibraryError   $  "Server Responded with failure ["++  (case responseStatusCode rf' of { Status n bs -> show n ++ " " ++  BS.unpack bs } ) ++  "] "  ++ BSL8.unpack (responseBody rf')
          Just fe -> fe
        DecodeFailure txt rf -> FrameworkError LibraryError "Failed to Decode response from Kuber Backend Server"
        UnsupportedContentType mt rf -> FrameworkError LibraryError "Kuber Backend server responded with Unknown Content Type"
@@ -120,7 +138,7 @@ mapClientError = \case
           Nothing -> FrameworkError Cardano.Kuber.Error.ConnectionError (show se)
           Just ex -> mapHttpException  ex
       )
-      
+
     Right v -> pure v
     where
       mapHttpException  htException= case htException of
@@ -193,7 +211,7 @@ baseUrl urlString = do
   scheme <-  case uriScheme uri of
     "https:" -> pure Https
     "http:" -> pure Http
-    scheme -> fail $ "Invalid URL scheme " ++ scheme 
+    scheme -> fail $ "Invalid URL scheme " ++ scheme
 
   host <- case uriAuthority uri of
     Just auth -> pure $ uriRegName auth
@@ -203,7 +221,7 @@ baseUrl urlString = do
       "" -> case uriScheme uri of
         "https:" -> pure 443
         "http:" -> pure 80
-        scheme -> fail$  "Invalid URL scheme " ++ scheme 
+        scheme -> fail$  "Invalid URL scheme " ++ scheme
       _ -> maybe (fail "Invalid port number") pure (readMaybe (tail (uriPort auth)))
     Nothing -> fail "Invalid URL"
 

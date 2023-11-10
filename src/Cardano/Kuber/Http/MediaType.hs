@@ -4,6 +4,7 @@
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Cardano.Kuber.Http.MediaType
 where
@@ -21,7 +22,6 @@ import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
 import Cardano.Binary (FromCBOR)
 import qualified Cardano.Binary as CBOR
-import Cardano.Api (Tx, ConwayEra, SerialiseAsCBOR (deserialiseFromCBOR, serialiseToCBOR), AsType (AsTx, AsConwayEra))
 import Data.Text.Conversions (Base16(Base16), convertText)
 import Data.Data (Proxy (Proxy))
 import Data.ByteString (ByteString)
@@ -29,6 +29,11 @@ import Data.Proxy (asProxyTypeOf)
 import qualified Data.ByteString.Lazy
 import Cardano.Kuber.Data.Models (SubmitTxModal(SubmitTxModal), TxModal (TxModal))
 import Data.ByteString.Lazy (fromStrict)
+import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra (bAsEra))
+import Cardano.Api.Shelley (AsType(..))
+import Cardano.Api (InAnyCardanoEra(..), Tx, SerialiseAsCBOR (deserialiseFromCBOR, serialiseToCBOR))
+import qualified Data.ByteString.Lazy as BS
+import Cardano.Kuber.Data.Parsers (parseRawTxInAnyEra)
 
 data AnyTextType = AnyTextType
 
@@ -50,26 +55,26 @@ data CBORBinary =CBORBinary
 instance Accept CBORBinary where
    contentTypes _ =  "octet" // "stream" :| [  "application" // "cbor"]
 
-instance  MimeUnrender  CBORBinary  ( Tx ConwayEra ) where
-    mimeUnrender  _ bs = case deserialiseFromCBOR (AsTx AsConwayEra) ( Data.ByteString.Lazy.toStrict bs) of
+instance IsTxBuilderEra era => MimeUnrender  CBORBinary  ( Tx era ) where
+    mimeUnrender  _ bs = case deserialiseFromCBOR (AsTx bAsEra) ( Data.ByteString.Lazy.toStrict bs) of
         Left e -> Left $ "Tx string: Invalid CBOR format : " ++ show e
         Right tx -> pure  tx
 
 instance  MimeUnrender  CBORBinary  TxModal where
     mimeUnrender  proxy bs = do
-      v <- mimeUnrender proxy bs
-      pure (TxModal v)
+      case parseRawTxInAnyEra ( BS.toStrict bs) of
+         Just result -> pure $ TxModal result
+         Nothing -> Left "Tx string: Invalid CBOR format "
 
-instance MimeRender CBORBinary TxModal where
-  mimeRender :: Proxy CBORBinary -> TxModal -> Data.ByteString.Lazy.ByteString
-  mimeRender p (TxModal tx) = fromStrict $  serialiseToCBOR tx
-   
+instance  MimeRender CBORBinary TxModal where
+  mimeRender p (TxModal (InAnyCardanoEra era tx)) = fromStrict $  serialiseToCBOR tx
+
 
 
 instance MimeUnrender CBORBinary  SubmitTxModal where
-   mimeUnrender  _ bs  = case deserialiseFromCBOR (AsTx AsConwayEra) ( Data.ByteString.Lazy.toStrict bs) of
-        Left e -> Left $ "Tx string: Invalid CBOR format : " ++ show e
-        Right tx -> pure  $ SubmitTxModal tx Nothing
+   mimeUnrender  proxy bs  = do
+         (TxModal result) <- mimeUnrender proxy bs
+         pure $ SubmitTxModal result Nothing
 
 
 data CBORText =CBORText

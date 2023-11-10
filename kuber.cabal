@@ -40,6 +40,7 @@ library
     Cardano.Kuber.Core.TxFramework
     Cardano.Kuber.Core.KuberAPI
     Cardano.Kuber.Data.TxBuilderAeson
+    Cardano.Kuber.Data.EraUpdate
     Cardano.Kuber.Utility.ChainInfoUtil
     Cardano.Kuber.Utility.WalletUtil
     Cardano.Kuber.Utility.QueryHelper

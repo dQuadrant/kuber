@@ -4,6 +4,8 @@ module Cardano.Kuber.Api(
 
     -- |Transaction Builder Object
          TxBuilder
+    ,   TxBuilder_()
+    ,   IsTxBuilderEra (..)
 
     -- *** Transaction Inputs
     -- | Add the txin to  transaction input
@@ -35,7 +37,7 @@ module Cardano.Kuber.Api(
 
 
    -- *** Payment functions
-    ,    txPayTo
+    ,   txPayTo
     ,   txPayToPkh
     ,   txPayToScript
     ,   txPayToScriptWithData 
@@ -121,6 +123,9 @@ module Cardano.Kuber.Api(
     ,   getWorkPath
     ,   getWorkPathFunc
     ,   getNetworkFromEnv
+
+    -- eraupdate for 
+    , updateUtxoEra
 )
 
 where
@@ -140,3 +145,4 @@ import Cardano.Kuber.Core.ChainAPI
 import Cardano.Kuber.Core.KuberAPI
 import Cardano.Kuber.Core.LocalNodeChainApi
 import Cardano.Kuber.Http.Client
+import Cardano.Kuber.Data.EraUpdate (updateUtxoEra)

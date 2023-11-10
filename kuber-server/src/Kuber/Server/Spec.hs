@@ -6,15 +6,16 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MonoLocalBinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Kuber.Server.Spec where
 
 import Cardano.Api
-import Cardano.Api.Shelley (ConwayEra, ProtocolParameters)
+import Cardano.Api.Shelley ( ProtocolParameters, LedgerProtocolParameters)
 import Cardano.Kuber.Data.Models
-import Cardano.Kuber.Http.Spec
 
 import Control.Exception
   ( Exception,
@@ -55,7 +56,7 @@ import Network.Wai.Middleware.Static (static)
 import Network.Wai.Middleware.Rewrite (rewriteRoot)
 import Cardano.Kuber.Api
 
-import Cardano.Kuber.Util 
+import Cardano.Kuber.Util
 import Kuber.Server.Core
 import qualified Data.Aeson as Aeson
 import Cardano.Kuber.Data.Parsers
@@ -66,36 +67,39 @@ import Control.Monad (liftM)
 import Cardano.Kuber.Http.Spec
 
 
-type ExHadledKuberServerApi =  Throws FrameworkError :>  KuberServerApi
+type KubeServer era =  Throws FrameworkError :>  KuberServerApi era
 
-exHandledKuberServerApiProxy :: Proxy ExHadledKuberServerApi
-exHandledKuberServerApiProxy = Proxy 
+type KuberServerApi_ era =
+              -- "api" :>"v3"  :>    QueryApi
+         "api" :> "v1"  :> (
+                        KuberApi era
+                  :<|>  UtilityApi
+    )
 
-kuberApiServer a = (
-          queryServer a
+kuberApiServer queryEra a = (
+          queryServer queryEra a
     :<|>  kuberServer a
     :<|>  utilityServer a
   )
 
-
-queryServer a = 
-        makeHandler  a kQueryProtocolParams
+queryServer queryEra a =
+        makeHandler  a (queryPparamHandler queryEra)
   :<|>  makeHandler a (kQueryChainPoint <&> ChainPointModal)
-  :<|> makeHandler2  a queryUtxosHandler 
+  :<|> makeHandler2  a (queryUtxosHandler queryEra)
   :<|> (makeHandler a kQuerySystemStart <&> SystemStartModal)
   :<|> (makeHandler a kQueryGenesisParams <&> GenesisParamModal)
 
 
 kuberServer a =
-        makeHandler2 a txBuilderHandler 
-  :<|>  makeHandler1 a submitTxHandler  
+        makeHandler2 a txBuilderHandler
+  :<|>  makeHandler1 a submitTxHandler
   :<|>  makeHandler a queryTimeHandler
   :<|>  makeHandler1 a translatePosixTimeHandler
   :<|>  makeHandler1 a translateSlotHandler
 
-utilityServer a =  
-          (\tx -> makeHandler a (kCalculateMinFee $ unTxModal tx ))
-    :<|>  (\tx -> makeHandler a (kEvaluateExUnits (unTxModal tx) <&> ExUnitsResponseModal)) 
+utilityServer a =
+          ( makeHandler1 a calculateMinFeeHandler)
+    :<|>  ( makeHandler1 a calculateExUnitsHandler)
 
 
 corsMiddlewarePolicy = CorsResourcePolicy {
@@ -109,9 +113,13 @@ corsMiddlewarePolicy = CorsResourcePolicy {
     , corsIgnoreFailures = True
     }
 
-app :: (HasChainQueryAPI a, HasLocalNodeAPI a, HasSubmitApi a,HasKuberAPI a) => a -> Application
-app dcinfo = rewriteRoot (T.pack "index.html") $ static $ cors (\r ->  Just corsMiddlewarePolicy ) $ serve exHandledKuberServerApiProxy $ kuberApiServer dcinfo
+appWithBackenAndEra :: (HasChainQueryAPI a, HasLocalNodeAPI a, HasSubmitApi a,HasKuberAPI a) => a -> BabbageEraOnwards era-> Application
+appWithBackenAndEra dcinfo beraonward = rewriteRoot (T.pack "index.html") $ static $ cors (\r ->  Just corsMiddlewarePolicy ) $ case beraonward of 
+  BabbageEraOnwardsBabbage -> serve @(KubeServer BabbageEra) Proxy  $ kuberApiServer BabbageEraOnwardsBabbage dcinfo
+  BabbageEraOnwardsConway ->  serve @(KubeServer ConwayEra) Proxy  $ kuberApiServer  BabbageEraOnwardsConway dcinfo
 
+
+  
 instance ToServantErr FrameworkError where
   status (FrameworkError _ _) = status400
   status (FrameworkErrors _) = status400

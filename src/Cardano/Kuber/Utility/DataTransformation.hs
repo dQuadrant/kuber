@@ -5,7 +5,7 @@ module Cardano.Kuber.Utility.DataTransformation where
 
 import Cardano.Api
 import Cardano.Api.Byron (Address (ByronAddress))
-import Cardano.Api.Shelley (Address (ShelleyAddress), Hash (PaymentKeyHash), StakeCredential (StakeCredentialByKey, StakeCredentialByScript), fromPlutusData, fromShelleyPaymentCredential, fromShelleyStakeReference, shelleyPayAddrToPlutusPubKHash)
+import Cardano.Api.Shelley (Address (ShelleyAddress), Hash (PaymentKeyHash), StakeCredential (StakeCredentialByKey, StakeCredentialByScript), fromPlutusData, fromShelleyPaymentCredential, fromShelleyStakeReference, shelleyPayAddrToPlutusPubKHash, fromShelleyAddr)
 import qualified Cardano.Api.Shelley as Shelley
 import qualified Cardano.Binary as Cborg
 import Cardano.Ledger.Alonzo.TxInfo (transKeyHash)
@@ -43,6 +43,8 @@ sKeyToPkh skey = PubKeyHash (toBuiltin $ serialiseToRawBytes vkh)
   where
     vkh = verificationKeyHash $ getVerificationKey skey
 
+fromLedgerAddress la=  (fromShelleyAddr shelleyBasedEra la )
+
 -- | Convert Pkh (plutus type) to Hash PaymentKey (cardano-api type)
 pkhToPaymentKeyHash :: PubKeyHash -> Maybe (Hash PaymentKey)
 pkhToPaymentKeyHash pkh = case deserialiseFromRawBytes (AsHash AsPaymentKey) $
@@ -57,7 +59,7 @@ skeyToPaymentKeyHash skey = verificationKeyHash $ getVerificationKey skey
 
 -- | Convert AddressInEra (cardano-api type) to Hash PaymentKey (cardano-api type).
 -- Will return `Nothing` if address is  an Byron Address
-addressInEraToPaymentKeyHash ::IsShelleyBasedEra era =>  AddressInEra era -> Maybe (Hash PaymentKey)
+addressInEraToPaymentKeyHash ::  AddressInEra era -> Maybe (Hash PaymentKey)
 addressInEraToPaymentKeyHash a = case a of
   AddressInEra atie ad -> case ad of
     ByronAddress ad' -> Nothing

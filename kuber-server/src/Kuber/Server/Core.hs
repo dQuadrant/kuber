@@ -1,5 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeApplications #-}
 module Kuber.Server.Core where
 
 import qualified Data.Text as T
@@ -16,7 +18,7 @@ import System.Environment (getEnv)
 import System.FilePath (joinPath)
 import Cardano.Ledger.Alonzo.Scripts (ExUnits(ExUnits))
 import Data.Text.Conversions (Base16(Base16), convertText)
-import Cardano.Api.Shelley (TxBody(ShelleyTxBody), fromShelleyTxIn)
+import Cardano.Api.Shelley (TxBody(ShelleyTxBody), fromShelleyTxIn, LedgerProtocolParameters)
 import qualified Cardano.Ledger.TxIn as Ledger
 import qualified Cardano.Ledger.Core as Ledger
 import Cardano.Ledger.Alonzo.TxBody (inputs')
@@ -44,23 +46,53 @@ makeHandler1 a  f p1 = makeHandler a (f p1)
 makeHandler2 a  f p1 p2= makeHandler a (f p1 p2)
 
 
-queryUtxosHandler :: HasChainQueryAPI api =>   [Text] ->  [Text] -> Kontract api w FrameworkError UtxoModal
-queryUtxosHandler   [] [] = KError (FrameworkError ParserError "Missing both address and txin in query param")
-queryUtxosHandler   addrTxts txinTxts = do
+
+calculateMinFeeHandler :: (HasKuberAPI api) => TxModal -> Kontract api w FrameworkError Lovelace
+calculateMinFeeHandler (TxModal (InAnyCardanoEra cera tx))  = case cera of
+  BabbageEra -> kCalculateMinFee tx
+  ConwayEra -> kCalculateMinFee tx
+  _ -> kError FeatureNotSupported ("calculateMinFee: only BabbageEra and ConwayEra supported got : " ++ show cera )
+
+
+calculateExUnitsHandler :: (HasKuberAPI api) => TxModal -> Kontract api w FrameworkError ExUnitsResponseModal
+calculateExUnitsHandler (TxModal (InAnyCardanoEra cera tx))  = case cera of
+  BabbageEra -> kEvaluateExUnits tx <&> ExUnitsResponseModal
+  ConwayEra -> kEvaluateExUnits tx <&> ExUnitsResponseModal
+  _ -> kError FeatureNotSupported ("calculateMinFee: only BabbageEra and ConwayEra supported got : " ++ show cera )
+
+
+bindEra :: IsTxBuilderEra era => CardanoEra era -> t1 era -> t1 era
+bindEra _ = id
+
+queryPparamHandler  :: (HasChainQueryAPI api) =>  BabbageEraOnwards era->  Kontract api w FrameworkError (LedgerProtocolParameters era)
+queryPparamHandler era = case era of
+  BabbageEraOnwardsBabbage -> kQueryProtocolParams
+  BabbageEraOnwardsConway -> kQueryProtocolParams
+
+queryUtxosHandler :: (HasChainQueryAPI api) =>   BabbageEraOnwards era ->  [Text] ->  [Text] -> Kontract api w FrameworkError (UtxoModal ConwayEra)
+queryUtxosHandler era   [] [] = KError (FrameworkError ParserError "Missing both address and txin in query param")
+queryUtxosHandler era   addrTxts txinTxts = do
       if null addrTxts
         then do
           txins <- mapM (\v1 -> case parseTxIn  v1  of
                 Right v -> pure v
                 Left msg -> KError (FrameworkError ParserError msg)
             ) txinTxts
-          kQueryUtxoByTxin (Set.fromList txins) <&> UtxoModal
+          case era of 
+            BabbageEraOnwardsBabbage -> kQueryUtxoByTxin  (Set.fromList txins) <&> UtxoModal
+            BabbageEraOnwardsConway -> kQueryUtxoByTxin  (Set.fromList txins) <&> UtxoModal
+          
       else if null txinTxts
         then do
-          addrs <-  mapM (\v1 -> case parseAddressBech32  v1 of
+          addrs <-  mapM (\v1 -> case parseAddressBech32 @ConwayEra  v1 of
                     Right v -> pure  $ addressInEraToAddressAny v
                     Left msg -> KError (FrameworkError ParserError msg)
                 ) addrTxts
-          kQueryUtxoByAddress (Set.fromList addrs) <&> UtxoModal
+          case era of 
+            BabbageEraOnwardsBabbage -> do 
+              utxo <- kQueryUtxoByAddress (Set.fromList addrs) 
+              pure $ UtxoModal $  updateUtxoEra (bindEra BabbageEra utxo)
+            BabbageEraOnwardsConway -> kQueryUtxoByAddress (Set.fromList addrs) <&> UtxoModal
       else
         KError (FrameworkError ParserError "Expected either address or txin in parameter")
 
@@ -87,25 +119,30 @@ queryTimeHandler  = do
 
 queryBalanceHandler :: HasChainQueryAPI a => Text ->   Kontract a w FrameworkError BalanceResponse
 queryBalanceHandler addrStr =
-    case parseAddressBech32 addrStr of
+    case parseAddressBech32 @ConwayEra addrStr of
       Left e -> KError $ FrameworkError ParserError e
       Right a -> do
         utxos<- kQueryUtxoByAddress (Set.singleton $ addressInEraToAddressAny  a)
         pure $ BalanceResponse utxos
 
-txBuilderHandler :: HasKuberAPI a => Maybe Bool -> TxBuilder -> Kontract a w FrameworkError TxModal
+txBuilderHandler ::  (HasKuberAPI a, IsTxBuilderEra era) =>  Maybe Bool -> TxBuilder_ era -> Kontract a w FrameworkError TxModal
 txBuilderHandler submitM txBuilder = do
   liftIO $ putStrLn $ BS8.unpack $  prettyPrintJSON txBuilder
-  case submitM of 
-    Just True ->  kBuildAndSubmit txBuilder <&> TxModal
-    _ ->  kBuildTx txBuilder <&> TxModal
- 
+  tx <- case submitM of
+    Just True ->  kBuildAndSubmit txBuilder
+    _ ->  kBuildTx txBuilder
+  pure $ TxModal $ InAnyCardanoEra bCardanoEra tx
 
 submitTxHandler :: HasSubmitApi a =>  SubmitTxModal -> Kontract a w FrameworkError TxModal
-submitTxHandler  (SubmitTxModal tx mWitness) = do
-  let tx' = case mWitness of
-        Nothing -> tx
-        Just kw -> makeSignedTransaction (kw : getTxWitnesses tx) txbody
-      txbody = getTxBody tx
-  kSubmitTx tx'
-  pure $ TxModal tx'
+submitTxHandler  (SubmitTxModal inanyEra@(InAnyCardanoEra era tx) mWitness) = do
+  case mWitness of
+        Nothing -> do
+          kSubmitTx inanyEra
+          pure $ TxModal inanyEra
+        Just kw -> do
+          let txBody = getTxBody tx
+          -- TODO handle witnesses
+          -- let signedTx= InAnyCardanoEra era (makeSignedTransaction (kw : getTxWitnesses tx) txbody)
+          kSubmitTx inanyEra
+          pure $ TxModal inanyEra
+

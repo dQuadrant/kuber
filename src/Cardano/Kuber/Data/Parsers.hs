@@ -3,6 +3,8 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module Cardano.Kuber.Data.Parsers where
 
@@ -49,11 +51,12 @@ import qualified Cardano.Ledger.Babbage.TxOut as Babbage
 
 import Cardano.Ledger.Address
 import qualified Cardano.Ledger.Api.Era as Conway
-import Cardano.Api.Shelley (fromShelleyTxOut, ReferenceScript (..))
+import Cardano.Api.Shelley (fromShelleyTxOut, ReferenceScript (..), fromShelleyAddr, toShelleyAddr)
 import qualified Codec.Binary.Bech32 as Bech32
 import qualified Data.Set as Set
 import Control.Monad (guard)
 import Data.List (intercalate)
+import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra (bMaryOnward, bConwayOnward, bBabbageOnward, bAlonzoOnward, bAsEra, bCardanoEra, bShelleyBasedEra))
 
 
 type ErrorMessage = String
@@ -198,40 +201,40 @@ anyScriptParser v@(A.Object o) =do
       pure $ ScriptInAnyLang SimpleScriptLanguage $ SimpleScript v
 anyScriptParser _ = fail "Expected json object type"
 
-parseAddressBinary :: MonadFail m => ByteString -> m (AddressInEra ConwayEra )
+parseAddressBinary :: (IsTxBuilderEra era,MonadFail m) => ByteString -> m (AddressInEra era )
 parseAddressBinary bs = case parseAddressCbor (LBS.fromStrict bs) of
   Just addr -> pure addr
   Nothing -> parseAddressRaw bs
 
-parseAddressRaw :: MonadFail m =>  ByteString -> m(AddressInEra ConwayEra)
-parseAddressRaw addrBs = case deserialiseFromRawBytes (AsAddressInEra AsConwayEra) addrBs of
+parseAddressRaw :: (IsTxBuilderEra era, MonadFail m) =>  ByteString -> m(AddressInEra era)
+parseAddressRaw addrBs = case deserialiseFromRawBytes (AsAddressInEra bAsEra) addrBs of
             Left _  -> fail  "Invalid Address Hex "
-            Right addr -> pure addr
+            Right addr ->pure   addr
 
-parseAddress :: MonadFail m => Text -> m (AddressInEra ConwayEra)
-parseAddress addrText = case deserialiseAddress (AsAddressInEra AsConwayEra) addrText of
+parseAddress :: (IsTxBuilderEra era , MonadFail m) => Text -> m (AddressInEra era)
+parseAddress addrText = case deserialiseAddress (AsAddressInEra bAsEra) addrText of
   Nothing -> do
      let hex :: Maybe  ByteString = parseHexString addrText
      case  hex of
       Just hex -> case parseAddressBinary hex of
         Just addr -> pure addr
-        Nothing -> case deserialiseFromRawBytes (AsAddressInEra AsConwayEra) hex of
+        Nothing -> case deserialiseFromRawBytes (AsAddressInEra bAsEra) hex of
             Left _ -> fail  $ "Address is neither bech32 nor cborHex : "++ T.unpack addrText
             Right addr -> pure addr
       Nothing -> fail $ "Address is neither bech32 nor cborHex : "++ T.unpack addrText
   Just aie -> pure aie
 
-parseAddressCbor :: MonadFail m => LBS.ByteString -> m (AddressInEra ConwayEra)
+parseAddressCbor ::(IsTxBuilderEra era , MonadFail m) => LBS.ByteString -> m (AddressInEra era)
 parseAddressCbor  cbor = do
   aie <-  case deserialiseFromRawBytes AsAddressAny (LBS.toStrict cbor) of
       Left e -> fail $ show e
       Right v -> pure v
-  case anyAddressInEra ConwayEra aie of
+  case anyAddressInEra bCardanoEra aie of
      Left s -> fail $ "Error parsing address CBOR " ++ s
      Right aie' -> pure aie'
 
-parseAddressBech32 :: MonadFail m => Text -> m (AddressInEra ConwayEra)
-parseAddressBech32 txt = case deserialiseAddress (AsAddressInEra AsConwayEra) txt of
+parseAddressBech32 ::(IsTxBuilderEra era , MonadFail m)=> Text -> m (AddressInEra era)
+parseAddressBech32 txt = case deserialiseAddress (AsAddressInEra bAsEra) txt of
   Nothing -> fail "Address is not in bech32 format"
   Just aie -> pure aie
 
@@ -287,16 +290,30 @@ parseTxIn txt = do
           Left _ -> fail $ "Failed to parse value as txHash " ++ T.unpack txHash
       _ -> fail $ "Expected to be of format 'txId#index' got :" ++ T.unpack txt
 
-parseUtxo :: MonadFail m => Text -> m (UTxO ConwayEra )
-parseUtxo v =parseHexString v >>= parseUtxoCbor
 
-parseUtxoCbor :: MonadFail m => LBS.ByteString -> m (UTxO ConwayEra)
-parseUtxoCbor val = do
-  ((txHash,index ),txout) <- parseCbor val
+parseUtxo :: (IsTxBuilderEra era,  MonadFail m) => Text -> m (UTxO era )
+parseUtxo v =parseHexString v >>=  parseUtxoCbor
+
+
+parseUtxoCbor :: (IsTxBuilderEra era,MonadFail m) => LBS.ByteString -> m (UTxO era)
+parseUtxoCbor = parseUtxoCbor' bShelleyBasedEra
+
+parseUtxoCbor' :: ( MonadFail m) => ShelleyBasedEra era ->LBS.ByteString -> m (UTxO era)
+parseUtxoCbor' era = case era of --Don't use this if possible
+  ShelleyBasedEraShelley -> error "Unexpected"
+  ShelleyBasedEraAllegra -> error "Unexpected"
+  ShelleyBasedEraMary -> error "Unexpected"
+  ShelleyBasedEraAlonzo -> error "Unexpected"
+  ShelleyBasedEraBabbage -> parseUtxoCbor_ ShelleyBasedEraBabbage
+  ShelleyBasedEraConway -> parseUtxoCbor_ ShelleyBasedEraConway
+
+
+parseUtxoCbor_ sbe bs = do
+  ((txHash,index ),txout) <- parseCbor bs
   txIn <- case deserialiseFromRawBytes AsTxId txHash of
           Right txid -> pure $ TxIn txid (TxIx index)
           Left _ -> fail $ "Failed to parse value as txHash " ++ toHexString  txHash
-  pure $ UTxO (Map.singleton txIn (fromShelleyTxOut ShelleyBasedEraConway txout))
+  pure $ UTxO (Map.singleton txIn (fromShelleyTxOut sbe txout))
 
 
 parseTxOut :: MonadFail m => Text -> m (TxOut CtxTx   ConwayEra)
@@ -339,7 +356,7 @@ parseRawBytes' t v msg = case deserialiseFromRawBytes t v of
   Right a -> pure a
 
 parseBech32Type :: (SerialiseAsBech32 a, MonadFail m) => Text -> AsType a -> m a
-parseBech32Type bs  t  = case deserialiseFromBech32  t bs of 
+parseBech32Type bs  t  = case deserialiseFromBech32  t bs of
     Left e ->  fail $ "Parse Error :" ++ show e
     Right v -> pure v
 
@@ -355,7 +372,7 @@ parseRawBech32  permittedPrefixes bech32Str = do
       then fail $ "Invalid prefix : " ++ T.unpack actualPrefix ++ " Allowed : " ++ intercalate ", "  (map T.unpack $  Set.toList  permittedPrefixes)
       else pure ()
 
-    case Bech32.dataPartToBytes dataPart of 
+    case Bech32.dataPartToBytes dataPart of
       Nothing -> fail "String not in Bech32 format"
       Just bs -> pure bs
 
@@ -365,7 +382,7 @@ parseRawBech32'   bech32Str = do
       Left de -> fail "Invalid bech 32"
       Right x0 -> pure x0
 
-    case Bech32.dataPartToBytes dataPart of 
+    case Bech32.dataPartToBytes dataPart of
       Nothing -> fail "String not in Bech32 format"
       Just bs -> pure bs
 
@@ -375,7 +392,7 @@ parseRawBech32_   bech32Str = do
       Left de -> fail "Invalid bech 32"
       Right x0 -> pure x0
 
-    case Bech32.dataPartToBytes dataPart of 
+    case Bech32.dataPartToBytes dataPart of
       Nothing -> fail "String not in Bech32 format"
       Just bs -> pure (Bech32.humanReadablePartToText prefix,bs)
 
@@ -383,23 +400,23 @@ parseRawBech32_   bech32Str = do
 
 
 parseBech32Type' :: (SerialiseAsBech32 a, MonadFail m) => Text -> AsType a -> ErrorMessage -> m a
-parseBech32Type' bs  t msg = case deserialiseFromBech32  t bs of 
+parseBech32Type' bs  t msg = case deserialiseFromBech32  t bs of
     Left e ->  fail  msg
     Right v -> pure v
-  
+
 parseBech32OrCBOR :: (FromCBOR  a, SerialiseAsBech32 a, MonadFail m) => Text -> AsType a  -> m a
-parseBech32OrCBOR bs t  = case parseHexString bs of 
+parseBech32OrCBOR bs t  = case parseHexString bs of
   Just unhexed -> parseCbor unhexed
   Nothing -> parseBech32Type bs t
 
-  
+
 parseBech32OrCBOR' :: (FromCBOR  a, SerialiseAsBech32 a, MonadFail m) => Text -> AsType a -> ErrorMessage -> m a
-parseBech32OrCBOR' bs t msg = case parseHexString bs of 
+parseBech32OrCBOR' bs t msg = case parseHexString bs of
   Just unhexed -> parseCbor' unhexed msg
   Nothing -> parseBech32Type' bs t msg
 
 
-txinOrUtxoParser :: A.Value -> A.Parser (Either TxIn (UTxO ConwayEra))
+txinOrUtxoParser  :: IsTxBuilderEra era =>  A.Value -> A.Parser (Either TxIn (UTxO era))
 txinOrUtxoParser obj@(A.Object o) = do
     txin' <- o .:? "txIn"
     txin'' <- o .:? "txin"
@@ -413,7 +430,7 @@ txinOrUtxoParser obj@(A.Object o) = do
     case (addrM,valueM) of
       (Just addrT , Just valT) -> do
           addr <- parseAddress addrT
-          val <-  case valT of  
+          val <-  case valT of
                     A.String s -> parseValueText s
                     A.Number n -> pure $  lovelaceToValue $ Lovelace  (round n)
                     _ -> parseJSON valT
@@ -423,15 +440,15 @@ txinOrUtxoParser obj@(A.Object o) = do
           dh <- case inlineDatum of
               Nothing -> case datumHash of
                 Nothing -> pure TxOutDatumNone
-                Just any -> pure $ TxOutDatumHash AlonzoEraOnwardsConway any
+                Just any -> pure $ TxOutDatumHash bAlonzoOnward any
               Just any ->  do
                 sd<- scriptDataParser any
-                pure $ TxOutDatumInline BabbageEraOnwardsConway  sd -- proper parse
+                pure $ TxOutDatumInline bBabbageOnward  sd -- proper parse
           let
               rScript =case refScript of
                 Nothing -> ReferenceScriptNone
-                Just any -> ReferenceScript BabbageEraOnwardsConway any
-          pure $ Right $ UTxO $ Map.singleton txin  (TxOut addr (TxOutValue MaryEraOnwardsConway val) dh rScript)
+                Just any -> ReferenceScript bBabbageOnward any
+          pure $ Right $ UTxO $ Map.singleton txin  (TxOut addr (TxOutValue bMaryOnward val) dh rScript)
 
       _ -> pure $ Left txin
     where
@@ -451,3 +468,28 @@ txinOrUtxoParser (A.String v) = do
     Nothing -> parseTxIn v <&> Left
 
 txinOrUtxoParser _ = fail "Expected Utxo Object or cborHex"
+
+
+parseRawCBorAnyOf ::
+        MonadFail m =>[FromSomeType SerialiseAsCBOR b]
+      -> ByteString
+      -> m b
+      -> m b
+parseRawCBorAnyOf ((FromSomeType ttoken f):other) bs onErr = case deserialiseFromCBOR ttoken  bs of
+      Right v -> pure $ f v
+      Left e -> parseRawCBorAnyOf other bs onErr
+parseRawCBorAnyOf [] bs onErr = onErr
+
+parseRawTxInAnyEra :: MonadFail m => ByteString -> m (InAnyCardanoEra Tx)
+parseRawTxInAnyEra bs = parseRawCBorAnyOf allTxTypes bs (fail "CBOR deserialise of transaction failed")
+
+allTxTypes :: [FromSomeType SerialiseAsCBOR (InAnyCardanoEra Tx)]
+allTxTypes  =[
+        FromSomeType (AsTx AsBabbageEra) (InAnyCardanoEra BabbageEra)
+      , FromSomeType (AsTx AsConwayEra) (InAnyCardanoEra ConwayEra)
+      , FromSomeType (AsTx AsByronEra)   (InAnyCardanoEra ByronEra)
+      , FromSomeType (AsTx AsShelleyEra) (InAnyCardanoEra ShelleyEra)
+      , FromSomeType (AsTx AsAllegraEra) (InAnyCardanoEra AllegraEra)
+      , FromSomeType (AsTx AsMaryEra)    (InAnyCardanoEra MaryEra)
+      , FromSomeType (AsTx AsAlonzoEra)  (InAnyCardanoEra AlonzoEra)
+  ]

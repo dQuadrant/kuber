@@ -38,7 +38,7 @@ module Cardano.Kuber.Util
     , calculateTxoutMinLovelaceOrErr
     , calculateTxoutMinLovelace
     , evaluateFee
-    , babbageMinLovelace
+    , txoutMinLovelace
 
     -- query helpers
     , queryUtxos
@@ -139,7 +139,5 @@ import Data.Time (NominalDiffTime, UTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, POSIXTime, utcTimeToPOSIXSeconds)
 import Ouroboros.Consensus.HardFork.History (unsafeExtendSafeZone)
 import Cardano.Kuber.Utility.Misc
-
-
 
 

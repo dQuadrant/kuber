@@ -1,6 +1,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Cardano.Kuber.Utility.Misc where
 
@@ -40,7 +42,9 @@ import qualified Cardano.Ledger.Alonzo.Core as Ledger
 import Control.Lens.Getter ((^.))
 import Cardano.Ledger.Mary.Value as L (MaryValue (..), MultiAsset (MultiAsset), PolicyID (PolicyID))
 import Cardano.Ledger.Alonzo.TxInfo (transPolicyID)
-import Cardano.Ledger.Api (MaryEraTxBody(mintTxBodyL))
+import qualified Cardano.Ledger.Api.Era as Ledger
+import qualified Cardano.Ledger.Api as Leger
+import Cardano.Ledger.Api (mintTxBodyL)
 
 
 calculateTxoutMinLovelaceOrErr :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Lovelace
@@ -55,7 +59,21 @@ calculateTxoutMinLovelace txout pParams = do
     Right bpp -> pure bpp
   pure $ calculateMinimumUTxO ShelleyBasedEraConway txout (unLedgerProtocolParameters bpparams)
 
-babbageMinLovelace pparam txout = Ledger.getMinCoinTxOut pparam (toShelleyTxOut ShelleyBasedEraConway txout)
+txoutMinLovelace :: (IsCardanoEra era,IsShelleyBasedEra era) => Leger.PParams (ShelleyLedgerEra era) -> TxOut CtxUTxO era -> Ledger.Coin
+txoutMinLovelace  = withCardanoEra cardanoEra
+  where
+    withCardanoEra :: CardanoEra era ->  Leger.PParams (ShelleyLedgerEra era) ->  TxOut CtxUTxO era  -> Ledger.Coin
+    withCardanoEra era pparam txout = case era of  -- doing this to remove EraTXOut
+      ShelleyEra -> txoutMinLovelace_ era pparam txout
+      AllegraEra -> txoutMinLovelace_ era pparam txout
+      MaryEra -> txoutMinLovelace_ era pparam txout
+      AlonzoEra -> txoutMinLovelace_ era pparam txout
+      BabbageEra -> txoutMinLovelace_ era pparam txout
+      ConwayEra -> txoutMinLovelace_ era pparam txout
+      _ -> Ledger.Coin 0
+    txoutMinLovelace_ :: (Leger.EraTxOut (ShelleyLedgerEra era), IsShelleyBasedEra era) =>CardanoEra era ->  Leger.PParams (ShelleyLedgerEra era) -> TxOut CtxUTxO era -> Ledger.Coin
+    txoutMinLovelace_  cera pparam txout = Ledger.getMinCoinTxOut pparam (toShelleyTxOut shelleyBasedEra txout)
+
 
 isNullValue :: Value -> Bool
 isNullValue v = not $ any (\(aid, Quantity q) -> q > 0) (valueToList v)
@@ -86,7 +104,7 @@ utxoListSum l = txoutListSum (map snd l)
 utxoMapSum :: Map a (TxOut ctx era) -> Value
 utxoMapSum x = txoutListSum $ Map.elems x
 
-utxoSum :: UTxO ConwayEra -> Value
+utxoSum :: UTxO era -> Value
 utxoSum (UTxO uMap) = utxoMapSum uMap
 
 evaluateFee :: HasChainQueryAPI a => Tx ConwayEra -> Kontract a w FrameworkError Integer
@@ -106,14 +124,19 @@ evaluateFee tx = do
 --   txIns <- kQueryUtxoByTxin  _inputs
 --   evaluateExUnitMapWithUtxos txIns txbody
 
-evaluateExUnitMapWithUtxos ::
-  LedgerProtocolParameters ConwayEra ->
-  SystemStart ->
-  LedgerEpochInfo ->
-  UTxO ConwayEra ->
-  TxBody ConwayEra ->
-  Either FrameworkError (Map TxIn ExecutionUnits, Map PolicyId ExecutionUnits)
-evaluateExUnitMapWithUtxos protocolParams systemStart eraHistory usedUtxos txbody = do
+--
+-- 
+
+evaluateExUnitMapWithUtxos :: IsCardanoEra era => LedgerProtocolParameters era -> SystemStart -> LedgerEpochInfo -> UTxO era -> TxBody era -> Either      FrameworkError      (Map TxIn ExecutionUnits, Map PolicyId ExecutionUnits)
+evaluateExUnitMapWithUtxos  = evaluateExUnitMapWithUtxos_ cardanoEra
+  where
+    evaluateExUnitMapWithUtxos_ :: CardanoEra era ->  LedgerProtocolParameters era -> SystemStart -> LedgerEpochInfo -> UTxO era -> TxBody era -> Either      FrameworkError      (Map TxIn ExecutionUnits, Map PolicyId ExecutionUnits)
+    evaluateExUnitMapWithUtxos_ bera = case bera of
+      BabbageEra -> evaluateExUnitMapWithUtxos
+      ConwayEra -> evaluateExUnitMapWithUtxos
+      _ -> (\ _ _ _ _ _ ->Left (FrameworkError FeatureNotSupported "not in era"))
+
+evaluateExUnitMapWithUtxos_ protocolParams systemStart eraHistory usedUtxos txbody = do
 
   exMap <- case evaluateTransactionExecutionUnits
     systemStart
@@ -216,3 +239,4 @@ slotToTimestamp sstart (EraHistory _ interpreter) slotNo = case Qry.interpretQue
   (Qry.slotToWallclock slotNo) of
   Left phe -> error $ "Unexpected : " ++ show phe
   Right (rt, _) -> utcTimeToPOSIXSeconds $ fromRelativeTime sstart rt
+

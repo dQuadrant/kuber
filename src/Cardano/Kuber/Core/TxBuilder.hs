@@ -7,6 +7,8 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Cardano.Kuber.Core.TxBuilder
 
 where
@@ -51,14 +53,14 @@ import qualified Data.Aeson as Aeson
 import Data.Word (Word64)
 import qualified Data.HashMap.Internal.Strict as H
 import Data.Bifunctor
--- import Cardano.Kuber.Utility.ScriptUtil ( fromPlutusV2Script)
 import GHC.Generics (Generic)
 import Data.Time.Clock.POSIX
 import Foreign.C (CTime)
-import Cardano.Kuber.Data.Models (TxVote)
-import Cardano.Api.Ledger (StandardCrypto)
+import Cardano.Api.Ledger (StandardCrypto, EraCrypto, GovActionId)
 import qualified Cardano.Ledger.Api.Era as Ledger
 import qualified Cardano.Ledger.Address as Ledger
+import Cardano.Ledger.Api (Babbage)
+import qualified Cardano.Ledger.Api as Ledger
 
 
 newtype TxSimpleScript = TxSimpleScript SimpleScript
@@ -69,34 +71,45 @@ data TxScript = TxScriptSimple TxSimpleScript
         deriving (Show)
 
 
+data  TxVoteL (ledgerera) = TxVoteL
+                        (Ledger.GovActionId (EraCrypto ledgerera))
+                        (Ledger.VotingProcedure  ledgerera)
+                        (Ledger.Voter (EraCrypto ledgerera))
+                      deriving (Show,Eq)
+
+newtype (TxVote era) = TxVote (TxVoteL (ShelleyLedgerEra era)) deriving (Show,Eq)
+
+
+
+
 data  TxPlutusScript  =
     TxPlutusScriptV1 (PlutusScript  PlutusScriptV1)
   | TxPlutusScriptV2 (PlutusScript  PlutusScriptV2)
                           deriving (Show)
 
 
-data TxInputResolved_ = TxInputUtxo (UTxO ConwayEra)
-              | TxInputScriptUtxo TxPlutusScript (Maybe HashableScriptData) HashableScriptData (Maybe ExecutionUnits) (UTxO ConwayEra)
-              | TxInputReferenceScriptUtxo TxIn (Maybe HashableScriptData) HashableScriptData (Maybe ExecutionUnits) (UTxO ConwayEra)
+data TxInputResolved_ era = TxInputUtxo (UTxO era)
+              | TxInputScriptUtxo TxPlutusScript (Maybe HashableScriptData) HashableScriptData (Maybe ExecutionUnits) (TxIn,TxOut CtxUTxO era)
+              | TxInputReferenceScriptUtxo TxIn (Maybe HashableScriptData) HashableScriptData (Maybe ExecutionUnits) (TxIn,TxOut CtxUTxO era)
 
               deriving (Show)
 
 
-data TxInputUnResolved_ = TxInputTxin TxIn
+data TxInputUnResolved_ era = TxInputTxin TxIn
               | TxInputSkey (SigningKey PaymentKey)
-              | TxInputAddr (AddressInEra ConwayEra)
+              | TxInputAddr (AddressInEra era)
               | TxInputScriptTxin TxPlutusScript (Maybe HashableScriptData) HashableScriptData (Maybe ExecutionUnits) TxIn
               | TxInputReferenceScriptTxin TxIn (Maybe HashableScriptData) HashableScriptData (Maybe ExecutionUnits) TxIn
 
               deriving (Show)
 
-data TxInput  = TxInputResolved TxInputResolved_ | TxInputUnResolved TxInputUnResolved_ deriving (Show)
+data TxInput era = TxInputResolved (TxInputResolved_ era) | TxInputUnResolved (TxInputUnResolved_ era) deriving (Show)
 
-data TxInputReference  = TxInputReferenceTxin TxIn
-    |  TxInputReferenceUtxo (UTxO ConwayEra)
+data TxInputReference era = TxInputReferenceTxin TxIn
+    |  TxInputReferenceUtxo (UTxO era)
     deriving (Show)
 
-data TxOutputContent =
+data TxOutputContent era =
      TxOutPkh PubKeyHash Value
   |  TxOutScript TxPlutusScript Value  (Hash ScriptData)
   |  TxOutScriptInline TxPlutusScript Value (Hash ScriptData)
@@ -104,7 +117,7 @@ data TxOutputContent =
   |  TxOutScriptWithData TxPlutusScript Value HashableScriptData
   |  TxOutScriptWithDataAndScript TxPlutusScript Value HashableScriptData TxScript
   |  TxOutScriptWithDataAndReference TxPlutusScript Value HashableScriptData
-  |  TxOutNative (TxOut  CtxTx ConwayEra)
+  |  TxOutNative (TxOut  CtxTx era)
    deriving (Show)
 
 data TxOutput content =TxOutput {
@@ -120,22 +133,22 @@ transfrormOutput (TxOutput con fee change minAda) v =TxOutput v fee change minAd
 data InsufficientUtxoAdaAction = DropOnUtxoInsufficientUtxoAda | IncreaseOnUtxoInsufficientUtxoAda|ErrorOnInsufficientUtxoAda | OnInsufficientUtxoAdaUnset deriving (Show,Eq,Generic, ToJSON )
 
 
-data TxCollateral =  TxCollateralTxin TxIn
-                  |  TxCollateralUtxo (UTxO ConwayEra) deriving (Show)
+data TxCollateral era =  TxCollateralTxin TxIn
+                  |  TxCollateralUtxo (UTxO era) deriving (Show)
 
-data TxSignature =  TxSignatureAddr (AddressInEra ConwayEra)
+data TxSignature era =  TxSignatureAddr (AddressInEra era)
                   | TxSignaturePkh PubKeyHash
                   | TxSignatureSkey (SigningKey PaymentKey)
                   deriving (Show)
 
 
 
-data TxChangeAddr = TxChangeAddrUnset
-                  | TxChangeAddr (AddressInEra ConwayEra) deriving (Show)
+data TxChangeAddr era = TxChangeAddrUnset
+                  | TxChangeAddr (AddressInEra era) deriving (Show)
 
 
-data TxInputSelection = TxSelectableAddresses [Ledger.Addr StandardCrypto]
-                  | TxSelectableUtxos  (UTxO ConwayEra)
+data TxInputSelection era = TxSelectableAddresses [Ledger.Addr StandardCrypto]
+                  | TxSelectableUtxos  (UTxO era)
                   | TxSelectableTxIn [TxIn]
                   | TxSelectableSkey [SigningKey PaymentKey]
                   deriving(Show)
@@ -182,29 +195,59 @@ maxValidity _ v2 = v2
 
 type TxBuilder =  (TxBuilder_ ConwayEra)
 
-data TxBuilder_  era  =TxBuilder{
-    txSelections :: [TxInputSelection],
-    txInputs:: [TxInput],
-    txInputReferences:: [TxInputReference],
-    txOutputs :: [TxOutput TxOutputContent],
-    txCollaterals :: [TxCollateral],  -- collateral for the transaction
+data TxBuilder_  era  =TxBuilder_{
+    txSelections :: [TxInputSelection era],
+    txInputs:: [TxInput era],
+    txInputReferences:: [TxInputReference era],
+    txOutputs :: [TxOutput (TxOutputContent era) ],
+    txCollaterals :: [TxCollateral era],  -- collateral for the transaction
     txValidityStart :: ValidityTimestamp,
     txValidityEnd :: ValidityTimestamp,
     txMintData :: [TxMintData TxMintingScriptSource],
-    txSignatures :: [TxSignature],
-    txProposals :: [Proposal ConwayEra],
-    txVotes :: [TxVote  ConwayEra],
+    txSignatures :: [TxSignature era],
+    txProposals :: [Proposal era],
+    txVotes :: [TxVote  era],
     txCertificates :: [Certificate era],
     txFee :: Maybe Integer,
     txDefaultChangeAddr :: Maybe (AddressInEra era),
     txMetadata' :: Map Word64 Aeson.Value
   } deriving (Show)
 
+
+class IsShelleyBasedEra era => IsTxBuilderEra era where
+  bMaryOnward :: MaryEraOnwards era
+  bAlonzoOnward :: AlonzoEraOnwards era
+  bBabbageOnward :: BabbageEraOnwards era
+  bConwayOnward :: Maybe (ConwayEraOnwards era)
+  bShelleyBasedEra :: ShelleyBasedEra era
+  bCardanoEra :: CardanoEra era
+  bAsEra :: AsType era
+
+
+instance IsTxBuilderEra ConwayEra where
+  bMaryOnward = MaryEraOnwardsConway
+  bAlonzoOnward = AlonzoEraOnwardsConway
+  bBabbageOnward = BabbageEraOnwardsConway
+  bConwayOnward = Just ConwayEraOnwardsConway
+  bShelleyBasedEra = ShelleyBasedEraConway
+  bCardanoEra = ConwayEra
+  bAsEra = AsConwayEra
+
+instance IsTxBuilderEra BabbageEra where
+  bMaryOnward = MaryEraOnwardsBabbage
+  bAlonzoOnward = AlonzoEraOnwardsBabbage
+  bBabbageOnward = BabbageEraOnwardsBabbage
+  bConwayOnward = Nothing
+  bShelleyBasedEra = ShelleyBasedEraBabbage
+  bCardanoEra =  BabbageEra
+  bAsEra = AsBabbageEra
+
+
 instance Monoid (TxBuilder_ era) where
-  mempty = TxBuilder  [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
+  mempty = TxBuilder_  [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
 
 instance Semigroup (TxBuilder_ era) where
-  (<>)  txb1 txb2 =TxBuilder{
+  (<>)  txb1 txb2 =TxBuilder_{
     txSelections = txSelections txb1 ++ txSelections txb2,
     txInputs = txInputs txb1 ++ txInputs txb2,
     txInputReferences = txInputReferences txb1 ++ txInputReferences txb2,
@@ -229,28 +272,28 @@ instance Semigroup (TxBuilder_ era) where
   }
 
 
-txSelection :: TxInputSelection -> TxBuilder
-txSelection v = TxBuilder  [v] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
+txSelection :: TxInputSelection ConwayEra -> TxBuilder
+txSelection v = TxBuilder_  [v] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
 
-txInput :: TxInput -> TxBuilder
-txInput v = TxBuilder  [] [v] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
+txInput :: TxInput ConwayEra -> TxBuilder
+txInput v = TxBuilder_  [] [v] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
 
-txInputReference :: TxInputReference -> TxBuilder
-txInputReference v = TxBuilder  [] [] [v] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
+txInputReference :: TxInputReference ConwayEra -> TxBuilder
+txInputReference v = TxBuilder_  [] [] [v] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
 
 
 txMints :: [TxMintData TxMintingScriptSource] -> TxBuilder
-txMints md= TxBuilder  [] [] [] [] [] mempty mempty md [] [] [] [] Nothing Nothing Map.empty
+txMints md= TxBuilder_  [] [] [] [] [] mempty mempty md [] [] [] [] Nothing Nothing Map.empty
 
 
-txOutput :: TxOutput TxOutputContent -> TxBuilder
-txOutput v =  TxBuilder  [] [] [] [v] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
+txOutput :: TxOutput (TxOutputContent ConwayEra) -> TxBuilder
+txOutput v =  TxBuilder_  [] [] [] [v] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
 
-txCollateral' :: TxCollateral -> TxBuilder
-txCollateral' v =  TxBuilder  [] [] [] [] [v] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
+txCollateral' :: (TxCollateral ConwayEra) -> TxBuilder
+txCollateral' v =  TxBuilder_  [] [] [] [] [v] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
 
-txSignature :: TxSignature -> TxBuilder
-txSignature v =  TxBuilder  [] [] [] [] [] mempty mempty [] [v] [] [] [] Nothing Nothing Map.empty
+txSignature :: (TxSignature ConwayEra) -> TxBuilder
+txSignature v =  TxBuilder_  [] [] [] [] [] mempty mempty [] [v] [] [] [] Nothing Nothing Map.empty
 
 
 
@@ -258,40 +301,40 @@ txSignature v =  TxBuilder  [] [] [] [] [] mempty mempty [] [v] [] [] [] Nothing
 
 -- Set validity Start and end time in posix seconds
 txValidPosixTimeRange :: POSIXTime  -> POSIXTime -> TxBuilder
-txValidPosixTimeRange start end = TxBuilder  [] [] [] [] [] (ValidityPosixTime start ) (ValidityPosixTime end) [] [] [] [] [] Nothing Nothing Map.empty
+txValidPosixTimeRange start end = TxBuilder_  [] [] [] [] [] (ValidityPosixTime start ) (ValidityPosixTime end) [] [] [] [] [] Nothing Nothing Map.empty
 
 -- set  validity statart time in posix seconds
 txValidFromPosixTime:: POSIXTime -> TxBuilder
-txValidFromPosixTime start =  TxBuilder  [] [] [] [] [] (ValidityPosixTime start) mempty [] [] [] [] [] Nothing Nothing Map.empty
+txValidFromPosixTime start =  TxBuilder_  [] [] [] [] [] (ValidityPosixTime start) mempty [] [] [] [] [] Nothing Nothing Map.empty
 
 -- set transaction validity end time in posix seconds
 txValidUntilPosixTime :: POSIXTime -> TxBuilder
-txValidUntilPosixTime end =  TxBuilder  [] [] [] [] [] mempty (ValidityPosixTime  end) [] [] [] [] [] Nothing Nothing Map.empty
+txValidUntilPosixTime end =  TxBuilder_  [] [] [] [] [] mempty (ValidityPosixTime  end) [] [] [] [] [] Nothing Nothing Map.empty
 
 -- Set validity Start and end slot
 txValidSlotRange :: SlotNo  -> SlotNo -> TxBuilder
-txValidSlotRange start end = TxBuilder  [] [] [] [] [] (ValiditySlot  start ) (ValiditySlot end) [] [] [] [] [] Nothing Nothing Map.empty
+txValidSlotRange start end = TxBuilder_  [] [] [] [] [] (ValiditySlot  start ) (ValiditySlot end) [] [] [] [] [] Nothing Nothing Map.empty
 
 -- set  validity statart time in posix seconds
 txValidFromSlot:: SlotNo -> TxBuilder
-txValidFromSlot start =  TxBuilder  [] [] [] [] [] (ValiditySlot start) mempty [] [] [] [] [] Nothing Nothing Map.empty
+txValidFromSlot start =  TxBuilder_  [] [] [] [] [] (ValiditySlot start) mempty [] [] [] [] [] Nothing Nothing Map.empty
 
 -- set transaction validity end time in posix seconds
 txValidUntilSlot :: SlotNo  -> TxBuilder
-txValidUntilSlot end =  TxBuilder  [] [] [] [] [] mempty (ValiditySlot  end) [] [] [] [] [] Nothing Nothing Map.empty
+txValidUntilSlot end =  TxBuilder_  [] [] [] [] [] mempty (ValiditySlot  end) [] [] [] [] [] Nothing Nothing Map.empty
 
 
 -- governanceProposals
 txProposal :: Proposal ConwayEra -> TxBuilder
-txProposal p =TxBuilder  [] [] [] [] [] mempty mempty [] [] [p] [] [] Nothing Nothing Map.empty
+txProposal p =TxBuilder_  [] [] [] [] [] mempty mempty [] [] [p] [] [] Nothing Nothing Map.empty
 
 -- voting
 txVote :: TxVote ConwayEra -> TxBuilder
-txVote v =TxBuilder  [] [] [] [] [] mempty mempty [] [] [] [v] [] Nothing Nothing Map.empty
+txVote v =TxBuilder_  [] [] [] [] [] mempty mempty [] [] [] [v] [] Nothing Nothing Map.empty
 
 -- voting
 txCertificate :: Certificate ConwayEra -> TxBuilder
-txCertificate v =TxBuilder  [] [] [] [] [] mempty mempty [] [] [] [] [v] Nothing Nothing Map.empty
+txCertificate v =TxBuilder_  [] [] [] [] [] mempty mempty [] [] [] [] [v] Nothing Nothing Map.empty
 
 
 --- minting
@@ -383,10 +426,11 @@ txSign p = txSignature $ TxSignatureSkey p
 
 -- | explicitly set Fee for the transaction
 txSetFee :: Integer -> TxBuilder
-txSetFee v = TxBuilder  [] [] [] [] [] mempty mempty [] [] [] [] [] (Just v) Nothing Map.empty
+txSetFee v = TxBuilder_  [] [] [] [] [] mempty mempty [] [] [] [] [] (Just v) Nothing Map.empty
 
 txMetadata :: Map Word64 Aeson.Value -> TxBuilder
-txMetadata  =  TxBuilder  [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing
+txMetadata  =  TxBuilder_  [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing
+
 
 class IsPlutusVersion v where
   toTxPlutusScriptInstance :: PlutusScript v -> TxPlutusScript
@@ -410,16 +454,19 @@ instance IsPlutusScript TxPlutusScript where
 instance IsSimpleScript TxSimpleScript where
   toTxSimpleScript = id
 
+instance IsSimpleScript SimpleScript where
+  toTxSimpleScript = TxSimpleScript
+
 hashPlutusScript :: TxPlutusScript -> ScriptHash
 hashPlutusScript sc = case sc of
   TxPlutusScriptV1 ps -> hashScript (PlutusScript  PlutusScriptV1 ps)
   TxPlutusScriptV2 ps -> hashScript (PlutusScript  PlutusScriptV2 ps)
 
-plutusScriptAddr :: TxPlutusScript -> NetworkId -> AddressInEra ConwayEra
+plutusScriptAddr :: IsShelleyBasedEra era => TxPlutusScript -> NetworkId -> AddressInEra era
 plutusScriptAddr sc networkId =
     let payCred = PaymentCredentialByScript (hashPlutusScript sc)
         addr = makeShelleyAddress networkId payCred NoStakeAddress
-        addrInEra = AddressInEra (ShelleyAddressInEra ShelleyBasedEraConway) addr
+        addrInEra = AddressInEra (ShelleyAddressInEra shelleyBasedEra) addr
     in addrInEra
 
 plutusScriptToScriptAny :: TxPlutusScript -> ScriptInAnyLang
@@ -429,6 +476,9 @@ plutusScriptToScriptAny sc = case sc of
 
 instance  IsPlutusVersion ver => IsPlutusScript (PlutusScript ver) where
   toTxPlutusScript  = toTxPlutusScriptInstance
+
+-- instance  IsPlutusVersion ver => IsPlutusScript (PlutusScript ver) where
+--   toTxPlutusScript  = toTxPlutusScriptInstance
 
 instance   IsPlutusVersion ver => IsPlutusScript (Script ver) where
   toTxPlutusScript  (PlutusScript psv ps) = toTxPlutusScript ps
@@ -459,7 +509,13 @@ txScriptToScriptAny sc = case sc of
   TxScriptSimple (TxSimpleScript ss) ->  ScriptInAnyLang SimpleScriptLanguage (SimpleScript ss)
   TxScriptPlutus tps -> plutusScriptToScriptAny tps
 
-
+txScriptFromScriptAny:: ScriptInAnyLang -> TxScript 
+txScriptFromScriptAny = \case ScriptInAnyLang sl sc -> case sc of 
+                                SimpleScript ss -> TxScriptSimple $ toTxSimpleScript  ss
+                                PlutusScript psv ps -> case psv of
+                                  PlutusScriptV1 -> TxScriptPlutus$  toTxPlutusScript ps
+                                  PlutusScriptV2 -> TxScriptPlutus$  toTxPlutusScript ps
+                                  _ -> error "Cardano.Kuber.Core.Txbuilder.txScriptFromScriptAny TODO: for pv3"
 
 class IsScriptVersion v where
   translationFunc :: Script v -> TxScript
@@ -476,11 +532,11 @@ instance (IsPlutusVersion ver) => IsMintingScript (PlutusScript ver) where
 
 -- | Add a  script utxo containing datum-hash to  transaction input . Script code, datum matching datumHash and redeemer should be  passed for building transaction.
 txRedeemUtxoWithDatum :: IsPlutusScript sc =>  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO ConwayEra ->   sc   -> HashableScriptData  -> HashableScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemUtxoWithDatum  txin txout sc _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (toTxPlutusScript sc)  (Just _data) _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
+txRedeemUtxoWithDatum  txin txout sc _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (toTxPlutusScript sc)  (Just _data) _redeemer  exUnitsM  ( txin,  txout)
 
 -- | Add a  script utxo containing inline-datum  to  transaction input. Script code and redeemer should be  passed for building transaction.
 txRedeemUtxo :: IsPlutusScript sc => TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO ConwayEra -> sc  -> HashableScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemUtxo txin txout script _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (toTxPlutusScript script)  Nothing _redeemer  exUnitsM $ UTxO $ Map.singleton txin  txout
+txRedeemUtxo txin txout script _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputScriptUtxo  (toTxPlutusScript script)  Nothing _redeemer  exUnitsM  ( txin,  txout)
 
 -- | Add a script utxo-reference containing inline-datum to transaction input.  Script code and Reedemer  should be passed.
 txRedeemTxin :: IsPlutusScript sc => TxIn  -> sc  -> HashableScriptData -> Maybe ExecutionUnits ->TxBuilder
@@ -490,7 +546,7 @@ type ScriptReferenceTxIn = TxIn
 
 -- | Add a script utxo txin containing datum-hash to transaction input. Script code is inlined in provided TransactionInput. The script reference input will be automatically added to transaction reference inputs.
 txRedeemUtxoWithDatumAndReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO ConwayEra  -> HashableScriptData ->  HashableScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemUtxoWithDatumAndReferenceScript scRefTxIn txin txout _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputReferenceScriptUtxo scRefTxIn (Just _data) _redeemer exUnitsM (UTxO $ Map.singleton txin  txout)
+txRedeemUtxoWithDatumAndReferenceScript scRefTxIn txin txout _data _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputReferenceScriptUtxo scRefTxIn (Just _data) _redeemer exUnitsM ( txin,  txout)
 
 -- | Add a script utxo containing datum-hash to transaction input. Script code is inlined in provided TransactionInput. The script reference input will be automatically added to transaction reference inputs.
 txRedeemTxinWithDatumAndReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO ConwayEra  -> HashableScriptData ->  HashableScriptData -> Maybe ExecutionUnits ->TxBuilder
@@ -498,7 +554,7 @@ txRedeemTxinWithDatumAndReferenceScript scRefTxIn txin txout _data _redeemer exU
 
 -- | Add a script utxo containing inline-datum to transaction input. Script code is inlined in provided TransactionInput. The script reference input will be automatically added to transaction reference inputs.
 txRedeemUtxoWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO ConwayEra  -> HashableScriptData -> Maybe ExecutionUnits ->TxBuilder
-txRedeemUtxoWithReferenceScript scRefTxIn txin txout  _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputReferenceScriptUtxo scRefTxIn Nothing _redeemer exUnitsM (UTxO $ Map.singleton txin  txout)
+txRedeemUtxoWithReferenceScript scRefTxIn txin txout  _redeemer exUnitsM = txInput $ TxInputResolved $ TxInputReferenceScriptUtxo scRefTxIn Nothing _redeemer exUnitsM ( txin,  txout)
 
 -- | Add a script txIn containing inline-datum to transaction input. Script code is inlined in provided TransactionInput. The script reference input will be automatically added to transaction reference inputs.
 txRedeemTxinWithReferenceScript :: ScriptReferenceTxIn ->  TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO ConwayEra  -> HashableScriptData -> Maybe ExecutionUnits ->TxBuilder
@@ -507,7 +563,8 @@ txRedeemTxinWithReferenceScript scRefTxIn txin txout  _redeemer exUnitsM = txInp
 
  -- wallet addresses, from which utxos can be spent for balancing the transaction
 txWalletAddresses :: [AddressInEra ConwayEra] -> TxBuilder
-txWalletAddresses v = txSelection $ TxSelectableAddresses  v
+txWalletAddresses v = txSelection $ TxSelectableAddresses  (map toShelleyAddr v)
+
 
 -- wallet address, from which utxos can be spent  for balancing the transaction
 txWalletAddress :: AddressInEra ConwayEra -> TxBuilder
@@ -538,14 +595,4 @@ txCollateralUtxo :: TxIn -> TxOut CtxUTxO ConwayEra -> TxBuilder
 txCollateralUtxo tin tout =  txCollateral' $ TxCollateralUtxo  $ UTxO $ Map.singleton  tin tout
 
 txChangeAddress :: AddressInEra ConwayEra -> TxBuilder
-txChangeAddress addr = TxBuilder  [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing (Just addr) Map.empty
-
-
-root@gitlab ~ # ls /srv/gitlab/data/gitlab-rails/shared/registry/
-docker  lost+found
-root@gitlab ~ # ls /srv/gitlab/data/gitlab-rails/shared/registry/docker
-registry
-root@gitlab ~ # ls /srv/gitlab/data/gitlab-rails/shared/registry/docker/registry
-v2
-root@gitlab ~ # ls /srv/gitlab/data/gitlab-rails/shared/registry/docker/registry/v2
-blobs  repositories
+txChangeAddress addr = TxBuilder_  [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing (Just addr) Map.empty

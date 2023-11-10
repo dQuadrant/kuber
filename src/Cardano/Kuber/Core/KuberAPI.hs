@@ -3,6 +3,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeApplications #-}
 
 
 module Cardano.Kuber.Core.KuberAPI where
@@ -25,6 +27,7 @@ import Cardano.Kuber.Core.TxFramework (executeTxBuilder)
 import Cardano.Ledger.Babbage.TxBody (BabbageTxBody (btbInputs, btbReferenceInputs), BabbageEraTxBody (referenceInputsTxBodyL))
 import Cardano.Ledger.Api (EraTxBody(inputsTxBodyL))
 import Control.Lens ((^.))
+import Cardano.Kuber.Data.EraUpdate (updateUtxoEra)
 
 
 
@@ -32,53 +35,13 @@ type ShelleyWitCount  = Word
 type ByronWitCount    = Word
 
 class HasKuberAPI a  where
-  kTxBuildTxBody    :: TxBuilder ->  Kontract a w FrameworkError (TxBody ConwayEra)
-  kBuildTx       :: TxBuilder -> Kontract a w FrameworkError (Tx ConwayEra)
+  kTxBuildTxBody    :: IsTxBuilderEra era =>  TxBuilder_ era ->  Kontract a w FrameworkError (TxBody era)
+  kBuildTx       ::  IsTxBuilderEra era => TxBuilder_ era -> Kontract a w FrameworkError (Tx era)
   kTimeToSlot           :: POSIXTime -> Kontract a w FrameworkError SlotNo
   kSlotToTime           ::  SlotNo    -> Kontract a  w FrameworkError POSIXTime
-  kEvaluateExUnits :: Tx ConwayEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
-  kCalculateMinFee :: Tx ConwayEra -> Kontract a  w FrameworkError  Lovelace
-  kBuildAndSubmit :: TxBuilder -> Kontract a w FrameworkError (Tx ConwayEra)
-
-
-
--- instance {-# OVERLAPPABLE #-}   (HasChainQueryAPI a,HasSubmitApi a,HasLocalNodeAPI a ) => HasKuberAPI a where
-
---   kTxBuildTxBody    :: TxBuilder ->  Kontract a w FrameworkError (TxBody ConwayEra)
---   kTxBuildTxBody builder = executeTxBuilder builder <&> fst
-
---   kBuildTx       :: TxBuilder -> Kontract a w FrameworkError (Tx ConwayEra)
---   kBuildTx  builder =  executeTxBuilder builder <&> snd
-
---   kTimeToSlot           :: POSIXTime -> Kontract a w FrameworkError SlotNo
---   kTimeToSlot  time = timestampToSlot <$> kQuerySystemStart   <*> kQueryEraHistory <*> pure time
-
---   kSlotToTime           ::  SlotNo    -> Kontract a  w FrameworkError POSIXTime
---   kSlotToTime   slot = slotToTimestamp <$> kQuerySystemStart <*> kQueryEraHistory <*>  pure slot
-
---   kEvaluateExUnits :: Tx ConwayEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
---   kEvaluateExUnits tx  = do
---     let txBody = getTxBody tx
---         ins =  case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> Ledger.inputs tb } 
---         refs = case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> Ledger.referenceInputs tb } 
---         allInputs =  Set.map fromShelleyTxIn (ins <> refs)
---     utxos <-kQueryUtxoByTxin allInputs
---     kEvaluateExUnits' (getTxBody tx) utxos
-
-
---   kCalculateMinFee :: Tx ConwayEra -> Kontract a  w FrameworkError  Lovelace
---   kCalculateMinFee tx = do 
---       kCalculateMinFee' (getTxBody tx) (fromInteger $ toInteger $  length (getTxWitnesses tx)) 0
-
-
---   kBuildAndSubmit :: TxBuilder -> Kontract a w FrameworkError (Tx ConwayEra)
---   kBuildAndSubmit  builder =  do
---       tx <- executeTxBuilder builder <&> snd
---       kSubmitTx tx
---       pure tx
-
-
--- instance(HasChainQueryAPI a,HasSubmitApi a ) => HasKuberAPI (CachedApi a)
+  kEvaluateExUnits :: IsTxBuilderEra era => Tx era -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
+  kCalculateMinFee :: IsTxBuilderEra era => Tx era -> Kontract a  w FrameworkError  Lovelace
+  kBuildAndSubmit :: IsTxBuilderEra era => TxBuilder_ era -> Kontract a w FrameworkError (Tx era)
 
 
 instance   HasKuberAPI (LocalNodeConnectInfo CardanoMode) where
@@ -110,12 +73,23 @@ kSlotToTime'   slot = slotToTimestamp <$> kQuerySystemStart <*> kQueryEraHistory
 
 kEvaluateExUnits'' tx  = do
     let txBody = getTxBody tx
-        ledgerTxBody = case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> tb}
-        ins =   ledgerTxBody ^. inputsTxBodyL
-        refs =   ledgerTxBody ^. referenceInputsTxBodyL --case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> btbReferenceInputs tb } 
-        allInputs =  Set.map fromShelleyTxIn (ins <> refs)
+        allInputs = resolveEra bShelleyBasedEra txBody
+        
     utxos <-kQueryUtxoByTxin allInputs
-    kEvaluateExUnits' (getTxBody tx) utxos
+    kEvaluateExUnits' (getTxBody tx)  utxos
+    
+  where
+    resolveEra :: IsShelleyBasedEra era => ShelleyBasedEra era -> TxBody era -> Set.Set TxIn
+    resolveEra sbera body = case sbera of 
+      ShelleyBasedEraBabbage -> getTxUnknownInputs  (body ::TxBody BabbageEra)
+      ShelleyBasedEraConway -> getTxUnknownInputs  (body ::TxBody ConwayEra)
+      _ -> error "Unexpected"
+
+    getTxUnknownInputs txBody = let 
+          ledgerTxBody = case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> tb}
+          ins =   ledgerTxBody ^. inputsTxBodyL
+          refs =   ledgerTxBody ^. referenceInputsTxBodyL --case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> btbReferenceInputs tb } 
+      in Set.map fromShelleyTxIn (ins <> refs)
 
 kCalculateMinFee' :: (HasChainQueryAPI a, IsShelleyBasedEra era) => Tx era -> Kontract a w FrameworkError Lovelace
 kCalculateMinFee' tx = do 
@@ -133,5 +107,5 @@ kCalculateMinFee'' txbody shelleyWitnesses byronWitnesses = do
 
 kBuildAndSubmit'  builder =  do
     tx <- executeTxBuilder builder <&> snd
-    kSubmitTx tx
+    kSubmitTx (InAnyCardanoEra bCardanoEra tx)
     pure tx

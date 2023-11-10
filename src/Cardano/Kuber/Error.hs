@@ -110,7 +110,7 @@ throwFrameworkError = \case
     Right v -> pure v
 
 
-fromScriptExecutionError :: ScriptExecutionError -> TxBody ConwayEra -> FrameworkError
+fromScriptExecutionError :: ScriptExecutionError -> TxBody era -> FrameworkError
 fromScriptExecutionError see  txbody=  case see of
                 ScriptErrorMissingTxIn ti -> makeErr  ("Input Missing : " ++ T.unpack (renderTxIn ti))
                 ScriptErrorTxInWithoutDatum ti -> makeErr  ("Input doesn't have datum " ++  T.unpack (renderTxIn ti))
