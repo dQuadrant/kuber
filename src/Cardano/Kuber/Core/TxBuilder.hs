@@ -61,6 +61,7 @@ import qualified Cardano.Ledger.Api.Era as Ledger
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.Api (Babbage)
 import qualified Cardano.Ledger.Api as Ledger
+import Control.Applicative (Alternative)
 
 
 newtype TxSimpleScript = TxSimpleScript SimpleScript
@@ -272,6 +273,7 @@ instance Semigroup (TxBuilder_ era) where
   }
 
 
+
 txSelection :: TxInputSelection ConwayEra -> TxBuilder
 txSelection v = TxBuilder_  [v] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
 
@@ -295,8 +297,8 @@ txCollateral' v =  TxBuilder_  [] [] [] [] [v] mempty mempty [] [] [] [] [] Noth
 txSignature :: (TxSignature ConwayEra) -> TxBuilder
 txSignature v =  TxBuilder_  [] [] [] [] [] mempty mempty [] [v] [] [] [] Nothing Nothing Map.empty
 
-
-
+txReplacePoposalsNCert:: (TxBuilder_ era) -> [Proposal era]  -> [Certificate era] -> (TxBuilder_ era)
+txReplacePoposalsNCert (TxBuilder_ a b c d e f g h i j k l m n o ) ps  cs= TxBuilder_ a b c d e f g h i ps k cs m n o
 -- Transaction validity
 
 -- Set validity Start and end time in posix seconds
@@ -509,8 +511,8 @@ txScriptToScriptAny sc = case sc of
   TxScriptSimple (TxSimpleScript ss) ->  ScriptInAnyLang SimpleScriptLanguage (SimpleScript ss)
   TxScriptPlutus tps -> plutusScriptToScriptAny tps
 
-txScriptFromScriptAny:: ScriptInAnyLang -> TxScript 
-txScriptFromScriptAny = \case ScriptInAnyLang sl sc -> case sc of 
+txScriptFromScriptAny:: ScriptInAnyLang -> TxScript
+txScriptFromScriptAny = \case ScriptInAnyLang sl sc -> case sc of
                                 SimpleScript ss -> TxScriptSimple $ toTxSimpleScript  ss
                                 PlutusScript psv ps -> case psv of
                                   PlutusScriptV1 -> TxScriptPlutus$  toTxPlutusScript ps

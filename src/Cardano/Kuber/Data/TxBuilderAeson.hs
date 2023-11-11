@@ -18,7 +18,7 @@ import Cardano.Api.Shelley
     (
       ReferenceScript(ReferenceScript, ReferenceScriptNone),
       ReferenceScript(ReferenceScript, ReferenceScriptNone),
-      scriptDataToJsonDetailedSchema, Proposal (unProposal), VotingProcedures (unVotingProcedures, VotingProcedures), fromLedgerPParamsUpdate, fromShelleyStakeAddr, VotingProcedure (unVotingProcedure), toShelleyAddr )
+      scriptDataToJsonDetailedSchema, Proposal (unProposal), VotingProcedures (unVotingProcedures, VotingProcedures), fromLedgerPParamsUpdate, fromShelleyStakeAddr, VotingProcedure (unVotingProcedure), toShelleyAddr, ShelleyLedgerEra )
 import Cardano.Kuber.Error
 import PlutusTx (ToData)
 import Cardano.Slotting.Time
@@ -84,13 +84,26 @@ import qualified Cardano.Api.Shelley as CApi
 import qualified Cardano.Api.Ledger as Ledger
 import Data.Ratio (denominator, numerator)
 import Cardano.Kuber.Data.EraUpdate (updateAddressEra)
+import Control.Monad (when, unless)
+import qualified Debug.Trace as Debug
 
 
 
 
 instance IsTxBuilderEra era => FromJSON (TxBuilder_ era) where
   parseJSON (A.Object v) =let
-      requireAbsent  k (onPresent) = do
+      objectKeys = Set.fromList $  map A.toText  $ A.keys v
+      pluralKeys :: [T.Text] = [
+          "selection","input","referenceInput","output","collateral",
+          "mint", "signature","proposal", "vote", "cert"
+        ]
+      nonPluralKeys = [
+          "changeAddress","metadata","fee","validityStart","validityEnd",
+          "validityStartSlot","validityEndSlot"
+        ]
+      extraKeys = Set.difference objectKeys posisibleKeys
+      posisibleKeys = Set.fromList $ pluralKeys ++ map (`T.append` "s") pluralKeys ++ nonPluralKeys
+      requireAbsent  k onPresent = do
          obj :: [A.Value] <- v .?< k
          if null obj then pure () else onPresent
       eraBasedParser :: ShelleyBasedEra era ->  Parser (TxBuilder_ era)
@@ -108,14 +121,17 @@ instance IsTxBuilderEra era => FromJSON (TxBuilder_ era) where
           requireAbsent "vote" $ fail ".vote[s] not supported. Kuber is in Babbage era"
           commonParser [] [] []
         _ -> fail "Unexpected era"
-    in eraBasedParser bShelleyBasedEra
+    in do
+      unless (null extraKeys)  (fail $ "Invalid fields in txBuilder :" ++ show extraKeys)
+      eraBasedParser bShelleyBasedEra
 
     where
       commonParser :: IsTxBuilderEra e1 => [Proposal e1]
         -> [TxVote e1]
         -> [Certificate e1]
         -> Parser (TxBuilder_ e1)
-      commonParser proposals votes certs =TxBuilder_
+      commonParser proposals votes certs =do
+        TxBuilder_
           <$> (v .?< "selection")
           <*> v .?<  "input"
           <*> v .?< "referenceInput"
@@ -243,9 +259,9 @@ instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
               <+>  "validityStart"  `appendValidity` validityStart
               <+>  "validityEnd"    `appendValidity` validityEnd
               <+>  "signatures"     >= signatures
-              -- <+>  "proposals"      >= map translateProposal proposals
-              -- <+>  "votes"          >=  votes
-              -- <+>  "certificates"   >= map CertificateModal certs
+              <+>  "proposals"      >= map (translateProposal bConwayOnward) proposals
+              <+>  "votes"          >=  map (transformVote bShelleyBasedEra) votes
+              <+>  "certificates"   >= map (transformCerts bShelleyBasedEra) certs
               <+>  "fee"            >= fee
               <+>  "changeAddress"  >= defaultChangeAddr
               <#>  "metadata"       >= metadata
@@ -256,8 +272,29 @@ instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
     infixr 6 <+>
     (<+>) f  v = f v
 
-translateProposal :: Proposal era -> ProposalProcedureModal (CApi.ShelleyLedgerEra era)
-translateProposal (CApi.Proposal proposal) = ProposalProcedureModal proposal
+translateProposal ::  Maybe (ConwayEraOnwards era) -> Proposal era -> A.Value
+translateProposal sbera (CApi.Proposal proposal) = case sbera of
+  Nothing -> A.Null
+  Just ceo -> case ceo of { ConwayEraOnwardsConway -> toJSON $ ProposalProcedureModal @ConwayEra proposal }
+
+transformCerts :: ShelleyBasedEra era -> Certificate era -> A.Value
+transformCerts sbera c = case sbera of
+  ShelleyBasedEraShelley -> toJSON certModal
+  ShelleyBasedEraAllegra -> toJSON certModal
+  ShelleyBasedEraMary -> toJSON certModal
+  ShelleyBasedEraAlonzo -> toJSON certModal
+  ShelleyBasedEraBabbage -> toJSON certModal
+  ShelleyBasedEraConway -> toJSON certModal
+  where
+      certModal = CertificateModal c
+transformVote :: ShelleyBasedEra era ->  TxVote  era -> A.Value
+transformVote sbera vote = case sbera of
+  ShelleyBasedEraShelley -> toJSON vote
+  ShelleyBasedEraAllegra -> toJSON vote
+  ShelleyBasedEraMary -> toJSON vote
+  ShelleyBasedEraAlonzo -> toJSON vote
+  ShelleyBasedEraBabbage -> toJSON vote
+  ShelleyBasedEraConway -> toJSON vote
 
 instance ToJSON (TxMintData TxMintingScriptSource) where
   toJSON (TxMintData script value metadata) =

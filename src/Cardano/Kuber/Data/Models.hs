@@ -118,7 +118,7 @@ newtype GovActionModal era = GovActionModal (GovAction era)
 newtype ConstitutionModal era  = ConstitutionModal (Constitution era)
 
 newtype AnchorModal era = AnchorModal (Anchor era)
-newtype ProposalProcedureModal  era = ProposalProcedureModal (ProposalProcedure era)
+newtype ProposalProcedureModal  era = ProposalProcedureModal (ProposalProcedure (ShelleyLedgerEra era))
 
 newtype SystemStartModal = SystemStartModal SystemStart
 newtype EraHistoryModal = EraHistoryModal (EraHistory CardanoMode)
@@ -236,8 +236,8 @@ instance Wrapper (AnchorModal era) (Anchor era) where
 instance Wrapper (GovActionModal era) (GovAction era) where
   unWrap (GovActionModal a) = a
 
-instance Wrapper (ProposalProcedureModal era) (ProposalProcedure era) where
-  unWrap (ProposalProcedureModal p) =p
+-- instance Wrapper (ProposalProcedureModal era) (ProposalProcedure (ShelleyLedgerEra era)) where
+--   unWrap (ProposalProcedureModal p) =p
 
 instance Wrapper (RewardAcntModal era) (Ledger.RewardAcnt era) where
   unWrap (RewardAcntModal ra) =ra
@@ -637,8 +637,8 @@ instance  EraCrypto ledgerera ~ StandardCrypto =>  FromJSON  (GovActionModal led
 
   parseJSON  _ = fail "Expected GovActionModal Object"
 
-instance  (EraCrypto ledgerera ~ StandardCrypto, Ledger.EraPParams ledgerera,Ledger.ConwayEraPParams ledgerera)
-    =>  FromJSON  (ProposalProcedureModal ledgerera) where
+instance  (   era ~ ConwayEra)
+    =>  FromJSON  (ProposalProcedureModal era) where
   parseJSON (A.Object o) = do
     deposit :: Integer <- o.:? "deposit" .!= 0
     (RewardAcntModal returnAddress) <- o .: "refundAccount"
@@ -677,58 +677,6 @@ instance  (EraCrypto ledgerera ~ StandardCrypto, Ledger.EraPParams ledgerera,Led
           ProposalProcedure (Coin deposit) returnAddress  govAction  anchor
 
     where
-        parseParamUpdate :: (purpose ~ 'Ledger.PParamUpdatePurpose,EraPParams ledgerera,Ledger.ConwayEraPParams ledgerera) => StrictMaybe (PrevGovActionId purpose StandardCrypto) -> A.Value -> A.Parser (GovAction ledgerera)
-        parseParamUpdate prevGovAction v@(A.Object obj)= do
-          let hmap=  A.fromHashMapText $  HM.mapKeys (T.toLower . A.toText ) $ toHashMap obj
-          -- pUpdate<- parseJSON v
-          let pParamUpdate=emptyPParamsUpdate
-              paramParser :: (FromJSON a , EraCrypto ledgerera ~ StandardCrypto,Ledger.ConwayEraPParams ledgerera,
-                     EraPParams ledgerera) => T.Text
-                  -> Lens' (PParamsUpdate ledgerera) (StrictMaybe b)
-                  -> (a -> b)
-                  -> PParamsUpdate ledgerera
-                  -> Parser (PParamsUpdate ledgerera)
-              paramParser k f f2 pUpdate   = do
-                minSize <- hmap .:? A.fromText (T.toLower k)
-                pure $ case minSize of
-                  Nothing ->  pUpdate
-                  Just val ->   pUpdate  & f .~ SJust  (f2 val)
-
-          param <-    paramParser  "maxblocksize" ppuMaxBBSizeL id pParamUpdate
-                  >>= paramParser  "minFeeA"   Ledger.ppuMinFeeAL id
-                  >>= paramParser "MaxBBSize" Ledger.ppuMaxBBSizeL id
-                  >>= paramParser "MaxTxSize" Ledger.ppuMaxTxSizeL id
-                  >>= paramParser "MaxBHSize" Ledger.ppuMaxBHSizeL id
-                  >>= paramParser "KeyDeposit" Ledger.ppuKeyDepositL id
-                  >>= paramParser "PoolDeposit" Ledger.ppuPoolDepositL id
-                  >>= paramParser "EMax" Ledger.ppuEMaxL id
-                  >>= paramParser "NOpt" Ledger.ppuNOptL id
-                  >>= paramParser "A0" Ledger.ppuA0L id
-                  >>= paramParser "Rho" Ledger.ppuRhoL id
-                  >>= paramParser "Tau" Ledger.ppuTauL id
-                  -- >>= paramParser "ProtocolVersion" Ledger.ppuProtocolVersionL id
-                  >>= paramParser "MinPoolCost" Ledger.ppuMinPoolCostL id
-                  >>= paramParser "CoinsPerUTxOByte" Ledger.ppuCoinsPerUTxOByteL id
-                  >>= paramParser "CostModels" Ledger.ppuCostModelsL id
-                  >>= paramParser "Prices" Ledger.ppuPricesL id
-                  >>= paramParser "MaxTxExUnits" Ledger.ppuMaxTxExUnitsL id
-                  >>= paramParser "MaxBlockExUnits" Ledger.ppuMaxBlockExUnitsL id
-                  >>= paramParser "MaxValSize" Ledger.ppuMaxValSizeL id
-                  >>= paramParser "CollateralPercentage" Ledger.ppuCollateralPercentageL id
-                  >>= paramParser "MaxCollateralInputs" Ledger.ppuMaxCollateralInputsL id
-                  >>= paramParser "PoolVotingThresholds" Ledger.ppuPoolVotingThresholdsL id
-                  >>= paramParser "DRepVotingThresholds" Ledger.ppuDRepVotingThresholdsL id
-                  >>= paramParser "CommitteeMinSize" Ledger.ppuCommitteeMinSizeL id
-                  >>= paramParser "CommitteeMaxTermLength" Ledger.ppuCommitteeMaxTermLengthL id
-                  >>= paramParser "GovActionLifetime" Ledger.ppuGovActionLifetimeL id
-                  >>= paramParser "GovActionDeposit" Ledger.ppuGovActionDepositL id
-                  >>= paramParser "DRepDeposit" Ledger.ppuDRepDepositL id
-                  >>= paramParser "DRepActivity" Ledger.ppuDRepActivityL id
-
-          pure $ ParameterChange  prevGovAction  param
-
-        parseParamUpdate _  _ = fail "Expected Protocol Parameter Update Object"
-
         parseUpdateCommittee prevAction (A.Object  obj)= do
            addMap  <- obj .:? "add" .!= mempty
            remove  <- obj .:? "remove" .!= mempty
@@ -776,8 +724,59 @@ instance  (EraCrypto ledgerera ~ StandardCrypto, Ledger.EraPParams ledgerera,Led
 
   parseJSON  _ = fail "Expected GovActionModal Object"
 
+parseParamUpdate :: (EraCrypto ledgerera ~ StandardCrypto,  Ledger.ConwayEraPParams ledgerera) => StrictMaybe   (PrevGovActionId 'Ledger.PParamUpdatePurpose (EraCrypto ledgerera)) -> A.Value -> Parser (GovAction ledgerera)
+parseParamUpdate prevGovAction v@(A.Object obj)= do
+  let hmap=  A.fromHashMapText $  HM.mapKeys (T.toLower . A.toText ) $ toHashMap obj
+  -- pUpdate<- parseJSON v
+  let pParamUpdate=emptyPParamsUpdate
+      paramParser :: (FromJSON a , EraCrypto ledgerera ~ StandardCrypto,Ledger.ConwayEraPParams ledgerera,
+              EraPParams ledgerera) => T.Text
+          -> Lens' (PParamsUpdate ledgerera) (StrictMaybe b)
+          -> (a -> b)
+          -> PParamsUpdate ledgerera
+          -> Parser (PParamsUpdate ledgerera)
+      paramParser k f f2 pUpdate   = do
+        minSize <- hmap .:? A.fromText (T.toLower k)
+        pure $ case minSize of
+          Nothing ->  pUpdate
+          Just val ->   pUpdate  & f .~ SJust  (f2 val)
 
-instance (Crypto (EraCrypto era),EraCrypto era ~ StandardCrypto, Ledger.Era era, EraPParams era,Ledger.ConwayEraPParams era) => ToJSON (ProposalProcedureModal era) where
+  param :: (PParamsUpdate ledgerera) <-    paramParser  "maxblocksize" ppuMaxBBSizeL id pParamUpdate
+          >>= paramParser  "minFeeA"   Ledger.ppuMinFeeAL id
+          >>= paramParser "MaxBBSize" Ledger.ppuMaxBBSizeL id
+          >>= paramParser "MaxTxSize" Ledger.ppuMaxTxSizeL id
+          >>= paramParser "MaxBHSize" Ledger.ppuMaxBHSizeL id
+          >>= paramParser "KeyDeposit" Ledger.ppuKeyDepositL id
+          >>= paramParser "PoolDeposit" Ledger.ppuPoolDepositL id
+          >>= paramParser "EMax" Ledger.ppuEMaxL id
+          >>= paramParser "NOpt" Ledger.ppuNOptL id
+          >>= paramParser "A0" Ledger.ppuA0L id
+          >>= paramParser "Rho" Ledger.ppuRhoL id
+          >>= paramParser "Tau" Ledger.ppuTauL id
+          -- >>= paramParser "ProtocolVersion" Ledger.ppuProtocolVersionL id
+          >>= paramParser "MinPoolCost" Ledger.ppuMinPoolCostL id
+          >>= paramParser "CoinsPerUTxOByte" Ledger.ppuCoinsPerUTxOByteL id
+          >>= paramParser "CostModels" Ledger.ppuCostModelsL id
+          >>= paramParser "Prices" Ledger.ppuPricesL id
+          >>= paramParser "MaxTxExUnits" Ledger.ppuMaxTxExUnitsL id
+          >>= paramParser "MaxBlockExUnits" Ledger.ppuMaxBlockExUnitsL id
+          >>= paramParser "MaxValSize" Ledger.ppuMaxValSizeL id
+          >>= paramParser "CollateralPercentage" Ledger.ppuCollateralPercentageL id
+          >>= paramParser "MaxCollateralInputs" Ledger.ppuMaxCollateralInputsL id
+          >>= paramParser "PoolVotingThresholds" Ledger.ppuPoolVotingThresholdsL id
+          >>= paramParser "DRepVotingThresholds" Ledger.ppuDRepVotingThresholdsL id
+          >>= paramParser "CommitteeMinSize" Ledger.ppuCommitteeMinSizeL id
+          >>= paramParser "CommitteeMaxTermLength" Ledger.ppuCommitteeMaxTermLengthL id
+          >>= paramParser "GovActionLifetime" Ledger.ppuGovActionLifetimeL id
+          >>= paramParser "GovActionDeposit" Ledger.ppuGovActionDepositL id
+          >>= paramParser "DRepDeposit" Ledger.ppuDRepDepositL id
+          >>= paramParser "DRepActivity" Ledger.ppuDRepActivityL id
+
+  pure $ ParameterChange  prevGovAction  param
+
+parseParamUpdate _  _ = fail "Expected Protocol Parameter Update Object"
+
+instance (era ~  ConwayEra) => ToJSON (ProposalProcedureModal era) where
   toJSON (ProposalProcedureModal (ProposalProcedure (Coin co) refundAccnt ga an))
     = A.object $ ["anchor" .= an, "deposit" .= co , "refundAccount" .= RewardAcntModal refundAccnt ] ++  (case ga of
    ParameterChange sm ppu -> addPrevGovAction sm [A.fromString "parameterUpdate" .= parameterUpdateJson ppu ]
@@ -792,18 +791,16 @@ instance (Crypto (EraCrypto era),EraCrypto era ~ StandardCrypto, Ledger.Era era,
    NewConstitution sm con -> addPrevGovAction sm  ["newConstitution" .= con ]
    InfoAction -> ["info" .= True ])
     where
-      addPrevGovAction :: StrictMaybe (PrevGovActionId purpose (EraCrypto era))-> [A.Pair] -> [A.Pair]
       addPrevGovAction (SJust (PrevGovActionId (GovActionId txid (GovActionIx index)))) v = ("prevGovAction"  .=  renderTxIn ( fromShelleyTxIn  $ Ledger.TxIn txid ( Ledger.TxIx $ fromIntegral index))) : v
       addPrevGovAction SNothing v = v
 
       parameterUpdateJson ppu = let
-                paramUpdateField :: (ToJSON a) => A.Key-> Getting (StrictMaybe v) (PParamsUpdate era) (StrictMaybe v)-> (v -> a)-> [A.Pair]
+                paramUpdateField :: (ToJSON a) => A.Key-> Getting (StrictMaybe v) (PParamsUpdate (ShelleyLedgerEra ConwayEra)) (StrictMaybe v)-> (v -> a)-> [A.Pair]
                 paramUpdateField k getter f = case ppu ^. getter  of
                   SJust v -> [ k .= toJSON (f v)]
                   SNothing -> []
             in A.object $
              paramUpdateField "Maxblocksize" Ledger.ppuMaxBBSizeL id
-          <> paramUpdateField "MinFeeA"   Ledger.ppuMinFeeAL id
           <> paramUpdateField "MaxBBSize" Ledger.ppuMaxBBSizeL id
           <> paramUpdateField "MaxTxSize" Ledger.ppuMaxTxSizeL id
           <> paramUpdateField "MaxBHSize" Ledger.ppuMaxBHSizeL id

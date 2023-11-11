@@ -80,14 +80,13 @@ main = do
 
     else do
       dcinfo <- chainInfoFromEnv
-
       let settings = setPort port defaultSettings
       let settings2  = (case hostStr of
             Nothing -> settings
             Just s -> setHost (fromString s) settings  )
       (AnyCardanoEra nodeEra) <- queryNodeEra dcinfo
       let app =case nodeEra of  
-            ConwayEra -> appWithBackenAndEra dcinfo BabbageEraOnwardsBabbage
+            ConwayEra -> appWithBackenAndEra dcinfo BabbageEraOnwardsConway
             _ -> appWithBackenAndEra dcinfo BabbageEraOnwardsBabbage
       putStrLn $ case nodeEra of
         BabbageEra ->  "Starting Kuber in Babbage era"

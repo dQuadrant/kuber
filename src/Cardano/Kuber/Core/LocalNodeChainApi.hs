@@ -2,14 +2,14 @@
 {-# LANGUAGE LambdaCase #-}
 
 module Cardano.Kuber.Core.LocalNodeChainApi where
-import Cardano.Api hiding (queryCurrentEra, queryEraHistory, queryChainPoint, querySystemStart)
-import Cardano.Api.Shelley hiding (queryCurrentEra, queryEraHistory, queryChainPoint, querySystemStart)
+import Cardano.Api hiding (queryGovState, queryCurrentEra, queryEraHistory, queryChainPoint, querySystemStart)
+import Cardano.Api.Shelley hiding (queryGovState, queryCurrentEra, queryEraHistory, queryChainPoint, querySystemStart)
 
 import Cardano.Kuber.Core.ChainAPI
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Error
 import Cardano.Slotting.Time (SystemStart)
-import Cardano.Kuber.Utility.QueryHelper (queryProtocolParam, querySystemStart, queryEraHistory, queryGenesesisParams, queryUtxos, queryTxins, queryChainPoint, submitTx, queryGenesesisParams', queryCurrentEra)
+import Cardano.Kuber.Utility.QueryHelper (queryProtocolParam, querySystemStart, queryEraHistory, queryGenesesisParams, queryUtxos, queryTxins, queryChainPoint, submitTx, queryGenesesisParams', queryCurrentEra, queryGovState)
 import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Map (Map)
 import qualified Cardano.Ledger.Babbage.Tx as Ledger
@@ -26,7 +26,6 @@ class ChainInfo v where
 class HasLocalNodeAPI a where
     kQueryEraHistory      :: Kontract a w FrameworkError (EraHistory CardanoMode)
 
-
 -- ChainConnectInfo wraps (LocalNodeConnectInfo CardanoMode)
 -- This is the minimal information required to connect to a cardano node
 newtype ChainConnectInfo= ChainConnectInfo (LocalNodeConnectInfo CardanoMode)
@@ -40,9 +39,10 @@ instance HasChainQueryAPI (LocalNodeConnectInfo CardanoMode) where
     kQueryChainPoint  = liftLnciQuery queryChainPoint
     kGetNetworkId  = KLift $ \c  -> pure  $pure $ localNodeNetworkId c
     kQueryCurrentEra = liftLnciQuery queryCurrentEra
+    kQueryGovState = liftLnciQuery queryGovState
+
 instance HasLocalNodeAPI (LocalNodeConnectInfo CardanoMode) where
     kQueryEraHistory = liftLnciQuery queryEraHistory
-
 instance HasSubmitApi (LocalNodeConnectInfo CardanoMode) where
     kSubmitTx  = liftLnciQuery2 submitTx
 
@@ -56,6 +56,7 @@ instance HasChainQueryAPI ChainConnectInfo where
     kQueryChainPoint  = liftCinfoQuery queryChainPoint
     kGetNetworkId = KLift $ \(ChainConnectInfo c)  -> pure  $pure $ localNodeNetworkId c
     kQueryCurrentEra = liftCinfoQuery queryCurrentEra
+    kQueryGovState = liftCinfoQuery queryGovState
 
 instance HasLocalNodeAPI ChainConnectInfo where
     kQueryEraHistory = liftCinfoQuery queryEraHistory

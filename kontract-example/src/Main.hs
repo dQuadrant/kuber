@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable(toConsoleText, toConsoleTextNoPrefix))
 import qualified Data.Text as T
@@ -16,11 +18,11 @@ remoteKuberConnection = do
 localNodeConnection :: IO ChainConnectInfo
 localNodeConnection = chainInfoFromEnv
 
-printBalanceKontract :: HasChainQueryAPI api =>  Kontract api w FrameworkError ()
+printBalanceKontract :: HasChainQueryAPI api =>  Kontract api BabbageEra FrameworkError ()
 printBalanceKontract=  do
-    addr <- kWrapParser $ parseAddressBech32 (T.pack "addr_test1qrmntnd29t3kpnn8uf7d9asr3fzvw7lnah55h52yvaxnfe4g2v2ge520usmkn0zcl46gy38877hej5cnqe6s602xpkyqtpcsrj")
+    (addr ::AddressInEra BabbageEra) <- kWrapParser $ parseAddressBech32 (T.pack "addr_test1qrmntnd29t3kpnn8uf7d9asr3fzvw7lnah55h52yvaxnfe4g2v2ge520usmkn0zcl46gy38877hej5cnqe6s602xpkyqtpcsrj")
     tip <- kQueryChainPoint
-    utxos <- kQueryUtxoByAddress (Set.singleton $ addressInEraToAddressAny addr)
+    (utxos ::UTxO BabbageEra) <- kQueryUtxoByAddress  (Set.singleton $ addressInEraToAddressAny addr)
     liftIO $ do 
         putStrLn ("Chain is at " ++ (case tip of
             ChainPointAtGenesis -> "Genesis"

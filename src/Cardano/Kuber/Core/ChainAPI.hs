@@ -11,7 +11,7 @@ import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Set (Set)
 import PlutusTx.Prelude (traceError)
 import qualified Cardano.Ledger.Api as Ledger
-import Cardano.Api.Ledger (StandardCrypto)
+import Cardano.Api.Ledger (StandardCrypto, GovState)
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra)
 
 
@@ -25,6 +25,7 @@ class HasChainQueryAPI a  where
   kQueryUtxoByTxin      :: IsTxBuilderEra era => Set TxIn -> Kontract a w FrameworkError (UTxO era)
   kQueryChainPoint      :: Kontract a w FrameworkError ChainPoint
   kQueryCurrentEra      :: Kontract a w FrameworkError AnyCardanoEra
+  kQueryGovState        :: IsTxBuilderEra era => Kontract a w FrameworkError (GovState (ShelleyLedgerEra era))
 
 class HasSubmitApi a where
   kSubmitTx :: InAnyCardanoEra Tx ->  Kontract  a w FrameworkError ()
