@@ -72,6 +72,7 @@ opts = info (sample <**> helper)
   )
 main :: IO ()
 main = do
+  
   KuberConfig hostStr port healthCheckUrl doHealthCheck <- execParser  opts
 
   if  doHealthCheck
@@ -79,6 +80,8 @@ main = do
      performRequest healthCheckUrl
 
     else do
+      -- enable line buffering for instantaneous logs when kuber-server is run in docker container
+      hSetBuffering stdout LineBuffering 
       dcinfo <- chainInfoFromEnv
       let settings = setPort port defaultSettings
       let settings2  = (case hostStr of
