@@ -92,8 +92,7 @@ instance HasChainQueryAPI   RemoteKuberConnection where
   kQueryGovState = error "TODO Cardano.Kuber.Http.Client.RemoteKuberConnection.queryGovState"
 instance {-# OVERLAPS #-}  HasKuberAPI RemoteKuberConnection where
   kTxBuildTxBody    :: IsTxBuilderEra era =>  TxBuilder_ era ->  Kontract RemoteKuberConnection w FrameworkError (TxBody era)
-  kTxBuildTxBody builder = kError FeatureNotSupported "BuildTx Over Http is not supported"
-      --   TODO FIX THIS 
+  kTxBuildTxBody builder =   kError FeatureNotSupported "BuildTx Over Http is not supported"
       --  liftHttpReq (cBuildTx (Just True) builder ) <&> (getTxBody .  unWrap )
 
   kBuildTx       :: IsTxBuilderEra era =>  TxBuilder_ era -> Kontract RemoteKuberConnection w FrameworkError (Tx era)

@@ -145,7 +145,7 @@ instance Wrapper VoteModal Ledger.Vote where
 instance (IsTxBuilderEra era, ToJSON (PParamsHKD Identity (ShelleyLedgerEra era))) => ToJSON (LedgerProtocolParameters era)where
   toJSON (LedgerProtocolParameters param)=toJSON param
 
-instance  (Ledger.ConwayEraPParams -- conway era params todo
+instance  (Ledger.ConwayEraPParams
                       (ShelleyLedgerEra era),EraCrypto (ShelleyLedgerEra era)
                     ~ StandardCrypto)=> FromJSON (LedgerProtocolParameters era)where
   parseJSON (A.Object obj)=

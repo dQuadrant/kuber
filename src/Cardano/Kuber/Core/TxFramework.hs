@@ -362,12 +362,15 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         Nothing ->  Lovelace 400_000
         Just n -> Lovelace n
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin builderInputUtxo) spendableUtxos
-      calculator exmap1 exmap2 onMissing= computeBody bBabbageOnward pParam (txBodyContentf exmap1 exmap2 onMissing) txChangeAddr  compulsarySignatories  fixedInputSum availableInputs fixedOutputs
+      calculator exmap1 exmap2 onMissing= 
+        computeBody bBabbageOnward pParam 
+          (txBodyContentf exmap1 exmap2 onMissing) 
+          txChangeAddr  compulsarySignatories  
+          fixedInputSum availableInputs fixedOutputs
       calculatorWithDefaults = calculator  mempty mempty (pure defaultExunits)
       colalteralSignatories = Set.fromList ( map snd collaterals)
       withExtraSigs = appendExtraSignatures  colalteralSignatories extraSignatures
-      -- TODO: add minting signatures
-      -- withMintSignatures = appendMintingScriptSignatures withExtraSigs (map (\(TxMintData (_,wit) _ _)-> wit) resolvedMints)
+      withMintSignatures = appendMintingScriptSignatures withExtraSigs $ map snd parsedMints
       withCertSignatures = appendCertSignatures withExtraSigs certs
       withVoteSigs = appendVotingSignatures withCertSignatures
       compulsarySignatories = foldl (\acc (TxOut a _ _ _) ->  case addressInEraToPaymentKeyHash  a of
