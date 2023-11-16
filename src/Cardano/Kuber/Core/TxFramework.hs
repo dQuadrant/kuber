@@ -113,6 +113,7 @@ import Cardano.Ledger.Conway.PParams (ppDRepDepositL)
 import qualified Cardano.Ledger.Conway.PParams as Ledger
 import Cardano.Ledger.Conway.Governance (enactStateGovStateL, ensCurPParamsL, ensPrevPParamUpdateL, ensPrevCommitteeL, ensPrevConstitutionL, ensPrevHardForkL)
 import Cardano.Kuber.Data.TxBuilderAeson
+import Control.Monad.IO.Class (liftIO)
 type BoolChange   = Bool
 type BoolFee = Bool
 type ChangeValue = Value
@@ -212,7 +213,6 @@ executeTxBuilder builder = do
                 props
             Nothing -> pure props
 
-
     updatePrevGovActions :: (Ledger.ConwayEraPParams
                       (ShelleyLedgerEra era) ,EraCrypto (ShelleyLedgerEra era) ~ StandardCrypto) =>ConwayEraOnwards era ->  EnactState (ShelleyLedgerEra era) -> PParams (ShelleyLedgerEra era) -> Proposal era -> Proposal era
     updatePrevGovActions eon enacedGovActions pParams (Proposal (ProposalProcedure (Coin co) ra ga an)) =let
@@ -224,7 +224,7 @@ executeTxBuilder builder = do
           UpdateCommittee sm set map ui -> UpdateCommittee (updateMaybe sm (enacedGovActions ^. ensPrevCommitteeL )) set map ui
           NewConstitution sm con -> NewConstitution (updateMaybe sm (enacedGovActions ^. ensPrevConstitutionL )) con
           InfoAction -> ga
-      in Proposal (ProposalProcedure (if co ==0 then pParams ^. Ledger.ppGovActionDepositL else (Coin co)) ra newga an)
+      in Proposal (ProposalProcedure (if co ==0 then pParams ^. Ledger.ppGovActionDepositL else Coin co) ra newga an)
     updateMaybe SNothing v =v
     updateMaybe v _ = v
 
@@ -378,7 +378,6 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                                                     Just pkh -> Set.insert pkh acc
                             ) withVoteSigs   $ Map.elems  builderInputUtxo
 
-  -- buildBlancedTx txBodyContentf partialInputs  parsedOutputs (error "sad")  startingChange startingChange
   iteration1@(txBody1,signatories,fee1) <-  calculatorWithDefaults    fee
   let iterationFunc lastBody lastFee   =
         if  null partialInputs && null  partialMints
@@ -613,8 +612,8 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         -- sort based on following conditions => Utxos having >4ada come eariler and the lesser ones come later.
         sortingFunc :: (TxIn,a,Integer) -> (TxIn,a,Integer)-> Ordering
         sortingFunc (_,_,v1) (_,_,v2)
-          | v1 < 4 = if v2 < 4 then  v2 `compare` v1 else GT
-          | v2 < 4 = LT
+          | v1 < 5 = if v2 < 5 then  v1 `compare` v2 else GT
+          | v2 < 5 = LT
           | otherwise = v1 `compare` v2
 
     txContextCollaterals =foldl getCollaterals [] _collaterals

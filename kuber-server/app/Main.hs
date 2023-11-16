@@ -1,7 +1,5 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use newtype instead of data" #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE GADTs #-}
 module Main where
@@ -92,8 +90,8 @@ main = do
             ConwayEra -> appWithBackenAndEra dcinfo BabbageEraOnwardsConway
             _ -> appWithBackenAndEra dcinfo BabbageEraOnwardsBabbage
       putStrLn $ case nodeEra of
-        BabbageEra ->  "Starting Kuber in Babbage era"
-        ConwayEra ->  "Starting Kuber in Conway era"
+        BabbageEra ->  "Connected to Node at Babbage era"
+        ConwayEra ->  "Connected to Node at Conway era"
         era -> "Node is at " ++ show era ++" Kuber will start in BabbageEra"
       
       putStrLn $ "Server started listening on port " ++ show port ++ "."

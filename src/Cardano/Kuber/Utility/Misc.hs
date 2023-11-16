@@ -132,11 +132,11 @@ evaluateExUnitMapWithUtxos  = evaluateExUnitMapWithUtxos_ cardanoEra
   where
     evaluateExUnitMapWithUtxos_ :: CardanoEra era ->  LedgerProtocolParameters era -> SystemStart -> LedgerEpochInfo -> UTxO era -> TxBody era -> Either      FrameworkError      (Map TxIn ExecutionUnits, Map PolicyId ExecutionUnits)
     evaluateExUnitMapWithUtxos_ bera = case bera of
-      BabbageEra -> evaluateExUnitMapWithUtxos
-      ConwayEra -> evaluateExUnitMapWithUtxos
+      BabbageEra -> evaluateExUnitMapWithUtxos__
+      ConwayEra -> evaluateExUnitMapWithUtxos__
       _ -> (\ _ _ _ _ _ ->Left (FrameworkError FeatureNotSupported "not in era"))
 
-evaluateExUnitMapWithUtxos_ protocolParams systemStart eraHistory usedUtxos txbody = do
+evaluateExUnitMapWithUtxos__ protocolParams systemStart eraHistory usedUtxos txbody = do
 
   exMap <- case evaluateTransactionExecutionUnits
     systemStart
