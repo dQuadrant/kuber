@@ -283,6 +283,7 @@ instance FromJSON SubmitTxModal where
           , FromSomeType (AsTx AsMaryEra)    (InAnyCardanoEra MaryEra)
           , FromSomeType (AsTx AsAlonzoEra)  (InAnyCardanoEra AlonzoEra)
           , FromSomeType (AsTx AsBabbageEra) (InAnyCardanoEra BabbageEra)
+          , FromSomeType (AsTx AsConwayEra) (InAnyCardanoEra ConwayEra)
           ]  te of
             Left err -> fail "Couldn't deserialise transaction"
             Right val -> pure val
@@ -314,8 +315,10 @@ instance  FromJSON TxModal  where
   parseJSON _ = fail "Expected Tx cbor hex string"
 
 instance ToJSON TxModal where
-  toJSON (TxModal (InAnyCardanoEra era tx)) = toJSON (serialiseTxLedgerCddl  era tx)
-
+  toJSON (TxModal (InAnyCardanoEra era tx)) = case toJSON $ serialiseTxLedgerCddl era tx of
+    Object km -> let hsmapTxt = A.toHashMapText km
+      in A.toJSON $  HM.insert "hash" ( toJSON $ serialiseToRawBytesHexText $  getTxId $  getTxBody tx) hsmapTxt
+    val -> val 
 
 instance  FromJSON AddressModal  where
   parseJSON (String s)=  case deserialiseAddress (AsAddressInEra AsConwayEra) s of
