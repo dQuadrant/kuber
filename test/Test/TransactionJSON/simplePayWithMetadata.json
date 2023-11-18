@@ -1,0 +1,44 @@
+{
+    "outputs": [
+      {
+        "address": "addr_test1qr0k5uczwvzdt6g6c2e9l92r24f528dfnmu9qq6lssrc3z56l3lczn30u56k4vlf948etel5d63zj20yg6wymu2gp4gsyum3sz",
+        "value": "5A"
+      }
+    ],
+    "inputs": [
+      {
+        "utxo": {
+          "address": "addr_test1wqag3rt979nep9g2wtdwu8mr4gz6m4kjdpp5zp705km8wys6t2kla",
+          "txin": "022b440450e28c33a785e7521edd13c8aa51fa8e0708fb0aff946d646712c9a7#0",
+          "value": {
+            "lovelace": 29167525003
+          }
+        }
+      }
+    ],
+    "changeAddress": "addr_test1qr0k5uczwvzdt6g6c2e9l92r24f528dfnmu9qq6lssrc3z56l3lczn30u56k4vlf948etel5d63zj20yg6wymu2gp4gsyum3sz",
+    "collaterals": {
+      "address": "addr_test1qr0k5uczwvzdt6g6c2e9l92r24f528dfnmu9qq6lssrc3z56l3lczn30u56k4vlf948etel5d63zj20yg6wymu2gp4gsyum3sz",
+      "txin": "5f40b522ea06816aae59003a995bdf7dede505a1dae9e9b0c9b3d19b80c1aeba#0",
+      "value": {
+        "lovelace": 5000000
+      }
+    },
+    "selections": [
+      {
+        "address": "addr_test1qpw57k84mzwmpqyx6n9smye79mxt8rqpfpvx7p6chz95sm7a3aw5tgv4fc9weuwme2u29aerv5hk0m2lkpkgasn7gtxqwen0r7",
+        "txin": "289d78cc6ac3000748060b3c0d48d8b900b05b11c0eba3352d9fe47109584448#5",
+        "value": {
+          "lovelace": 29167525003
+        }
+      }
+    ],
+    "metadata": {
+      "0": {
+        "library": "Kuber",
+        "version": "2.3.2"
+      },
+      "1": "Test example for metadata"
+    }
+  }
+  

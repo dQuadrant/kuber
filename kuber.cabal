@@ -102,6 +102,7 @@ test-suite test
   hs-source-dirs: test
   other-modules:
     Test.ParserTest
+    Test.ApiTest
 
   build-depends:
       base >= 4.9 && <5
@@ -130,3 +131,4 @@ test-suite test
     , vector
     , unordered-containers
     , hedgehog
+    , directory
