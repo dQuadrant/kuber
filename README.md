@@ -5,12 +5,16 @@ Haskell library and API server for composing balanced Cardano transactions.
 
 [KuberIDE.com](https://kuberide.com) is Oficial IDE and plutus development and trying out kuber-server features.
 
-OpenSource Kuber playground is [here](https://dquadrant.github.io/kuber-playgrounnd/)
+OpenSource Kuber playground is [here](https://github.com/dquadrant/kuber-playground)
+
 
 
 ## Docs
  - [JSON API](https://kuberide.com/kuber/docs/intro)
  - [Kuber Haskel Library](https://dquadrant.github.io/kuber)
+
+## IDE
+ Official IDE with Plutus compilation support is available at [kuberide.com/ide](https://kuberide.com/kuber/login/?state=\%2fide)
 
 ## Example Project using Kuber (v2)
 [cardano-marketplace](https://github.com/dQuadrant/cardano-marketplace)
