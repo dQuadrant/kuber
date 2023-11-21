@@ -1,3 +1,11 @@
+## v3.0.0-rc2 : Tx build bug fix , Add tests
+- Fix Bug : Server got irresponsive after requesting `/api/v1/tx` with plutus included transaction 
+- Add tests to validate that the kuber apis are working via LocalNode Socket connection.
+
+#### Known Issues:
+- `Kontract` is not working via `RemoteKuberConnection`
+- If node is at Babbage era when kuber-server starts, after node reaches Conway era, restart is required  to enable Conway features.
+- `$.validtyStart` is broken and is ignored.
 
 ## v3.0.0-rc1 : Full Refactor and ConwayEra Support
 

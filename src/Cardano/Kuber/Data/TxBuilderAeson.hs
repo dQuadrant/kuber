@@ -95,7 +95,7 @@ instance IsTxBuilderEra era => FromJSON (TxBuilder_ era) where
       objectKeys = Set.fromList $  map A.toText  $ A.keys v
       pluralKeys :: [T.Text] = [
           "selection","input","referenceInput","output","collateral",
-          "mint", "signature","proposal", "vote", "cert"
+          "mint", "signature","proposal", "vote", "cert","certificate"
         ]
       nonPluralKeys = [
           "changeAddress","metadata","fee","validityStart","validityEnd",
