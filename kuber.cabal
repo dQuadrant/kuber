@@ -102,6 +102,7 @@ test-suite test
   hs-source-dirs: test
   other-modules:
     Test.ParserTest
+    Test.ApiTest
 
   build-depends:
       base >= 4.9 && <5
@@ -118,6 +119,7 @@ test-suite test
     , aeson
     , text-conversions
     , cardano-api
+    , cardano-api-gen
     , cardano-ledger-alonzo
     , cardano-ledger-shelley
     , cardano-ledger-conway
@@ -128,3 +130,5 @@ test-suite test
     , cardano-binary
     , vector
     , unordered-containers
+    , hedgehog
+    , directory

@@ -1,0 +1,101 @@
+{
+    "outputs": [
+        {
+            "address": "addr_test1qqtq0qdpkfj5wp7jd7p33ccra9tmsfc8jtej62msts2hxyfn22mqclj4572cnmgtg4jf9h799jlg4dahjhenthyjjp3srjlxp4",
+            "value": {
+                "lovelace": 1000000
+            }
+        }
+    ],
+    "selections": [
+        {
+            "address": "addr_test1vp4zezdmyh8navsyfzmak2fge45gq5qr9yaqk2tpxgztuugmp89sa",
+            "txin": "01f4b788593d4f70de2a45c2e1e87088bfbdfa29577ae1b62aba60e095e3ab53#13121",
+            "value": {
+                "lovelace": 503976174260
+            }
+        },
+        {
+            "address": "addr_test1vrjpe0zzyyxmp644umze27a6jmxqdzawl88xyz8d2w8dr2spwsep4",
+            "txin": "01f4b788593d4f70de2a45c2e1e87088bfbdfa29577ae1b62aba60e095e3ab53#18890",
+            "value": {
+                "lovelace": 570499140107
+            }
+        },
+        {
+            "address": "addr_test1vp4zezdmyh8navsyfzmak2fge45gq5qr9yaqk2tpxgztuugmp89sa",
+            "txin": "01f4b788593d4f70de2a45c2e1e87088bfbdfa29577ae1b62aba60e095e3ab53#21801",
+            "value": {
+                "lovelace": 6127900
+            }
+        },
+        {
+            "address": "addr_test1vp4zezdmyh8navsyfzmak2fge45gq5qr9yaqk2tpxgztuugmp89sa",
+            "txin": "01f4b788593d4f70de2a45c2e1e87088bfbdfa29577ae1b62aba60e095e3ab53#28694",
+            "value": {
+                "lovelace": 3
+            }
+        },
+        {
+            "address": "addr_test1vp4zezdmyh8navsyfzmak2fge45gq5qr9yaqk2tpxgztuugmp89sa",
+            "txin": "01f4b788593d4f70de2a45c2e1e87088bfbdfa29577ae1b62aba60e095e3ab53#33371",
+            "value": {
+                "lovelace": 196268299603
+            }
+        },
+        {
+            "address": "addr_test1vrjpe0zzyyxmp644umze27a6jmxqdzawl88xyz8d2w8dr2spwsep4",
+            "txin": "01f4b788593d4f70de2a45c2e1e87088bfbdfa29577ae1b62aba60e095e3ab53#40799",
+            "value": {
+                "lovelace": 682055819268
+            }
+        },
+        {
+            "address": "addr_test1vrjpe0zzyyxmp644umze27a6jmxqdzawl88xyz8d2w8dr2spwsep4",
+            "txin": "01f4b788593d4f70de2a45c2e1e87088bfbdfa29577ae1b62aba60e095e3ab53#41216",
+            "value": {
+                "a0000000000000000000000000000000000000000000000000000000": {
+                    "61": 1
+                },
+                "lovelace": 2
+            }
+        },
+        {
+            "address": "addr_test1vrjpe0zzyyxmp644umze27a6jmxqdzawl88xyz8d2w8dr2spwsep4",
+            "txin": "01f4b788593d4f70de2a45c2e1e87088bfbdfa29577ae1b62aba60e095e3ab53#41520",
+            "value": {
+                "b0000000000000000000000000000000000000000000000000000000": {
+                    "62": 2
+                },
+                "b556c554568c1929f4390f5311808e93af1debe5d406cb5e6f0541de": {
+                    "61": 1
+                },
+                "lovelace": 4
+            }
+        },
+        {
+            "address": "addr_test1vrjpe0zzyyxmp644umze27a6jmxqdzawl88xyz8d2w8dr2spwsep4",
+            "txin": "01f4b788593d4f70de2a45c2e1e87088bfbdfa29577ae1b62aba60e095e3ab53#46983",
+            "value": {
+                "lovelace": 237735667683
+            }
+        },
+        {
+            "address": "addr_test1vp4zezdmyh8navsyfzmak2fge45gq5qr9yaqk2tpxgztuugmp89sa",
+            "txin": "01f4b788593d4f70de2a45c2e1e87088bfbdfa29577ae1b62aba60e095e3ab53#53436",
+            "value": {
+                "a0000000000000000000000000000000000000000000000000000000": {
+                    "61": 2
+                },
+                "lovelace": 3
+            }
+        },
+        {
+            "address": "addr_test1vrjpe0zzyyxmp644umze27a6jmxqdzawl88xyz8d2w8dr2spwsep4",
+            "txin": "01f4b788593d4f70de2a45c2e1e87088bfbdfa29577ae1b62aba60e095e3ab53#60873",
+            "value": {
+                "lovelace": 377327595188
+            }
+        }
+    ]
+}

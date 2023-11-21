@@ -77,4 +77,3 @@ unHex v = convertText (toText v) <&> unBase16
 
 forceJust (Just v) =v
 forceRight(Right r) = r
-
