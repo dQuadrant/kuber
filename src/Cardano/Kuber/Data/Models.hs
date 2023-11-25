@@ -89,6 +89,7 @@ import Cardano.Ledger.Binary.Plain (serializeAsHexText)
 import Cardano.Ledger.Credential (parseCredential)
 import Cardano.Kuber.Core.TxBuilder (TxVote (..), TxVoteL (..), IsTxBuilderEra (bAsEra, bCardanoEra, bBabbageOnward))
 import Data.Functor.Identity (Identity)
+import qualified Data.Maybe
 
 class Wrapper  m a  where
   unWrap :: m  ->  a
@@ -318,7 +319,7 @@ instance ToJSON TxModal where
   toJSON (TxModal (InAnyCardanoEra era tx)) = case toJSON $ serialiseTxLedgerCddl era tx of
     Object km -> let hsmapTxt = A.toHashMapText km
       in A.toJSON $  HM.insert "hash" ( toJSON $ serialiseToRawBytesHexText $  getTxId $  getTxBody tx) hsmapTxt
-    val -> val 
+    val -> val
 
 instance  FromJSON AddressModal  where
   parseJSON (String s)=  case deserialiseAddress (AsAddressInEra AsConwayEra) s of
@@ -845,6 +846,8 @@ instance (era ~ ConwayEra)  =>  FromJSON (CertificateModal era) where
     let depositAmount = case mDeposit of
                                   Nothing -> SNothing
                                   Just lovelace -> SJust (Coin lovelace)
+        depositAmount' = Coin $ Data.Maybe.fromMaybe 0 mDeposit
+
     case T.toLower certType of
       "registerstake" -> do
           (CredentialModal stakeCred) <- o .: "key"
@@ -882,21 +885,19 @@ instance (era ~ ConwayEra)  =>  FromJSON (CertificateModal era) where
                                       delegatee
       "registerdrep" -> do
           (CredentialModal key) <- o .: "key"
-          deposit <- o .: "deposit"
           pure $  CertificateModal $  ConwayCertificate ConwayEraOnwardsConway
                         . ConwayTxCertGov
                         $ ConwayRegDRep
                             key
-                            (Coin deposit)
+                            depositAmount'
                             smAnchor
       "deregisterdrep" -> do
           (CredentialModal key) <- o .: "key"
-          deposit <- o .: "deposit"
           pure $  CertificateModal $  ConwayCertificate ConwayEraOnwardsConway
                         . ConwayTxCertGov
                         $ ConwayUnRegDRep
                             key
-                            (Coin deposit)
+                            depositAmount'
       "updatedrep" -> do
           (CredentialModal key) <- o .: "key"
           pure $  CertificateModal $  ConwayCertificate ConwayEraOnwardsConway
@@ -904,7 +905,7 @@ instance (era ~ ConwayEra)  =>  FromJSON (CertificateModal era) where
                         $ ConwayUpdateDRep
                             key
                             smAnchor
-      _ -> fail "Only Drep/Stake registration, drep delegation and stake de-registration certificate are supported"
+      _ -> fail $ "Unknown cert.type :\""++ T.unpack certType ++"\". Expected one of ['updateDrep', 'deRegisterDrep','registerDrep', 'delegage', 'registerStake', 'deRegisterStake']"
 
   parseJSON  _ = fail "Expected Certificate Object"
 

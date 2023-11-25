@@ -99,7 +99,7 @@ import Cardano.Ledger.Api
       ProtVerAtMost,
       EnactState,
       GovAction(..) )
-import Cardano.Api.Ledger (ConwayTxCert(..), ConwayDelegCert (..), PoolCert (..), ConwayGovCert (..), PoolParams (PoolParams), StrictMaybe (..), ShelleyTxCert (..), EraCrypto, Coin (unCoin), GovState, StandardCrypto, PParams (PParams))
+import Cardano.Api.Ledger (ConwayTxCert(..), ConwayDelegCert (..), PoolCert (..), ConwayGovCert (..), PoolParams (PoolParams), StrictMaybe (..), ShelleyTxCert (..), EraCrypto, Coin (unCoin), GovState, StandardCrypto, PParams (PParams), KeyRole (DRepRole))
 import qualified Cardano.Ledger.Api as Ledger
 import qualified Cardano.Api.Shelley as CAPI
 import qualified Cardano.Ledger.Shelley.API.Wallet as Ledger (evaluateTransactionFee)
@@ -114,6 +114,8 @@ import qualified Cardano.Ledger.Conway.PParams as Ledger
 import Cardano.Ledger.Conway.Governance (enactStateGovStateL, ensCurPParamsL, ensPrevPParamUpdateL, ensPrevCommitteeL, ensPrevConstitutionL, ensPrevHardForkL)
 import Cardano.Kuber.Data.TxBuilderAeson
 import Control.Monad.IO.Class (liftIO)
+import qualified Cardano.Ledger.Credential as Ledger
+import Cardano.Ledger.CertState (DRepState(DRepState))
 type BoolChange   = Bool
 type BoolFee = Bool
 type ChangeValue = Value
@@ -133,10 +135,11 @@ type  ParseMintsF m era = Map PolicyId ExecutionUnits -> m TxMintValue BuildTx e
 type  ParseInputsF m era =  Map TxIn ExecutionUnits -> [TxIn] -> m [(TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn era))]
 
 
--- Given TxBuilder object, Construct a txBody3
--- This IO code, constructs detailedChainInfo(protocolParam,costPerWord,eraHistory,SystemHistory)
--- then queries required utxos used in inputs and calls  txBuilderToTxBody
-
+-- Given TxBuilder object, Construct a txBody
+-- This IO code, queries all the required parameters
+-- then queries required utxos used in inputs, refInputs
+-- then updates the deposit amounts and previousGovActionId if required.
+-- finally it calls the pure txBuilderToTxBody function
 executeTxBuilder::  (HasChainQueryAPI api ,HasLocalNodeAPI api,IsTxBuilderEra era)  =>    TxBuilder_ era  -> Kontract  api w FrameworkError (Cardano.Api.TxBody era,Tx era)
 executeTxBuilder builder = do
   -- first determine the addresses and txins that need to be queried for value and address.
@@ -144,8 +147,7 @@ executeTxBuilder builder = do
   pParam <- kQueryProtocolParams
   systemStart <- kQuerySystemStart
   eraHistory <- kQueryEraHistory
-  updatedProposals <- applyPrevGovActionId bConwayOnward (unLedgerProtocolParameters pParam) (txProposals builder)
-  let updatedCerts = map  (updateCertDeposit (unLedgerProtocolParameters pParam)) (Cardano.Kuber.Core.TxBuilder.txCertificates builder)
+  updatedProposals <- applyPrevGovActionIdNDeposit bConwayOnward (unLedgerProtocolParameters pParam) (txProposals builder)
   let (selectionAddrs,sel_txins,sel_utxo) = mergeSelections
       mergeSelections=foldl (mergeSelection network)  (Set.empty,Set.empty ,Map.empty ) (txSelections builder)
       (input_txins,input_utxo) = mergeInputs
@@ -158,7 +160,8 @@ executeTxBuilder builder = do
   let missingTxins= Set.difference txins ( Map.keysSet combinedUtxos )
   (UTxO txInUtxos) <- queryIfNotEmpty missingTxins (kQueryUtxoByTxin  missingTxins) (UTxO  Map.empty)
   let allUtxos = UTxO $  combinedUtxos <>  txInUtxos
-      updatedTxBuilder = txReplacePoposalsNCert builder updatedProposals updatedCerts
+  updatedCerts <- mapM  (updateCertDeposit (unLedgerProtocolParameters pParam)) (Cardano.Kuber.Core.TxBuilder.txCertificates builder)
+  let updatedTxBuilder = txReplacePoposalsNCert builder updatedProposals updatedCerts
   eitherToKontract$  txBuilderToTxBody  network pParam systemStart eraHistory allUtxos  updatedTxBuilder
 
   where
@@ -202,20 +205,20 @@ executeTxBuilder builder = do
         TxSelectableTxIn tis -> (a,Set.union i (Set.fromList tis),u)
         TxSelectableSkey skeys -> (Set.union a (Set.fromList $ map (\s ->  toAddressAny $ skeyToAddr s networkId ) skeys), i , u )
 
-    applyPrevGovActionId :: HasChainQueryAPI api => Maybe (ConwayEraOnwards era) -> PParams (ShelleyLedgerEra era) -> [Proposal era] ->  Kontract api w FrameworkError [Proposal era]
-    applyPrevGovActionId beraOnward pParam props=
+    applyPrevGovActionIdNDeposit :: HasChainQueryAPI api => Maybe (ConwayEraOnwards era) -> PParams (ShelleyLedgerEra era) -> [Proposal era] ->  Kontract api w FrameworkError [Proposal era]
+    applyPrevGovActionIdNDeposit beraOnward pParam props=
           case beraOnward of
             Just ConwayEraOnwardsConway ->  do
               govAction <- kQueryGovState
               let enactions =govAction ^. enactStateGovStateL
               pure $ map
-                (updatePrevGovActions ConwayEraOnwardsConway enactions pParam)
+                (updatePrevGovActionsNDeposit ConwayEraOnwardsConway enactions pParam)
                 props
             Nothing -> pure props
 
-    updatePrevGovActions :: (Ledger.ConwayEraPParams
+    updatePrevGovActionsNDeposit :: (Ledger.ConwayEraPParams
                       (ShelleyLedgerEra era) ,EraCrypto (ShelleyLedgerEra era) ~ StandardCrypto) =>ConwayEraOnwards era ->  EnactState (ShelleyLedgerEra era) -> PParams (ShelleyLedgerEra era) -> Proposal era -> Proposal era
-    updatePrevGovActions eon enacedGovActions pParams (Proposal (ProposalProcedure (Coin co) ra ga an)) =let
+    updatePrevGovActionsNDeposit eon enacedGovActions pParams (Proposal (ProposalProcedure (Coin co) ra ga an)) =let
         newga = case ga of
           ParameterChange sm ppu -> ParameterChange (updateMaybe sm (enacedGovActions ^. ensPrevPParamUpdateL)) ppu
           HardForkInitiation sm pv -> HardForkInitiation (updateMaybe sm (enacedGovActions ^. ensPrevHardForkL)) pv
@@ -231,32 +234,51 @@ executeTxBuilder builder = do
     updateMaybe' SNothing v = SJust v
     updateMaybe' v _ = v
 
-    updateCertDeposit :: Ledger.PParams (ShelleyLedgerEra era)  -> Certificate era  -> Certificate  era
+    updateCertDeposit :: HasChainQueryAPI api => Ledger.PParams (ShelleyLedgerEra era)  -> Certificate era  -> Kontract api w FrameworkError (Certificate era)
     updateCertDeposit pParam cert  =  case cert of
-        ShelleyRelatedCertificate stbe stc -> cert
+        ShelleyRelatedCertificate stbe stc -> pure cert
         ConwayCertificate ConwayEraOnwardsConway ctc -> updateCertConwayCertDeposit pParam cert
 
-    updateCertConwayCertDeposit :: Ledger.PParams (ShelleyLedgerEra ConwayEra) -> Certificate ConwayEra -> Certificate ConwayEra
+    updateCertConwayCertDeposit ::HasChainQueryAPI api => Ledger.PParams (ShelleyLedgerEra ConwayEra) -> Certificate ConwayEra ->  Kontract api w FrameworkError (Certificate ConwayEra)
     updateCertConwayCertDeposit  pParam cert = case cert of
-      ShelleyRelatedCertificate stbe stc -> cert
-      ConwayCertificate ceo ctc -> ConwayCertificate ceo (updateConwayCert  pParam ctc)
+      ShelleyRelatedCertificate stbe stc -> pure cert
+      ConwayCertificate ceo ctc -> do
+        val<- updateConwayCert  pParam ctc
+        pure $ ConwayCertificate ceo val
 
-    updateConwayCert :: ( Ledger.ConwayEraPParams ledgerera) => Ledger.PParams ledgerera  ->  ConwayTxCert ledgerera   -> ConwayTxCert ledgerera
+
+    updateConwayCert :: (HasChainQueryAPI api , Ledger.ConwayEraPParams ledgerera,EraCrypto ledgerera ~ StandardCrypto) => Ledger.PParams ledgerera  ->  ConwayTxCert ledgerera   -> Kontract api w FrameworkError (ConwayTxCert ledgerera)
     updateConwayCert pParam ctc =  case ctc of
-          ConwayTxCertDeleg cdc ->ConwayTxCertDeleg $ case cdc of
-            ConwayRegCert cre sm ->  ConwayRegCert cre  $ updateMaybe' sm (pParam ^. ppKeyDepositL)
-            ConwayUnRegCert cre sm -> ConwayUnRegCert cre sm
-            ConwayDelegCert cre del -> ConwayDelegCert cre del
-            ConwayRegDelegCert cre del co -> ConwayRegDelegCert cre del (pParam ^.ppKeyDepositL )
-          ConwayTxCertPool pc -> ConwayTxCertPool $ case pc of
+          ConwayTxCertDeleg cdc ->  (case cdc of
+            ConwayRegCert cre sm -> pure $  ConwayRegCert cre  $ updateMaybe' sm (pParam ^. ppKeyDepositL)
+            ConwayUnRegCert cre sm -> do
+              case sm of
+                SJust co -> pure $ ConwayUnRegCert cre sm
+                SNothing -> do
+                  result <- kQueryStakeDeposit (Set.singleton (fromShelleyStakeCredential cre) )
+                  case Map.toList result of
+                    [(cred,Lovelace deposit)]->  pure $ ConwayUnRegCert cre (SJust  $ Coin deposit)
+                    _ -> kError TxValidationError $ "Stake address is not registered : " ++ show cre
+            ConwayDelegCert cre del -> pure $ ConwayDelegCert cre del
+            ConwayRegDelegCert cre del co -> pure $ ConwayRegDelegCert cre del (pParam ^.ppKeyDepositL )) <&> ConwayTxCertDeleg
+          ConwayTxCertPool pc -> pure $ ConwayTxCertPool $ case pc of
             RegPool pp -> RegPool pp
             RetirePool kh en -> RetirePool kh en
-          ConwayTxCertGov cgc -> ConwayTxCertGov $ case cgc of
-            ConwayRegDRep cre co sm -> ConwayRegDRep cre (pParam ^. ppDRepDepositL) sm
-            ConwayUnRegDRep cre co ->ConwayUnRegDRep cre co
-            ConwayUpdateDRep cre mAnchor -> ConwayUpdateDRep cre mAnchor
-            ConwayAuthCommitteeHotKey cre cre' -> ConwayAuthCommitteeHotKey cre cre'
-            ConwayResignCommitteeColdKey cre _anchor-> ConwayResignCommitteeColdKey cre _anchor
+          ConwayTxCertGov cgc ->   ( case cgc of
+            ConwayRegDRep cre co@(Coin coinVal) sm ->
+               pure $ ConwayRegDRep cre ( if coinVal==0 then pParam ^. ppDRepDepositL else co) sm
+            ConwayUnRegDRep cre co@(Coin coinVal) ->do
+              if coinVal /= 0
+                then pure $ ConwayUnRegDRep cre co
+              else do
+                drepState <- kQueryDrepState (Set.singleton cre)
+
+                case  Map.toList drepState of
+                  [(cre', DRepState en sm co')]-> pure $ ConwayUnRegDRep cre co'
+                  _ ->  kError TxValidationError $ "Drep  is not registered : " ++ show cre
+            ConwayUpdateDRep cre mAnchor -> pure $ ConwayUpdateDRep cre mAnchor
+            ConwayAuthCommitteeHotKey cre cre' -> pure $ ConwayAuthCommitteeHotKey cre cre'
+            ConwayResignCommitteeColdKey cre _anchor-> pure $ ConwayResignCommitteeColdKey cre _anchor) <&> ConwayTxCertGov
 
 -- Construct TxBody from TxBuilder specification.
 -- Utxos map must be provided for the utxos that are available in wallet and used in input
@@ -362,10 +384,10 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         Nothing ->  Lovelace 400_000
         Just n -> Lovelace n
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin builderInputUtxo) spendableUtxos
-      calculator exmap1 exmap2 onMissing= 
-        computeBody bBabbageOnward pParam 
-          (txBodyContentf exmap1 exmap2 onMissing) 
-          txChangeAddr  compulsarySignatories  
+      calculator exmap1 exmap2 onMissing=
+        computeBody bBabbageOnward pParam
+          (txBodyContentf exmap1 exmap2 onMissing)
+          txChangeAddr  compulsarySignatories
           fixedInputSum availableInputs fixedOutputs
       calculatorWithDefaults = calculator  mempty mempty (pure defaultExunits)
       colalteralSignatories = Set.fromList ( map snd collaterals)
@@ -505,14 +527,14 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
           ConwayRegCert cre sm -> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
           ConwayUnRegCert cre sm -> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
           ConwayDelegCert cre del -> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
-          ConwayRegDelegCert cre del co -> Nothing
+          ConwayRegDelegCert cre del co -> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
         ConwayTxCertPool pc -> case pc of
           RegPool pp -> Nothing
           RetirePool kh en -> Just $ fromLedgerKeyHash txShelleyBasedEra kh
         ConwayTxCertGov cgc -> case cgc of
-          ConwayRegDRep cre co sm -> Nothing
-          ConwayUnRegDRep cre co -> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
-          ConwayUpdateDRep cre sm -> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
+          ConwayRegDRep cre co sm ->      ledgerCredToPaymentKeyHash txShelleyBasedEra cre
+          ConwayUnRegDRep cre co ->       ledgerCredToPaymentKeyHash txShelleyBasedEra cre
+          ConwayUpdateDRep cre sm ->       ledgerCredToPaymentKeyHash txShelleyBasedEra cre
           ConwayAuthCommitteeHotKey cre cre' -> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
           ConwayResignCommitteeColdKey cre _anchor-> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
     txEra = babbageEraOnwardsToCardanoEra bBabbageOnward
@@ -789,7 +811,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                             }
       where
         transformer v = pure $ transfrormOutput output  v
-    resolvedInputUtxo :: (TxInputResolved_ era) -> Map TxIn (TxOut CtxUTxO era)
+    resolvedInputUtxo :: TxInputResolved_ era -> Map TxIn (TxOut CtxUTxO era)
     resolvedInputUtxo  =  \case
       TxInputUtxo (UTxO utxo) -> utxo
       TxInputScriptUtxo tps m_hsd hsd m_eu v -> Map.fromAscList [v]

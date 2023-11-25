@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module Cardano.Kuber.Core.LocalNodeChainApi where
 import Cardano.Api hiding (queryGovState, queryCurrentEra, queryEraHistory, queryChainPoint, querySystemStart)
@@ -9,7 +10,7 @@ import Cardano.Kuber.Core.ChainAPI
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Error
 import Cardano.Slotting.Time (SystemStart)
-import Cardano.Kuber.Utility.QueryHelper (queryProtocolParam, querySystemStart, queryEraHistory, queryGenesesisParams, queryUtxos, queryTxins, queryChainPoint, submitTx, queryGenesesisParams', queryCurrentEra, queryGovState)
+import Cardano.Kuber.Utility.QueryHelper (queryProtocolParam, querySystemStart, queryEraHistory, queryGenesesisParams, queryUtxos, queryTxins, queryChainPoint, submitTx, queryGenesesisParams', queryCurrentEra, queryGovState, queryStakeDeposits, queryDRepState)
 import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Map (Map)
 import qualified Cardano.Ledger.Babbage.Tx as Ledger
@@ -40,6 +41,8 @@ instance HasChainQueryAPI (LocalNodeConnectInfo CardanoMode) where
     kGetNetworkId  = KLift $ \c  -> pure  $pure $ localNodeNetworkId c
     kQueryCurrentEra = liftLnciQuery queryCurrentEra
     kQueryGovState = liftLnciQuery queryGovState
+    kQueryStakeDeposit = liftLnciQuery2 (queryStakeDeposits ShelleyBasedEraConway)
+    kQueryDrepState  = liftLnciQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepState ShelleyBasedEraConway)
 
 instance HasLocalNodeAPI (LocalNodeConnectInfo CardanoMode) where
     kQueryEraHistory = liftLnciQuery queryEraHistory
@@ -57,6 +60,8 @@ instance HasChainQueryAPI ChainConnectInfo where
     kGetNetworkId = KLift $ \(ChainConnectInfo c)  -> pure  $pure $ localNodeNetworkId c
     kQueryCurrentEra = liftCinfoQuery queryCurrentEra
     kQueryGovState = liftCinfoQuery queryGovState
+    kQueryStakeDeposit = liftCinfoQuery2 (queryStakeDeposits ShelleyBasedEraConway)
+    kQueryDrepState  = liftCinfoQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepState ShelleyBasedEraConway)
 
 instance HasLocalNodeAPI ChainConnectInfo where
     kQueryEraHistory = liftCinfoQuery queryEraHistory

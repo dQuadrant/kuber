@@ -121,7 +121,7 @@ queryConstitution  conn  =performShelleyQuery  conn QueryConstitution "Constitut
 queryGovState :: IsShelleyBasedEra era => LocalNodeConnectInfo CardanoMode -> IO      (Either FrameworkError (Ledger.GovState (ShelleyLedgerEra era)))
 queryGovState  conn  =performShelleyQuery   conn QueryGovState "GovState"
 
-queryDRepState :: ShelleyBasedEra era -> LocalNodeConnectInfo CardanoMode -> Set (Credential 'DRepRole StandardCrypto) -> IO      (Either         FrameworkError         (Map   (Credential   'DRepRole StandardCrypto)  (DRepState StandardCrypto)))
+queryDRepState :: ShelleyBasedEra era -> LocalNodeConnectInfo CardanoMode -> Set (Credential 'DRepRole StandardCrypto) -> IO      (Either  FrameworkError   (Map   (Credential   'DRepRole StandardCrypto)  (DRepState StandardCrypto)))
 queryDRepState  era conn drep =performShelleyQuery' era  conn (QueryDRepState drep ) "DrepState"
 
 submitTx :: LocalNodeConnectInfo CardanoMode -> InAnyCardanoEra Tx -> IO  (Either FrameworkError ())

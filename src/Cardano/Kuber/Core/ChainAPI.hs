@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DataKinds #-}
 module Cardano.Kuber.Core.ChainAPI where
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Error
@@ -11,8 +12,9 @@ import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Set (Set)
 import PlutusTx.Prelude (traceError)
 import qualified Cardano.Ledger.Api as Ledger
-import Cardano.Api.Ledger (StandardCrypto, GovState)
+import Cardano.Api.Ledger (StandardCrypto, GovState, DRepState, Credential, KeyRole (DRepRole))
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra)
+import Data.Map (Map)
 
 
 class HasChainQueryAPI a  where
@@ -25,6 +27,8 @@ class HasChainQueryAPI a  where
   kQueryUtxoByTxin      :: IsTxBuilderEra era => Set TxIn -> Kontract a w FrameworkError (UTxO era)
   kQueryChainPoint      :: Kontract a w FrameworkError ChainPoint
   kQueryCurrentEra      :: Kontract a w FrameworkError AnyCardanoEra
+  kQueryStakeDeposit    :: Set StakeCredential -> Kontract a w FrameworkError (Map StakeCredential Lovelace)
+  kQueryDrepState       :: Set (Credential 'DRepRole StandardCrypto) -> Kontract a w FrameworkError (Map (Credential 'DRepRole StandardCrypto) (DRepState StandardCrypto))
   kQueryGovState        :: IsTxBuilderEra era => Kontract a w FrameworkError (GovState (ShelleyLedgerEra era))
 
 class HasSubmitApi a where
