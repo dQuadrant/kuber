@@ -311,6 +311,10 @@ txPayToScript addr v d = txOutput $TxOutput (TxOutNative $TxOut addr  (TxOutValu
 txPayToScriptWithData :: AddressInEra BabbageEra -> Value -> ScriptData -> TxBuilder
 txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValue MultiAssetInBabbageEra v)  (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
 
+-- | Pay to script address and inline the datum in utxo
+txPayToScriptWithTxAuxData :: AddressInEra BabbageEra -> Value -> ScriptData -> TxBuilder
+txPayToScriptWithTxAuxData addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValue MultiAssetInBabbageEra v)  (TxOutDatumInTx ScriptDataInBabbageEra d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
+
 -- | Pay to the script and inline it in the utxo. Script enterprise address is derrived from script hash
 txPayToScriptWithReference :: Plutus.Script -> Value -> Hash ScriptData -> TxBuilder
 txPayToScriptWithReference pScript v d = txOutput $ TxOutput (TxOutScript (toTxPlutusScript (fromPlutusV2Script pScript)) v d) False False OnInsufficientUtxoAdaUnset
