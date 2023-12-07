@@ -3,24 +3,11 @@
 
 module Test.ApiTest where
 
-import Cardano.Api
 import Cardano.Kuber.Api
-import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable (toConsoleText, toConsoleTextNoPrefix))
-import Cardano.Kuber.Data.Parsers
-import Cardano.Kuber.Util hiding (toHexString)
-import Cardano.Ledger.Shelley.API (ScriptHash (ScriptHash))
-import Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.ByteString.Lazy as LBS
-import Data.Functor ((<&>))
-import qualified Data.Text as T
-import Data.Text.Conversions
-import qualified Debug.Trace as Debug
 import Test.ChainApiTests (test_kGetNetworkId, test_kQueryChainPoint, test_kQueryCurrentEra, test_kQueryGenesisParams, test_kQueryProtocolParams, test_kQuerySystemStart, test_kQueryUtxoByAddress, test_kQueryUtxoByTxin)
 import Test.KuberApiTests
-import Test.Tasty (TestTree, defaultMain, testGroup)
-import Test.Tasty.HUnit (assertFailure, testCase, (@?=))
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (assertFailure, testCase)
 
 remoteKuberConnection :: IO RemoteKuberConnection
 remoteKuberConnection = do
@@ -243,4 +230,18 @@ testBuildTxSupportMetadata =
           Right tx -> pure ()
     ]
 
-
+testBuildTxSupportDatumInAuxData :: TestTree
+testBuildTxSupportDatumInAuxData =
+  testGroup
+    "should support datum in auxiliary data"
+    [ testCase "Remote" $ do
+        maybeFe <- evaluateFromRemoteKuber test_kBuildTx_supportDatumInAuxData
+        case maybeFe of
+          Left fe -> assertFailure $ "Test Case Failed: " ++ show fe
+          Right tx -> pure (),
+      testCase "Local" $ do
+        maybeFe <- evaluateFromLocalKuber test_kBuildTx_supportDatumInAuxData
+        case maybeFe of
+          Left fe -> assertFailure $ "Test Case Failed: " ++ show fe
+          Right tx -> pure ()
+    ]

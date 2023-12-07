@@ -82,9 +82,11 @@ kuberApiServer queryEra a = (
     :<|>  utilityServer a
   )
 
+
 queryServer queryEra a =
         makeHandler  a (queryPparamHandler queryEra)
   :<|>  makeHandler a (kQueryChainPoint <&> ChainPointModal)
+  :<|>  makeHandler a (kQueryCurrentEra <&> AnyCardanoEraModal)
   :<|> makeHandler2  a (queryUtxosHandler queryEra)
   :<|> (makeHandler a kQuerySystemStart <&> SystemStartModal)
   :<|> (makeHandler a kQueryGenesisParams <&> GenesisParamModal)
@@ -114,12 +116,12 @@ corsMiddlewarePolicy = CorsResourcePolicy {
     }
 
 appWithBackenAndEra :: (HasChainQueryAPI a, HasLocalNodeAPI a, HasSubmitApi a,HasKuberAPI a) => a -> BabbageEraOnwards era-> Application
-appWithBackenAndEra dcinfo beraonward = rewriteRoot (T.pack "index.html") $ static $ cors (\r ->  Just corsMiddlewarePolicy ) $ case beraonward of 
+appWithBackenAndEra dcinfo beraonward = rewriteRoot (T.pack "index.html") $ static $ cors (\r ->  Just corsMiddlewarePolicy ) $ case beraonward of
   BabbageEraOnwardsBabbage -> serve @(KubeServer BabbageEra) Proxy  $ kuberApiServer BabbageEraOnwardsBabbage dcinfo
   BabbageEraOnwardsConway ->  serve @(KubeServer ConwayEra) Proxy  $ kuberApiServer  BabbageEraOnwardsConway dcinfo
 
 
-  
+
 instance ToServantErr FrameworkError where
   status (FrameworkError _ _) = status400
   status (FrameworkErrors _) = status400

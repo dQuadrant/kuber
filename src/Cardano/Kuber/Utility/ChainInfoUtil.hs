@@ -7,7 +7,6 @@ import Cardano.Kuber.Core.LocalNodeChainApi (ChainConnectInfo (..))
 import Cardano.Kuber.Error (ErrorType (ParserError), FrameworkError (FrameworkError))
 import Control.Exception (throw, try)
 import Data.Char (toLower)
-import qualified Debug.Trace as Debug
 import System.Directory (doesFileExist)
 import System.Environment (getEnv)
 import System.FilePath (joinPath)

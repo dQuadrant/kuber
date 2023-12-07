@@ -42,3 +42,6 @@ test_kBuildTx_redeemFromSmartContract = kBuildTx $ txMaker "redeemFromSmartContr
 
 test_kBuildTx_supportMetadata :: (HasKuberAPI api, IsTxBuilderEra BabbageEra) => Kontract api w FrameworkError (Tx BabbageEra)
 test_kBuildTx_supportMetadata = kBuildTx $ txMaker "simplePayWithMetadata"
+
+test_kBuildTx_supportDatumInAuxData :: (HasKuberAPI api, IsTxBuilderEra BabbageEra) => Kontract api w FrameworkError (Tx BabbageEra)
+test_kBuildTx_supportDatumInAuxData = kBuildTx $ txMaker "mintWithDatumInAuxData"

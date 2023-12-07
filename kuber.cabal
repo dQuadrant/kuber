@@ -50,6 +50,12 @@ library
     Cardano.Kuber.Utility.Misc
     Cardano.Kuber.Http.Client
     Cardano.Kuber.Http.MediaType
+  
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wunused-packages
+     -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities -fobject-code
+    -fno-ignore-interface-pragmas -fno-omit-interface-pragmas
 
   hs-source-dirs: src
   build-depends:
@@ -132,3 +138,9 @@ test-suite test
     , unordered-containers
     , hedgehog
     , directory
+  
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wunused-packages
+    -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities -fobject-code
+    -fno-ignore-interface-pragmas -fno-omit-interface-pragmas  

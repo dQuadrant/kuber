@@ -161,7 +161,7 @@ data TxMintingScriptSource =
           | TxMintingSimpleScript TxSimpleScript
             deriving  (Show)
 
-data TxMintData  s = TxMintData  s  [(AssetName ,Quantity)]  (Map Word64 (Map AssetName Aeson.Value)) deriving (Show)
+data TxMintData  s = TxMintData  s  [(AssetName ,Quantity)]  (Map Word64 (Map AssetName Aeson.Value))  deriving (Show)
 
 data ValidityTimestamp = NoValidityTime
   | ValidityPosixTime POSIXTime
@@ -344,13 +344,13 @@ _txMint  v = txMints [v]
 
 -- | Mint token with plutus v1 or v2 script
 txMintPlutusScript :: IsPlutusScript script =>script  ->  HashableScriptData -> [(AssetName,Quantity)] -> TxBuilder
-txMintPlutusScript script sData amounts = _txMint $ TxMintData (TxMintingPlutusScript  (toTxPlutusScript script) Nothing sData) amounts Map.empty
+txMintPlutusScript script sData amounts = _txMint $ TxMintData (TxMintingPlutusScript  (toTxPlutusScript script) Nothing sData) amounts Map.empty 
 
 -- | Mint token with simple script
-txMintSimpleScript :: IsSimpleScript script =>script  -> [(AssetName,Quantity)] -> TxBuilder
-txMintSimpleScript script amounts = _txMint $ TxMintData (TxMintingSimpleScript  (toTxSimpleScript script)) amounts Map.empty
+txMintSimpleScript :: IsSimpleScript script =>script -> [(AssetName,Quantity)] -> TxBuilder
+txMintSimpleScript script  amounts = _txMint $ TxMintData (TxMintingSimpleScript  (toTxSimpleScript script)) amounts Map.empty 
 
-
+                                         
 -- txMintWithMetadata :: IsMintingScript script =>script  ->   [(AssetName,Integer)] -> Map Word64 (Map AssetName Aeson.Value)  -> TxBuilder
 -- txMintWithMetadata script amounts mp = _txMint $ TxMintData (TxMintingScriptCode $ toTxMintingScript script) amounts mp
 --  witness (valueFromList  $ map (bimap (AssetId policyId) Quantity )  amounts )

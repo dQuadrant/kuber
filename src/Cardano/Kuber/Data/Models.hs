@@ -500,6 +500,32 @@ instance FromJSON ChainPointModal where
             pure $ ChainPointModal $ ChainPoint  (SlotNo slot) hHash
     parseJSON _ = fail "Expected ChainPoint Modal"
 
+newtype AnyCardanoEraModal = AnyCardanoEraModal AnyCardanoEra 
+instance Wrapper AnyCardanoEraModal AnyCardanoEra where 
+  unWrap (AnyCardanoEraModal cEra) = cEra
+
+instance ToJSON AnyCardanoEraModal where 
+  toJSON (AnyCardanoEraModal cEra) = case cEra of 
+    AnyCardanoEra ce -> 
+      A.object [
+      A.fromString "currentEra" A..= (show ce::String)
+      ] 
+
+instance FromJSON AnyCardanoEraModal where 
+  parseJSON (A.Object o) = do 
+    currentEra :: Text <- o A..: "currentEra"
+    case currentEra of
+      "ByronEra" -> pure $ AnyCardanoEraModal (AnyCardanoEra ByronEra)
+      "ShelleyEra" -> pure $ AnyCardanoEraModal (AnyCardanoEra ShelleyEra)
+      "AllegraEra"-> pure $ AnyCardanoEraModal (AnyCardanoEra AllegraEra)
+      "MaryEra" -> pure $ AnyCardanoEraModal (AnyCardanoEra MaryEra)
+      "AlonzoEra" -> pure $ AnyCardanoEraModal (AnyCardanoEra AlonzoEra)
+      "BabbageEra" -> pure $ AnyCardanoEraModal (AnyCardanoEra BabbageEra)
+      "ConwayEra" -> pure $ AnyCardanoEraModal (AnyCardanoEra ConwayEra)
+      _ -> fail "Could not deduce Era"
+  parseJSON _ = fail "Expected AnyCardanoEra Modal"    
+
+
 
 instance IsTxBuilderEra era => FromJSON (UtxoModal era) where
   parseJSON v = case v of

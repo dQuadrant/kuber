@@ -5,21 +5,17 @@ module Cardano.Kuber.Utility.DataTransformation where
 
 import Cardano.Api
 import Cardano.Api.Byron (Address (ByronAddress))
-import Cardano.Api.Shelley (Address (ShelleyAddress), Hash (PaymentKeyHash), StakeCredential (StakeCredentialByKey, StakeCredentialByScript), fromPlutusData, fromShelleyPaymentCredential, fromShelleyStakeReference, shelleyPayAddrToPlutusPubKHash, fromShelleyAddr)
+import Cardano.Api.Shelley (Address (ShelleyAddress), StakeCredential (StakeCredentialByKey, StakeCredentialByScript), fromPlutusData, fromShelleyAddr, fromShelleyPaymentCredential, fromShelleyStakeReference, shelleyPayAddrToPlutusPubKHash)
 import qualified Cardano.Api.Shelley as Shelley
-import qualified Cardano.Binary as Cborg
-import Cardano.Ledger.Alonzo.TxInfo (transKeyHash)
+import Cardano.Kuber.Data.Parsers (parseAddress)
 import qualified Cardano.Ledger.Alonzo.TxInfo as Alonzo
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import qualified Cardano.Ledger.Credential as Ledger
-import qualified Cardano.Ledger.Keys as Ledger
-import Cardano.Ledger.Shelley.API (Credential (KeyHashObj, ScriptHashObj), Ptr (Ptr), ScriptHash (ScriptHash), StakeReference (StakeRefBase, StakeRefNull, StakeRefPtr))
-import qualified Cardano.Ledger.Shelley.API as Shelley
-import Data.ByteString
+import Cardano.Ledger.Shelley.API (Credential, Ptr (Ptr), StakeReference (StakeRefNull, StakeRefPtr))
 import Data.Functor ((<&>))
+import Data.Maybe (fromJust)
 import Data.String (fromString)
-import PlutusLedgerApi.V1.Value (AssetClass (AssetClass))
-import PlutusLedgerApi.V2 (CurrencySymbol (CurrencySymbol), PubKeyHash (PubKeyHash, getPubKeyHash), ToData, TokenName (TokenName), fromBuiltin, toBuiltin, toData)
+import PlutusLedgerApi.V1.Value (AssetClass (AssetClass), adaSymbol, adaToken, assetClass, flattenValue, assetClassValue)
+import PlutusLedgerApi.V2 (CurrencySymbol (CurrencySymbol), PubKeyHash (PubKeyHash, getPubKeyHash), ToData, TokenName (TokenName), fromBuiltin, toBuiltin, toData, TxOutRef (TxOutRef))
 import qualified PlutusLedgerApi.V2 as Plutus
 
 -- | Create enterprise address from SignKey
@@ -43,7 +39,7 @@ sKeyToPkh skey = PubKeyHash (toBuiltin $ serialiseToRawBytes vkh)
   where
     vkh = verificationKeyHash $ getVerificationKey skey
 
-fromLedgerAddress la=  (fromShelleyAddr shelleyBasedEra la )
+fromLedgerAddress la = (fromShelleyAddr shelleyBasedEra la)
 
 -- | Convert Pkh (plutus type) to Hash PaymentKey (cardano-api type)
 pkhToPaymentKeyHash :: PubKeyHash -> Maybe (Hash PaymentKey)
@@ -59,7 +55,7 @@ skeyToPaymentKeyHash skey = verificationKeyHash $ getVerificationKey skey
 
 -- | Convert AddressInEra (cardano-api type) to Hash PaymentKey (cardano-api type).
 -- Will return `Nothing` if address is  an Byron Address
-addressInEraToPaymentKeyHash ::  AddressInEra era -> Maybe (Hash PaymentKey)
+addressInEraToPaymentKeyHash :: AddressInEra era -> Maybe (Hash PaymentKey)
 addressInEraToPaymentKeyHash a = case a of
   AddressInEra atie ad -> case ad of
     ByronAddress ad' -> Nothing
@@ -114,7 +110,7 @@ unstakeAddr :: IsShelleyBasedEra era => AddressInEra era -> AddressInEra era
 unstakeAddr a = case a of
   AddressInEra atie ad -> case ad of
     ByronAddress ad' -> a
-    ShelleyAddress net cre sr -> shelleyAddressInEra shelleyBasedEra $ ShelleyAddress net cre StakeRefNull
+    ShelleyAddress net cre sr -> shelleyAddressInEra shelleyBasedEra $ ShelleyAddress net cre Cardano.Ledger.Shelley.API.StakeRefNull
 
 -- | Create Plutus library AssetClass structure from Cardano.Api's AssetId
 toPlutusAssetClass :: AssetId -> AssetClass
@@ -129,7 +125,7 @@ dataToScriptData sData = fromPlutusData $ toData sData
 -- toPlutusScriptHash = Alonzo.transScriptHash
 
 -- | Convert Credential (cardano-api type)  to Credential (plutus type)
-toPlutusCredential :: Credential keyrole crypto -> Plutus.Credential
+toPlutusCredential :: Cardano.Ledger.Shelley.API.Credential keyrole crypto -> Plutus.Credential
 toPlutusCredential = Alonzo.transCred
 
 -- | Extract Payment Credential from Shelley Address (cardano-api type) and return  Plutus Credential (plutus type)
@@ -138,8 +134,8 @@ addressToPlutusCredential (ShelleyAddress net cre sr) = toPlutusCredential cre
 
 -- | Get Network Id from address
 addressNetworkId :: Cardano.Api.Shelley.Address ShelleyAddr -> NetworkId
-addressNetworkId (ShelleyAddress net cre sr) = case net of 
-  Ledger.Testnet  -> Cardano.Api.Testnet  (NetworkMagic 1)
+addressNetworkId (ShelleyAddress net cre sr) = case net of
+  Ledger.Testnet -> Cardano.Api.Testnet (NetworkMagic 1)
   Ledger.Mainnet -> Cardano.Api.Mainnet
 
 -- | Convert Shelley Address (cardano-api type) to Address (plutus type)
@@ -190,4 +186,29 @@ fromPlutusAddress network (Plutus.Address cre m_sc) = makeShelleyAddress network
             )
               <&> StakeCredentialByScript
               <&> StakeAddressByValue
-        Plutus.StakingPtr n i j -> Just $ fromShelleyStakeReference $ StakeRefPtr (Ptr (SlotNo $ fromInteger n) (Ledger.TxIx $ fromInteger i) (Ledger.CertIx $ fromInteger j))
+        Plutus.StakingPtr n i j -> Just $ fromShelleyStakeReference $ Cardano.Ledger.Shelley.API.StakeRefPtr (Cardano.Ledger.Shelley.API.Ptr (SlotNo $ fromInteger n) (Ledger.TxIx $ fromInteger i) (Ledger.CertIx $ fromInteger j))
+
+plutusAssetClassToAssetId :: AssetClass -> AssetId
+plutusAssetClassToAssetId plutusAssetClass =
+  if plutusAssetClass == assetClass adaSymbol adaToken
+    then AdaAssetId
+    else case plutusAssetClass of
+      AssetClass (CurrencySymbol bbs, TokenName bbs') ->
+        AssetId
+          ( case deserialiseFromRawBytes AsPolicyId (fromBuiltin bbs) of
+              Left sarbe -> error "plutusAssetClassToAssetId(): invalid currency symbol"
+              Right pi -> pi
+          )
+          ( case deserialiseFromRawBytes AsAssetName (fromBuiltin bbs') of
+              Left sarbe -> error "plutusAssetClassToAssetId(): invalid tokenName"
+              Right an -> an
+          )
+
+fromPlutusValue :: Plutus.Value -> Value
+fromPlutusValue val = mconcat $ map (\(cs, tn, n) -> valueFromList [(plutusAssetClassToAssetId (assetClass cs tn), Quantity n)]) (flattenValue val)
+
+toPlutusValue :: Value -> Plutus.Value
+toPlutusValue val1 = mconcat $ Prelude.map (\(asset, Quantity amount) -> assetClassValue (toPlutusAssetClass asset) amount) (valueToList val1)
+
+toPlutusTxOutRef ::  TxIn -> TxOutRef
+toPlutusTxOutRef (TxIn tid (TxIx index)) = TxOutRef (Plutus.TxId $ toBuiltin $ serialiseToRawBytes tid) (toInteger index)   

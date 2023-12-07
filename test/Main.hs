@@ -37,5 +37,6 @@ kuberApiTests =
       testBuildTxSimpleMint,
       testBuildTxSimpleRedeem,
       testBuildTxRedeemFromSmartContract,
-      testBuildTxSupportMetadata
+      testBuildTxSupportMetadata,
+      testBuildTxSupportDatumInAuxData
     ]

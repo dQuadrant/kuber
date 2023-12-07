@@ -31,7 +31,7 @@ printBalanceKontract=  do
 
 main :: IO ()
 main = do
-  kuberConn <- localNodeConnection
+  kuberConn <- remoteKuberConnection
   result <- evaluateKontract  kuberConn printBalanceKontract
   case result of 
     Left e -> putStrLn $ "Unexpected error evaluating printBalance kontract:\n  "++ show e

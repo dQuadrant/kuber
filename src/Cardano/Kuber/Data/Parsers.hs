@@ -418,13 +418,13 @@ parseBech32OrCBOR' bs t msg = case parseHexString bs of
 
 txinOrUtxoParser  :: IsTxBuilderEra era =>  A.Value -> A.Parser (Either TxIn (UTxO era))
 txinOrUtxoParser obj@(A.Object o) = do
-    txin' <- o .:? "txIn"
-    txin'' <- o .:? "txin"
+    txin' ::Maybe A.Value <- o .:? "txIn"
+    txin'' ::Maybe A.Value <- o .:? "txin"
     txin<-case txin' of
             Nothing -> case txin'' of
                 Nothing -> txInParser obj
-                Just any -> pure any
-            Just any -> pure any
+                Just any -> txInParser any
+            Just any -> txInParser any
     addrM <- o .:? "address"
     valueM <- o.:? "value"
     case (addrM,valueM) of

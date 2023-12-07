@@ -18,16 +18,13 @@ import Data.Time.Clock.POSIX (POSIXTime)
 import Cardano.Kuber.Utility.Misc
 import Data.Functor ((<&>))
 import Data.Map (Map)
-import Cardano.Api.Shelley (TxBody(ShelleyTxBody), fromShelleyTxIn, convertToLedgerProtocolParameters, LedgerProtocolParameters (unLedgerProtocolParameters), ShelleyLedgerEra)
+import Cardano.Api.Shelley (TxBody(ShelleyTxBody), fromShelleyTxIn, convertToLedgerProtocolParameters, LedgerProtocolParameters (unLedgerProtocolParameters))
 import qualified Data.Set as Set
-import qualified Data.Map as Map
-import qualified Debug.Trace as Debug
 import Cardano.Kuber.Core.LocalNodeChainApi (kEvaluateExUnits', HasLocalNodeAPI (..), ChainConnectInfo)
 import Cardano.Kuber.Core.TxFramework (executeTxBuilder)
-import Cardano.Ledger.Babbage.TxBody (BabbageTxBody (btbInputs, btbReferenceInputs), BabbageEraTxBody (referenceInputsTxBodyL))
+import Cardano.Ledger.Babbage.TxBody (BabbageEraTxBody (referenceInputsTxBodyL))
 import Cardano.Ledger.Api (EraTxBody(inputsTxBodyL))
 import Control.Lens ((^.))
-import Cardano.Kuber.Data.EraUpdate (updateUtxoEra)
 
 
 
@@ -79,7 +76,7 @@ kEvaluateExUnits'' tx  = do
     kEvaluateExUnits' (getTxBody tx)  utxos
     
   where
-    resolveEra :: IsShelleyBasedEra era => ShelleyBasedEra era -> TxBody era -> Set.Set TxIn
+    resolveEra :: ShelleyBasedEra era -> TxBody era -> Set.Set TxIn
     resolveEra sbera body = case sbera of 
       ShelleyBasedEraBabbage -> getTxUnknownInputs  (body ::TxBody BabbageEra)
       ShelleyBasedEraConway -> getTxUnknownInputs  (body ::TxBody ConwayEra)

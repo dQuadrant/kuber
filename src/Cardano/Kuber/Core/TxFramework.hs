@@ -789,7 +789,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                       (TxOutValue txMaryEraOnwards va)
                       (TxOutDatumInline bBabbageOnward   sd )
                       (ReferenceScript bBabbageOnward $ plutusScriptToScriptAny sc)
-      TxOutNative to -> pure $ transfrormOutput output (updateTxOutInEra  to)
+      TxOutNative to -> pure $ transfrormOutput output (updateTxOutInEra'  to)
       TxOutPkh pkh va -> case pkhToMaybeAddr network pkh of
         Nothing -> Left  $ FrameworkError ParserError  ("Cannot convert PubKeyHash to Address : "++ show pkh)
         Just aie ->  transformer $ TxOut aie  (TxOutValue txMaryEraOnwards va ) TxOutDatumNone ReferenceScriptNone
