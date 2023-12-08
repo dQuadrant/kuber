@@ -307,6 +307,9 @@ txPayToPkh pkh v= txOutput $  TxOutput ( TxOutPkh  pkh  v ) False False OnInsuff
 txPayToScript :: AddressInEra BabbageEra -> Value -> Hash ScriptData -> TxBuilder
 txPayToScript addr v d = txOutput $TxOutput (TxOutNative $TxOut addr  (TxOutValue MultiAssetInBabbageEra v) (TxOutDatumHash ScriptDataInBabbageEra d) ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
 
+txPayToScriptWithDataInTx :: AddressInEra BabbageEra -> Value -> ScriptData -> TxBuilder
+txPayToScriptWithDataInTx addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValue MultiAssetInBabbageEra v)  (TxOutDatumInTx ScriptDataInBabbageEra d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
+
 -- | Pay to script address and inline the datum in utxo
 txPayToScriptWithData :: AddressInEra BabbageEra -> Value -> ScriptData -> TxBuilder
 txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValue MultiAssetInBabbageEra v)  (TxOutDatumInline ReferenceTxInsScriptsInlineDatumsInBabbageEra d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset

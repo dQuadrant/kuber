@@ -42,7 +42,7 @@ module Cardano.Kuber.Api(
     ,   txPayToScript
     
     ,   txPayToScriptWithData 
-    
+    ,   txPayToScriptWithDataInTx
     ,   txPayToScriptWithReference
     
     ,   txPayToScriptWithDataAndReference
