@@ -371,6 +371,8 @@ txPayToWithReferenceScript  addr v pScript=  txOutput $  TxOutput (TxOutNative $
 txPayToPkh:: PubKeyHash  ->Value ->TxBuilder
 txPayToPkh pkh v= txOutput $  TxOutput ( TxOutPkh  pkh  v ) False False OnInsufficientUtxoAdaUnset
 
+txPayToScriptWithDataInTx :: AddressInEra ConwayEra -> Value -> HashableScriptData -> TxBuilder
+txPayToScriptWithDataInTx addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValue MaryEraOnwardsConway v)  (TxOutDatumInTx AlonzoEraOnwardsConway d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
 -- | Pay to script address with datumHash
 txPayToScript :: AddressInEra ConwayEra -> Value -> Hash ScriptData -> TxBuilder
 txPayToScript addr v d = txOutput $TxOutput (TxOutNative $TxOut addr  (TxOutValue MaryEraOnwardsConway v) (TxOutDatumHash AlonzoEraOnwardsConway d) ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
