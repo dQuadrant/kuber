@@ -380,7 +380,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       builderInputUtxo = foldMap resolvedInputUtxo resolvedInputs
       fixedInputSum =   utxoMapSum builderInputUtxo <> totalMintVal <> negateValue totalDeposit
 
-      fee=case explicitFee of
+      startingFee=case explicitFee of
         Nothing ->  Lovelace 400_000
         Just n -> Lovelace n
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin builderInputUtxo) spendableUtxos
@@ -400,14 +400,14 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                                                     Just pkh -> Set.insert pkh acc
                             ) withVoteSigs   $ Map.elems  builderInputUtxo
 
-  iteration1@(txBody1,signatories,fee1) <-  calculatorWithDefaults    fee
+  iteration1@(txBody1,signatories,fee1) <-  calculatorWithDefaults    startingFee
   let iterationFunc lastBody lastFee   =
         if  null partialInputs && null  partialMints
-          then calculatorWithDefaults    lastFee
+          then calculatorWithDefaults    lastFee <&> makeNewFee
           else do
               let onMissing = Left $ FrameworkError LibraryError "Unexpected missing Exunits"
               (inputExmap,mintExmap) <- evaluateExUnitMapWithUtxos pParam  systemStart (Cardano.Api.Shelley.toLedgerEpochInfo eraHistory)  ( UTxO availableUtxo) lastBody
-              calculator mintExmap inputExmap onMissing lastFee
+              calculator mintExmap inputExmap onMissing lastFee <&> makeNewFee
       iteratedBalancing n lastBody lastFee=do
         v@(txBody',signatories',fee')<- iterationFunc lastBody lastFee
         if (if n >0 then  (==) else (<=) ) fee'  lastFee
@@ -417,6 +417,9 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                                             (map (toWitness txBody) $ mapMaybe (`Map.lookup` availableSkeys) $ Set.toList signatories)
                                             txBody
                                         )
+      makeNewFee (a,b,fee) =case explicitFee of
+        Nothing -> (a,b,fee)
+        Just n -> (a,b,Lovelace n)
   iteratedBalancing  10 txBody1 fee1 <&> respond
 
   where
@@ -964,7 +967,7 @@ ledgerCredToPaymentKeyHash sbera cred = case cred of
   _ -> Nothing
 
 
-computeBody ::  (IsShelleyBasedEra era,IsCardanoEra era) =>  BabbageEraOnwards era
+computeBody ::  (IsShelleyBasedEra era) =>  BabbageEraOnwards era
       -> LedgerProtocolParameters era
       ->( [TxIn] -> [TxOut CtxTx era]-> Lovelace->  Either FrameworkError (TxBodyContent BuildTx era))
       -> AddressInEra era
