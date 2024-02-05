@@ -113,7 +113,7 @@ mapClientError = \case
        FailureResponse rf rf' -> case decode @FrameworkError (responseBody rf') of
          Nothing ->  FrameworkError LibraryError   $  "Server Responsed with failure ["++  (case responseStatusCode rf' of { Status n bs -> show n ++ " " ++  BS.unpack bs } ) ++  "] "  ++ BSL8.unpack (responseBody rf')
          Just fe -> fe
-       DecodeFailure txt rf -> FrameworkError LibraryError "Failed to Decode response from Kuber Backend Server"
+       DecodeFailure txt rf -> FrameworkError LibraryError ("OH NO!! Failed to Decode response from Kuber Backend Server"++ "\n"++show txt ++"\n"++show rf)
        UnsupportedContentType mt rf -> FrameworkError LibraryError "Kuber Backend server responded with Unknown Content Type"
        InvalidContentTypeHeader rf -> FrameworkError LibraryError  $ "Kuber Backend server responded with invalid contentType header  " ++  show (responseHeaders rf)
        Servant.Client.ConnectionError se -> case fromException  se of
