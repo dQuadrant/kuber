@@ -38,6 +38,7 @@ import Network.URI (URI (uriAuthority, uriPath, uriScheme), URIAuth (uriPort, ur
 import Servant.API.Alternative
 import Servant.Client hiding (baseUrl)
 import Text.Read (readMaybe)
+import qualified Debug.Trace as Debug
 
 cQueryPParams :: ClientM (LedgerProtocolParameters ConwayEra)
 cQueryChainPoint :: ClientM ChainPointModal
@@ -251,7 +252,9 @@ mapClientError = \case
           FailureResponse rf rf' -> case decode @FrameworkError (responseBody rf') of
             Nothing -> FrameworkError LibraryError $ "Server Responded with failure [" ++ (case responseStatusCode rf' of Status n bs -> show n ++ " " ++ BS.unpack bs) ++ "] " ++ BSL8.unpack (responseBody rf')
             Just fe -> fe
-          DecodeFailure txt rf -> FrameworkError LibraryError "Failed to Decode response from Kuber Backend Server"
+          DecodeFailure txt rf -> 
+            Debug.trace (show txt ++ "\n" ++ show rf)
+            FrameworkError LibraryError ("Oh no!! Failed to Decode response from Kuber Backend Server" ++ show txt ++ "\n" ++ show rf)
           UnsupportedContentType mt rf -> FrameworkError LibraryError "Kuber Backend server responded with Unknown Content Type"
           InvalidContentTypeHeader rf -> FrameworkError LibraryError $ "Kuber Backend server responded with invalid contentType header  " ++ show (responseHeaders rf)
           Servant.Client.ConnectionError se -> case fromException se of
