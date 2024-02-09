@@ -11,7 +11,7 @@ import Cardano.Kuber.Util
 remoteKuberConnection :: IO RemoteKuberConnection
 remoteKuberConnection = do 
     (networkName,network) <- getNetworkFromEnv "NETWORK"    
-    createRemoteKuberConnection network "http://localhost:8081" Nothing
+    createRemoteKuberConnection network "http://172.31.6.14:8081" Nothing
 
 localNodeConnection :: IO ChainConnectInfo
 localNodeConnection = chainInfoFromEnv
@@ -29,7 +29,7 @@ printBalanceKontract=  do
 
 main :: IO ()
 main = do
-  kuberConn <- localNodeConnection
+  kuberConn <- remoteKuberConnection
   result <- evaluateKontract  kuberConn printBalanceKontract
   case result of 
     Left e -> putStrLn $ "Unexpected error evaluating printBalance kontract:\n  "++ show e
