@@ -15,11 +15,12 @@ import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (..), HasSubmitApi (..))
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Core.KuberAPI (HasKuberAPI (..))
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra (bBabbageOnward, bCardanoEra), TxBuilder_ (TxBuilder_), TxCollateral (TxCollateralTxin, TxCollateralUtxo), TxInput (TxInputResolved, TxInputUnResolved), TxInputReference (TxInputReferenceTxin, TxInputReferenceUtxo), TxInputResolved_ (TxInputReferenceScriptUtxo, TxInputScriptUtxo, TxInputUtxo), TxInputSelection (TxSelectableAddresses, TxSelectableSkey, TxSelectableTxIn, TxSelectableUtxos), TxInputUnResolved_ (TxInputAddr, TxInputReferenceScriptTxin, TxInputScriptTxin, TxInputSkey, TxInputTxin), TxOutput (TxOutput), TxOutputContent (TxOutNative, TxOutPkh, TxOutScript, TxOutScriptInline, TxOutScriptWithData, TxOutScriptWithDataAndReference, TxOutScriptWithDataAndScript, TxOutScriptWithScript), TxSignature (TxSignatureAddr, TxSignaturePkh, TxSignatureSkey))
-import Cardano.Kuber.Data.EraUpdate (updateAddressEra, updatePParamEra, updateTxOutInEra, updateUtxoEra, updateTxOutInEra')
+import Cardano.Kuber.Data.EraUpdate (updateAddressEra, updatePParamEra, updateTxOutInEra, updateTxOutInEra', updateUtxoEra)
 import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Error
 import Cardano.Kuber.Http.Spec (KuberServerApi)
 import Control.Exception (fromException)
+import Control.Monad.Trans.Reader (ReaderT (..))
 import Data.Aeson (decode)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Char8 as BS8
@@ -31,12 +32,15 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX (POSIXTime)
+import qualified Debug.Trace as Debug
+import GHC.IO (unsafePerformIO)
 import Network.HTTP.Client (HttpException (..), HttpExceptionContent (..), ManagerSettings (managerModifyRequest), Request (requestHeaders), Response (responseStatus), defaultManagerSettings, getUri, newManager)
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types (Status (Status))
 import Network.URI (URI (uriAuthority, uriPath, uriScheme), URIAuth (uriPort, uriRegName), parseURI)
 import Servant.API.Alternative
 import Servant.Client hiding (baseUrl)
+import Servant.Client.Internal.HttpClient (ClientM (..))
 import Text.Read (readMaybe)
 
 cQueryPParams :: ClientM (LedgerProtocolParameters ConwayEra)
@@ -80,7 +84,9 @@ instance HasChainQueryAPI RemoteKuberConnection where
     IsTxBuilderEra era =>
     Set.Set AddressAny ->
     Kontract RemoteKuberConnection w FrameworkError (UTxO era)
-  kQueryUtxoByAddress addrs = liftHttpReq (cQueryUtxos (map serialiseAddress $ Set.toList addrs) [] <&> (\(UtxoModal utxo) -> updateUtxoEra utxo))
+  kQueryUtxoByAddress addrs = do 
+    res<-liftHttpReq (cQueryUtxos (map serialiseAddress $ Set.toList addrs) [] )
+    pure res <&> (\(UtxoModal utxo) -> updateUtxoEra utxo)
   kQueryUtxoByTxin txins = liftHttpReq (cQueryUtxos [] (map renderTxIn $ Set.toList txins) <&> (\(UtxoModal utxo) -> updateUtxoEra utxo))
   kQueryChainPoint = liftHttpReq cQueryChainPoint <&> unWrap
   kQueryCurrentEra = liftHttpReq cQueryCurrentEra <&> unWrap

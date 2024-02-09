@@ -531,7 +531,10 @@ instance IsTxBuilderEra era => FromJSON (UtxoModal era) where
   parseJSON v = case v of
     Object km -> doparse v
     String txt -> doparse v
-    A.Array vs -> mconcat $ map doparse  $ Vector.toList  vs
+    A.Array vs -> do 
+      res <- mapM doparse  $ Vector.toList  vs
+      let utxo = mconcat $ map(\(UtxoModal (UTxO utxos))-> utxos)res
+      pure $ UtxoModal (UTxO utxo)
     _ -> fail "parseError : Expected Utxo Modal Object"
     where
       doparse obj = do
