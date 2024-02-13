@@ -79,10 +79,10 @@ instance HasChainQueryAPI   RemoteKuberConnection where
 
 instance {-# OVERLAPS #-}  HasKuberAPI RemoteKuberConnection where
   kTxBuildTxBody    :: TxBuilder ->  Kontract RemoteKuberConnection w FrameworkError (TxBody BabbageEra)
-  kTxBuildTxBody builder = liftHttpReq (cBuildTx (Just True) builder ) <&> (getTxBody .  unWrap )
+  kTxBuildTxBody builder = liftHttpReq (cBuildTx (Just False) builder ) <&> (getTxBody .  unWrap )
 
   kBuildTx       :: TxBuilder -> Kontract RemoteKuberConnection w FrameworkError (Tx BabbageEra)
-  kBuildTx  builder = liftHttpReq (cBuildTx (Just True) builder ) <&> unWrap
+  kBuildTx  builder = liftHttpReq (cBuildTx (Just False) builder ) <&> unWrap
 
   kTimeToSlot           :: POSIXTime -> Kontract RemoteKuberConnection w FrameworkError SlotNo
   kTimeToSlot slot = liftHttpReq ( cTimeToSlot (TimeTranslationReq slot) ) <&> tResSlotNo

@@ -18,7 +18,7 @@ localNodeConnection = chainInfoFromEnv
 
 printBalanceKontract :: HasChainQueryAPI api =>  Kontract api w FrameworkError ()
 printBalanceKontract=  do
-    addr <- kWrapParser $ parseAddressBech32 (T.pack "addr_test1qrmntnd29t3kpnn8uf7d9asr3fzvw7lnah55h52yvaxnfe4g2v2ge520usmkn0zcl46gy38877hej5cnqe6s602xpkyqtpcsrj")
+    addr <- kWrapParser $ parseAddressBech32 (T.pack "addr1w904uqjsfjeaqgrzq60y8aajuqhcaa3ar4jp227k5w2v8hswf38tq")
     tip <- kQueryChainPoint
     utxos <- kQueryUtxoByAddress (Set.singleton $ addressInEraToAddressAny addr)
     liftIO $ do 
