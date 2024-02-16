@@ -83,7 +83,7 @@ kEvaluateExUnits' txbody utxos = do
   case evaluateTransactionExecutionUnits
     sStart
     (toLedgerEpochInfo eHhistory)
-    (updatePParamEra bCardanoEra pParams)
+    pParams
     utxos
     txbody of
       Left tve -> KError $  FrameworkError ExUnitCalculationError (show tve)
