@@ -65,6 +65,9 @@ import Data.Functor ((<&>))
 import Kuber.Server.Model
 import Control.Monad (liftM)
 import Cardano.Kuber.Http.Spec
+import qualified Cardano.Ledger.Crypto
+import qualified Cardano.Api.Ledger as Cardano.Ledger.Core.Era
+import qualified Cardano.Api.Shelley as Cardano.Api.Eon.ShelleyBasedEra
 
 
 type KubeServer era =  Throws FrameworkError :>  KuberServerApi era
@@ -115,12 +118,17 @@ corsMiddlewarePolicy = CorsResourcePolicy {
     , corsIgnoreFailures = True
     }
 
-appWithBackenAndEra :: (HasChainQueryAPI a, HasLocalNodeAPI a, HasSubmitApi a,HasKuberAPI a) => a -> BabbageEraOnwards era-> Application
+appWithBackenAndEra :: (HasChainQueryAPI a, 
+    HasLocalNodeAPI a, 
+    HasSubmitApi a,
+    HasKuberAPI a
+    -- Cardano.Ledger.Core.Era.EraCrypto ConwayEra ~ Cardano.Ledger.Crypto.StandardCrypto,
+    -- Cardano.Api.Eon.ShelleyBasedEra.ShelleyLedgerEra Cardano.Ledger.Core.Era.StandardCrypto ~ Cardano.Ledger.Core.Era.StandardCrypto,
+    -- Cardano.Ledger.Core.Era.EraCrypto Cardano.Ledger.Core.Era.StandardCrypto ~ Cardano.Ledger.Core.Era.StandardCrypto
+    ) => a -> BabbageEraOnwards era-> Application
 appWithBackenAndEra dcinfo beraonward = rewriteRoot (T.pack "index.html") $ static $ cors (\r ->  Just corsMiddlewarePolicy ) $ case beraonward of
   BabbageEraOnwardsBabbage -> serve @(KubeServer BabbageEra) Proxy  $ kuberApiServer BabbageEraOnwardsBabbage dcinfo
   BabbageEraOnwardsConway ->  serve @(KubeServer ConwayEra) Proxy  $ kuberApiServer  BabbageEraOnwardsConway dcinfo
-
-
 
 instance ToServantErr FrameworkError where
   status (FrameworkError _ _) = status400

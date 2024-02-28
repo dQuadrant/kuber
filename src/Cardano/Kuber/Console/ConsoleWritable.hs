@@ -29,11 +29,12 @@ instance ConsoleWritable TxIn where
   toConsoleTextNoPrefix txin = T.unpack (renderTxIn txin)
 
 instance IsCardanoEra era =>  ConsoleWritable (UTxO era) where
-  toConsoleText prefix (UTxO utxoMap) =  prefix ++ intercalate ( "\n" ++ prefix) (map toStrings $ Map.toList utxoMap)
+  toConsoleText prefix (UTxO utxoMap) =  prefix ++ intercalate ( "\n" ++ prefix) (map toStrings $ Map.toList utxoMap) 
     where
       toStrings (TxIn txId (TxIx index),TxOut addr value hash refScript )=    showStr txId ++ "#" ++  show index ++" : " ++ (case value of
-       TxOutAdaOnly oasie (Lovelace v) -> show v
-       TxOutValue masie va ->  intercalate " +" (map vToString $valueToList va ) ) ++ showRefScript refScript
+        TxOutValueByron (Lovelace n ) -> show n
+        TxOutValueShelleyBased sbe va -> case fromLedgerValue sbe va of
+          value -> intercalate " +" (map vToString $valueToList value )) ++ showRefScript refScript
       vToString (AssetId policy asset,Quantity v)=show v ++ " " ++ showStr  policy ++ "." ++ showStr  asset
       vToString (AdaAssetId, Quantity v) = if v >99999
         then(
@@ -57,15 +58,15 @@ instance ConsoleWritable Value where
       renderAda (Quantity q)= show ((fromIntegral q::Double)/1e6) ++ " Ada"
 
       toValue (TxOut _ v _ _) = case v of
-        TxOutAdaOnly oasie lo -> lovelaceToValue lo
-        TxOutValue masie va -> va
+        TxOutValueByron lo -> lovelaceToValue lo
+        TxOutValueShelleyBased sbe va -> fromLedgerValue sbe va
 
 instance IsCardanoEra era => ConsoleWritable (TxOut ctx era ) where
  toConsoleTextNoPrefix  t@(TxOut aie val datum refScript) = T.unpack (serialiseAddress aie) ++ toConsoleText " : "  (toValue t ) ++ showRefScript refScript
   where
         toValue (TxOut _ v _ _) = case v of
-          TxOutAdaOnly oasie lo -> lovelaceToValue lo
-          TxOutValue masie va -> va
+          TxOutValueByron lo -> lovelaceToValue lo
+          TxOutValueShelleyBased sbe va -> fromLedgerValue sbe va
     
  toConsoleText prefix txout = prefix ++ toConsoleTextNoPrefix txout
 

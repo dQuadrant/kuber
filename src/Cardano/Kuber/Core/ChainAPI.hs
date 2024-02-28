@@ -34,7 +34,7 @@ class HasChainQueryAPI a  where
 class HasSubmitApi a where
   kSubmitTx :: InAnyCardanoEra Tx ->  Kontract  a w FrameworkError ()
 
-data  CachedApi  a = CachedApi a  SystemStart ProtocolParameters (EraHistory CardanoMode) (GenesisParameters ShelleyEra)
+data  CachedApi  a = CachedApi a  SystemStart ProtocolParameters EraHistory (GenesisParameters ShelleyEra)
 
 
 -- instance HasChainQueryAPI a => HasChainQueryAPI (CachedApi a ) where

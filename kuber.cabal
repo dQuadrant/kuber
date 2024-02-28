@@ -71,11 +71,11 @@ library
     , directory
     , aeson >= 1.5.6.0
     , text-conversions
-    , cardano-api == 8.29.0.0
+    , cardano-api == 8.39.0.0
     , cardano-ledger-binary
     , cardano-ledger-core 
     , cardano-ledger-babbage
-    , cardano-ledger-alonzo
+    , cardano-ledger-alonzo >= 1.6.0
     , cardano-ledger-shelley
     , cardano-ledger-api 
     , cardano-ledger-mary
@@ -126,7 +126,7 @@ test-suite test
     , text-conversions
     , cardano-api
     , cardano-api-gen
-    , cardano-ledger-alonzo
+    , cardano-ledger-alonzo >= 1.6.0
     , cardano-ledger-shelley
     , cardano-ledger-conway
     , cardano-slotting

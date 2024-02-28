@@ -21,17 +21,17 @@ import Data.Functor ((<&>))
 import Cardano.Kuber.Data.EraUpdate (updatePParamEra)
 
 class ChainInfo v where
-  getConnectInfo :: v-> LocalNodeConnectInfo CardanoMode
+  getConnectInfo :: v-> LocalNodeConnectInfo
   getNetworkId :: v -> NetworkId
 
 class HasLocalNodeAPI a where
-    kQueryEraHistory      :: Kontract a w FrameworkError (EraHistory CardanoMode)
+    kQueryEraHistory      :: Kontract a w FrameworkError EraHistory
 
 -- ChainConnectInfo wraps (LocalNodeConnectInfo CardanoMode)
 -- This is the minimal information required to connect to a cardano node
-newtype ChainConnectInfo= ChainConnectInfo (LocalNodeConnectInfo CardanoMode)
+newtype ChainConnectInfo= ChainConnectInfo LocalNodeConnectInfo
 
-instance HasChainQueryAPI (LocalNodeConnectInfo CardanoMode) where
+instance HasChainQueryAPI LocalNodeConnectInfo where
     kQueryProtocolParams = liftLnciQuery queryProtocolParam
     kQuerySystemStart = liftLnciQuery querySystemStart
     kQueryGenesisParams = liftLnciQuery queryGenesesisParams'
@@ -44,9 +44,9 @@ instance HasChainQueryAPI (LocalNodeConnectInfo CardanoMode) where
     kQueryStakeDeposit = liftLnciQuery2 (queryStakeDeposits ShelleyBasedEraConway)
     kQueryDrepState  = liftLnciQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepState ShelleyBasedEraConway)
 
-instance HasLocalNodeAPI (LocalNodeConnectInfo CardanoMode) where
+instance HasLocalNodeAPI LocalNodeConnectInfo where
     kQueryEraHistory = liftLnciQuery queryEraHistory
-instance HasSubmitApi (LocalNodeConnectInfo CardanoMode) where
+instance HasSubmitApi LocalNodeConnectInfo where
     kSubmitTx  = liftLnciQuery2 submitTx
 
 
@@ -81,6 +81,7 @@ kEvaluateExUnits' txbody utxos = do
   eHhistory <- kQueryEraHistory
   pParams <- kQueryProtocolParams
   case evaluateTransactionExecutionUnits
+    cardanoEra
     sStart
     (toLedgerEpochInfo eHhistory)
     pParams

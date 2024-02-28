@@ -41,7 +41,6 @@ import qualified PlutusLedgerApi.V1 as Plutus
 import qualified Cardano.Ledger.Alonzo.Core as Ledger
 import Control.Lens.Getter ((^.))
 import Cardano.Ledger.Mary.Value as L (MaryValue (..), MultiAsset (MultiAsset), PolicyID (PolicyID))
-import Cardano.Ledger.Alonzo.TxInfo (transPolicyID)
 import qualified Cardano.Ledger.Api.Era as Ledger
 import qualified Cardano.Ledger.Api as Leger
 import Cardano.Ledger.Api (mintTxBodyL)
@@ -96,7 +95,8 @@ txoutListSum :: [TxOut ctx era] -> Value
 txoutListSum = foldMap toValue
   where
     toValue (TxOut _ val _ _) = case val of
-      TxOutValue masie va -> va
+      TxOutValueByron lo -> lovelaceToValue lo
+      TxOutValueShelleyBased sbe va -> fromLedgerValue sbe va
 
 utxoListSum :: [(a, TxOut ctx era)] -> Value
 utxoListSum l = txoutListSum (map snd l)
@@ -127,20 +127,20 @@ evaluateFee tx = do
 --
 -- 
 
-evaluateExUnitMapWithUtxos :: IsCardanoEra era => LedgerProtocolParameters era -> SystemStart -> LedgerEpochInfo -> UTxO era -> TxBody era -> Either      FrameworkError      (Map TxIn ExecutionUnits, Map PolicyId ExecutionUnits)
-evaluateExUnitMapWithUtxos  = evaluateExUnitMapWithUtxos_ cardanoEra
+evaluateExUnitMapWithUtxos :: IsCardanoEra era => SystemStart -> LedgerEpochInfo -> LedgerProtocolParameters era ->  UTxO era -> TxBody era -> Either      FrameworkError      (Map TxIn ExecutionUnits, Map PolicyId ExecutionUnits)
+evaluateExUnitMapWithUtxos = evaluateExUnitMapWithUtxos_ cardanoEra 
   where
-    evaluateExUnitMapWithUtxos_ :: CardanoEra era ->  LedgerProtocolParameters era -> SystemStart -> LedgerEpochInfo -> UTxO era -> TxBody era -> Either      FrameworkError      (Map TxIn ExecutionUnits, Map PolicyId ExecutionUnits)
-    evaluateExUnitMapWithUtxos_ bera = case bera of
-      BabbageEra -> evaluateExUnitMapWithUtxos__
-      ConwayEra -> evaluateExUnitMapWithUtxos__
+    evaluateExUnitMapWithUtxos_ :: CardanoEra era -> SystemStart -> LedgerEpochInfo -> LedgerProtocolParameters era -> UTxO era -> TxBody era -> Either      FrameworkError      (Map TxIn ExecutionUnits, Map PolicyId ExecutionUnits)
+    evaluateExUnitMapWithUtxos_ bera = case bera of 
+      BabbageEra -> evaluateExUnitMapWithUtxos__ BabbageEra
+      ConwayEra -> evaluateExUnitMapWithUtxos__ ConwayEra
       _ -> (\ _ _ _ _ _ ->Left (FrameworkError FeatureNotSupported "not in era"))
 
-evaluateExUnitMapWithUtxos__ protocolParams systemStart eraHistory usedUtxos txbody = do
-
+evaluateExUnitMapWithUtxos__ era systemStart epochInfo protocolParams usedUtxos txbody = do
   exMap <- case evaluateTransactionExecutionUnits
+    era
     systemStart
-    eraHistory
+    epochInfo
     protocolParams
     usedUtxos
     txbody of
@@ -225,16 +225,16 @@ splitMetadataStrings = Map.map morphValue
 toCharUtf8 :: Char -> BSL.Builder
 toCharUtf8 = charUtf8
 
-timestampToSlot :: SystemStart -> EraHistory mode -> POSIXTime -> SlotNo
-timestampToSlot sstart (EraHistory _ interpreter) utcTime = case Qry.interpretQuery (unsafeExtendSafeZone interpreter) (Qry.wallclockToSlot relativeTime) of
+timestampToSlot :: SystemStart -> EraHistory -> POSIXTime -> SlotNo
+timestampToSlot sstart (EraHistory interpreter) utcTime = case Qry.interpretQuery (unsafeExtendSafeZone interpreter) (Qry.wallclockToSlot relativeTime) of
   -- left should never occur because we have used unsafeExtendSafeZone.
   Left phe -> error $ "Unexpected : " ++ show phe
   Right (slot, _, _) -> slot
   where
     relativeTime = toRelativeTime sstart (posixSecondsToUTCTime utcTime)
 
-slotToTimestamp :: SystemStart -> EraHistory mode -> SlotNo -> POSIXTime
-slotToTimestamp sstart (EraHistory _ interpreter) slotNo = case Qry.interpretQuery
+slotToTimestamp :: SystemStart -> EraHistory -> SlotNo -> POSIXTime
+slotToTimestamp sstart (EraHistory interpreter) slotNo = case Qry.interpretQuery
   (unsafeExtendSafeZone interpreter)
   (Qry.slotToWallclock slotNo) of
   Left phe -> error $ "Unexpected : " ++ show phe

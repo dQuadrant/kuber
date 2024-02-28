@@ -2,7 +2,7 @@
 
 module Cardano.Kuber.Utility.ChainInfoUtil where
 
-import Cardano.Api (CardanoMode, ConsensusModeParams (CardanoModeParams), EpochSlots (EpochSlots), File (File), LocalNodeConnectInfo (LocalNodeConnectInfo), NetworkId (Mainnet, Testnet), NetworkMagic (NetworkMagic), SocketPath)
+import Cardano.Api (ConsensusModeParams (CardanoModeParams), EpochSlots (EpochSlots), File (File), LocalNodeConnectInfo (LocalNodeConnectInfo), NetworkId (Mainnet, Testnet), NetworkMagic (NetworkMagic), SocketPath)
 import Cardano.Kuber.Core.LocalNodeChainApi (ChainConnectInfo (..))
 import Cardano.Kuber.Error (ErrorType (ParserError), FrameworkError (FrameworkError))
 import Control.Exception (throw, try)
@@ -16,7 +16,7 @@ import Text.Read (readMaybe)
 type EnvVariable = String
 
 -- Helper function to get Node conenction information
-localNodeConnInfo :: NetworkId -> SocketPath -> LocalNodeConnectInfo CardanoMode
+localNodeConnInfo :: NetworkId -> SocketPath -> LocalNodeConnectInfo
 localNodeConnInfo = LocalNodeConnectInfo (CardanoModeParams (EpochSlots 21600))
 
 -- Using Environment variables get mainnet's ConnectInfo
@@ -66,7 +66,7 @@ chainInfoFromEnv' envKey = do
 
 -- | If CARDANO_NODE_SOCKET_PATH environment variable is set,  return ConnectInfo instance with the path
 -- Otherwise CARDANO_HOME or "$HOME/.cardano"  is used and the socket path becomes "$CARDANO_HOME/node.socket"
-getDefaultConnection :: String -> NetworkId -> IO (LocalNodeConnectInfo CardanoMode)
+getDefaultConnection :: String -> NetworkId -> IO LocalNodeConnectInfo
 getDefaultConnection networkName networkId = do
   sockEnv <- try $ getEnv "CARDANO_NODE_SOCKET_PATH"
   socketPath <- case sockEnv of

@@ -40,7 +40,7 @@ library
     , cardano-api
     , cardano-ledger-core
     , cardano-ledger-shelley
-    , cardano-ledger-alonzo
+    , cardano-ledger-alonzo >= 1.6.0
     , text
     , bytestring
     , containers
@@ -83,7 +83,7 @@ executable kuber-server
     , aeson
     , text-conversions
     , cardano-api
-    , cardano-ledger-alonzo
+    , cardano-ledger-alonzo >= 1.6.0
     , cardano-ledger-shelley
     , cardano-slotting 
     , plutus-ledger-api

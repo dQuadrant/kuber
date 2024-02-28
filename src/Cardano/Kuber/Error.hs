@@ -13,9 +13,9 @@ import qualified Data.ByteString as BS
 import qualified Data.Text as T
 import qualified Data.ByteString.Char8 as BS8
 import Cardano.Api.Shelley
-import Cardano.Ledger.Babbage.Tx (ScriptPurpose)
-import Cardano.Ledger.Shelley.LedgerState (witsFromTxWitnesses)
-import Cardano.Ledger.Alonzo.TxWits (RdmrPtr)
+import Cardano.Ledger.Babbage.Tx 
+import Cardano.Ledger.Shelley.LedgerState 
+import Cardano.Ledger.Alonzo.TxWits 
 import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Hashes as Ledger
 import Cardano.Kuber.Utility.Text (toHexString)
@@ -130,7 +130,6 @@ fromScriptExecutionError see  txbody=  case see of
                 ScriptErrorMissingScript rp (ResolvablePointers era map) -> makeErr  $ "Missing script : " ++ show map
                 ScriptErrorMissingCostModel lan -> makeErr "Unexpected costModel Parameter Mismatch"
   where
-          -- wits = case tx' of { ValidatedTx tb tw iv sm -> witsFromTxWitnesses tb  }
           makeErr t  = FrameworkError PlutusExecutionError t
           mkPlutusErr t = FrameworkError PlutusScriptError t
           

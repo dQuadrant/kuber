@@ -40,7 +40,7 @@ class HasKuberAPI a where
   kCalculateMinFee :: IsTxBuilderEra era => Tx era -> Kontract a w FrameworkError Lovelace
   kBuildAndSubmit :: IsTxBuilderEra era => TxBuilder_ era -> Kontract a w FrameworkError (Tx era)
 
-instance HasKuberAPI (LocalNodeConnectInfo CardanoMode) where
+instance HasKuberAPI LocalNodeConnectInfo where
   kTxBuildTxBody = kTxBuildTxBody'
   kBuildTx = kBuildTx'
   kTimeToSlot = kTimeToSlot'
@@ -94,7 +94,6 @@ kCalculateMinFee'' txbody shelleyWitnesses byronWitnesses = do
   protocolParams <- kQueryProtocolParams
   let 
     era =case txbody of
-      ByronTxBody an -> error "No Support For Byron Era Transaction."
       ShelleyTxBody sbe tb scs tbsd m_tad tsv -> sbe
     capiParams = fromLedgerPParams era (unLedgerProtocolParameters protocolParams)
   bpparams <- case convertToLedgerProtocolParameters shelleyBasedEra capiParams of

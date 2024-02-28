@@ -12,7 +12,7 @@ import qualified PlutusLedgerApi.V2
 import qualified PlutusLedgerApi.V1
 import PlutusTx (CompiledCode, BuiltinData)
 import PlutusLedgerApi.Common (serialiseCompiledCode)
-import Cardano.Kuber.Core.TxBuilder (TxPlutusScript (..), TxScript (..), TxSimpleScript (TxSimpleScript))
+import Cardano.Kuber.Core.TxBuilder (TxPlutusScript (..), TxScript (..), TxSimpleScript (TxSimpleScript), IsTxBuilderEra)
 import qualified Debug.Trace as Debug
 import Data.Functor ((<&>))
 type TxScriptParsed witctx era =  Either  
@@ -24,7 +24,7 @@ type TxScriptParsed witctx era =  Either
 
 createTxInScriptWitness :: ScriptInAnyLang -> Maybe HashableScriptData -> HashableScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn ConwayEra)
 createTxInScriptWitness anyScript mDatum redeemer exUnits = do
-  ScriptInEra langInEra script' <- validateScriptSupportedInEra' ConwayEra anyScript
+  ScriptInEra langInEra script' <- validateScriptSupportedInEra' ShelleyBasedEraConway anyScript
   case script' of
     PlutusScript version pscript ->
       pure $ PlutusScriptWitness langInEra version (PScript pscript) datumForTxin redeemer exUnits
@@ -40,7 +40,7 @@ createTxInReferenceScriptWitness scTxIn mScriptHash mDatum redeemer exUnits = pu
 
 createPlutusMintingWitness :: ScriptInAnyLang ->HashableScriptData ->ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxMint ConwayEra)
 createPlutusMintingWitness anyScript redeemer exUnits = do
-  ScriptInEra langInEra script' <- validateScriptSupportedInEra' ConwayEra anyScript
+  ScriptInEra langInEra script' <- validateScriptSupportedInEra' ShelleyBasedEraConway anyScript
   case script' of
     PlutusScript version pscript ->
       pure $ PlutusScriptWitness langInEra version (PScript pscript) NoScriptDatumForMint redeemer exUnits
@@ -48,20 +48,20 @@ createPlutusMintingWitness anyScript redeemer exUnits = do
 
 createSimpleMintingWitness :: ScriptInAnyLang -> Either FrameworkError (ScriptWitness WitCtxMint ConwayEra)
 createSimpleMintingWitness anyScript = do
-  ScriptInEra langInEra script' <- validateScriptSupportedInEra' ConwayEra anyScript
+  ScriptInEra langInEra script' <- validateScriptSupportedInEra' ShelleyBasedEraConway anyScript
   case script' of
     PlutusScript version pscript -> Left $ FrameworkError  WrongScriptType "Plutus script not supported on creating simple script witness"
     SimpleScript sscript -> pure $ SimpleScriptWitness langInEra (SScript sscript)
 
 
-validateScriptSupportedInEra' ::  CardanoEra era -> ScriptInAnyLang -> Either FrameworkError (ScriptInEra era)
+validateScriptSupportedInEra' :: ShelleyBasedEra era -> ScriptInAnyLang -> Either FrameworkError (ScriptInEra era)
 validateScriptSupportedInEra' era script@(ScriptInAnyLang lang _) =
   case toScriptInEra era script of
     Nothing -> Left $ FrameworkError WrongScriptType   (show lang ++ " not supported in " ++ show era ++ " era")
     Just script' -> pure script'
 
 makeTxPlutusScriptWitness :: 
-    CardanoEra era -> 
+    ShelleyBasedEra era -> 
     TxPlutusScript -> 
     Maybe TxIn -> 
     Either FrameworkError (ScriptDatum witctx  -> ScriptRedeemer -> ExecutionUnits -> ScriptWitness witctx era)
@@ -80,7 +80,7 @@ makeTxPlutusScriptWitness era script mtxIn = case script of
       validatePv1 = validateLang  era (PlutusScriptLanguage PlutusScriptV1) $ "PlutusScriptV1 not supported in " ++ show era
       validatePv2 = validateLang era (PlutusScriptLanguage PlutusScriptV2) $ "PlutusScriptV2 not supported in " ++ show era
 
-makeTxSimpleScriptWitness :: CardanoEra era ->  TxSimpleScript -> Maybe TxIn -> Either FrameworkError (ScriptWitness witctx era)
+makeTxSimpleScriptWitness :: ShelleyBasedEra era ->  TxSimpleScript -> Maybe TxIn -> Either FrameworkError (ScriptWitness witctx era)
 makeTxSimpleScriptWitness cera sc mtxIn = do
     lang <- validateSimpleScript
     let simpleSc = case sc of { TxSimpleScript ss -> ss } 
@@ -92,7 +92,7 @@ makeTxSimpleScriptWitness cera sc mtxIn = do
     validateSimpleScript = validateLang cera SimpleScriptLanguage ("Simple Script not supported for this era" ++ show cera)
 
 
-makeTxScriptWitness ::  CardanoEra era ->  TxScript -> Maybe TxIn -> Either FrameworkError (TxScriptParsed witctx era)
+makeTxScriptWitness ::  ShelleyBasedEra era ->  TxScript -> Maybe TxIn -> Either FrameworkError (TxScriptParsed witctx era)
 makeTxScriptWitness era script mtxIn = case script of
   TxScriptSimple (TxSimpleScript tss) -> do
     lang <- validateSimpleScript
@@ -109,7 +109,7 @@ makeTxScriptWitness era script mtxIn = case script of
       validateSimpleScript = validateLang era SimpleScriptLanguage ("Simple script not supported for this era" ++ show era)
 
 
-validateLang ::  CardanoEra era2 ->   ScriptLanguage lang-> String-> Either FrameworkError (ScriptLanguageInEra lang era2)
+validateLang ::  ShelleyBasedEra era2 ->   ScriptLanguage lang-> String-> Either FrameworkError (ScriptLanguageInEra lang era2)
 validateLang  era lang msg = case scriptLanguageSupportedInEra era lang  of
       Nothing -> Left $ FrameworkError FeatureNotSupported msg
       Just scInEra -> pure scInEra

@@ -196,7 +196,7 @@ maxValidity _ v2 = v2
 
 type TxBuilder =  (TxBuilder_ ConwayEra)
 
-data TxBuilder_  era  =TxBuilder_{
+data TxBuilder_ era  =TxBuilder_{
     txSelections :: [TxInputSelection era],
     txInputs:: [TxInput era],
     txInputReferences:: [TxInputReference era],
@@ -361,25 +361,25 @@ txMintSimpleScript script  amounts = _txMint $ TxMintData (TxMintingSimpleScript
 
 -- | Pay to this address in transaction
 txPayTo:: AddressInEra ConwayEra ->Value ->TxBuilder
-txPayTo addr v=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValue MaryEraOnwardsConway v) TxOutDatumNone ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
+txPayTo addr v=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValueShelleyBased ShelleyBasedEraConway (toMaryValue v)) TxOutDatumNone ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
 
 -- | Pay to address  and inline the script in resulting utxo.
 txPayToWithReferenceScript:: AddressInEra ConwayEra ->Value -> TxScript  ->TxBuilder
-txPayToWithReferenceScript  addr v pScript=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValue MaryEraOnwardsConway v) TxOutDatumNone (ReferenceScript BabbageEraOnwardsConway (txScriptToScriptAny pScript) ))False False OnInsufficientUtxoAdaUnset
+txPayToWithReferenceScript  addr v pScript=  txOutput $  TxOutput (TxOutNative $TxOut addr  (TxOutValueShelleyBased ShelleyBasedEraConway (toMaryValue v)) TxOutDatumNone (ReferenceScript BabbageEraOnwardsConway (txScriptToScriptAny pScript) ))False False OnInsufficientUtxoAdaUnset
 
 -- | Pay to the enterprise address of this PublicKeyHash
 txPayToPkh:: PubKeyHash  ->Value ->TxBuilder
 txPayToPkh pkh v= txOutput $  TxOutput ( TxOutPkh  pkh  v ) False False OnInsufficientUtxoAdaUnset
 
 txPayToScriptWithDataInTx :: AddressInEra ConwayEra -> Value -> HashableScriptData -> TxBuilder
-txPayToScriptWithDataInTx addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValue MaryEraOnwardsConway v)  (TxOutDatumInTx AlonzoEraOnwardsConway d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
+txPayToScriptWithDataInTx addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValueShelleyBased ShelleyBasedEraConway (toMaryValue v))  (TxOutDatumInTx AlonzoEraOnwardsConway d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
 -- | Pay to script address with datumHash
 txPayToScript :: AddressInEra ConwayEra -> Value -> Hash ScriptData -> TxBuilder
-txPayToScript addr v d = txOutput $TxOutput (TxOutNative $TxOut addr  (TxOutValue MaryEraOnwardsConway v) (TxOutDatumHash AlonzoEraOnwardsConway d) ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
+txPayToScript addr v d = txOutput $TxOutput (TxOutNative $TxOut addr  (TxOutValueShelleyBased ShelleyBasedEraConway (toMaryValue v)) (TxOutDatumHash AlonzoEraOnwardsConway d) ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
 
 -- | Pay to script address and inline the datum in utxo
 txPayToScriptWithData :: AddressInEra ConwayEra -> Value -> HashableScriptData -> TxBuilder
-txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValue MaryEraOnwardsConway v)  (TxOutDatumInline BabbageEraOnwardsConway d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
+txPayToScriptWithData addr v d  = txOutput $ TxOutput  (TxOutNative $ TxOut  addr (TxOutValueShelleyBased ShelleyBasedEraConway (toMaryValue v))  (TxOutDatumInline BabbageEraOnwardsConway d) ReferenceScriptNone ) False False OnInsufficientUtxoAdaUnset
 
 -- | Pay to the script and inline it in the utxo. Script enterprise address is derrived from script hash
 txPayToScriptWithReference :: IsPlutusScript sc => sc -> Value -> Hash ScriptData -> TxBuilder

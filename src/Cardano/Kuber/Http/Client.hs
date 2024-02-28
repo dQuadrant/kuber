@@ -6,6 +6,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Cardano.Kuber.Http.Client where
 
@@ -92,9 +93,16 @@ instance HasChainQueryAPI RemoteKuberConnection where
   kQueryCurrentEra = liftHttpReq cQueryCurrentEra <&> unWrap
   kQueryGovState = error "TODO Cardano.Kuber.Http.Client.RemoteKuberConnection.queryGovState"
 
-deserialiseTxToEra :: IsCardanoEra era => InAnyCardanoEra Tx -> AsType era -> Either FrameworkError (Tx era)
+deserialiseTxToEra :: ( IsShelleyBasedEra era) =>InAnyCardanoEra Tx -> AsType era -> Either FrameworkError (Tx era)
 deserialiseTxToEra (InAnyCardanoEra ce tx) asType = do
-  let serialised = serialiseToCBOR tx
+  let serialised =case ce of
+        ShelleyEra -> serialiseToCBOR tx
+        AllegraEra -> serialiseToCBOR tx
+        MaryEra -> serialiseToCBOR tx
+        AlonzoEra -> serialiseToCBOR tx
+        BabbageEra -> serialiseToCBOR tx
+        ConwayEra -> serialiseToCBOR tx
+        _ -> error "Unexpected era"
       deserialsied = deserialiseFromCBOR (AsTx asType) serialised
   case deserialsied of
     Left sarbe -> Left $ FrameworkError EraMisMatch "Failed to Deserialise to ConwayEra"
@@ -200,7 +208,7 @@ instance HasKuberAPI RemoteKuberConnection where
           result <- liftHttpReq (cBuildTx (Just False) _builder)
           pure $ parseModalInAnyEraToBodyInConwayEra result AsConwayEra
 
-      parseModalInAnyEraToBodyInConwayEra :: IsCardanoEra era =>TxModal -> AsType era -> TxBody era
+      parseModalInAnyEraToBodyInConwayEra :: IsShelleyBasedEra era =>TxModal -> AsType era -> TxBody era
       parseModalInAnyEraToBodyInConwayEra modalInAnyEra era = case modalInAnyEra of
         TxModal iace -> case deserialiseTxToEra iace era of
           Left fe -> error $ "Sad Error: " ++ show fe
@@ -218,7 +226,7 @@ instance HasKuberAPI RemoteKuberConnection where
           result <- liftHttpReq (cBuildTx (Just False) _builder)
           pure $ parseModalInAnyEraToTxInConwayEra result AsConwayEra
 
-      parseModalInAnyEraToTxInConwayEra :: IsCardanoEra era => TxModal -> AsType era -> Tx era
+      parseModalInAnyEraToTxInConwayEra :: IsShelleyBasedEra era => TxModal -> AsType era -> Tx era
       parseModalInAnyEraToTxInConwayEra modalInAnyEra era = case modalInAnyEra of
         TxModal iace -> case deserialiseTxToEra iace era of
           Left fe -> error $ "Sad Error: " ++ show fe

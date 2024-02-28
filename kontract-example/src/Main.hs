@@ -15,6 +15,9 @@ remoteKuberConnection = do
     (networkName,network) <- getNetworkFromEnv "NETWORK"    
     createRemoteKuberConnection network "http://localhost:8081" Nothing
 
+
+exConPP = ""
+
 localNodeConnection :: IO ChainConnectInfo
 localNodeConnection = chainInfoFromEnv
 

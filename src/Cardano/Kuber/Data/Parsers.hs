@@ -45,7 +45,6 @@ import           GHC.IO.Exception             (IOErrorType (UserError),
 import           Text.Read                    (readMaybe)
 import qualified Debug.Trace as Debug
 import qualified Data.Aeson.Types as A
-import Data.Aeson.Parser (eitherDecodeWith)
 import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Babbage.TxOut as Babbage
 
@@ -416,7 +415,7 @@ parseBech32OrCBOR' bs t msg = case parseHexString bs of
   Nothing -> parseBech32Type' bs t msg
 
 
-txinOrUtxoParser  :: IsTxBuilderEra era =>  A.Value -> A.Parser (Either TxIn (UTxO era))
+txinOrUtxoParser  :: (IsTxBuilderEra era) =>  A.Value -> A.Parser (Either TxIn (UTxO era))
 txinOrUtxoParser obj@(A.Object o) = do
     txin' ::Maybe A.Value <- o .:? "txIn"
     txin'' ::Maybe A.Value <- o .:? "txin"
@@ -448,10 +447,17 @@ txinOrUtxoParser obj@(A.Object o) = do
               rScript =case refScript of
                 Nothing -> ReferenceScriptNone
                 Just any -> ReferenceScript bBabbageOnward any
-          pure $ Right $ UTxO $ Map.singleton txin  (TxOut addr (TxOutValue bMaryOnward val) dh rScript)
+          pure $ Right $ UTxO $ Map.singleton txin  (TxOut addr (valueToRequiredEra bCardanoEra val) dh rScript)
 
       _ -> pure $ Left txin
     where
+    valueToRequiredEra:: CardanoEra era -> Value -> TxOutValue era 
+    valueToRequiredEra cera val = case cera of
+      MaryEra -> TxOutValueShelleyBased ShelleyBasedEraMary (toLedgerValue MaryEraOnwardsMary val)
+      AlonzoEra ->  TxOutValueShelleyBased ShelleyBasedEraAlonzo (toLedgerValue MaryEraOnwardsAlonzo val)
+      BabbageEra ->  TxOutValueShelleyBased ShelleyBasedEraBabbage (toLedgerValue MaryEraOnwardsBabbage val)
+      ConwayEra ->  TxOutValueShelleyBased ShelleyBasedEraConway (toLedgerValue MaryEraOnwardsConway val)
+      _ -> error "Unexpected"
 
     (.:?*) :: FromJSON a => A.KeyMap A.Value  -> [A.Key] -> A.Parser (Maybe a)
     (.:?*) obj = doAccum
@@ -462,13 +468,13 @@ txinOrUtxoParser obj@(A.Object o) = do
             case val of
               Nothing -> doAccum  ks
               Just any -> pure any
+
 txinOrUtxoParser (A.String v) = do
   case parseHexString v of
     Just binary -> parseUtxoCbor binary <&> Right
     Nothing -> parseTxIn v <&> Left
 
 txinOrUtxoParser _ = fail "Expected Utxo Object or cborHex"
-
 
 parseRawCBorAnyOf ::
         MonadFail m =>[FromSomeType SerialiseAsCBOR b]
@@ -487,7 +493,7 @@ allTxTypes :: [FromSomeType SerialiseAsCBOR (InAnyCardanoEra Tx)]
 allTxTypes  =[
         FromSomeType (AsTx AsBabbageEra) (InAnyCardanoEra BabbageEra)
       , FromSomeType (AsTx AsConwayEra) (InAnyCardanoEra ConwayEra)
-      , FromSomeType (AsTx AsByronEra)   (InAnyCardanoEra ByronEra)
+      -- , FromSomeType (AsTx AsByronEra)   (InAnyCardanoEra ByronEra)
       , FromSomeType (AsTx AsShelleyEra) (InAnyCardanoEra ShelleyEra)
       , FromSomeType (AsTx AsAllegraEra) (InAnyCardanoEra AllegraEra)
       , FromSomeType (AsTx AsMaryEra)    (InAnyCardanoEra MaryEra)
