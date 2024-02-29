@@ -90,6 +90,8 @@ import Cardano.Ledger.Credential (parseCredential)
 import Cardano.Kuber.Core.TxBuilder (TxVote (..), TxVoteL (..), IsTxBuilderEra (bAsEra, bCardanoEra, bBabbageOnward))
 import Data.Functor.Identity (Identity)
 import qualified Data.Maybe
+import qualified Cardano.Ledger.Api.Era as L
+import qualified Cardano.Ledger.Conway.Governance as L
 
 class Wrapper  m a  where
   unWrap :: m  ->  a

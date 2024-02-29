@@ -96,11 +96,7 @@ import PlutusTx.IsData (toData)
 import qualified Cardano.Ledger.Conway.PParams
 
 instance
-  ( IsTxBuilderEra era,
-    Ledger.EraCrypto ConwayEra
-      ~ Ledger.StandardCrypto,
-    ShelleyLedgerEra era
-      ~ Ledger.StandardCrypto, Cardano.Ledger.Conway.PParams.ConwayEraPParams Ledger.StandardCrypto, ShelleyLedgerEra Ledger.StandardCrypto ~ Ledger.StandardCrypto, Ledger.EraCrypto Ledger.StandardCrypto ~ Ledger.StandardCrypto) =>
+  IsTxBuilderEra era=>
   FromJSON (TxBuilder_ era)
   where
   parseJSON (A.Object v) =
@@ -135,14 +131,15 @@ instance
         eraBasedParser :: ShelleyBasedEra era -> Parser (TxBuilder_ era)
         eraBasedParser sbera = case sbera of
           ShelleyBasedEraConway -> do
-            proposals <- v .?< "proposal"
+            -- TODO: Implement parsing of proposals
+            -- proposals <- v .?< "proposal"
             certs <-
               ( do
                   res <- v .?< "certificate"
                   pure $ map (\(CertificateModal m) -> m) res
                 )
             votes <- v .?< "vote"
-            commonParser (map (\(ProposalProcedureModal p) -> CApi.Proposal p) proposals) votes certs
+            commonParser [] votes certs
           ShelleyBasedEraBabbage -> do
             requireAbsent "certificate" $ fail ".certificate[s] not supported. Kuber is in Babbage era"
             requireAbsent "proposal" $ fail ".proposal[s] not supported. Kuber is in Babbage era"
