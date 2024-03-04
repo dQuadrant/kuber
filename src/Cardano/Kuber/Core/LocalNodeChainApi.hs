@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Cardano.Kuber.Core.LocalNodeChainApi where
 import Cardano.Api hiding (queryGovState, queryCurrentEra, queryEraHistory, queryChainPoint, querySystemStart)
@@ -10,7 +11,7 @@ import Cardano.Kuber.Core.ChainAPI
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Error
 import Cardano.Slotting.Time (SystemStart)
-import Cardano.Kuber.Utility.QueryHelper (queryProtocolParam, querySystemStart, queryEraHistory, queryGenesesisParams, queryUtxos, queryTxins, queryChainPoint, submitTx, queryGenesesisParams', queryCurrentEra, queryGovState, queryStakeDeposits, queryDRepState)
+import Cardano.Kuber.Utility.QueryHelper (queryProtocolParam, querySystemStart, queryEraHistory, queryGenesesisParams, queryUtxos, queryTxins, queryChainPoint, submitTx, queryGenesesisParams', queryCurrentEra, queryGovState, queryStakeDeposits, queryDRepState, queryDRepDistribution)
 import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Map (Map)
 import qualified Cardano.Ledger.Babbage.Tx as Ledger
@@ -43,6 +44,7 @@ instance HasChainQueryAPI LocalNodeConnectInfo where
     kQueryGovState = liftLnciQuery queryGovState
     kQueryStakeDeposit = liftLnciQuery2 (queryStakeDeposits ShelleyBasedEraConway)
     kQueryDrepState  = liftLnciQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepState ShelleyBasedEraConway)
+    kQueryDRepDistribution = liftLnciQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepDistribution ShelleyBasedEraConway)
 
 instance HasLocalNodeAPI LocalNodeConnectInfo where
     kQueryEraHistory = liftLnciQuery queryEraHistory
@@ -62,7 +64,8 @@ instance HasChainQueryAPI ChainConnectInfo where
     kQueryGovState = liftCinfoQuery queryGovState
     kQueryStakeDeposit = liftCinfoQuery2 (queryStakeDeposits ShelleyBasedEraConway)
     kQueryDrepState  = liftCinfoQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepState ShelleyBasedEraConway)
-
+    kQueryDRepDistribution = liftCinfoQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepDistribution ShelleyBasedEraConway)
+    
 instance HasLocalNodeAPI ChainConnectInfo where
     kQueryEraHistory = liftCinfoQuery queryEraHistory
 

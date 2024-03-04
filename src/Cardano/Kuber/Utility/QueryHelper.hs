@@ -21,7 +21,7 @@ import qualified Data.Text as T
 import Control.Exception (throw, catch, SomeException (SomeException), IOException)
 import Cardano.Kuber.Data.Parsers (parseAnyScript)
 import qualified Cardano.Ledger.Api as Ledger
-import Cardano.Api.Ledger (StandardCrypto, Credential, KeyRole (DRepRole), DRepState)
+import Cardano.Api.Ledger (StandardCrypto, Credential, KeyRole (DRepRole), DRepState, DRep)
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra)
 import GHC.IO.Exception (IOException(..), IOErrorType (..))
 import Data.Map (Map)
@@ -123,6 +123,9 @@ queryGovState  conn  =performShelleyQuery   conn QueryGovState "GovState"
 
 queryDRepState :: ShelleyBasedEra era -> LocalNodeConnectInfo  -> Set (Credential 'DRepRole StandardCrypto) -> IO      (Either  FrameworkError   (Map   (Credential   'DRepRole StandardCrypto)  (DRepState StandardCrypto)))
 queryDRepState  era conn drep =performShelleyQuery' era  conn (QueryDRepState drep ) "DrepState"
+
+queryDRepDistribution :: ShelleyBasedEra era -> LocalNodeConnectInfo  -> Set ( DRep StandardCrypto) -> IO (Either  FrameworkError   (Map   (DRep StandardCrypto)  Lovelace)) 
+queryDRepDistribution era conn drep = performShelleyQuery' era conn (QueryDRepStakeDistr drep) "DrepStakeDistribution"
 
 submitTx :: LocalNodeConnectInfo  -> InAnyCardanoEra Tx -> IO  (Either FrameworkError ())
 submitTx conn  (InAnyCardanoEra era tx)= do

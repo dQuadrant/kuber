@@ -82,7 +82,8 @@ executable kuber-server
     , directory
     , aeson
     , text-conversions
-    , cardano-api
+    , cardano-api 
+    , cardano-data 
     , cardano-ledger-alonzo >= 1.6.0
     , cardano-ledger-shelley
     , cardano-slotting 

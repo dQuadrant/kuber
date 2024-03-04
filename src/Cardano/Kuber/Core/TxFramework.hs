@@ -39,7 +39,7 @@ import Data.ByteString.Builder (charUtf8)
 
 import Codec.Serialise (serialise)
 import Data.Set (Set)
-import Data.Maybe (mapMaybe, catMaybes, fromMaybe, maybeToList)
+import Data.Maybe (mapMaybe, catMaybes, fromMaybe, maybeToList, fromJust)
 import Data.List (intercalate, sortBy, minimumBy, find)
 import qualified Data.Foldable as Foldable
 import PlutusLedgerApi.V2 (PubKeyHash(PubKeyHash), fromBuiltin)
@@ -97,8 +97,8 @@ import Cardano.Ledger.Api
       ppMinUTxOValueL,
       ProtVerAtMost,
       EnactState,
-      GovAction(..) )
-import Cardano.Api.Ledger (ConwayTxCert(..), ConwayDelegCert (..), PoolCert (..), ConwayGovCert (..), PoolParams (PoolParams), StrictMaybe (..), ShelleyTxCert (..), EraCrypto, Coin (unCoin), GovState, StandardCrypto, PParams (PParams), KeyRole (DRepRole))
+      GovAction(..), RewardAcnt (RewardAcnt) )
+import Cardano.Api.Ledger (ConwayTxCert(..), ConwayDelegCert (..), PoolCert (..), ConwayGovCert (..), PoolParams (PoolParams), StrictMaybe (..), ShelleyTxCert (..), EraCrypto, Coin (unCoin), GovState, StandardCrypto, PParams (PParams), KeyRole (DRepRole), Anchor (Anchor), Credential (ScriptHashObj))
 import qualified Cardano.Ledger.Api as Ledger
 import qualified Cardano.Api.Shelley as CAPI
 import qualified Cardano.Ledger.Shelley.API.Wallet as Ledger (evaluateTransactionFee)
@@ -114,6 +114,8 @@ import Cardano.Ledger.Conway.Governance (enactStateGovStateL, ensCurPParamsL, en
 import Cardano.Kuber.Data.TxBuilderAeson
 import Control.Monad.IO.Class (liftIO)
 import qualified Cardano.Ledger.Credential as Ledger
+import qualified Data.OSet.Strict as OSet
+
 import Cardano.Ledger.CertState (DRepState(DRepState))
 type BoolChange   = Bool
 type BoolFee = Bool
@@ -305,7 +307,7 @@ txBuilderToTxBody:: (IsTxBuilderEra targetEra) =>
    -> Either FrameworkError  (Cardano.Api.TxBody targetEra,Tx targetEra )
 txBuilderToTxBody   network  pParam  systemStart eraHistory
                     ( UTxO availableUtxo)
-                    (TxBuilder_ selections _inputs _inputRefs _outputs _collaterals validityStart validityEnd mintData extraSignatures proposals votes certs explicitFee mChangeAddr metadata )
+                    txBuilder@(TxBuilder_ selections _inputs _inputRefs _outputs _collaterals validityStart validityEnd mintData extraSignatures proposals votes certs explicitFee mChangeAddr metadata )
   = do
   (totalMintVal, mints_) <- parseMints (UTxO availableUtxo)
 
@@ -341,19 +343,14 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                     Nothing ->  Left $ FrameworkError BalancingError "No utxo available for collateral"
                     Just tis -> pure tis
                     )
-                  else pure []
-  -- txPropsoals <- ( if null proposals
-  --   then pure $ Nothing
-  --   else inEonForEra (Left $ FrameworkError FeatureNotSupported "Proposals are not supported in Babbage era")
-  --          (\conwayOnward -> Right$ Just  $ Featured conwayOnward proposals )
-  --          txCardanoEra
-  --   )
-  -- txVotes <- ( if null votes
-  --   then pure $ Nothing
-  --   else inEonForEra (Left $ FrameworkError FeatureNotSupported "Voting  not supported in Babbage era")
-  --          (\conwayOnward -> Right$ Just $ Featured conwayOnward (CAPI.VotingProcedures $ Ledger.VotingProcedures txVoteToVotingProcedure) )
-  --          txCardanoEra
-  --   )
+                  else pure [] 
+  txPropsoals <- ( if null proposals
+    then pure $ Nothing
+    else  inEonForEra (Left $ FrameworkError FeatureNotSupported "Proposals are not supported in Babbage era")
+           (\conwayOnward -> Right$ Just  $ Featured conwayOnward (TxProposalProcedures (OSet.fromSet (Set.fromList (map(\(Proposal pp)-> pp)proposals))) (BuildTxWith mempty)) )
+           txConwayEra
+    )
+
   txCerts <- ( if null certs
     then pure $ TxCertificatesNone
     else inEonForEra
@@ -361,7 +358,8 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
            (\conwayOnward -> Right $    Cardano.Api.Shelley.TxCertificates (conwayEraOnwardsToShelleyBasedEra conwayOnward) certs (BuildTxWith mempty))
            txCardanoEra
     )
-  let toBuildTxWith v = map (second BuildTxWith)
+  let 
+      toBuildTxWith v = map (second BuildTxWith)
       txBodyContentf1 ins  mints outs fee
           =(TxBodyContent {
         txIns=   parsedInputs ++ ins,
@@ -383,9 +381,18 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         txMintValue=mints,
         txScriptValidity=TxScriptValidityNone,
         -- TODO : Parese proposal and voting proposals accordingly
-        txProposalProcedures  = Nothing,
-        txVotingProcedures  = Nothing
+        txProposalProcedures  = txPropsoals,
+        txVotingProcedures  = parseToCApiVotingProcedures votes
          })
+
+      parseToCApiVotingProcedures voting =
+        case voting of
+          [] -> Just $ Featured (fromJust bConwayOnward) TxVotingProceduresNone
+          v -> Just $ Featured (fromJust bConwayOnward) (TxVotingProcedures votingProcedures (BuildTxWith mempty) )
+        where
+          mapOfGovernanceIdAndVotingProcedure = Map.fromList $ map (\(TxVote tvl) -> case tvl of { TxVoteL gai vp vo -> (gai,vp) })voting
+          votingProcedures = Ledger.VotingProcedures $ Map.fromList $ map (\(TxVote tvl)-> case tvl of { TxVoteL gai vp vo -> (vo,mapOfGovernanceIdAndVotingProcedure) })voting
+
       txBodyContentf mintExUnits inputExUnits onMissing extraIns touts fee   = do
         inputs <- applyExUnitToPartial inputExUnits onMissing partialInputs
         mints  <- applyExUnitToPartial mintExUnits  onMissing partialMints
@@ -559,7 +566,9 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
           ConwayAuthCommitteeHotKey cre cre' -> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
           ConwayResignCommitteeColdKey cre _anchor-> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
     txEra = babbageEraOnwardsToCardanoEra bBabbageOnward
+    txEraConway = conwayEraOnwardsToCardanoEra (fromJust bConwayOnward)
     txCardanoEra=txEra
+    txConwayEra = txEraConway
     txShelleyBasedEra = babbageEraOnwardsToShelleyBasedEra bBabbageOnward
     txMaryEraOnwards = babbageEraOnwardsToMaryEraOnwards bBabbageOnward
     txAlonzoEraOnwards = babbageEraOnwardsToAlonzoEraOnwards bBabbageOnward

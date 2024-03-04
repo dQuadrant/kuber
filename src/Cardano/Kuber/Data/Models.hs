@@ -17,12 +17,13 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 
 module Cardano.Kuber.Data.Models where
 
 import Cardano.Api
-import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData, scriptDataFromJsonDetailedSchema, scriptDataToJsonDetailedSchema, ReferenceScript (ReferenceScript, ReferenceScriptNone), Proposal, ShelleyLedgerEra, StakeAddress (StakeAddress), StakePoolKey, Hash (..), toShelleyStakeAddr, toShelleyTxId, fromShelleyTxIn, fromShelleyStakeAddr, LedgerProtocolParameters (LedgerProtocolParameters))
+import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData, scriptDataFromJsonDetailedSchema, scriptDataToJsonDetailedSchema, ReferenceScript (ReferenceScript, ReferenceScriptNone), Proposal, ShelleyLedgerEra, StakeAddress (StakeAddress), StakePoolKey, Hash (..), toShelleyStakeAddr, toShelleyTxId, fromShelleyTxIn, fromShelleyStakeAddr, LedgerProtocolParameters (LedgerProtocolParameters), createGovernanceActionId, createPreviousGovernanceActionId)
 import Cardano.Binary (ToCBOR (toCBOR), decodeFull, fromCBOR)
 import Cardano.Ledger.Babbage.Tx (BabbageTxBody (btbTxFee))
 import Codec.CBOR.Write (toLazyByteString)
@@ -52,7 +53,7 @@ import qualified Data.Vector as Vector
 import Cardano.Api.Ledger (ConwayTxCert(..), ConwayGovCert (..), StrictMaybe (SNothing, SJust), Credential (KeyHashObj, ScriptHashObj), Coin (Coin), StandardCrypto, Url, textToUrl, ShelleyTxCert (..), ShelleyDelegCert (..), ConwayDelegCert (..), KeyHash (KeyHash), Delegatee (..), KeyRole (DRepRole), hashFromBytes, DRep (..), GovActionId (GovActionId), boundRational, unboundRational, PoolCert (..))
 import Data.Text.Encoding (encodeUtf8)
 import Cardano.Ledger.Hashes as Hashes
-import Cardano.Ledger.Api (Constitution (Constitution), Anchor (Anchor), GovAction (..), ProposalProcedure (ProposalProcedure), Crypto (ADDRHASH), PParamsUpdate, emptyPParamsUpdate, ppuMaxBBSizeL, GovPurposeId (GovPurposeId), GovActionIx (GovActionIx), PParams)
+import Cardano.Ledger.Api (Constitution (Constitution), Anchor (Anchor), GovAction (..), ProposalProcedure (ProposalProcedure), Crypto (ADDRHASH), PParamsUpdate, emptyPParamsUpdate, ppuMaxBBSizeL, GovPurposeId (GovPurposeId), GovActionIx (GovActionIx), PParams, GovActionPurpose)
 import qualified Cardano.Ledger.Api as Ledger
 import Cardano.Ledger.SafeHash (unsafeMakeSafeHash)
 import Cardano.Ledger.Core (EraCrypto, PParamsUpdate (..), EraPParams (..))
@@ -92,6 +93,7 @@ import Data.Functor.Identity (Identity)
 import qualified Data.Maybe
 import qualified Cardano.Ledger.Api.Era as L
 import qualified Cardano.Ledger.Conway.Governance as L
+import qualified Debug.Trace as Debug
 
 class Wrapper  m a  where
   unWrap :: m  ->  a
@@ -118,10 +120,17 @@ newtype ProposalModal  era = ProposalModal (Proposal era)
 
 newtype GovActionModal era = GovActionModal (GovAction era)
 
+-- newtype GovPurposeIdModal era = GovPurposeIdModal (GovPurposeId GovActionPurpose era) 
+
 newtype ConstitutionModal era  = ConstitutionModal (Constitution era)
 
+-- ConwaEra~ (ShelleyLedgerEra (Ledger.ConwayEra StandardCrypto))
+
 newtype AnchorModal era = AnchorModal (Anchor era)
-newtype ProposalProcedureModal  era = ProposalProcedureModal (ProposalProcedure (ShelleyLedgerEra era))
+newtype ProposalProcedureModal  era = ProposalProcedureModal (ProposalProcedure  (ShelleyLedgerEra era))
+-- newtype LProposalProcedureModal era  = LProposalProcedureModal (ProposalProcedure era)
+
+-- ProposalProcedureModal (CAPI.ConwayEra) => ProposalProcedudure (ShelleyLedgerEra ( ShelleyLedgerEra (L.ConwayEra StandardCrypto) ))
 
 newtype SystemStartModal = SystemStartModal SystemStart
 newtype EraHistoryModal = EraHistoryModal EraHistory
@@ -130,6 +139,7 @@ newtype GenesisParamModal era = GenesisParamModal (GenesisParameters era)
 newtype VotingProcedureModal era = VotingProcedureModal (Ledger.VotingProcedure era)
 
 instance Wrapper (VotingProcedureModal era) (Ledger.VotingProcedure era) where
+  unWrap :: VotingProcedureModal era -> L.VotingProcedure era
   unWrap(VotingProcedureModal vp)=vp
 
 newtype VoteModal = VoteModal Ledger.Vote
@@ -665,7 +675,7 @@ instance (Crypto era) => ToJSON (AnchorModal era) where
       , "hash" .= hash
     ]
 
-instance  (EraCrypto ledgerera ~ EraCrypto StandardCrypto , (Crypto (EraCrypto StandardCrypto)))=>  FromJSON  (ConstitutionModal ledgerera) where
+instance EraCrypto ledgerera ~ StandardCrypto =>  FromJSON  (ConstitutionModal ledgerera) where
   parseJSON (A.Object o) = do
       url <- o .: "url"
       dataHash <- o .: "dataHash"
@@ -675,7 +685,7 @@ instance  (EraCrypto ledgerera ~ EraCrypto StandardCrypto , (Crypto (EraCrypto S
   parseJSON  _ = fail "Expected Proposal Object"
 
 
-instance ( EraCrypto ledgerera ~ EraCrypto StandardCrypto, Crypto (EraCrypto StandardCrypto)) =>  FromJSON  (GovActionModal ledgerera) where
+instance  EraCrypto ledgerera ~ StandardCrypto =>  FromJSON  (GovActionModal ledgerera) where
   parseJSON (A.Object o) = do
     certType <- o .: "type"
     case T.toLower certType of
@@ -686,8 +696,7 @@ instance ( EraCrypto ledgerera ~ EraCrypto StandardCrypto, Crypto (EraCrypto Sta
 
   parseJSON  _ = fail "Expected GovActionModal Object"
 
-instance (( era ~ StandardCrypto), (StandardCrypto ~ EraCrypto era), (Ledger.ConwayEraPParams StandardCrypto),(ShelleyLedgerEra StandardCrypto ~ StandardCrypto))
-    =>  FromJSON  (ProposalProcedureModal era) where
+instance (era ~ ConwayEra)=>FromJSON  (ProposalProcedureModal era) where
   parseJSON (A.Object o) = do
     deposit :: Integer <- o.:? "deposit" .!= 0
     (RewardAcntModal returnAddress) <- o .: "refundAccount"
@@ -699,11 +708,10 @@ instance (( era ~ StandardCrypto), (StandardCrypto ~ EraCrypto era), (Ledger.Con
           result <- o.:? key
           maybe onMissing mapper  result
 
-        prevGovActionId :: StrictMaybe (GovPurposeId purpose StandardCrypto)
+        prevGovActionId :: StrictMaybe (GovPurposeId purpose (ShelleyLedgerEra era))
         prevGovActionId =case mUtxoIdModal of
             Nothing -> SNothing
-            Just (UtxoIdModal ( prevGovTxId, TxIx prevGovTxIx)) -> SJust 
-                $ GovPurposeId $ GovActionId (toShelleyTxId prevGovTxId) (GovActionIx $ fromIntegral prevGovTxIx)
+            Just (UtxoIdModal ( prevGovTxId, TxIx prevGovTxIx)) -> SJust $ createPreviousGovernanceActionId prevGovTxId (fromIntegral prevGovTxIx)
         knownKeys = [
           "refundaccount","deposit","anchor","prevgovaction"
           ,"newconstitution","noconfidence","info","withdraw","hardfork","updatecommittee","parameterupdate"
@@ -718,7 +726,7 @@ instance (( era ~ StandardCrypto), (StandardCrypto ~ EraCrypto era), (Ledger.Con
         $ chain "withdraw" parseTreasuryWithdrawal
         $ chain "hardfork" (parseHardforkInitiation prevGovActionId)
         $ chain "updatecommittee" (parseUpdateCommittee prevGovActionId)
-        $ chain "parameterupdate" (parseParamUpdate prevGovActionId)
+        -- $ chain "parameterupdate" (parseParamUpdate prevGovActionId)
         $ pure InfoAction
 
 
@@ -772,13 +780,14 @@ instance (( era ~ StandardCrypto), (StandardCrypto ~ EraCrypto era), (Ledger.Con
 
   parseJSON  _ = fail "Expected GovActionModal Object"
 
-parseParamUpdate :: (EraCrypto ledgerera ~ StandardCrypto, ledgerera ~ StandardCrypto, Ledger.ConwayEraPParams ledgerera, EraCrypto StandardCrypto ~ StandardCrypto) => StrictMaybe   (GovPurposeId 'Ledger.PParamUpdatePurpose (EraCrypto ledgerera)) -> A.Value -> Parser (GovAction ledgerera)
+parseParamUpdate :: 
+  (ledgerera ~ StandardCrypto, Ledger.ConwayEraPParams ledgerera, EraCrypto StandardCrypto ~ StandardCrypto,  ShelleyLedgerEra StandardCrypto ~ StandardCrypto) =>
+  StrictMaybe   (GovPurposeId 'Ledger.PParamUpdatePurpose (ShelleyLedgerEra ledgerera)) -> A.Value -> Parser (GovAction ledgerera)
 parseParamUpdate prevGovAction v@(A.Object obj)= do
   let hmap=  A.fromHashMapText $  HM.mapKeys (T.toLower . A.toText ) $ toHashMap obj
   -- pUpdate<- parseJSON v
   let pParamUpdate=emptyPParamsUpdate
-      paramParser :: (FromJSON a , EraCrypto ledgerera ~ StandardCrypto,Ledger.ConwayEraPParams ledgerera,
-              EraPParams ledgerera) => T.Text
+      paramParser :: (FromJSON a) => T.Text
           -> Lens' (PParamsUpdate ledgerera) (StrictMaybe b)
           -> (a -> b)
           -> PParamsUpdate ledgerera
@@ -819,7 +828,7 @@ parseParamUpdate prevGovAction v@(A.Object obj)= do
           >>= paramParser "GovActionDeposit" Ledger.ppuGovActionDepositL id
           >>= paramParser "DRepDeposit" Ledger.ppuDRepDepositL id
           >>= paramParser "DRepActivity" Ledger.ppuDRepActivityL id
-  -- TODO: Replace SNOthing with actual policy
+  -- TODO: Replace SNothing with actual policy
   pure $ ParameterChange  prevGovAction  param SNothing
 
 parseParamUpdate _  _ = fail "Expected Protocol Parameter Update Object"

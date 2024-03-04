@@ -58,7 +58,7 @@ cCalculateFee :: TxModal -> ClientM Lovelace
 cEvaluateExUnits :: TxModal -> ClientM ExUnitsResponseModal
 ( cQueryPParams
     :<|> cQueryChainPoint
-    :<|> cQueryCurrentEra
+    :<|> cQueryCurrentEra  
     :<|> cQueryUtxos
     :<|> cQuerySystemStart
     :<|> cQueryGenesisParams
@@ -92,6 +92,7 @@ instance HasChainQueryAPI RemoteKuberConnection where
   kQueryChainPoint = liftHttpReq cQueryChainPoint <&> unWrap
   kQueryCurrentEra = liftHttpReq cQueryCurrentEra <&> unWrap
   kQueryGovState = error "TODO Cardano.Kuber.Http.Client.RemoteKuberConnection.queryGovState"
+  kQueryDRepDistribution = error "TODO Cardano.Kuber.Http.Client.RemoteKuberConnection.queryDRepDistribution"
 
 deserialiseTxToEra :: ( IsShelleyBasedEra era) =>InAnyCardanoEra Tx -> AsType era -> Either FrameworkError (Tx era)
 deserialiseTxToEra (InAnyCardanoEra ce tx) asType = do

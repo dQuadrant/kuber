@@ -95,8 +95,10 @@ import PlutusTx (ToData)
 import PlutusTx.IsData (toData)
 import qualified Cardano.Ledger.Conway.PParams
 
+
+
 instance
-  IsTxBuilderEra era=>
+  (IsTxBuilderEra era) =>
   FromJSON (TxBuilder_ era)
   where
   parseJSON (A.Object v) =
@@ -132,7 +134,7 @@ instance
         eraBasedParser sbera = case sbera of
           ShelleyBasedEraConway -> do
             -- TODO: Implement parsing of proposals
-            -- proposals <- v .?< "proposal"
+            proposals <- v .?< "proposal"
             certs <-
               ( do
                   res <- v .?< "certificate"
@@ -150,12 +152,7 @@ instance
           unless (null extraKeys) (fail $ "Invalid fields in txBuilder :" ++ show extraKeys)
           eraBasedParser bShelleyBasedEra
     where
-      commonParser ::
-        IsTxBuilderEra e1 =>
-        [Proposal e1] ->
-        [TxVote e1] ->
-        [Certificate e1] ->
-        Parser (TxBuilder_ e1)
+      
       commonParser proposals votes certs = do
         TxBuilder_
           <$> (v .?< "selection")
@@ -184,7 +181,7 @@ instance
               Just slot -> pure $ ValiditySlot $ SlotNo $ slot
               _ -> pure $ NoValidityTime
 
-      (.?<) :: FromJSON v => A.Object -> T.Text -> Parser [v]
+      (.?<) ::  (FromJSON v) => A.Object -> T.Text -> Parser [v]
       (.?<) obj key = do
         mVal1 <- obj .:? A.fromText key
         case mVal1 of
