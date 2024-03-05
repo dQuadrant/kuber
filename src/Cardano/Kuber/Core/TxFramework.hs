@@ -11,6 +11,7 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use tuple-section" #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# HLINT ignore "Use lambda-case" #-}
 module Cardano.Kuber.Core.TxFramework where
 
 
@@ -117,6 +118,7 @@ import qualified Cardano.Ledger.Credential as Ledger
 import qualified Data.OSet.Strict as OSet
 
 import Cardano.Ledger.CertState (DRepState(DRepState))
+import Cardano.Kuber.Data.Models (ProposalModal(ProposalModal))
 type BoolChange   = Bool
 type BoolFee = Bool
 type ChangeValue = Value
@@ -224,20 +226,23 @@ executeTxBuilder builder = do
         TxSelectableTxIn tis -> (a,Set.union i (Set.fromList tis),u)
         TxSelectableSkey skeys -> (Set.union a (Set.fromList $ map (\s ->  toAddressAny $ skeyToAddr s networkId ) skeys), i , u )
 
-    applyPrevGovActionIdNDeposit :: HasChainQueryAPI api => Maybe (ConwayEraOnwards era) -> PParams (ShelleyLedgerEra era) -> [Proposal era] ->  Kontract api w FrameworkError [Proposal era]
+    applyPrevGovActionIdNDeposit :: HasChainQueryAPI api => Maybe (ConwayEraOnwards era) -> PParams (ShelleyLedgerEra era) -> [TxProposal era] ->  Kontract api w FrameworkError [TxProposal era]
     applyPrevGovActionIdNDeposit beraOnward pParam props=
           case beraOnward of
             Just ConwayEraOnwardsConway ->  do
               govAction <- kQueryGovState
               let enactions =govAction ^. enactStateGovStateL
-              pure $ map
-                (updatePrevGovActionsNDeposit ConwayEraOnwardsConway enactions pParam)
-                props
+              pure $ map (
+                (TxProposal
+                  . updatePrevGovActionsNDeposit ConwayEraOnwardsConway enactions pParam )
+                  . (\x -> case x of
+                      TxProposal ppm -> ppm
+                      TxProposalScript ppm -> ppm )) props
             Nothing -> pure props
 
     updatePrevGovActionsNDeposit :: (Ledger.ConwayEraPParams
-                      (ShelleyLedgerEra era) ,EraCrypto (ShelleyLedgerEra era) ~ StandardCrypto) =>ConwayEraOnwards era ->  EnactState (ShelleyLedgerEra era) -> PParams (ShelleyLedgerEra era) -> Proposal era -> Proposal era
-    updatePrevGovActionsNDeposit eon enacedGovActions pParams (Proposal (ProposalProcedure (Coin co) ra ga an)) =let
+                      (ShelleyLedgerEra era) ,EraCrypto (ShelleyLedgerEra era) ~ StandardCrypto) =>ConwayEraOnwards era ->  EnactState (ShelleyLedgerEra era) -> PParams (ShelleyLedgerEra era) -> ProposalProcedureModal era -> ProposalProcedureModal era
+    updatePrevGovActionsNDeposit eon enacedGovActions pParams (ProposalProcedureModal (ProposalProcedure (Coin co) ra ga an)) =let
         newga = case ga of
           ParameterChange sm ppu govPol -> ParameterChange (updateMaybe sm (enacedGovActions ^. ensPrevPParamUpdateL)) ppu govPol
           HardForkInitiation sm pv -> HardForkInitiation (updateMaybe sm (enacedGovActions ^. ensPrevHardForkL)) pv
@@ -246,7 +251,7 @@ executeTxBuilder builder = do
           UpdateCommittee sm set map ui -> UpdateCommittee (updateMaybe sm (enacedGovActions ^. ensPrevCommitteeL )) set map ui
           NewConstitution sm con -> NewConstitution (updateMaybe sm (enacedGovActions ^. ensPrevConstitutionL )) con
           InfoAction -> ga
-      in Proposal (ProposalProcedure (if co ==0 then pParams ^. Ledger.ppGovActionDepositL else Coin co) ra newga an)
+      in ProposalProcedureModal (ProposalProcedure (if co ==0 then pParams ^. Ledger.ppGovActionDepositL else Coin co) ra newga an)
     updateMaybe SNothing v =v
     updateMaybe v _ = v
 
@@ -343,22 +348,28 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                     Nothing ->  Left $ FrameworkError BalancingError "No utxo available for collateral"
                     Just tis -> pure tis
                     )
-                  else pure [] 
-  txPropsoals <- ( if null proposals
-    then pure $ Nothing
-    else  inEonForEra (Left $ FrameworkError FeatureNotSupported "Proposals are not supported in Babbage era")
-           (\conwayOnward -> Right$ Just  $ Featured conwayOnward (TxProposalProcedures (OSet.fromSet (Set.fromList (map(\(Proposal pp)-> pp)proposals))) (BuildTxWith mempty)) )
-           txConwayEra
+                  else pure []
+  (txPropsoals,pDeposits) <- ( if null proposals
+    then pure (Nothing,zeroValue)
+    else case bConwayOnward of
+                     Nothing -> pure (Nothing,zeroValue)
+                     Just ceo -> do 
+                      val <- makeTxProposals ceo proposals
+                      pure (val,case ceo of { ConwayEraOnwardsConway -> totalProposalDeposits proposals } )
     )
 
-  txCerts <- ( if null certs
-    then pure $ TxCertificatesNone
+  (txCerts,cDeposits) <- ( if null certs
+    then pure $ (TxCertificatesNone,zeroValue)
     else inEonForEra
            (Left $ FrameworkError FeatureNotSupported "Certificate are not supported in Babbage era in Kuber")
-           (\conwayOnward -> Right $    Cardano.Api.Shelley.TxCertificates (conwayEraOnwardsToShelleyBasedEra conwayOnward) certs (BuildTxWith mempty))
-           txCardanoEra
+           (\conwayOnward -> pure $    (
+            Cardano.Api.Shelley.TxCertificates 
+              (conwayEraOnwardsToShelleyBasedEra conwayOnward) 
+              certs 
+              (BuildTxWith mempty),
+              totalCertDeposits certs) ) txCardanoEra
     )
-  let 
+  let
       toBuildTxWith v = map (second BuildTxWith)
       txBodyContentf1 ins  mints outs fee
           =(TxBodyContent {
@@ -403,7 +414,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
             then TxMintNone
             else  TxMintValue txMaryEraOnwards totalMintVal  (BuildTxWith (  Map.fromList $ parsedMints <> postResolved ))
       builderInputUtxo = foldMap resolvedInputUtxo resolvedInputs
-      fixedInputSum =   utxoMapSum builderInputUtxo <> totalMintVal <> negateValue totalDeposit
+      fixedInputSum =   utxoMapSum builderInputUtxo <> totalMintVal <> negateValue (cDeposits <> pDeposits)
 
       startingFee=case explicitFee of
         Nothing ->  Lovelace 400_000
@@ -566,9 +577,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
           ConwayAuthCommitteeHotKey cre cre' -> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
           ConwayResignCommitteeColdKey cre _anchor-> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
     txEra = babbageEraOnwardsToCardanoEra bBabbageOnward
-    txEraConway = conwayEraOnwardsToCardanoEra (fromJust bConwayOnward)
     txCardanoEra=txEra
-    txConwayEra = txEraConway
     txShelleyBasedEra = babbageEraOnwardsToShelleyBasedEra bBabbageOnward
     txMaryEraOnwards = babbageEraOnwardsToMaryEraOnwards bBabbageOnward
     txAlonzoEraOnwards = babbageEraOnwardsToAlonzoEraOnwards bBabbageOnward
@@ -918,11 +927,9 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     toSlot  =  timestampToSlot systemStart  eraHistory
     ledgerPParam = unLedgerProtocolParameters pParam
 
-    totalDeposit = lovelaceToValue $ Lovelace $  totalProposalDeposit + totalCertDeposit
+    totalCertDeposits ::[Certificate era] -> Value
+    totalCertDeposits certs= lovelaceToValue $ Lovelace $ sum (map certDeposit certs)
       where
-      proposalDeposit (Proposal (ProposalProcedure (Coin co) ra ga an)) = co
-      totalProposalDeposit = sum $ map  proposalDeposit proposals
-      totalCertDeposit = sum $ map certDeposit certs
       certDeposit cert =  case cert of
         ShelleyRelatedCertificate stbe stc -> 0
         ConwayCertificate ceo ctc -> case ctc of
@@ -943,6 +950,16 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       maybeToCoin sm = case sm of
             SNothing -> 0
             SJust (Coin co) -> co
+    totalProposalDeposits :: (Ledger.EraPParams (ShelleyLedgerEra era)) => [TxProposal era]  -> Value
+    totalProposalDeposits proposals = lovelaceToValue $ Lovelace $
+        sum (map  txProposalDeposit proposals)
+      where
+      proposalDeposit (ProposalProcedure (Coin co) ra ga an) = co
+
+      txProposalDeposit= \case
+          TxProposal (ProposalProcedureModal pp) -> proposalDeposit pp
+          TxProposalScript (ProposalProcedureModal pp) -> 0
+
 
 buildBlancedTx :: ([ParsedInput era] ->  TxMintValue BuildTx era -> [TxOut CtxTx era] -> Value -> TxBodyContent BuildTx era )
    -> [PartialInput era]
@@ -993,6 +1010,22 @@ fromLedgerKeyHash cera = case cera of
   ShelleyBasedEraBabbage -> fromLedgerKeyHash_
   ShelleyBasedEraConway -> fromLedgerKeyHash_
 
+
+
+    -- -> BuildTxWith build (Map (L.ProposalProcedure (ShelleyLedgerEra era)) (ScriptWitness WitCtxStake era))
+
+
+makeTxProposals ::  Eon eon => ConwayEraOnwards era  -> [TxProposal era] -> Either FrameworkError (Maybe (Featured eon era (TxProposalProcedures BuildTx era)))
+makeTxProposals  conOnward proposals=do
+  case conOnward of { v@ConwayEraOnwardsConway ->
+    let unProcedures= map (\x -> case x of
+          TxProposal (ProposalProcedureModal pp) ->  pp
+          TxProposalScript (ProposalProcedureModal pp) ->pp ) proposals
+    in
+    inEonForEra (Left $ FrameworkError FeatureNotSupported "Proposals are not supported in Babbage era")
+           (\conwayOnward -> Right$ Just  $ Featured conwayOnward (TxProposalProcedures (OSet.fromSet (Set.fromList ( unProcedures))) (BuildTxWith mempty)) )
+           (conwayEraOnwardsToCardanoEra conOnward)
+      }
 
 
 ledgerCredToPaymentKeyHash :: ShelleyBasedEra targetEra -> Credential r (EraCrypto (ShelleyLedgerEra targetEra)) -> Maybe (Hash PaymentKey)

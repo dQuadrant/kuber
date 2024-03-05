@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Cardano.Kuber.Core.TxBuilder where
 
@@ -59,6 +60,9 @@ import GHC.Generics (Generic)
 import PlutusLedgerApi.V2 (CurrencySymbol, PubKeyHash (PubKeyHash))
 import qualified PlutusLedgerApi.V2 as Plutus hiding (TxOut)
 import PlutusTx (ToData)
+import qualified Cardano.Ledger.Api as L
+
+
 
 newtype TxSimpleScript = TxSimpleScript SimpleScript
   deriving (Show)
@@ -191,6 +195,14 @@ maxValidity _ v2 = v2
 -- Multiple builder parts can be combined to construct full transaction specification
 type TxBuilder = (TxBuilder_ ConwayEra)
 
+newtype (L.EraPParams (ShelleyLedgerEra era)) =>  ProposalProcedureModal  era = 
+    ProposalProcedureModal (L.ProposalProcedure  (ShelleyLedgerEra era))
+
+
+data TxProposal era = TxProposal  (ProposalProcedureModal era)
+      | TxProposalScript (ProposalProcedureModal era) -- TODO: for future
+
+
 data TxBuilder_ era = TxBuilder_
   { txSelections :: [TxInputSelection era],
     txInputs :: [TxInput era],
@@ -201,13 +213,13 @@ data TxBuilder_ era = TxBuilder_
     txValidityEnd :: ValidityTimestamp,
     txMintData :: [TxMintData TxMintingScriptSource],
     txSignatures :: [TxSignature era],
-    txProposals :: [Proposal era],
+    txProposals :: [TxProposal era],
     txVotes :: [TxVote era],
     txCertificates :: [Certificate era],
     txFee :: Maybe Integer,
     txDefaultChangeAddr :: Maybe (AddressInEra era),
     txMetadata' :: Map Word64 Aeson.Value
-  } deriving (Show)
+  } 
 
 
 class IsShelleyBasedEra era => IsTxBuilderEra era where
@@ -281,18 +293,15 @@ txMints md = TxBuilder_ [] [] [] [] [] mempty mempty md [] [] [] [] Nothing Noth
 txOutput :: TxOutput (TxOutputContent ConwayEra) -> TxBuilder
 txOutput v = TxBuilder_ [] [] [] [v] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
 
-txCollateral' :: (TxCollateral ConwayEra) -> TxBuilder
+txCollateral' :: TxCollateral ConwayEra -> TxBuilder
 txCollateral' v = TxBuilder_ [] [] [] [] [v] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
 
-txSignature :: (TxSignature ConwayEra) -> TxBuilder
+txSignature :: TxSignature ConwayEra -> TxBuilder
 txSignature v = TxBuilder_ [] [] [] [] [] mempty mempty [] [v] [] [] [] Nothing Nothing Map.empty
 
-txReplacePoposalsNCert ::
-  (TxBuilder_ era) ->
-  [ Proposal era] ->
-  [Certificate era] ->
-  (TxBuilder_ era)
-txReplacePoposalsNCert (TxBuilder_ a b c d e f g h i j k l m n o) ps cs = TxBuilder_ a b c d e f g h i ps k cs m n o
+
+txReplacePoposalsNCert :: TxBuilder_ era -> [TxProposal era] -> [Certificate era] -> TxBuilder_ era
+txReplacePoposalsNCert (TxBuilder_ a b c d e f g h i _ k _ m n o) ps cs = TxBuilder_ a b c d e f g h i ps k cs m n o
 
 -- Transaction validity
 
@@ -321,10 +330,10 @@ txValidUntilSlot :: SlotNo -> TxBuilder
 txValidUntilSlot end = TxBuilder_ [] [] [] [] [] mempty (ValiditySlot end) [] [] [] [] [] Nothing Nothing Map.empty
 
 -- governanceProposals
-txProposal ::
-  Proposal ConwayEra ->
-  TxBuilder
-txProposal p = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [p] [] [] Nothing Nothing Map.empty
+-- txProposal ::
+--   Proposal ConwayEra ->
+--   TxBuilder
+-- txProposal p = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [p] [] [] Nothing Nothing Map.empty
 
 -- voting
 txVote :: TxVote ConwayEra -> TxBuilder

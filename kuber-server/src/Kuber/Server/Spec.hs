@@ -122,9 +122,6 @@ appWithBackenAndEra :: (HasChainQueryAPI a,
     HasLocalNodeAPI a, 
     HasSubmitApi a,
     HasKuberAPI a
-    -- Cardano.Ledger.Core.Era.EraCrypto ConwayEra ~ Cardano.Ledger.Crypto.StandardCrypto,
-    -- Cardano.Api.Eon.ShelleyBasedEra.ShelleyLedgerEra Cardano.Ledger.Core.Era.StandardCrypto ~ Cardano.Ledger.Core.Era.StandardCrypto,
-    -- Cardano.Ledger.Core.Era.EraCrypto Cardano.Ledger.Core.Era.StandardCrypto ~ Cardano.Ledger.Core.Era.StandardCrypto
     ) => a -> BabbageEraOnwards era-> Application
 appWithBackenAndEra dcinfo beraonward = rewriteRoot (T.pack "index.html") $ static $ cors (\r ->  Just corsMiddlewarePolicy ) $ case beraonward of
   BabbageEraOnwardsBabbage -> serve @(KubeServer BabbageEra) Proxy  $ kuberApiServer BabbageEraOnwardsBabbage dcinfo

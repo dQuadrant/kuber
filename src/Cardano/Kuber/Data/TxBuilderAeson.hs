@@ -33,7 +33,7 @@ import Cardano.Binary (serializeEncoding)
 import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable (toConsoleText, toConsoleTextNoPrefix))
 import Cardano.Kuber.Core.TxBuilder
 import Cardano.Kuber.Data.EraUpdate (updateAddressEra)
-import Cardano.Kuber.Data.Models (CertificateModal (CertificateModal), GovActionModal (GovActionModal), ProposalModal (ProposalModal), ProposalProcedureModal (ProposalProcedureModal), Wrapper (unWrap), unAddressModal)
+import Cardano.Kuber.Data.Models (CertificateModal (CertificateModal), GovActionModal (GovActionModal), ProposalModal (ProposalModal), Wrapper (unWrap), unAddressModal)
 import Cardano.Kuber.Data.Parsers (anyScriptParser, parseAddress, parseAddressBech32, parseAddressBinary, parseAddressRaw, parseAnyScript, parseAssetId, parseAssetNQuantity, parseAssetName, parseCbor, parseCborHex, parseHexString, parseScriptData, parseSignKey, parseTxIn, parseUtxo, parseUtxoCbor, parseValueText, parseValueToAsset, scriptDataParser, txInParser, txinOrUtxoParser)
 import Cardano.Kuber.Error
 import Cardano.Kuber.Util
@@ -134,14 +134,17 @@ instance
         eraBasedParser sbera = case sbera of
           ShelleyBasedEraConway -> do
             -- TODO: Implement parsing of proposals
-            proposals <- v .?< "proposal"
+            proposals <- (do
+                res <- v .?< "proposal" 
+                pure $ map (\(ppm@(ProposalProcedureModal m)) -> (TxProposal ppm )) res
+              )
             certs <-
               ( do
                   res <- v .?< "certificate"
                   pure $ map (\(CertificateModal m) -> m) res
                 )
             votes <- v .?< "vote"
-            commonParser [] votes certs
+            commonParser proposals votes certs
           ShelleyBasedEraBabbage -> do
             requireAbsent "certificate" $ fail ".certificate[s] not supported. Kuber is in Babbage era"
             requireAbsent "proposal" $ fail ".proposal[s] not supported. Kuber is in Babbage era"
@@ -152,7 +155,8 @@ instance
           unless (null extraKeys) (fail $ "Invalid fields in txBuilder :" ++ show extraKeys)
           eraBasedParser bShelleyBasedEra
     where
-      
+      commonParser :: [TxProposal era]
+        -> [TxVote era] -> [Certificate era] -> Parser (TxBuilder_ era)  
       commonParser proposals votes certs = do
         TxBuilder_
           <$> (v .?< "selection")
@@ -285,7 +289,7 @@ instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
           <+> "validityStart" `appendValidity` validityStart
           <+> "validityEnd" `appendValidity` validityEnd
           <+> "signatures" >= signatures
-          <+> "proposals" >= map (translateProposal bConwayOnward) proposals
+          -- <+> "proposals" >= map (translateProposal bConwayOnward) proposals --todo
           <+> "votes" >= map (transformVote bShelleyBasedEra) votes
           <+> "certificates" >= map (transformCerts bShelleyBasedEra) certs
           <+> "fee" >= fee
@@ -299,9 +303,10 @@ instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
       (<+>) f v = f v
 
 translateProposal :: Maybe (ConwayEraOnwards era) -> Proposal era -> A.Value
-translateProposal sbera (CApi.Proposal proposal) = case sbera of
-  Nothing -> A.Null
-  Just ceo -> case ceo of ConwayEraOnwardsConway -> toJSON $ ProposalProcedureModal @ConwayEra proposal
+translateProposal sbera (CApi.Proposal proposal) = error "sad" -- TODO
+  -- case sbera of
+  --   Nothing -> A.Null
+  --   Just ceo -> case ceo of ConwayEraOnwardsConway -> toJSON $ ProposalProcedureModal @ConwayEra proposal
 
 transformCerts :: ShelleyBasedEra era -> Certificate era -> A.Value
 transformCerts sbera c = case sbera of

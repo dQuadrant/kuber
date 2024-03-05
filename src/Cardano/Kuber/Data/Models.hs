@@ -88,7 +88,7 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Binary.Plain (serializeAsHexText)
 import Cardano.Ledger.Credential (parseCredential)
-import Cardano.Kuber.Core.TxBuilder (TxVote (..), TxVoteL (..), IsTxBuilderEra (bAsEra, bCardanoEra, bBabbageOnward))
+import Cardano.Kuber.Core.TxBuilder (TxVote (..), TxVoteL (..), IsTxBuilderEra (bAsEra, bCardanoEra, bBabbageOnward), ProposalProcedureModal (..))
 import Data.Functor.Identity (Identity)
 import qualified Data.Maybe
 import qualified Cardano.Ledger.Api.Era as L
@@ -127,7 +127,6 @@ newtype ConstitutionModal era  = ConstitutionModal (Constitution era)
 -- ConwaEra~ (ShelleyLedgerEra (Ledger.ConwayEra StandardCrypto))
 
 newtype AnchorModal era = AnchorModal (Anchor era)
-newtype ProposalProcedureModal  era = ProposalProcedureModal (ProposalProcedure  (ShelleyLedgerEra era))
 -- newtype LProposalProcedureModal era  = LProposalProcedureModal (ProposalProcedure era)
 
 -- ProposalProcedureModal (CAPI.ConwayEra) => ProposalProcedudure (ShelleyLedgerEra ( ShelleyLedgerEra (L.ConwayEra StandardCrypto) ))
