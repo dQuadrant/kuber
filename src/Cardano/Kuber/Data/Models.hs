@@ -725,7 +725,7 @@ instance (era ~ ConwayEra)=>FromJSON  (ProposalProcedureModal era) where
         $ chain "withdraw" parseTreasuryWithdrawal
         $ chain "hardfork" (parseHardforkInitiation prevGovActionId)
         $ chain "updatecommittee" (parseUpdateCommittee prevGovActionId)
-        -- $ chain "parameterupdate" (parseParamUpdate prevGovActionId)
+        $ chain "parameterupdate" (parseParamUpdate prevGovActionId)
         $ pure InfoAction
 
 
@@ -779,9 +779,11 @@ instance (era ~ ConwayEra)=>FromJSON  (ProposalProcedureModal era) where
 
   parseJSON  _ = fail "Expected GovActionModal Object"
 
+
+
 parseParamUpdate :: 
-  (ledgerera ~ StandardCrypto, Ledger.ConwayEraPParams ledgerera, EraCrypto StandardCrypto ~ StandardCrypto,  ShelleyLedgerEra StandardCrypto ~ StandardCrypto) =>
-  StrictMaybe   (GovPurposeId 'Ledger.PParamUpdatePurpose (ShelleyLedgerEra ledgerera)) -> A.Value -> Parser (GovAction ledgerera)
+  (Ledger.ConwayEraPParams ledgerera) =>
+  StrictMaybe   (GovPurposeId 'Ledger.PParamUpdatePurpose  ledgerera) -> A.Value -> Parser (GovAction ledgerera)
 parseParamUpdate prevGovAction v@(A.Object obj)= do
   let hmap=  A.fromHashMapText $  HM.mapKeys (T.toLower . A.toText ) $ toHashMap obj
   -- pUpdate<- parseJSON v

@@ -289,7 +289,7 @@ instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
           <+> "validityStart" `appendValidity` validityStart
           <+> "validityEnd" `appendValidity` validityEnd
           <+> "signatures" >= signatures
-          -- <+> "proposals" >= map (translateProposal bConwayOnward) proposals --todo
+          <+> "proposals" >= map (translateProposal bConwayOnward) proposals --todo
           <+> "votes" >= map (transformVote bShelleyBasedEra) votes
           <+> "certificates" >= map (transformCerts bShelleyBasedEra) certs
           <+> "fee" >= fee
@@ -302,11 +302,11 @@ instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
       infixr 6 <+>
       (<+>) f v = f v
 
-translateProposal :: Maybe (ConwayEraOnwards era) -> Proposal era -> A.Value
-translateProposal sbera (CApi.Proposal proposal) = error "sad" -- TODO
-  -- case sbera of
-  --   Nothing -> A.Null
-  --   Just ceo -> case ceo of ConwayEraOnwardsConway -> toJSON $ ProposalProcedureModal @ConwayEra proposal
+translateProposal :: Maybe (ConwayEraOnwards era) -> TxProposal era -> A.Value
+translateProposal sbera (TxProposal proposal) = 
+  case sbera of
+    Nothing -> A.Null
+    Just ceo -> case ceo of ConwayEraOnwardsConway -> toJSON $  proposal
 
 transformCerts :: ShelleyBasedEra era -> Certificate era -> A.Value
 transformCerts sbera c = case sbera of
