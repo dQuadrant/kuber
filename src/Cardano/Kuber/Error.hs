@@ -111,7 +111,7 @@ throwFrameworkError = \case
 
 
 fromScriptExecutionError :: ScriptExecutionError -> TxBody era -> FrameworkError
-fromScriptExecutionError see  txbody=  case see of
+fromScriptExecutionError see  txbody= case see of
                 ScriptErrorMissingTxIn ti -> makeErr  ("Input Missing : " ++ T.unpack (renderTxIn ti))
                 ScriptErrorTxInWithoutDatum ti -> makeErr  ("Input doesn't have datum " ++  T.unpack (renderTxIn ti))
                 ScriptErrorWrongDatum ha ->  makeErr  ("Worng datum provided for hash " ++  BS8.unpack (serialiseToRawBytesHex ha))
