@@ -31,16 +31,19 @@ genSomeWalelt netid = do
         value <- genVal
         txid <- genTxIn
         address <- element addresses
-        pure (txid, TxOut address (TxOutValue MaryEraOnwardsConway value) TxOutDatumNone ReferenceScriptNone)
+        pure (txid, TxOut address (TxOutValueShelleyBased ShelleyBasedEraConway value) TxOutDatumNone ReferenceScriptNone)
+      genAdaUtxo genVal = do
+        value <- genVal
+        txid <- genTxIn
+        address <- element addresses
+        pure (txid, TxOut address (TxOutValueByron value) TxOutDatumNone ReferenceScriptNone)
       genAdaVal = do
-        amount <- Gen.integral (Range.linear 2_000_000 3_000_000_000_000) <&> Quantity
-        pure $ valueFromList [(AdaAssetId, amount)]
+        Gen.integral (Range.linear 2_000_000 3_000_000_000_000) <&> Lovelace
       genCollateralVal = do
-        amount <- Gen.integral (Range.linear 5_000_000 10_000_000) <&> Quantity
-        pure $ valueFromList [(AdaAssetId, amount)]
-  utxos <- Gen.list (Range.linear 4 10) (genutxo genValueForTxOut)
-  adaUtxos <- Gen.list (Range.linear 4 10) (genutxo genAdaVal)
-  collateralUtxo <- genutxo genCollateralVal
+        Gen.integral (Range.linear 5_000_000 10_000_000) <&> Lovelace
+  utxos <- Gen.list (Range.linear 4 10) (genutxo (genValueForTxOut ShelleyBasedEraConway))
+  adaUtxos <- Gen.list (Range.linear 4 10) (genAdaUtxo genAdaVal)
+  collateralUtxo <- genAdaUtxo genCollateralVal
   pure $ txWalletUtxos (UTxO . Map.fromList $ collateralUtxo : utxos <> adaUtxos)
 
 chainApiNetworkIdTest :: (HasChainQueryAPI api) => Kontract api w FrameworkError NetworkId

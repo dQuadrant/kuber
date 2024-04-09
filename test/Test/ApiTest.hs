@@ -1,13 +1,22 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Test.ApiTest where
 
+import Cardano.Api.Shelley
 import Cardano.Kuber.Api
+import Cardano.Ledger.Alonzo.Scripts hiding ()
+import Cardano.Ledger.Alonzo.Tx
+import Cardano.Ledger.Alonzo.TxWits
+import qualified Data.Map as Map
+import qualified Debug.Trace as Debug
 import Test.ChainApiTests (test_kGetNetworkId, test_kQueryChainPoint, test_kQueryCurrentEra, test_kQueryGenesisParams, test_kQueryProtocolParams, test_kQuerySystemStart, test_kQueryUtxoByAddress, test_kQueryUtxoByTxin)
 import Test.KuberApiTests
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertFailure, testCase)
+import Text.ParserCombinators.ReadP
+import qualified Text.ParserCombinators.ReadP as RP
 
 remoteKuberConnection :: IO RemoteKuberConnection
 remoteKuberConnection = do
@@ -245,3 +254,70 @@ testBuildTxSupportDatumInAuxData =
           Left fe -> assertFailure $ "Test Case Failed: " ++ show fe
           Right tx -> pure ()
     ]
+
+testExUnits :: TestTree
+testExUnits =
+  testGroup
+    "should pass"
+    [ testCase "Remote" $ do
+        maybeFe <- evaluateFromRemoteKuber test_ex_units
+        case maybeFe of
+          Left fe -> assertFailure $ "Test Case Failed: " ++ show fe
+          Right tx -> pure (),
+      testCase "Local" $ do
+        maybeFe <- evaluateFromLocalKuber test_ex_units
+        case maybeFe of
+          Left fe -> assertFailure $ "Test Case Failed: " ++ show fe
+          Right tx -> do
+            let mem_steps = memsAndSteps tx
+                (memSum, stepsSum) = sumTuples mem_steps
+            Debug.traceM("memSum: " ++ show memSum ++ " stepsum: " ++ show stepsSum)
+            let checkExceed
+                  | memSum > 14000000 =
+                    error $
+                      "\n" ++ "Mem has exceeded by " ++ show (memSum - 14000000)
+                  | stepsSum > 10000000000 =
+                    error $
+                      "\n" ++ "step has exceeded by  " ++ show (stepsSum - 10000000000)
+                  | otherwise = mem_steps
+            case checkExceed of
+              [(-1,-1)] -> error "failed"
+              memsAndSteps -> pure ()
+    ]
+
+sumTuples :: [(Integer, Integer)] -> (Integer, Integer)
+sumTuples = foldr (\x (mem, steps) -> case x of (n, i) -> (mem + n, steps + i)) (0, 0)
+
+memsAndSteps txBabbage = case txBabbage of
+  ShelleyTx sbe tx -> case tx of
+    AlonzoTx _ wit _ _ -> case wit of
+      AlonzoTxWits a b c d e ->
+        Prelude.map
+          ( ( \(WrapExUnits eu) -> case extractValues (show eu) of
+                Nothing -> error "could not parse string to ex-units"
+                Just x1 -> x1
+            )
+              . (snd . snd)
+          )
+          (Map.toList (unRedeemers e))
+
+extractValues :: String -> Maybe (Integer, Integer)
+extractValues str =
+  case readP_to_S parseExUnits' str of
+    [(exUnits, _)] -> Just (exUnitsMem'' exUnits, exUnitsSteps'' exUnits)
+    _ -> Nothing
+
+data ExUnits'' = ExUnits''
+  { exUnitsMem'' :: Integer,
+    exUnitsSteps'' :: Integer
+  }
+  deriving (Show)
+
+parseExUnits' :: ReadP ExUnits''
+parseExUnits' = do
+  _ <- RP.string "ExUnits' {exUnitsMem' = "
+  mem <- read <$> munch1 (`elem` ['0' .. '9'])
+  _ <- RP.string ", exUnitsSteps' = "
+  steps <- read <$> munch1 (`elem` ['0' .. '9'])
+  _ <- RP.string "}"
+  return $ ExUnits'' mem steps
