@@ -453,7 +453,7 @@ instance  (StandardCrypto ~ crypto) => FromJSON (RewardAcntModal crypto) where
 
   parseJSON _ = fail "Expected stake address  bech32 or cbor or keyhash hex "
 
-instance (StandardCrypto ~crypto) => ToJSON (RewardAcntModal crypto) where
+instance (StandardCrypto ~ crypto) => ToJSON (RewardAcntModal crypto) where
     toJSON (RewardAcntModal ra) = A.String $ serialiseAddress $ fromShelleyStakeAddr ra
 
 parseRewardAcntTxt txt =do
