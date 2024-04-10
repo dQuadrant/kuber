@@ -3,6 +3,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Kuber.Utility.Misc where
 
@@ -34,16 +36,14 @@ import qualified Data.Text as T
 import Data.Time.Clock.POSIX (POSIXTime, posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import qualified Data.Vector as Vector
 import Data.Word (Word64)
-import qualified Debug.Trace as Debug
 import Ouroboros.Consensus.HardFork.History (unsafeExtendSafeZone)
 import qualified Ouroboros.Consensus.HardFork.History.Qry as Qry
-import qualified PlutusLedgerApi.V1 as Plutus
-import qualified Cardano.Ledger.Alonzo.Core as Ledger
 import Control.Lens.Getter ((^.))
-import Cardano.Ledger.Mary.Value as L (MaryValue (..), MultiAsset (MultiAsset), PolicyID (PolicyID))
-import qualified Cardano.Ledger.Api.Era as Ledger
 import qualified Cardano.Ledger.Api as Leger
-import Cardano.Ledger.Api (mintTxBodyL)
+import Cardano.Ledger.Mary.Value
+import Cardano.Ledger.Api (MaryEraTxBody(..))
+import qualified Cardano.Ledger.Binary.Version
+import qualified Cardano.Ledger.Api as Ledger
 
 
 calculateTxoutMinLovelaceOrErr :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Lovelace
@@ -132,13 +132,14 @@ evaluateExUnitMapWithUtxos = evaluateExUnitMapWithUtxos_ cardanoEra
   where
     evaluateExUnitMapWithUtxos_ :: CardanoEra era -> SystemStart -> LedgerEpochInfo -> LedgerProtocolParameters era -> UTxO era -> TxBody era -> Either      FrameworkError      (Map TxIn ExecutionUnits, Map PolicyId ExecutionUnits)
     evaluateExUnitMapWithUtxos_ bera = case bera of 
-      BabbageEra -> evaluateExUnitMapWithUtxos__ BabbageEra
-      ConwayEra -> evaluateExUnitMapWithUtxos__ ConwayEra
+      BabbageEra -> evaluateExUnitMapWithUtxos__ ShelleyBasedEraBabbage
+      ConwayEra -> evaluateExUnitMapWithUtxos__ ShelleyBasedEraConway
       _ -> (\ _ _ _ _ _ ->Left (FrameworkError FeatureNotSupported "not in era"))
+
 
 evaluateExUnitMapWithUtxos__ era systemStart epochInfo protocolParams usedUtxos txbody = do
   exMap <- case evaluateTransactionExecutionUnits
-    era
+    (shelleyBasedToCardanoEra era)
     systemStart
     epochInfo
     protocolParams
@@ -151,8 +152,8 @@ evaluateExUnitMapWithUtxos__ era systemStart epochInfo protocolParams usedUtxos 
   pure $ bimap Map.fromList Map.fromList $ partitionEithers eithers
   where
     lTxBody = case txbody of ShelleyTxBody sbe tb scs tbsd m_ad tsv ->  tb
-    inputList = case txbody of ShelleyTxBody sbe tb scs tbsd m_ad tsv -> Set.toList (txins tb)
-    policyList  =  case txbody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> case  tb ^. mintTxBodyL of { MultiAsset  mp ->  map  (\(PolicyID sh) -> PolicyId $ fromShelleyScriptHash sh )  $ Set.toAscList$  Map.keysSet mp } }
+    inputList = case txbody of ShelleyTxBody sbe tb scs tbsd m_ad tsv -> Set.toList (tb ^. Ledger.inputsTxBodyL)
+    policyList :: [PolicyId]  =  case txbody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> case  tb ^. mintTxBodyL of { MultiAsset  mp ->  map  (\(PolicyID sh) -> PolicyId $ fromShelleyScriptHash sh )  $ Set.toAscList$  Map.keysSet mp } }
 
     inputLookup = Map.fromAscList $ zip [0 ..] inputList
 
@@ -163,11 +164,12 @@ evaluateExUnitMapWithUtxos__ era systemStart epochInfo protocolParams usedUtxos 
       ScriptWitnessIndexCertificate wo -> Left $ FrameworkError FeatureNotSupported "Witness for Certificates is not supported"
       ScriptWitnessIndexWithdrawal wo -> Left $ FrameworkError FeatureNotSupported "Plutus script for withdrawl is not supported"
 
+    unEitherExUnits :: (ExecutionUnits -> (a, ExecutionUnits))
+      -> Either ScriptExecutionError ExecutionUnits
+      -> Either FrameworkError (a, ExecutionUnits)
     unEitherExUnits f v = case v of
       Right e -> pure $ f e
-      Left e -> case e of
-        ScriptErrorEvaluationFailed ee txts -> Left (FrameworkError PlutusScriptError (T.unpack $ T.intercalate (T.pack ", ") txts))
-        _ -> Left (FrameworkError ExUnitCalculationError (show e))
+      Left e -> Left $ fromScriptExecutionError e txbody
 
     transformIn (txIn, wit) exUnit =
       ( txIn,
