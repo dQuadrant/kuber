@@ -98,11 +98,10 @@ import Cardano.Ledger.Api
       ppMinUTxOValueL,
       ProtVerAtMost,
       EnactState,
-      GovAction(..), RewardAcnt (RewardAcnt) )
+      GovAction(..), RewardAccount (RewardAcnt) )
 import Cardano.Api.Ledger (ConwayTxCert(..), ConwayDelegCert (..), PoolCert (..), ConwayGovCert (..), PoolParams (PoolParams), StrictMaybe (..), ShelleyTxCert (..), EraCrypto, Coin (unCoin), GovState, StandardCrypto, PParams (PParams), KeyRole (DRepRole), Anchor (Anchor), Credential (ScriptHashObj))
 import qualified Cardano.Ledger.Api as Ledger
 import qualified Cardano.Api.Shelley as CAPI
-import qualified Cardano.Ledger.Shelley.API.Wallet as Ledger (evaluateTransactionFee)
 import qualified Cardano.Ledger.Coin as Ledger
 import Cardano.Crypto.DSIGN
 import Cardano.Crypto.Hash (Blake2b_224)
@@ -111,7 +110,7 @@ import Cardano.Kuber.Data.EraUpdate
 import Cardano.Ledger.Api.PParams (ppKeyDepositL)
 import Cardano.Ledger.Conway.PParams (ppDRepDepositL)
 import qualified Cardano.Ledger.Conway.PParams as Ledger
-import Cardano.Ledger.Conway.Governance (enactStateGovStateL, ensCurPParamsL, ensPrevPParamUpdateL, ensPrevCommitteeL, ensPrevConstitutionL, ensPrevHardForkL)
+import Cardano.Ledger.Conway.Governance ( ensCurPParamsL, ensPrevPParamUpdateL, ensPrevCommitteeL, ensPrevConstitutionL, ensPrevHardForkL, govStatePrevGovActionIds, EraGov (prevPParamsGovStateL), ConwayEraGov (proposalsGovStateL), pRootsL, PRoot (prRoot))
 import Cardano.Kuber.Data.TxBuilderAeson
 import Control.Monad.IO.Class (liftIO)
 import qualified Cardano.Ledger.Credential as Ledger
@@ -229,27 +228,30 @@ executeTxBuilder builder = do
     applyPrevGovActionIdNDeposit :: HasChainQueryAPI api => Maybe (ConwayEraOnwards era) -> PParams (ShelleyLedgerEra era) -> [TxProposal era] ->  Kontract api w FrameworkError [TxProposal era]
     applyPrevGovActionIdNDeposit beraOnward pParam props=
           case beraOnward of
-            Just ConwayEraOnwardsConway ->  do
+            Just v@ConwayEraOnwardsConway ->  do
               govAction <- kQueryGovState
-              let enactions =govAction ^. enactStateGovStateL
+              let enactions =  govAction ^. proposalsGovStateL ^. pRootsL
               pure $ map (
                 (TxProposal
-                  . updatePrevGovActionsNDeposit ConwayEraOnwardsConway enactions pParam )
+                  . updatePrevGovActionsNDeposit v enactions pParam )
                   . (\x -> case x of
                       TxProposal ppm -> ppm
                       TxProposalScript ppm -> ppm )) props
             Nothing -> pure props
 
-    updatePrevGovActionsNDeposit :: (Ledger.ConwayEraPParams
-                      (ShelleyLedgerEra era) ,EraCrypto (ShelleyLedgerEra era) ~ StandardCrypto) =>ConwayEraOnwards era ->  EnactState (ShelleyLedgerEra era) -> PParams (ShelleyLedgerEra era) -> ProposalProcedureModal era -> ProposalProcedureModal era
+
     updatePrevGovActionsNDeposit eon enacedGovActions pParams (ProposalProcedureModal (ProposalProcedure (Coin co) ra ga an)) =let
+        prevParamUpdate =  prRoot $ Ledger.grPParamUpdate enacedGovActions
+        prevHardfork = prRoot $ Ledger.grHardFork enacedGovActions
+        prevUpdateCommitted = prRoot $ Ledger.grCommittee enacedGovActions
+        prevConstitution = prRoot $ Ledger.grConstitution enacedGovActions
         newga = case ga of
-          ParameterChange sm ppu govPol -> ParameterChange (updateMaybe sm (enacedGovActions ^. ensPrevPParamUpdateL)) ppu govPol
-          HardForkInitiation sm pv -> HardForkInitiation (updateMaybe sm (enacedGovActions ^. ensPrevHardForkL)) pv
+          ParameterChange sm ppu govPol -> ParameterChange (updateMaybe sm prevParamUpdate) ppu govPol
+          HardForkInitiation sm pv -> HardForkInitiation (updateMaybe sm (prevHardfork)) pv
           TreasuryWithdrawals map _ -> ga
-          NoConfidence sm ->  NoConfidence (updateMaybe sm (enacedGovActions ^. ensPrevCommitteeL))
-          UpdateCommittee sm set map ui -> UpdateCommittee (updateMaybe sm (enacedGovActions ^. ensPrevCommitteeL )) set map ui
-          NewConstitution sm con -> NewConstitution (updateMaybe sm (enacedGovActions ^. ensPrevConstitutionL )) con
+          NoConfidence sm ->  NoConfidence (updateMaybe sm (prevUpdateCommitted))
+          UpdateCommittee sm set map ui -> UpdateCommittee (updateMaybe sm (prevUpdateCommitted)) set map ui
+          NewConstitution sm con -> NewConstitution (updateMaybe sm prevConstitution) con
           InfoAction -> ga
       in ProposalProcedureModal (ProposalProcedure (if co ==0 then pParams ^. Ledger.ppGovActionDepositL else Coin co) ra newga an)
     updateMaybe SNothing v =v
@@ -281,7 +283,7 @@ executeTxBuilder builder = do
                 SNothing -> do
                   result <- kQueryStakeDeposit (Set.singleton (fromShelleyStakeCredential cre) )
                   case Map.toList result of
-                    [(cred,Lovelace deposit)]->  pure $ ConwayUnRegCert cre (SJust  $ Coin deposit)
+                    [(cred, deposit)]->  pure $ ConwayUnRegCert cre (SJust  $  deposit)
                     _ -> kError TxValidationError $ "Stake address is not registered : " ++ show cre
             ConwayDelegCert cre del -> pure $ ConwayDelegCert cre del
             ConwayRegDelegCert cre del co -> pure $ ConwayRegDelegCert cre del (pParam ^.ppKeyDepositL )) <&> ConwayTxCertDeleg
@@ -417,8 +419,8 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       fixedInputSum =   utxoMapSum builderInputUtxo <> totalMintVal <> negateValue (cDeposits <> pDeposits)
 
       startingFee=case explicitFee of
-        Nothing ->  Lovelace 400_000
-        Just n -> Lovelace n
+        Nothing ->  Coin 400_000
+        Just n -> Coin n
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin builderInputUtxo) spendableUtxos
       calculator exmap1 exmap2 onMissing=
         computeBody bBabbageOnward pParam
@@ -455,7 +457,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                                         )
       makeNewFee (a,b,fee) =case explicitFee of
         Nothing -> (a,b,fee)
-        Just n -> (a,b,Lovelace n)
+        Just n -> (a,b,Coin n)
   iteratedBalancing  10 txBody1 fee1 <&> respond
 
   where
@@ -661,7 +663,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         canBeCollateral :: (IsShelleyBasedEra era) => (TxIn  , TxOut ctx era) -> Maybe (TxIn, Hash PaymentKey, Integer)
         canBeCollateral v@(ti, to@(TxOut addr val mDatumHash _)) = case mDatumHash of
                               TxOutDatumNone -> case val of
-                                TxOutValueByron (Lovelace v) ->  addressInEraToPaymentKeyHash  addr >>= (\pkh -> Just (ti,pkh,v))
+                                TxOutValueByron ( v) ->  addressInEraToPaymentKeyHash  addr >>= (\pkh -> Just (ti,pkh,unCoin v))
                                 TxOutValueShelleyBased sbe va ->  let _list = valueToList (fromLedgerValue sbe va)
                                                     in if length _list == 1
                                                         then  case addressInEraToPaymentKeyHash  addr of
@@ -774,7 +776,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         -- - then the ones with higher lovelace amount come
         sortingFunc :: (TxIn,TxOut CtxUTxO era) -> (TxIn,TxOut CtxUTxO era)-> Ordering
         sortingFunc (_,TxOut _ (TxOutValueByron v1) _ _) (_, TxOut _ (TxOutValueByron v2)  _ _)         = v1 `compare` v2
-        sortingFunc (_,TxOut _ (TxOutValueByron (Lovelace v))  _ _) (_, TxOut _ (TxOutValueShelleyBased _ v2) _ _) = LT
+        sortingFunc (_,TxOut _ (TxOutValueByron ( v))  _ _) (_, TxOut _ (TxOutValueShelleyBased _ v2) _ _) = LT
         sortingFunc (_,TxOut _ _ _ (ReferenceScript _ _)) (_, _)                                      =  LT
         sortingFunc (_,TxOut _ _ (TxOutDatumInline _ _) _) (_, _)                                     =  LT
         sortingFunc (_,_) (_, TxOut _ _ _ (ReferenceScript _ _))                                      =  GT
@@ -928,7 +930,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     ledgerPParam = unLedgerProtocolParameters pParam
 
     totalCertDeposits ::[Certificate era] -> Value
-    totalCertDeposits certs= lovelaceToValue $ Lovelace $ sum (map certDeposit certs)
+    totalCertDeposits certs= lovelaceToValue $ Coin $ sum (map certDeposit certs)
       where
       certDeposit cert =  case cert of
         ShelleyRelatedCertificate stbe stc -> 0
@@ -951,7 +953,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
             SNothing -> 0
             SJust (Coin co) -> co
     totalProposalDeposits :: (Ledger.EraPParams (ShelleyLedgerEra era)) => [TxProposal era]  -> Value
-    totalProposalDeposits proposals = lovelaceToValue $ Lovelace $
+    totalProposalDeposits proposals = lovelaceToValue $ Coin $
         sum (map  txProposalDeposit proposals)
       where
       proposalDeposit (ProposalProcedure (Coin co) ra ga an) = co
@@ -1036,15 +1038,15 @@ ledgerCredToPaymentKeyHash sbera cred = case cred of
 
 computeBody ::  (IsShelleyBasedEra era, IsTxBuilderEra era) =>  BabbageEraOnwards era
       -> LedgerProtocolParameters era
-      ->( [TxIn] -> [TxOut CtxTx era]-> Lovelace->  Either FrameworkError (TxBodyContent BuildTx era))
+      ->( [TxIn] -> [TxOut CtxTx era]-> Coin->  Either FrameworkError (TxBodyContent BuildTx era))
       -> AddressInEra era
       -> Set (Hash PaymentKey)
       -> Value
       -> [(TxIn, TxOut CtxUTxO era)]
       -> [TxOutput (TxOut CtxTx era)]
-      -> Lovelace
+      -> Coin
       -> Either
-          FrameworkError (TxBody era, Set (Hash PaymentKey), Lovelace)
+          FrameworkError (TxBody era, Set (Hash PaymentKey), Coin)
 computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam)  bodyContentf changeAddr signatories   fixedInputSum availableInputs  fixedOutputs  fee = do
   -- Debug.traceM $ "ComputeBody:" 
   --            ++  "\n mintValue: " ++ show txMintValue'
@@ -1078,7 +1080,8 @@ computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam)  bodyContentf 
   case createAndValidateTransactionBody  shelleyBasedEra bc of
       Left tbe ->Left  $ FrameworkError  LibraryError  (show tbe)
       Right tb -> do
-        let evaluateTransactionFee1=evaluateTransactionFee  (babbageEraOnwardsToShelleyBasedEra beraOnward) lpparam   tb  signatureCount 0
+        -- TODO: THIS wont' work with reference scripts
+        let evaluateTransactionFee1=evaluateTransactionFee  (babbageEraOnwardsToShelleyBasedEra beraOnward) lpparam   tb  signatureCount 0 0
             --evaluateTransactionFee2=Lovelace $  Ledger.unCoin $  Ledger.evaluateTransactionFee   lpparam  (toLedgerTx tb)  signatureCount
         pure (tb,requiredSignatories, evaluateTransactionFee1 )
 
@@ -1160,17 +1163,17 @@ computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam)  bodyContentf 
     findChange :: [ParsedOutput era] -> Maybe (TxOut CtxTx era )
     findChange ous =   find (\(TxOutput _ _ c _)  -> c ) ous <&> (\(TxOutput v _ _ _)-> v)
     updateOutputs :: (IsTxBuilderEra era)=> MaryEraOnwards era
-      -> Lovelace
+      -> Coin
       -> Value
       -> [ParsedOutput era]
       -> (BoolFee, BoolChange, [TxOut CtxTx era])
     updateOutputs  meraOnward fee change outputs' = updateOutput meraOnward False False  fee change outputs'
 
-    updateOutput :: (IsTxBuilderEra era)=> MaryEraOnwards era -> BoolFee -> BoolChange ->  Lovelace -> Value -> [ParsedOutput era] ->  (BoolFee,BoolChange,[TxOut CtxTx era])
+    updateOutput :: (IsTxBuilderEra era)=> MaryEraOnwards era -> BoolFee -> BoolChange ->  Coin -> Value -> [ParsedOutput era] ->  (BoolFee,BoolChange,[TxOut CtxTx era])
     updateOutput  _ _ _ _ _ []  =  (False,False,[])
-    updateOutput  meraOnward _fUsed _cUsed  (Lovelace fee) change (txOutput:outs) =let
+    updateOutput  meraOnward _fUsed _cUsed  (fee) change (txOutput:outs) =let
         (feeUsed,changeUsed,result) = transformOut _fUsed _cUsed txOutput
-        (feeUsed2,changeUsed2,others) = updateOutput meraOnward feeUsed changeUsed  (Lovelace fee) change outs
+        (feeUsed2,changeUsed2,others) = updateOutput meraOnward feeUsed changeUsed  (fee) change outs
         updatedOutput = (feeUsed  || feeUsed2 , changeUsed || changeUsed2, result : others )
         in   updatedOutput
       where
@@ -1184,7 +1187,7 @@ computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam)  bodyContentf 
             -- deduct fee from the val if needed
             includeFee val
               | feeUsed = (True, val)
-              | addFee = (True, valueFromList [(AdaAssetId ,Quantity (- fee))] <> val)
+              | addFee = (True, valueFromList [(AdaAssetId ,Quantity (- (unCoin fee)))] <> val)
               | otherwise = (False,val)
 
             -- add change to the val if needed

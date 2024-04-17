@@ -289,7 +289,7 @@ instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
           <+> "validityStart" `appendValidity` validityStart
           <+> "validityEnd" `appendValidity` validityEnd
           <+> "signatures" >= signatures
-          -- <+> "proposals" >= map (translateProposal bConwayOnward) proposals --todo
+          <+> "proposals" >= map (translateProposal bConwayOnward) proposals --todo
           <+> "votes" >= map (transformVote bShelleyBasedEra) votes
           <+> "certificates" >= map (transformCerts bShelleyBasedEra) certs
           <+> "fee" >= fee
@@ -302,11 +302,14 @@ instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
       infixr 6 <+>
       (<+>) f v = f v
 
-translateProposal :: Maybe (ConwayEraOnwards era) -> Proposal era -> A.Value
-translateProposal sbera (CApi.Proposal proposal) = error "sad" -- TODO
-  -- case sbera of
-  --   Nothing -> A.Null
-  --   Just ceo -> case ceo of ConwayEraOnwardsConway -> toJSON $ ProposalProcedureModal @ConwayEra proposal
+translateProposal :: Maybe (ConwayEraOnwards era) -> TxProposal era -> A.Value
+translateProposal sbera (proposal) = 
+  case sbera of
+    Nothing -> A.Null
+    Just ceo -> case ceo of 
+      ConwayEraOnwardsConway -> case proposal of 
+        TxProposal  ppm -> toJSON $  ppm
+        TxProposalScript ppm -> A.Null
 
 transformCerts :: ShelleyBasedEra era -> Certificate era -> A.Value
 transformCerts sbera c = case sbera of
@@ -335,19 +338,19 @@ instance ToJSON (TxMintData TxMintingScriptSource) where
     A.object $
       [ "script"
           .= ( case script of
-                 TxMintingPlutusScript tps m_eu sd -> toJSON tps
-                 TxMintingReferenceScript ti m_eu m_sd -> A.String $ renderTxIn ti
+                 TxMintingPlutusScript tps _m_eu _sd -> toJSON tps
+                 TxMintingReferenceScript ti _m_eu _m_sd -> A.String $ renderTxIn ti
                  TxMintingSimpleScript tss -> toJSON tss
              ),
         "amount" .= Map.fromList value,
         "metadata" .= metadata
       ]
         ++ ( case script of
-               TxMintingPlutusScript tps m_eu hsd -> ["redeemer" .= scriptDataToJsonDetailedSchema hsd]
-               TxMintingReferenceScript ti m_eu m_hsd -> case m_hsd of
+               TxMintingPlutusScript _tps _m_eu hsd -> ["redeemer" .= scriptDataToJsonDetailedSchema hsd]
+               TxMintingReferenceScript _ti _m_eu m_hsd -> case m_hsd of
                  Nothing -> []
                  Just hsd -> ["redeemer" .= scriptDataToJsonDetailedSchema hsd]
-               TxMintingSimpleScript tss -> []
+               TxMintingSimpleScript _tss -> []
            )
 
 instance ToJSON (TxInputSelection era) where
@@ -356,7 +359,7 @@ instance ToJSON (TxInputSelection era) where
   toJSON (TxSelectableUtxos utxo) = case utxo of UTxO map_ -> A.Array $ V.fromList $ map (toJSON . fst) (Map.toList map_)
   toJSON (TxSelectableSkey sk) = A.Array $ V.fromList $ map (A.String . serialiseToBech32) sk
 
-collectSelection :: IsTxBuilderEra era => TxInputSelection era -> [Aeson.Value]
+collectSelection :: TxInputSelection era -> [Aeson.Value]
 collectSelection (TxSelectableAddresses v) = map (A.String . serialiseAddress @(AddressInEra ConwayEra) . fromLedgerAddress) v
 collectSelection (TxSelectableTxIn v) = map (A.String . renderTxIn) v
 collectSelection (TxSelectableUtxos utxo) = utxoToAeson utxo

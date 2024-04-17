@@ -44,14 +44,15 @@ import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Api (MaryEraTxBody(..))
 import qualified Cardano.Ledger.Binary.Version
 import qualified Cardano.Ledger.Api as Ledger
+import Cardano.Api.Ledger (Coin(unCoin))
 
 
-calculateTxoutMinLovelaceOrErr :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Lovelace
+calculateTxoutMinLovelaceOrErr :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Ledger.Coin
 calculateTxoutMinLovelaceOrErr t p = case calculateTxoutMinLovelace t p of
   Nothing -> error "Error calculating minlovelace"
   Just lo -> lo
 
-calculateTxoutMinLovelace :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Maybe Lovelace
+calculateTxoutMinLovelace :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Maybe Ledger.Coin
 calculateTxoutMinLovelace txout pParams = do
   bpparams <- case convertToLedgerProtocolParameters ShelleyBasedEraConway pParams  of
     Left ppce -> fail "Couldn't conver protocol parameters."
@@ -113,8 +114,9 @@ evaluateFee tx = do
   let txbody = getTxBody tx
       -- _inputs :: Set.Set TxIn
       -- _inputs = case txbody of ShelleyTxBody sbe tb scripts scriptData mAuxData validity -> Set.map fromShelleyTxIn $ inputs tb
-      (Lovelace fee) = evaluateTransactionFee shelleyBasedEra (unLedgerProtocolParameters pParam) txbody (fromIntegral $ length $ getTxWitnesses tx) 0
-  pure fee
+      -- todo: FIX this fee calculation won't work when reference script is used.
+      fee = evaluateTransactionFee shelleyBasedEra (unLedgerProtocolParameters pParam) txbody (fromIntegral $ length $ getTxWitnesses tx) 0 0
+  pure (unCoin fee)
 
 -- evaluateExUnitMap ::  HasChainQueryAPI a =>    TxBody ConwayEra -> Kontract a  w FrameworkError   (Map TxIn ExecutionUnits,Map PolicyId  ExecutionUnits)
 -- evaluateExUnitMap  txbody = do

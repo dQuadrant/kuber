@@ -13,7 +13,7 @@ import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Set (Set)
 import PlutusTx.Prelude (traceError)
 import qualified Cardano.Ledger.Api as Ledger
-import Cardano.Api.Ledger (StandardCrypto, GovState, DRepState, Credential, KeyRole (DRepRole), DRep)
+import Cardano.Api.Ledger (StandardCrypto, GovState, DRepState, Credential, KeyRole (DRepRole), DRep, Coin)
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra)
 import Data.Map (Map)
 
@@ -28,10 +28,10 @@ class HasChainQueryAPI a  where
   kQueryUtxoByTxin        :: IsTxBuilderEra era => Set TxIn -> Kontract a w FrameworkError (UTxO era)
   kQueryChainPoint        :: Kontract a w FrameworkError ChainPoint
   kQueryCurrentEra        :: Kontract a w FrameworkError AnyCardanoEra
-  kQueryStakeDeposit      :: Set StakeCredential -> Kontract a w FrameworkError (Map StakeCredential Lovelace)
+  kQueryStakeDeposit      :: Set StakeCredential -> Kontract a w FrameworkError (Map StakeCredential Coin)
   kQueryDrepState         :: Set (Credential 'DRepRole StandardCrypto) -> Kontract a w FrameworkError (Map (Credential 'DRepRole StandardCrypto) (DRepState StandardCrypto))
   kQueryGovState          :: IsTxBuilderEra era => Kontract a w FrameworkError (GovState (ShelleyLedgerEra era))
-  kQueryDRepDistribution  :: Set (DRep StandardCrypto) -> Kontract a w FrameworkError (Map   (DRep StandardCrypto)  Lovelace)
+  kQueryDRepDistribution  :: Set (DRep StandardCrypto) -> Kontract a w FrameworkError (Map   (DRep StandardCrypto)  Coin)
 
 class HasSubmitApi a where
   kSubmitTx :: InAnyCardanoEra Tx ->  Kontract  a w FrameworkError ()

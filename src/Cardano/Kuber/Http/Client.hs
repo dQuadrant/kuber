@@ -43,6 +43,7 @@ import Servant.API.Alternative
 import Servant.Client hiding (baseUrl)
 import Servant.Client.Internal.HttpClient (ClientM (..))
 import Text.Read (readMaybe)
+import Cardano.Api.Ledger (Coin)
 
 cQueryPParams :: ClientM (LedgerProtocolParameters ConwayEra)
 cQueryChainPoint :: ClientM ChainPointModal
@@ -54,7 +55,7 @@ cSubmitTx :: SubmitTxModal -> ClientM TxModal
 cQueryTime :: ClientM TranslationResponse
 cTimeToSlot :: TimeTranslationReq -> ClientM TranslationResponse
 cTimeFromSlot :: SlotTranslationReq -> ClientM TranslationResponse
-cCalculateFee :: TxModal -> ClientM Lovelace
+cCalculateFee :: TxModal -> ClientM Coin
 cEvaluateExUnits :: TxModal -> ClientM ExUnitsResponseModal
 ( cQueryPParams
     :<|> cQueryChainPoint
@@ -243,7 +244,7 @@ instance HasKuberAPI RemoteKuberConnection where
 
   --   kEvaluateExUnits' ::    TxBody ConwayEra -> UTxO ConwayEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
 
-  kCalculateMinFee :: IsTxBuilderEra era => Tx era -> Kontract RemoteKuberConnection w FrameworkError Lovelace
+  kCalculateMinFee :: IsTxBuilderEra era => Tx era -> Kontract RemoteKuberConnection w FrameworkError Coin
   kCalculateMinFee tx = liftHttpReq (cCalculateFee (TxModal $ InAnyCardanoEra bCardanoEra tx))
 
   --   kCalculateMinFee' :: TxBody ConwayEra ->  ShelleyWitCount ->  ByronWitCount-> Kontract a  w FrameworkError  Lovelace
