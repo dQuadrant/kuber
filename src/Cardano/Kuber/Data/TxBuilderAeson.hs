@@ -452,6 +452,7 @@ instance ToJSON TxPlutusScript where
   toJSON tps = case tps of
     TxPlutusScriptV1 ps -> toJSON $ serialiseToTextEnvelope Nothing ps
     TxPlutusScriptV2 ps -> toJSON $ serialiseToTextEnvelope Nothing ps
+    TxPlutusScriptV3 ps -> toJSON $ serialiseToTextEnvelope Nothing ps
 
 instance FromJSON TxPlutusScript where
   parseJSON (A.Object o) = do
@@ -459,7 +460,8 @@ instance FromJSON TxPlutusScript where
     case _type of
       "PlutusScriptV1" -> o .: "cborHex" >>= parseCborHex @T.Text <&> TxPlutusScriptV1
       "PlutusScriptV2" -> o .: "cborHex" >>= parseCborHex @T.Text <&> TxPlutusScriptV2
-      _ -> fail "Expected either PlutsScriptV1 or PlutusScriptV2 type"
+      "PlutusScriptV3" -> o .: "cborHex" >>= parseCborHex @T.Text <&> TxPlutusScriptV3
+      _ -> fail "Expected either PlutsScriptV1 or PlutusScriptV2 or PlutusScriptV3 type"
   parseJSON _ = error "Expected Object"
 
 instance FromJSON TxScript where

@@ -84,6 +84,7 @@ newtype TxVote era = TxVote (TxVoteL (ShelleyLedgerEra era)) deriving (Show, Eq)
 data TxPlutusScript
   = TxPlutusScriptV1 (PlutusScript PlutusScriptV1)
   | TxPlutusScriptV2 (PlutusScript PlutusScriptV2)
+  | TxPlutusScriptV3 (PlutusScript PlutusScriptV3)
   deriving (Show)
 
 data TxInputResolved_ era
@@ -447,6 +448,9 @@ instance IsPlutusVersion PlutusScriptV1 where
 instance IsPlutusVersion PlutusScriptV2 where
   toTxPlutusScriptInstance = TxPlutusScriptV2
 
+instance IsPlutusVersion PlutusScriptV3 where
+  toTxPlutusScriptInstance = TxPlutusScriptV3  
+
 class IsPlutusScript sc where
   toTxPlutusScript :: sc -> TxPlutusScript
 
@@ -466,6 +470,7 @@ hashPlutusScript :: TxPlutusScript -> ScriptHash
 hashPlutusScript sc = case sc of
   TxPlutusScriptV1 ps -> hashScript (PlutusScript PlutusScriptV1 ps)
   TxPlutusScriptV2 ps -> hashScript (PlutusScript PlutusScriptV2 ps)
+  TxPlutusScriptV3 ps -> hashScript (PlutusScript PlutusScriptV3 ps)
 
 plutusScriptAddr :: IsShelleyBasedEra era => TxPlutusScript -> NetworkId -> AddressInEra era
 plutusScriptAddr sc networkId =
@@ -478,6 +483,7 @@ plutusScriptToScriptAny :: TxPlutusScript -> ScriptInAnyLang
 plutusScriptToScriptAny sc = case sc of
   TxPlutusScriptV1 ps -> ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1) (PlutusScript PlutusScriptV1 ps)
   TxPlutusScriptV2 ps -> ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2) (PlutusScript PlutusScriptV2 ps)
+  TxPlutusScriptV3 ps -> ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV3) (PlutusScript PlutusScriptV3 ps)
 
 instance IsPlutusVersion ver => IsPlutusScript (PlutusScript ver) where
   toTxPlutusScript = toTxPlutusScriptInstance
@@ -518,8 +524,7 @@ txScriptFromScriptAny = \case
     PlutusScript psv ps -> case psv of
       PlutusScriptV1 -> TxScriptPlutus $ toTxPlutusScript ps
       PlutusScriptV2 -> TxScriptPlutus $ toTxPlutusScript ps
-      _ -> error "Cardano.Kuber.Core.Txbuilder.txScriptFromScriptAny TODO: for pv3"
-
+      PlutusScriptV3 -> TxScriptPlutus $ toTxPlutusScript ps
 class IsScriptVersion v where
   translationFunc :: Script v -> TxScript
 
@@ -527,6 +532,9 @@ instance IsScriptVersion PlutusScriptV1 where
   translationFunc (PlutusScript psv ps) = TxScriptPlutus $ toTxPlutusScript ps
 
 instance IsScriptVersion PlutusScriptV2 where
+  translationFunc (PlutusScript psv ps) = TxScriptPlutus $ toTxPlutusScript ps
+
+instance IsScriptVersion PlutusScriptV3 where
   translationFunc (PlutusScript psv ps) = TxScriptPlutus $ toTxPlutusScript ps
 
 instance (IsPlutusVersion ver) => IsMintingScript (PlutusScript ver) where

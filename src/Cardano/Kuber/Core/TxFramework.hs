@@ -909,7 +909,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                   witnessF <- case psv of
                       PlutusScriptV1 -> makeTxPlutusScriptWitness shelleyBasedEra ( toTxPlutusScript ps   ) (Just _in)
                       PlutusScriptV2 -> makeTxPlutusScriptWitness shelleyBasedEra ( toTxPlutusScript ps   ) (Just _in)
-                      PlutusScriptV3 -> Left $ FrameworkError FeatureNotSupported "PlutusVersion3 is not Supported"
+                      PlutusScriptV3 -> makeTxPlutusScriptWitness shelleyBasedEra ( toTxPlutusScript ps   ) (Just _in)
                   withExUnits witnessF mData r mExunit tout
           Just _ ->Left $ FrameworkError BalancingError $ "Utxo used as refreence script doesn't contain reference script: " ++ T.unpack (renderTxIn scriptRefTin)
 

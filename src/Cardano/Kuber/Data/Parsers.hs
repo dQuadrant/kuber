@@ -195,6 +195,9 @@ anyScriptParser v@(A.Object o) =do
     "PlutusScriptV2" -> do
       sc <- o.: "cborHex"  >>= parseCborHex @T.Text
       pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2) (PlutusScript PlutusScriptV2 sc)
+    "PlutusScriptV3" -> do 
+      sc <- o.:  "cborHex"  >>= parseCborHex @T.Text
+      pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV3) (PlutusScript PlutusScriptV3 sc)
     _ -> do
       v ::SimpleScript <- parseJSON v
       pure $ ScriptInAnyLang SimpleScriptLanguage $ SimpleScript v
