@@ -63,7 +63,7 @@ function execute-isolated() {
 	-e HOME=$HOME \
 	--entrypoint /bin/bash \
 	--workdir $WORKDIR \
-	cardanoapi/haskell:8.10.7 -c  "$*"
+	cardanoapi/haskell:9.6.1 -c  "$*"
 }
 
 if [[ "$1" == cabal* ]] ; then
