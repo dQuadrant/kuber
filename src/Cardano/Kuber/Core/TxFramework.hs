@@ -317,7 +317,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                     txBuilder@(TxBuilder_ selections _inputs _inputRefs _outputs _collaterals validityStart validityEnd mintData extraSignatures proposals votes certs explicitFee mChangeAddr metadata )
   = do
   (totalMintVal, mints_) <- parseMints (UTxO availableUtxo)
-
+  
   let --mergedMetadata = foldl injectMetadataPolicy (foldl  injectMetadataPolicy metadata resolvedMints) _txMint
       (partialMints, parsedMints ) = partitionEithers mints_
       injectMetadataPolicy :: Map Word64 A.Value -> TxMintData (PolicyId,a) -> Map Word64  A.Value
@@ -423,7 +423,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         Just n -> Coin n
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin builderInputUtxo) spendableUtxos
       calculator exmap1 exmap2 onMissing=
-        computeBody bBabbageOnward pParam
+        computeBody bBabbageOnward pParam (UTxO availableUtxo)
           (txBodyContentf exmap1 exmap2 onMissing)
           txChangeAddr  compulsarySignatories
           fixedInputSum availableInputs fixedOutputs
@@ -1038,6 +1038,7 @@ ledgerCredToPaymentKeyHash sbera cred = case cred of
 
 computeBody ::  (IsShelleyBasedEra era, IsTxBuilderEra era) =>  BabbageEraOnwards era
       -> LedgerProtocolParameters era
+      -> (UTxO era)
       ->( [TxIn] -> [TxOut CtxTx era]-> Coin->  Either FrameworkError (TxBodyContent BuildTx era))
       -> AddressInEra era
       -> Set (Hash PaymentKey)
@@ -1047,7 +1048,7 @@ computeBody ::  (IsShelleyBasedEra era, IsTxBuilderEra era) =>  BabbageEraOnward
       -> Coin
       -> Either
           FrameworkError (TxBody era, Set (Hash PaymentKey), Coin)
-computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam)  bodyContentf changeAddr signatories   fixedInputSum availableInputs  fixedOutputs  fee = do
+computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam) utxo bodyContentf changeAddr signatories   fixedInputSum availableInputs  fixedOutputs  fee = do
   -- Debug.traceM $ "ComputeBody:" 
   --            ++  "\n mintValue: " ++ show txMintValue'
   --            ++  "\n fee: " ++ show fee
@@ -1080,9 +1081,7 @@ computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam)  bodyContentf 
   case createAndValidateTransactionBody  shelleyBasedEra bc of
       Left tbe ->Left  $ FrameworkError  LibraryError  (show tbe)
       Right tb -> do
-        -- TODO: THIS wont' work with reference scripts
-        let evaluateTransactionFee1=evaluateTransactionFee  (babbageEraOnwardsToShelleyBasedEra beraOnward) lpparam   tb  signatureCount 0 0
-            --evaluateTransactionFee2=Lovelace $  Ledger.unCoin $  Ledger.evaluateTransactionFee   lpparam  (toLedgerTx tb)  signatureCount
+        let evaluateTransactionFee1=calculateMinTxFee (babbageEraOnwardsToShelleyBasedEra beraOnward) lpparam utxo tb signatureCount 
         pure (tb,requiredSignatories, evaluateTransactionFee1 )
 
   where
