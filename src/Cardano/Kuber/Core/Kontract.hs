@@ -3,20 +3,14 @@
 {-# HLINT ignore "Use <$>" #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Cardano.Kuber.Core.Kontract
 where
 import Cardano.Api
-import Cardano.Api.Shelley
-import Data.Time.Clock.POSIX (POSIXTime)
-import Data.Set (Set)
-import Cardano.Kuber.Utility.QueryHelper (queryProtocolParam, querySystemStart, queryAddressInEraUtxos, queryUtxos, queryTxins, queryChainPoint, queryGenesesisParams)
-import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (EraMismatch(..))
-import qualified Data.Text as T
-import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Exception (try, Exception)
--- import Cardano.Kuber.Api (FrameworkError)
-import Cardano.Slotting.Time (SystemStart)
 import Cardano.Kuber.Error (FrameworkError (..), ErrorType (..))
+import Control.Applicative (Alternative (empty, (<|>)))
+import Control.Exception.Base (throw)
 
 
 data  Exception e =>  Kontract api  w e r  =
@@ -54,6 +48,14 @@ instance Exception e => Applicative (Kontract api w e ) where
           v <- ve
           pure $ f v
 
+instance  Exception e => Alternative (Kontract api w e) where
+    empty ::  Kontract api w e a
+    empty = liftIO $ throw ( FrameworkError LibraryError "Empty Alternative for Kontract" ) 
+    
+    (<|>) ::  Kontract api w e a -> Kontract api w e a -> Kontract api w e a
+    (KError _) <|> b = b
+    a <|> _ = a
+
 instance Exception e =>  Monad (Kontract api w e ) where
 
   (>>=) :: Kontract api w e a -> (a -> Kontract api w e b) -> Kontract api w e b
@@ -67,7 +69,7 @@ instance Exception e =>  Monad (Kontract api w e ) where
 
 instance  Exception e =>  MonadIO (Kontract api w e) where
     liftIO :: IO r -> Kontract api w e r
-    liftIO io = KLift $  \x -> try io
+    liftIO io = KLift $  \_ -> try io
 
 
 evaluateKontract    :: Exception e => a ->  Kontract a w e r  -> IO (Either e r )
@@ -88,3 +90,19 @@ kWrapParser ::  Either String  r -> Kontract api w FrameworkError r
 kWrapParser m = case m  of
   Left msg -> kError  ParserError msg
   Right v -> KResult v
+
+
+instance (Exception e) =>  MonadError e (Kontract api w e) where
+    throwError = KError
+    catchError ::  Kontract api w e a -> (e -> Kontract api w e a) -> Kontract api w e a
+    catchError (KResult r) _ = KResult r
+    catchError (KError e) handler = handler e
+    catchError (KLift action) handler = KLift $ \api -> do
+        result <- action api
+        case result of
+            Left err -> case handler err of
+                KResult r -> return (Right r)
+                KError e' -> return (Left e')
+                KLift action' -> action' api
+            Right r -> return (Right r)
+
