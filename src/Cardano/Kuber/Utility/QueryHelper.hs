@@ -40,12 +40,22 @@ performShelleyQuery' sbera conn q queryName=
         Right res -> pure res
   where
   qFilter = QueryInEra (QueryInShelleyBasedEra sbera  q) 
+
+perfomEraIndependentQuery :: LocalNodeConnectInfo -> QueryInMode b -> String -> IO (Either FrameworkError b)
 perfomEraIndependentQuery conn q queryName = do
-  catch (catch ( do
+  withErrorHandler queryName conn $  do 
       a <- queryNodeLocalState conn VolatileTip q
       case a of
             Left af -> pure $ Left $ FrameworkError NodeQueryError (show q ++ ": Acqure Failure")
             Right result -> pure $ pure result
+
+
+
+withErrorHandler :: String ->  LocalNodeConnectInfo -> IO (Either FrameworkError b) -> IO (Either FrameworkError b)
+withErrorHandler queryName conn x = 
+  catch (catch ( do
+      x
+     
     ) (\(e ::IOException )-> pure $ Left $ FrameworkError  ConnectionError (case e of {
       IOError m_han iet s str m_ci m_s -> "Query" ++ queryName ++ ": " ++ case iet of
         ResourceBusy -> "ResourceBusy: path=" ++  filePath
@@ -60,10 +70,8 @@ perfomEraIndependentQuery conn q queryName = do
             } ))
     ) (\(e :: SomeException)-> pure $ Left $ FrameworkError  ConnectionError ( "Query" ++ queryName ++ ": " ++ show e) )
   where
-    filePath = case conn of { LocalNodeConnectInfo cmp ni fi -> case fi of { File s -> s }  }
-    -- evaluateMessage msg = if "No such file or directory" `isInfixOf` msg
-    --                         then case conn of
-    --                         else ""
+    filePath = case conn of { LocalNodeConnectInfo _cmp _ni fi -> case fi of { File s -> s }  }
+
 queryUtxos :: IsShelleyBasedEra era => LocalNodeConnectInfo -> Set AddressAny -> IO (Either FrameworkError  (UTxO era))
 queryUtxos conn addr= performShelleyQuery conn (QueryUTxO (QueryUTxOByAddress  addr)) "Utxo"
 
@@ -128,7 +136,7 @@ queryDRepDistribution :: ShelleyBasedEra era -> LocalNodeConnectInfo  -> Set ( D
 queryDRepDistribution era conn drep = performShelleyQuery' era conn (QueryDRepStakeDistr drep) "DrepStakeDistribution"
 
 submitTx :: LocalNodeConnectInfo  -> InAnyCardanoEra Tx -> IO  (Either FrameworkError ())
-submitTx conn  (InAnyCardanoEra era tx)= do
+submitTx conn  (InAnyCardanoEra era tx)= withErrorHandler "SubmitTx" conn $ do
       res <-submitTxToNodeLocal conn $  TxInMode (getErainMode' era) tx 
       case res of
         SubmitSuccess ->  pure $ pure ()
