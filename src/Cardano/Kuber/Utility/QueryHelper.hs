@@ -113,7 +113,7 @@ queryEraHistory :: LocalNodeConnectInfo -> IO ( Either FrameworkError EraHistory
 queryEraHistory conn=perfomEraIndependentQuery conn  QueryEraHistory "EraHistory"
 
 queryStakeDeposits ::   ShelleyBasedEra era -> LocalNodeConnectInfo  -> Set StakeCredential -> IO      (Either   FrameworkError (Map StakeCredential Coin))
-queryStakeDeposits  era conn creds =performShelleyQuery @ConwayEra conn (QueryStakeDelegDeposits creds) "StakeDelegDeposits"
+queryStakeDeposits  era conn creds =performShelleyQuery' era conn (QueryStakeDelegDeposits creds) "StakeDelegDeposits"
 
 queryConstitution :: IsShelleyBasedEra era =>  LocalNodeConnectInfo  -> IO      (Either         FrameworkError         (Ledger.Constitution  (ShelleyLedgerEra  era)))
 queryConstitution  conn  =performShelleyQuery  conn QueryConstitution "Constitution"

@@ -4,10 +4,12 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 module Cardano.Kuber.Core.Kontract
 where
 import Cardano.Api
-import Control.Exception (try, Exception)
+import Control.Exception (try, Exception, SomeException, catch)
 import Cardano.Kuber.Error (FrameworkError (..), ErrorType (..))
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Exception.Base (throw)
@@ -65,19 +67,28 @@ instance Exception e =>  Monad (Kontract api w e ) where
             result <- ior api
             case result of
               Left e -> pure $ Left  e
-              Right a -> evaluateKontract api ( f a)
+              Right a -> evaluateKontract' api ( f a)
 
 instance  Exception e =>  MonadIO (Kontract api w e) where
     liftIO :: IO r -> Kontract api w e r
     liftIO io = KLift $  \_ -> try io
 
 
-evaluateKontract    :: Exception e => a ->  Kontract a w e r  -> IO (Either e r )
+evaluateKontract'    :: Exception e => a ->  Kontract a w e r  -> IO (Either e r )
+evaluateKontract' api  contract = do
+  case contract of
+    KResult r -> pure $ pure r
+    KError e -> pure $ Left e
+    KLift f ->  f api
+
+evaluateKontract    ::  a ->  Kontract a w FrameworkError r  -> IO (Either FrameworkError r )
 evaluateKontract api  contract = do
   case contract of
     KResult r -> pure $ pure r
     KError e -> pure $ Left e
-    KLift f -> f api
+    KLift f -> mapException $ f api
+  where
+    mapException  action = catch  action someExHandler
 
 kGetBackend :: Exception e =>  Kontract  a w e a
 kGetBackend = KLift $ \api  -> pure (pure api)
@@ -92,17 +103,20 @@ kWrapParser m = case m  of
   Right v -> KResult v
 
 
-instance (Exception e) =>  MonadError e (Kontract api w e) where
+instance  MonadError FrameworkError  (Kontract api w FrameworkError) where
     throwError = KError
-    catchError ::  Kontract api w e a -> (e -> Kontract api w e a) -> Kontract api w e a
+    catchError :: Kontract api w FrameworkError a -> (FrameworkError -> Kontract api w FrameworkError a) -> Kontract api w FrameworkError a
     catchError (KResult r) _ = KResult r
     catchError (KError e) handler = handler e
     catchError (KLift action) handler = KLift $ \api -> do
-        result <- action api
-        case result of
-            Left err -> case handler err of
+        result <- try  (action api)  
+        case result of 
+          Left e -> someExHandler e
+          Right (Left err) -> case  handler err of
                 KResult r -> return (Right r)
                 KError e' -> return (Left e')
                 KLift action' -> action' api
-            Right r -> return (Right r)
+          Right(Right r) -> return (Right r)
 
+someExHandler :: Applicative f => SomeException -> f (Either FrameworkError b)
+someExHandler (e::SomeException ) = pure $ Left $  FrameworkError LibraryError ("Unhandled : " ++ show e)
