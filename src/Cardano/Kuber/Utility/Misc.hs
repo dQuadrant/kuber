@@ -159,18 +159,24 @@ evaluateExUnitMapWithUtxos__ era systemStart epochInfo protocolParams usedUtxos 
 
     inputLookup = Map.fromAscList $ zip [0 ..] inputList
 
+    doMap :: (ScriptWitnessIndex, Either ScriptExecutionError (a,ExecutionUnits))
+      -> Either
+          FrameworkError
+          (Either (TxIn, ExecutionUnits) (PolicyId, ExecutionUnits))
     doMap (i, mExUnitResult) = case i of
       ScriptWitnessIndexTxIn wo -> do
         unEitherExUnits (fromShelleyTxIn (inputList !! fromIntegral wo),) mExUnitResult <&> Left
       ScriptWitnessIndexMint wo -> unEitherExUnits (policyList !! fromIntegral wo,) mExUnitResult <&> Right
       ScriptWitnessIndexCertificate wo -> Left $ FrameworkError FeatureNotSupported "Witness for Certificates is not supported"
       ScriptWitnessIndexWithdrawal wo -> Left $ FrameworkError FeatureNotSupported "Plutus script for withdrawl is not supported"
+      ScriptWitnessIndexVoting _ -> Left $ FrameworkError FeatureNotSupported "Plutus script for voting is not supported"
+      ScriptWitnessIndexProposing _ -> Left $ FrameworkError FeatureNotSupported "Plutus script for proposing is not supported"
 
     unEitherExUnits :: (ExecutionUnits -> (a, ExecutionUnits))
-      -> Either ScriptExecutionError ExecutionUnits
+      -> Either ScriptExecutionError (b,ExecutionUnits)
       -> Either FrameworkError (a, ExecutionUnits)
     unEitherExUnits f v = case v of
-      Right e -> pure $ f e
+      Right e -> pure $ f $ snd e
       Left e -> Left $ fromScriptExecutionError e txbody
 
     transformIn (txIn, wit) exUnit =

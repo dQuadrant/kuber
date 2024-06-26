@@ -71,7 +71,7 @@ library
     , directory
     , aeson >= 1.5.6.0
     , text-conversions
-    , cardano-api ^>= 8.46
+    , cardano-api ^>= 8.48.0.1
     , cardano-data >= 1.0
     , cardano-ledger-binary
     , cardano-ledger-core 
@@ -101,7 +101,7 @@ library
     , http-client-tls
     , lens
     , data-default
-    , io-classes-mtl == 0.1.1.0,
+    , io-classes-mtl
 
 test-suite test
   default-language: Haskell2010

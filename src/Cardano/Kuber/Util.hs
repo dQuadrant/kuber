@@ -126,7 +126,6 @@ import Ouroboros.Consensus.HardFork.History (unsafeExtendSafeZone)
 import qualified Ouroboros.Consensus.HardFork.History as Qry
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult (SubmitFail, SubmitSuccess))
 import PlutusLedgerApi.V2 (Address, CurrencySymbol (CurrencySymbol), PubKeyHash (PubKeyHash), ToData, TokenName (TokenName), fromBuiltin, toBuiltin, toData)
-import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 import System.Directory (doesFileExist)
 import System.Environment (getEnv)
 import System.FilePath (joinPath)
