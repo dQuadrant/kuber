@@ -21,103 +21,54 @@ import Cardano.Kuber.Error
     ( ErrorType(BalancingError, WrongScriptType, ParserError,
                 LibraryError, InsufficientInput, BadMetadata, TxValidationError, FeatureNotSupported),
       FrameworkError(FrameworkError) )
-import PlutusTx (ToData)
-import Cardano.Slotting.Time
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Map (Map)
-import Control.Exception
 import Data.Either
 import Data.Functor ((<&>))
 
 
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Builder as Builder
-import qualified Data.ByteString.Short as SBS
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString.Builder as BSL
-import Data.ByteString.Builder (charUtf8)
-
-import Codec.Serialise (serialise)
 import Data.Set (Set)
-import Data.Maybe (mapMaybe, catMaybes, fromMaybe, maybeToList, fromJust)
-import Data.List (intercalate, sortBy, minimumBy, find)
+import Data.Maybe (mapMaybe, fromMaybe, fromJust)
+import Data.List (sortBy, minimumBy, find)
 import qualified Data.Foldable as Foldable
 import PlutusLedgerApi.V2 (PubKeyHash(PubKeyHash), fromBuiltin)
 import Cardano.Kuber.Core.TxBuilder
-import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
-import Cardano.Api.Crypto.Ed25519Bip32 (xPrvFromBytes)
 import qualified Data.Aeson as A
-import qualified Data.Map.Strict as StrictMap
-import qualified Debug.Trace as Debug
 import Data.Aeson (ToJSON(toJSON))
 import qualified Data.Text as T
-import Data.Text.Conversions (convertText)
 import Data.Word (Word64)
-import Foreign.Storable (sizeOf)
-import qualified Data.Vector as Vector
-import qualified Data.HashMap.Strict as HashMap
-import qualified Data.Char as C
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.Text.Encoding as T
-import Data.Int (Int64)
-import Cardano.Api.Byron (Address(ByronAddress))
-import Cardano.Ledger.Shelley.API (Credential(KeyHashObj), KeyHash (KeyHash), Globals (systemStart))
-import Cardano.Binary (ToCBOR(toCBOR))
-import qualified Cardano.Binary as Cborg
+import Cardano.Ledger.Shelley.API (Credential(KeyHashObj), KeyHash (KeyHash))
 import Cardano.Kuber.Utility.ScriptUtil
-import Cardano.Kuber.Utility.QueryHelper (queryUtxos, queryTxins)
-import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable(toConsoleTextNoPrefix, toConsoleText))
 import Cardano.Kuber.Utility.DataTransformation
-import Data.Foldable (foldlM, Foldable (toList))
+import Data.Foldable (foldlM)
 import Data.Bifunctor (first, Bifunctor (second))
 import Cardano.Ledger.Coin (Coin(Coin))
 import qualified Data.Aeson.KeyMap as A
 import qualified Data.Aeson.Key as A
 import qualified Data.HashMap.Lazy as HMap
-import Data.Time (nominalDiffTimeToSeconds)
 import qualified Data.Text as Text
-import Cardano.Ledger.Slot (EpochInfo, epochInfoFirst)
-import Cardano.Slotting.EpochInfo (hoistEpochInfo, epochInfoSlotToUTCTime)
+import Cardano.Ledger.Slot (EpochInfo)
+import Cardano.Slotting.EpochInfo (hoistEpochInfo)
 import Ouroboros.Consensus.HardFork.History.EpochInfo (interpreterToEpochInfo)
-import           Control.Monad.Trans.Except(runExcept)
-import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
-import qualified Data.Aeson.KeyMap as Mpa
 import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (..))
 import Cardano.Kuber.Utility.Misc
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Core.LocalNodeChainApi (HasLocalNodeAPI (..))
-import Control.Lens ((^.), Identity)
+import Control.Lens ((^.))
 import Cardano.Ledger.Api
-    ( EraTxBody,
-      MaryEraTxBody(mintTxBodyL),
-      proposalProceduresTxBodyL,
-      ProposalProcedure(..),
-      GovActionId,
-      ppuMinUTxOValueL,
-      ppMinUTxOValueL,
-      ProtVerAtMost,
-      EnactState,
-      GovAction(..), RewardAccount (RewardAcnt) )
-import Cardano.Api.Ledger (ConwayTxCert(..), ConwayDelegCert (..), PoolCert (..), ConwayGovCert (..), PoolParams (PoolParams), StrictMaybe (..), ShelleyTxCert (..), EraCrypto, Coin (unCoin), GovState, StandardCrypto, PParams (PParams), KeyRole (DRepRole), Anchor (Anchor), Credential (ScriptHashObj))
+    ( ProposalProcedure(..),
+      GovAction(..) )
+import Cardano.Api.Ledger (ConwayTxCert(..), ConwayDelegCert (..), PoolCert (..), ConwayGovCert (..), StrictMaybe (..), EraCrypto, Coin (unCoin), StandardCrypto)
 import qualified Cardano.Ledger.Api as Ledger
-import qualified Cardano.Api.Shelley as CAPI
-import qualified Cardano.Ledger.Coin as Ledger
-import Cardano.Crypto.DSIGN
-import Cardano.Crypto.Hash (Blake2b_224)
-import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Kuber.Data.EraUpdate
 import Cardano.Ledger.Api.PParams (ppKeyDepositL)
 import Cardano.Ledger.Conway.PParams (ppDRepDepositL)
 import qualified Cardano.Ledger.Conway.PParams as Ledger
-import Cardano.Ledger.Conway.Governance ( ensCurPParamsL, ensPrevPParamUpdateL, ensPrevCommitteeL, ensPrevConstitutionL, ensPrevHardForkL, govStatePrevGovActionIds, EraGov (prevPParamsGovStateL), ConwayEraGov (proposalsGovStateL), pRootsL, PRoot (prRoot))
-import Cardano.Kuber.Data.TxBuilderAeson
-import Control.Monad.IO.Class (liftIO)
-import qualified Cardano.Ledger.Credential as Ledger
+import Cardano.Ledger.Conway.Governance ( ConwayEraGov (proposalsGovStateL), pRootsL, PRoot (prRoot))
 import qualified Data.OSet.Strict as OSet
 
 import Cardano.Ledger.CertState (DRepState(DRepState))
-import Cardano.Kuber.Data.Models (ProposalModal(ProposalModal))
 type BoolChange   = Bool
 type BoolFee = Bool
 type ChangeValue = Value
@@ -225,7 +176,7 @@ executeTxBuilder builder = do
         TxSelectableTxIn tis -> (a,Set.union i (Set.fromList tis),u)
         TxSelectableSkey skeys -> (Set.union a (Set.fromList $ map (\s ->  toAddressAny $ skeyToAddr s networkId ) skeys), i , u )
 
-    applyPrevGovActionIdNDeposit :: HasChainQueryAPI api => Maybe (ConwayEraOnwards era) -> PParams (ShelleyLedgerEra era) -> [TxProposal era] ->  Kontract api w FrameworkError [TxProposal era]
+    applyPrevGovActionIdNDeposit :: HasChainQueryAPI api => Maybe (ConwayEraOnwards era) -> Ledger.PParams (ShelleyLedgerEra era) -> [TxProposal era] ->  Kontract api w FrameworkError [TxProposal era]
     applyPrevGovActionIdNDeposit beraOnward pParam props=
           case beraOnward of
             Just v@ConwayEraOnwardsConway ->  do
@@ -384,7 +335,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         Cardano.Api.Shelley.txFee=TxFeeExplicit txShelleyBasedEra  fee,
         txValidityLowerBound = txLowerBound,
         txValidityUpperBound = txUpperBound,
-        Cardano.Api.Shelley.txMetadata=meta  ,
+        Cardano.Api.Shelley.txMetadata=meta,
         txAuxScripts=TxAuxScriptsNone,
         txExtraKeyWits=keyWitnesses,
         txProtocolParams=BuildTxWith (Just   pParam),
@@ -395,8 +346,11 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         txScriptValidity=TxScriptValidityNone,
         -- TODO : Parese proposal and voting proposals accordingly
         txProposalProcedures  = txPropsoals,
-        txVotingProcedures  = parseToCApiVotingProcedures votes
-         })
+        txVotingProcedures  = parseToCApiVotingProcedures votes,
+       txCurrentTreasuryValue = Nothing,
+       -- | Treasury donation to perform
+       txTreasuryDonation   = Nothing
+      })
 
       parseToCApiVotingProcedures voting =
         case voting of
@@ -1090,7 +1044,6 @@ computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam) utxo bodyConte
     toLedgerTx :: TxBody era -> Ledger.Tx (ShelleyLedgerEra era)
     toLedgerTx tb = case makeSignedTransaction [] tb of
       ShelleyTx _ tx -> tx
-      _ -> error "Cardano.Kuber.Core.TxFramework.txBuildertoTxBody.computeBody.toLedgerTx : Impossible "
     fixedOutputSum = foldMap txOutputVal fixedOutputs
       where
       txOutputVal :: ParsedOutput era -> Value

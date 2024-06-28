@@ -21,7 +21,6 @@ import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Error
 import Cardano.Kuber.Http.Spec (KuberServerApi)
 import Control.Exception (fromException)
-import Control.Monad.Trans.Reader (ReaderT (..))
 import Data.Aeson (decode)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Char8 as BS8
@@ -33,17 +32,15 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX (POSIXTime)
-import qualified Debug.Trace as Debug
-import GHC.IO (unsafePerformIO)
 import Network.HTTP.Client (HttpException (..), HttpExceptionContent (..), ManagerSettings (managerModifyRequest), Request (requestHeaders), Response (responseStatus), defaultManagerSettings, getUri, newManager)
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types (Status (Status))
 import Network.URI (URI (uriAuthority, uriPath, uriScheme), URIAuth (uriPort, uriRegName), parseURI)
 import Servant.API.Alternative
 import Servant.Client hiding (baseUrl)
-import Servant.Client.Internal.HttpClient (ClientM (..))
 import Text.Read (readMaybe)
 import Cardano.Api.Ledger (Coin)
+import Cardano.Kuber.Data.TxBuilderAeson ()
 
 cQueryPParams :: ClientM (LedgerProtocolParameters ConwayEra)
 cQueryChainPoint :: ClientM ChainPointModal

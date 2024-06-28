@@ -14,52 +14,17 @@
 module Cardano.Kuber.Core.TxBuilder where
 
 import Cardano.Api hiding (txCertificates, txFee, txMetadata)
-import Cardano.Api.Ledger (EraCrypto, GovActionId, StandardCrypto)
+import Cardano.Api.Ledger (EraCrypto, StandardCrypto)
 import Cardano.Api.Shelley hiding (txCertificates, txFee, txMetadata)
-import Cardano.Kuber.Error
 import qualified Cardano.Ledger.Address as Ledger
-import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
-import Cardano.Ledger.Api (Babbage)
 import qualified Cardano.Ledger.Api as Ledger
-import qualified Cardano.Ledger.Api.Era as Ledger
-import Cardano.Slotting.Time
-import Codec.Serialise (serialise)
-import Control.Applicative (Alternative)
-import Control.Exception
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Aeson (KeyValue ((.=)), ToJSON (toJSON), (.!=), (.:?))
-import qualified Data.Aeson as A
-import qualified Data.Aeson as A.Object
 import qualified Data.Aeson as Aeson
-import Data.Aeson.Types (FromJSON (parseJSON), Parser, (.:))
-import Data.Bifunctor
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString.Short as SBS
-import Data.Either
-import qualified Data.Foldable as Foldable
-import Data.Functor ((<&>))
-import qualified Data.HashMap.Internal.Strict as H
-import qualified Data.HashMap.Strict as HM
-import Data.List (intercalate, sortBy)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, mapMaybe)
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.String (IsString (fromString))
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
-import Data.Time.Clock
-import Data.Time.Clock.POSIX
-import qualified Data.Vector as V
+import Data.Time.Clock.POSIX ( POSIXTime )
 import Data.Word (Word64)
-import Debug.Trace (trace, traceM)
-import qualified Debug.Trace as Debug
-import Foreign.C (CTime)
 import GHC.Generics (Generic)
-import PlutusLedgerApi.V2 (CurrencySymbol, PubKeyHash (PubKeyHash))
-import qualified PlutusLedgerApi.V2 as Plutus hiding (TxOut)
-import PlutusTx (ToData)
+import PlutusLedgerApi.V3 (PubKeyHash)
 import qualified Cardano.Ledger.Api as L
 
 
