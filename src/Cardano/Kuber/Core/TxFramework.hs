@@ -532,7 +532,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
           ConwayUpdateDRep cre sm ->       ledgerCredToPaymentKeyHash txShelleyBasedEra cre
           ConwayAuthCommitteeHotKey cre cre' -> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
           ConwayResignCommitteeColdKey cre _anchor-> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
-    txEra = babbageEraOnwardsToCardanoEra bBabbageOnward
+    txEra = toCardanoEra bBabbageOnward
     txCardanoEra=txEra
     txShelleyBasedEra = babbageEraOnwardsToShelleyBasedEra bBabbageOnward
     txMaryEraOnwards = babbageEraOnwardsToMaryEraOnwards bBabbageOnward
@@ -980,7 +980,7 @@ makeTxProposals  conOnward proposals=do
     in
     inEonForEra (Left $ FrameworkError FeatureNotSupported "Proposals are not supported in Babbage era")
            (\conwayOnward -> Right$ Just  $ Featured conwayOnward (TxProposalProcedures (OSet.fromSet (Set.fromList ( unProcedures))) (BuildTxWith mempty)) )
-           (conwayEraOnwardsToCardanoEra conOnward)
+           (toCardanoEra conOnward)
       }
 
 

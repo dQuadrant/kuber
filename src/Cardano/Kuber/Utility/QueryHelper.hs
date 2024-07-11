@@ -44,7 +44,7 @@ performShelleyQuery' sbera conn q queryName=
 perfomEraIndependentQuery :: LocalNodeConnectInfo -> QueryInMode b -> String -> IO (Either FrameworkError b)
 perfomEraIndependentQuery conn q queryName = do
   withErrorHandler queryName conn $  do 
-      a <- queryNodeLocalState conn VolatileTip q
+      a <- runExceptT $ queryNodeLocalState conn VolatileTip q
       case a of
             Left af -> pure $ Left $ FrameworkError NodeQueryError (show q ++ ": Acqure Failure")
             Right result -> pure $ pure result

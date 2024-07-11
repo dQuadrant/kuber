@@ -141,7 +141,7 @@ evaluateExUnitMapWithUtxos = evaluateExUnitMapWithUtxos_ cardanoEra
 
 evaluateExUnitMapWithUtxos__ era systemStart epochInfo protocolParams usedUtxos txbody = do
   exMap <- case evaluateTransactionExecutionUnits
-    (shelleyBasedToCardanoEra era)
+    (toCardanoEra era)
     systemStart
     epochInfo
     protocolParams

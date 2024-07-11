@@ -1,6 +1,6 @@
 /dist-newstyle
 .idea
-
+/.cluster
 # vscode related
 .vscode
 .history
