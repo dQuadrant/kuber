@@ -37,6 +37,7 @@ import Kuber.Server.Model
 import System.Environment (getEnv)
 import System.Exit (die)
 import System.FilePath (joinPath)
+import Cardano.Api.Ledger (Coin)
 
 makeHandler a kontract =
   liftIO $
@@ -50,7 +51,7 @@ makeHandler1 a f p1 = makeHandler a (f p1)
 
 makeHandler2 a f p1 p2 = makeHandler a (f p1 p2)
 
-calculateMinFeeHandler :: (HasKuberAPI api) => TxModal -> Kontract api w FrameworkError Lovelace
+calculateMinFeeHandler :: (HasKuberAPI api) => TxModal -> Kontract api w FrameworkError Coin
 calculateMinFeeHandler (TxModal (InAnyCardanoEra cera tx)) = case cera of
   BabbageEra -> kCalculateMinFee tx
   ConwayEra -> kCalculateMinFee tx

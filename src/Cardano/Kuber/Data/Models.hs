@@ -18,6 +18,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# LANGUAGE TypeOperators #-}
 
 
 module Cardano.Kuber.Data.Models where
@@ -695,7 +696,7 @@ instance  EraCrypto ledgerera ~ StandardCrypto =>  FromJSON  (GovActionModal led
 
   parseJSON  _ = fail "Expected GovActionModal Object"
 
-instance (era ~ ConwayEra)=>FromJSON  (ProposalProcedureModal era) where
+instance FromJSON  (ProposalProcedureModal ConwayEra) where
   parseJSON (A.Object o) = do
     deposit :: Integer <- o.:? "deposit" .!= 0
     (RewardAcntModal returnAddress) <- o .: "refundAccount"
@@ -707,7 +708,7 @@ instance (era ~ ConwayEra)=>FromJSON  (ProposalProcedureModal era) where
           result <- o.:? key
           maybe onMissing mapper  result
 
-        prevGovActionId :: StrictMaybe (GovPurposeId purpose (ShelleyLedgerEra era))
+        prevGovActionId :: EraCrypto (ShelleyLedgerEra era)~ StandardCrypto => StrictMaybe (GovPurposeId purpose (ShelleyLedgerEra era))
         prevGovActionId =case mUtxoIdModal of
             Nothing -> SNothing
             Just (UtxoIdModal ( prevGovTxId, TxIx prevGovTxIx)) -> SJust $ createPreviousGovernanceActionId prevGovTxId (fromIntegral prevGovTxIx)
@@ -737,7 +738,7 @@ instance (era ~ ConwayEra)=>FromJSON  (ProposalProcedureModal era) where
            addMap  <- obj .:? "add" .!= mempty
            remove  <- obj .:? "remove" .!= mempty
            qourum <- obj .: "qourum"
-           let toAdd = Map.mapKeys (\(CredentialModal c) -> c) $  Map.map fromInteger addMap
+           let toAdd = Map.mapKeys (\(CredentialModal c) -> c) $  Map.map EpochNo addMap
            let toRemove = Set.map (\(CredentialModal c) -> c)  remove
            pure $ UpdateCommittee prevAction  toRemove toAdd (  unJust $ boundRational qourum)
         parseUpdateCommittee _ _ = fail "Expected updateCommittee Object"
@@ -780,10 +781,6 @@ instance (era ~ ConwayEra)=>FromJSON  (ProposalProcedureModal era) where
   parseJSON  _ = fail "Expected GovActionModal Object"
 
 
-
-parseParamUpdate :: 
-  (Ledger.ConwayEraPParams ledgerera) =>
-  StrictMaybe   (GovPurposeId 'Ledger.PParamUpdatePurpose  ledgerera) -> A.Value -> Parser (GovAction ledgerera)
 parseParamUpdate prevGovAction v@(A.Object obj)= do
   let hmap=  A.fromHashMapText $  HM.mapKeys (T.toLower . A.toText ) $ toHashMap obj
   -- pUpdate<- parseJSON v

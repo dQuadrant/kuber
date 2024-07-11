@@ -6,13 +6,14 @@ where
 
 import Cardano.Api
 import qualified Data.Map as Map
-import Cardano.Api.Shelley (Lovelace(Lovelace), TxBody (ShelleyTxBody), ReferenceScript (ReferenceScriptNone, ReferenceScript))
+import Cardano.Api.Shelley ( TxBody (ShelleyTxBody), ReferenceScript (ReferenceScriptNone, ReferenceScript))
 import GHC.Real
 import Data.List
 import qualified Data.Set as Set
 import Control.Monad (join)
 import qualified Cardano.Ledger.Alonzo.Tx as LedgerBody
 import qualified Data.Text as T
+import Cardano.Api.Ledger (Coin(unCoin))
 -- import Cardano.Ledger.Alonzo.TxBody (ppTxBody)
 -- import Cardano.Ledger.Alonzo.Scripts (ppScript)
 -- import qualified Shelley.Spec.Ledger.TxBody as LedgerBody (TxIn (TxIn))
@@ -32,7 +33,7 @@ instance IsCardanoEra era =>  ConsoleWritable (UTxO era) where
   toConsoleText prefix (UTxO utxoMap) =  prefix ++ intercalate ( "\n" ++ prefix) (map toStrings $ Map.toList utxoMap) 
     where
       toStrings (TxIn txId (TxIx index),TxOut addr value hash refScript )=    showStr txId ++ "#" ++  show index ++" : " ++ (case value of
-        TxOutValueByron (Lovelace n ) -> show n
+        TxOutValueByron (n ) -> show (unCoin n)
         TxOutValueShelleyBased sbe va -> case fromLedgerValue sbe va of
           value -> intercalate " +" (map vToString $valueToList value )) ++ showRefScript refScript
       vToString (AssetId policy asset,Quantity v)=show v ++ " " ++ showStr  policy ++ "." ++ showStr  asset

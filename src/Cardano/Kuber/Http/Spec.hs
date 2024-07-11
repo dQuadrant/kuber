@@ -20,6 +20,7 @@ import Cardano.Kuber.Http.MediaType
 import Data.Data (Proxy (Proxy))
 import Data.Text
 import Servant.API
+import Cardano.Api.Ledger (Coin)
 
 type KuberServerApi era =
   "api" :> "v3" :> QueryApi era
@@ -44,7 +45,7 @@ type KuberApi era =
 
 type UtilityApi =
   --  "tx" :> "fee" :> QueryParams "shelleyWitCount" :> QueryParams "ByronWitCount" :> ReqBody '[ CBORBinary,CBORText,JSON ] TxModal :> Post '[JSON] Lovelace
-  "tx" :> "fee" :> ReqBody '[CBORBinary, CBORText, JSON] TxModal :> Post '[JSON] Lovelace
+  "tx" :> "fee" :> ReqBody '[CBORBinary, CBORText, JSON] TxModal :> Post '[JSON] Coin
     :<|> "tx" :> "exUnits" :> ReqBody '[CBORBinary, CBORText, CBORText] TxModal :> Post '[JSON] ExUnitsResponseModal
 
 kuberApiServerProxy :: Proxy (KuberServerApi era)

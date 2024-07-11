@@ -13,7 +13,7 @@ import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Set (Set)
 import PlutusTx.Prelude (traceError)
 import qualified Cardano.Ledger.Api as Ledger
-import Cardano.Api.Ledger (StandardCrypto, GovState, DRepState, Credential, KeyRole (DRepRole), DRep)
+import Cardano.Api.Ledger (StandardCrypto, GovState, DRepState, Credential, KeyRole (DRepRole), DRep, Coin)
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra)
 import Data.Map (Map)
 
@@ -28,41 +28,10 @@ class HasChainQueryAPI a  where
   kQueryUtxoByTxin        :: IsTxBuilderEra era => Set TxIn -> Kontract a w FrameworkError (UTxO era)
   kQueryChainPoint        :: Kontract a w FrameworkError ChainPoint
   kQueryCurrentEra        :: Kontract a w FrameworkError AnyCardanoEra
-  kQueryStakeDeposit      :: Set StakeCredential -> Kontract a w FrameworkError (Map StakeCredential Lovelace)
+  kQueryStakeDeposit      :: Set StakeCredential -> Kontract a w FrameworkError (Map StakeCredential Coin)
   kQueryDrepState         :: Set (Credential 'DRepRole StandardCrypto) -> Kontract a w FrameworkError (Map (Credential 'DRepRole StandardCrypto) (DRepState StandardCrypto))
   kQueryGovState          :: IsTxBuilderEra era => Kontract a w FrameworkError (GovState (ShelleyLedgerEra era))
-  kQueryDRepDistribution  :: Set (DRep StandardCrypto) -> Kontract a w FrameworkError (Map   (DRep StandardCrypto)  Lovelace)
+  kQueryDRepDistribution  :: Set (DRep StandardCrypto) -> Kontract a w FrameworkError (Map   (DRep StandardCrypto)  Coin)
 
 class HasSubmitApi a where
   kSubmitTx :: InAnyCardanoEra Tx ->  Kontract  a w FrameworkError ()
-
-data  CachedApi  a = CachedApi a  SystemStart ProtocolParameters EraHistory (GenesisParameters ShelleyEra)
-
-
--- instance HasChainQueryAPI a => HasChainQueryAPI (CachedApi a ) where
---   kQueryProtocolParams = KLift $ \(CachedApi a _ pp _  _ )  -> pure (pure pp)
---   kQuerySystemStart = KLift $ \(CachedApi a ss pp eh  gp )  -> pure (pure ss)
---   kQueryEraHistory = KLift $ \(CachedApi a ss pp eh  gp )  -> pure (pure eh)
---   kQueryGenesisParams = KLift $ \(CachedApi a ss pp eh  gp )  -> pure (pure gp)
---   kQueryUtxoByAddress addrs=  KLift $ \(CachedApi a _ _ _  _ )  -> evaluateKontract a (kQueryUtxoByAddress addrs)
---   kQueryUtxoByTxin txins = KLift $ \(CachedApi a _ _ _  _ )  -> evaluateKontract a (kQueryUtxoByTxin txins)
---   kQueryChainPoint = KLift $ \(CachedApi a _ _ _  _ )  -> evaluateKontract a kQueryChainPoint
---   kGetNetworkId = KLift $ \(CachedApi a _ _ _  _ )  ->evaluateKontract a kGetNetworkId
-
-
--- instance HasSubmitApi a => HasSubmitApi( CachedApi a) where
---     kSubmitTx  tx =  KLift $ \(CachedApi a _ pp _  _ )  ->evaluateKontract a (kSubmitTx tx)
-
-
-
--- withCache :: HasChainQueryAPI a => a -> IO (Either FrameworkError (CachedApi a))
--- withCache api = do
---     eParams  <- evaluateKontract api $  do
---                     pParam <-  kQueryProtocolParams
---                     sStart <- kQuerySystemStart
---                     eraHistory  <- kQueryEraHistory
---                     genesisParams <- kQueryGenesisParams
---                     pure ( pParam, sStart,eraHistory , genesisParams)
---     case eParams of
---       Left fe -> pure $ Left fe
---       Right (pp, ss, eh, gp) -> pure $ pure $ CachedApi api ss pp eh gp

@@ -91,6 +91,6 @@ kEvaluateExUnits' txbody utxos = do
     utxos
     txbody of
       Left tve -> KError $  FrameworkError ExUnitCalculationError (show tve)
-      Right map -> pure $ Map.map (\case
+      Right mp -> pure $ Map.map (\case
              Left see -> Left (fromScriptExecutionError  see txbody)
-             Right eu -> pure eu ) map
+             Right (_,eu) -> pure eu ) mp

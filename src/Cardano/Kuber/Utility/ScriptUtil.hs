@@ -72,6 +72,9 @@ makeTxPlutusScriptWitness era script mtxIn = case script of
     TxPlutusScriptV2 ps -> do
       langInEra <- validatePv2
       pure $   PlutusScriptWitness langInEra PlutusScriptV2 (toWitnessPScript ps )
+    TxPlutusScriptV3 ps -> do
+      langInEra <- validatePv3
+      pure $   PlutusScriptWitness langInEra PlutusScriptV3 (toWitnessPScript ps )  
   where
       toWitnessPScript :: PlutusScript lang-> PlutusScriptOrReferenceInput lang
       toWitnessPScript ps = case mtxIn of
@@ -79,6 +82,7 @@ makeTxPlutusScriptWitness era script mtxIn = case script of
         Just ti -> PReferenceScript ti Nothing
       validatePv1 = validateLang  era (PlutusScriptLanguage PlutusScriptV1) $ "PlutusScriptV1 not supported in " ++ show era
       validatePv2 = validateLang era (PlutusScriptLanguage PlutusScriptV2) $ "PlutusScriptV2 not supported in " ++ show era
+      validatePv3 = validateLang era (PlutusScriptLanguage PlutusScriptV3) $ "PlutusScriptV3 not supported in " ++ show era
 
 makeTxSimpleScriptWitness :: ShelleyBasedEra era ->  TxSimpleScript -> Maybe TxIn -> Either FrameworkError (ScriptWitness witctx era)
 makeTxSimpleScriptWitness cera sc mtxIn = do
@@ -114,6 +118,8 @@ validateLang  era lang msg = case scriptLanguageSupportedInEra era lang  of
       Nothing -> Left $ FrameworkError FeatureNotSupported msg
       Just scInEra -> pure scInEra
 
+fromPlutusV3Script :: CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ()) -> Script PlutusScriptV3
+fromPlutusV3Script plutusScript = PlutusScript PlutusScriptV3 $ PlutusScriptSerialised $  serialiseCompiledCode plutusScript
 
 fromPlutusV2Script :: CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ()) -> Script PlutusScriptV2
 fromPlutusV2Script plutusScript = PlutusScript PlutusScriptV2 $ PlutusScriptSerialised $  serialiseCompiledCode plutusScript

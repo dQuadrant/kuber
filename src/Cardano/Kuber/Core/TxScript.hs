@@ -14,6 +14,7 @@ data TxScript = TxScriptSimple TxSimpleScript
 data  TxPlutusScript  =
     TxPlutusScriptV1 (PlutusScript  PlutusScriptV1)
   | TxPlutusScriptV2 (PlutusScript  PlutusScriptV2)
+  | TxPlutusScriptV3 (PlutusScript  PlutusScriptV3)
                           deriving (Show)
 
 class IsPlutusVersion v where
@@ -25,6 +26,8 @@ instance IsPlutusVersion PlutusScriptV1  where
 instance IsPlutusVersion PlutusScriptV2  where
    toTxPlutusScriptInstance = TxPlutusScriptV2
 
+instance IsPlutusVersion PlutusScriptV3  where
+   toTxPlutusScriptInstance = TxPlutusScriptV3
 
 
 class IsPlutusScript sc where
@@ -51,6 +54,7 @@ hashPlutusScript :: TxPlutusScript -> ScriptHash
 hashPlutusScript sc = case sc of
   TxPlutusScriptV1 ps -> hashScript (PlutusScript  PlutusScriptV1 ps)
   TxPlutusScriptV2 ps -> hashScript (PlutusScript  PlutusScriptV2 ps)
+  TxPlutusScriptV3 ps -> hashScript (PlutusScript  PlutusScriptV3 ps)
 
 plutusScriptAddr :: TxPlutusScript -> NetworkId -> AddressInEra ConwayEra
 plutusScriptAddr sc networkId =
@@ -63,6 +67,7 @@ plutusScriptToScriptAny :: TxPlutusScript -> ScriptInAnyLang
 plutusScriptToScriptAny sc = case sc of
     TxPlutusScriptV1 ps -> ScriptInAnyLang (PlutusScriptLanguage  PlutusScriptV1) (PlutusScript PlutusScriptV1 ps)
     TxPlutusScriptV2 ps -> ScriptInAnyLang (PlutusScriptLanguage  PlutusScriptV2) (PlutusScript PlutusScriptV2 ps)
+    TxPlutusScriptV3 ps -> ScriptInAnyLang (PlutusScriptLanguage  PlutusScriptV3) (PlutusScript PlutusScriptV3 ps)
 
 instance (IsPlutusVersion ver =>  IsPlutusScript (PlutusScript ver)) where
   toTxPlutusScript  = toTxPlutusScriptInstance
@@ -111,6 +116,8 @@ instance IsScriptVersion PlutusScriptV1  where
 instance IsScriptVersion PlutusScriptV2  where
   translationFunc (PlutusScript psv ps)= TxScriptPlutus $ toTxPlutusScript  ps
 
+instance IsScriptVersion PlutusScriptV3  where
+  translationFunc (PlutusScript psv ps)= TxScriptPlutus $ toTxPlutusScript  ps
 instance IsScriptVersion v  => IsMintingScript (Script v) where
   toTxMintingScript sc = translationFunc sc
 

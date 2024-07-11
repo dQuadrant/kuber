@@ -21,7 +21,7 @@ import qualified Data.Text as T
 import Control.Exception (throw, catch, SomeException (SomeException), IOException)
 import Cardano.Kuber.Data.Parsers (parseAnyScript)
 import qualified Cardano.Ledger.Api as Ledger
-import Cardano.Api.Ledger (StandardCrypto, Credential, KeyRole (DRepRole), DRepState, DRep)
+import Cardano.Api.Ledger (StandardCrypto, Credential, KeyRole (DRepRole), DRepState, DRep, Coin)
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra)
 import GHC.IO.Exception (IOException(..), IOErrorType (..))
 import Data.Map (Map)
@@ -40,12 +40,22 @@ performShelleyQuery' sbera conn q queryName=
         Right res -> pure res
   where
   qFilter = QueryInEra (QueryInShelleyBasedEra sbera  q) 
+
+perfomEraIndependentQuery :: LocalNodeConnectInfo -> QueryInMode b -> String -> IO (Either FrameworkError b)
 perfomEraIndependentQuery conn q queryName = do
-  catch (catch ( do
-      a <- queryNodeLocalState conn VolatileTip q
+  withErrorHandler queryName conn $  do 
+      a <- runExceptT $ queryNodeLocalState conn VolatileTip q
       case a of
             Left af -> pure $ Left $ FrameworkError NodeQueryError (show q ++ ": Acqure Failure")
             Right result -> pure $ pure result
+
+
+
+withErrorHandler :: String ->  LocalNodeConnectInfo -> IO (Either FrameworkError b) -> IO (Either FrameworkError b)
+withErrorHandler queryName conn x = 
+  catch (catch ( do
+      x
+     
     ) (\(e ::IOException )-> pure $ Left $ FrameworkError  ConnectionError (case e of {
       IOError m_han iet s str m_ci m_s -> "Query" ++ queryName ++ ": " ++ case iet of
         ResourceBusy -> "ResourceBusy: path=" ++  filePath
@@ -60,10 +70,8 @@ perfomEraIndependentQuery conn q queryName = do
             } ))
     ) (\(e :: SomeException)-> pure $ Left $ FrameworkError  ConnectionError ( "Query" ++ queryName ++ ": " ++ show e) )
   where
-    filePath = case conn of { LocalNodeConnectInfo cmp ni fi -> case fi of { File s -> s }  }
-    -- evaluateMessage msg = if "No such file or directory" `isInfixOf` msg
-    --                         then case conn of
-    --                         else ""
+    filePath = case conn of { LocalNodeConnectInfo _cmp _ni fi -> case fi of { File s -> s }  }
+
 queryUtxos :: IsShelleyBasedEra era => LocalNodeConnectInfo -> Set AddressAny -> IO (Either FrameworkError  (UTxO era))
 queryUtxos conn addr= performShelleyQuery conn (QueryUTxO (QueryUTxOByAddress  addr)) "Utxo"
 
@@ -112,10 +120,10 @@ queryCurrentEra conn= do perfomEraIndependentQuery conn QueryCurrentEra  "Curren
 queryEraHistory :: LocalNodeConnectInfo -> IO ( Either FrameworkError EraHistory)
 queryEraHistory conn=perfomEraIndependentQuery conn  QueryEraHistory "EraHistory"
 
-queryStakeDeposits ::   ShelleyBasedEra era -> LocalNodeConnectInfo  -> Set StakeCredential -> IO      (Either   FrameworkError (Map StakeCredential Lovelace))
-queryStakeDeposits  era conn creds =performShelleyQuery @ConwayEra conn (QueryStakeDelegDeposits creds) "StakeDelegDeposits"
+queryStakeDeposits ::   ShelleyBasedEra era -> LocalNodeConnectInfo  -> Set StakeCredential -> IO      (Either   FrameworkError (Map StakeCredential Coin))
+queryStakeDeposits  era conn creds =performShelleyQuery' era conn (QueryStakeDelegDeposits creds) "StakeDelegDeposits"
 
-queryConstitution :: IsShelleyBasedEra era =>  LocalNodeConnectInfo  -> IO      (Either         FrameworkError         (Maybe   (Ledger.Constitution  (ShelleyLedgerEra  era))))
+queryConstitution :: IsShelleyBasedEra era =>  LocalNodeConnectInfo  -> IO      (Either         FrameworkError         (Ledger.Constitution  (ShelleyLedgerEra  era)))
 queryConstitution  conn  =performShelleyQuery  conn QueryConstitution "Constitution"
 
 queryGovState :: IsShelleyBasedEra era => LocalNodeConnectInfo  -> IO      (Either FrameworkError (Ledger.GovState (ShelleyLedgerEra era)))
@@ -124,11 +132,11 @@ queryGovState  conn  =performShelleyQuery   conn QueryGovState "GovState"
 queryDRepState :: ShelleyBasedEra era -> LocalNodeConnectInfo  -> Set (Credential 'DRepRole StandardCrypto) -> IO      (Either  FrameworkError   (Map   (Credential   'DRepRole StandardCrypto)  (DRepState StandardCrypto)))
 queryDRepState  era conn drep =performShelleyQuery' era  conn (QueryDRepState drep ) "DrepState"
 
-queryDRepDistribution :: ShelleyBasedEra era -> LocalNodeConnectInfo  -> Set ( DRep StandardCrypto) -> IO (Either  FrameworkError   (Map   (DRep StandardCrypto)  Lovelace)) 
+queryDRepDistribution :: ShelleyBasedEra era -> LocalNodeConnectInfo  -> Set ( DRep StandardCrypto) -> IO (Either  FrameworkError   (Map   (DRep StandardCrypto)  Coin)) 
 queryDRepDistribution era conn drep = performShelleyQuery' era conn (QueryDRepStakeDistr drep) "DrepStakeDistribution"
 
 submitTx :: LocalNodeConnectInfo  -> InAnyCardanoEra Tx -> IO  (Either FrameworkError ())
-submitTx conn  (InAnyCardanoEra era tx)= do
+submitTx conn  (InAnyCardanoEra era tx)= withErrorHandler "SubmitTx" conn $ do
       res <-submitTxToNodeLocal conn $  TxInMode (getErainMode' era) tx 
       case res of
         SubmitSuccess ->  pure $ pure ()

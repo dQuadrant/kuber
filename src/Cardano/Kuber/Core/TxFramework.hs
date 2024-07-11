@@ -21,104 +21,54 @@ import Cardano.Kuber.Error
     ( ErrorType(BalancingError, WrongScriptType, ParserError,
                 LibraryError, InsufficientInput, BadMetadata, TxValidationError, FeatureNotSupported),
       FrameworkError(FrameworkError) )
-import PlutusTx (ToData)
-import Cardano.Slotting.Time
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Map (Map)
-import Control.Exception
 import Data.Either
 import Data.Functor ((<&>))
 
 
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Builder as Builder
-import qualified Data.ByteString.Short as SBS
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString.Builder as BSL
-import Data.ByteString.Builder (charUtf8)
-
-import Codec.Serialise (serialise)
 import Data.Set (Set)
-import Data.Maybe (mapMaybe, catMaybes, fromMaybe, maybeToList, fromJust)
-import Data.List (intercalate, sortBy, minimumBy, find)
+import Data.Maybe (mapMaybe, fromMaybe, fromJust)
+import Data.List (sortBy, minimumBy, find)
 import qualified Data.Foldable as Foldable
 import PlutusLedgerApi.V2 (PubKeyHash(PubKeyHash), fromBuiltin)
 import Cardano.Kuber.Core.TxBuilder
-import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
-import Cardano.Api.Crypto.Ed25519Bip32 (xPrvFromBytes)
 import qualified Data.Aeson as A
-import qualified Data.Map.Strict as StrictMap
-import qualified Debug.Trace as Debug
 import Data.Aeson (ToJSON(toJSON))
 import qualified Data.Text as T
-import Data.Text.Conversions (convertText)
 import Data.Word (Word64)
-import Foreign.Storable (sizeOf)
-import qualified Data.Vector as Vector
-import qualified Data.HashMap.Strict as HashMap
-import qualified Data.Char as C
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.Text.Encoding as T
-import Data.Int (Int64)
-import Cardano.Api.Byron (Address(ByronAddress))
-import Cardano.Ledger.Shelley.API (Credential(KeyHashObj), KeyHash (KeyHash), Globals (systemStart))
-import Cardano.Binary (ToCBOR(toCBOR))
-import qualified Cardano.Binary as Cborg
+import Cardano.Ledger.Shelley.API (Credential(KeyHashObj), KeyHash (KeyHash))
 import Cardano.Kuber.Utility.ScriptUtil
-import Cardano.Kuber.Utility.QueryHelper (queryUtxos, queryTxins)
-import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable(toConsoleTextNoPrefix, toConsoleText))
 import Cardano.Kuber.Utility.DataTransformation
-import Data.Foldable (foldlM, Foldable (toList))
+import Data.Foldable (foldlM)
 import Data.Bifunctor (first, Bifunctor (second))
 import Cardano.Ledger.Coin (Coin(Coin))
 import qualified Data.Aeson.KeyMap as A
 import qualified Data.Aeson.Key as A
 import qualified Data.HashMap.Lazy as HMap
-import Data.Time (nominalDiffTimeToSeconds)
 import qualified Data.Text as Text
-import Cardano.Ledger.Slot (EpochInfo, epochInfoFirst)
-import Cardano.Slotting.EpochInfo (hoistEpochInfo, epochInfoSlotToUTCTime)
+import Cardano.Ledger.Slot (EpochInfo)
+import Cardano.Slotting.EpochInfo (hoistEpochInfo)
 import Ouroboros.Consensus.HardFork.History.EpochInfo (interpreterToEpochInfo)
-import           Control.Monad.Trans.Except(runExcept)
-import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
-import qualified Data.Aeson.KeyMap as Mpa
 import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (..))
 import Cardano.Kuber.Utility.Misc
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Core.LocalNodeChainApi (HasLocalNodeAPI (..))
-import Control.Lens ((^.), Identity)
+import Control.Lens ((^.))
 import Cardano.Ledger.Api
-    ( EraTxBody,
-      MaryEraTxBody(mintTxBodyL),
-      proposalProceduresTxBodyL,
-      ProposalProcedure(..),
-      GovActionId,
-      ppuMinUTxOValueL,
-      ppMinUTxOValueL,
-      ProtVerAtMost,
-      EnactState,
-      GovAction(..), RewardAcnt (RewardAcnt) )
-import Cardano.Api.Ledger (ConwayTxCert(..), ConwayDelegCert (..), PoolCert (..), ConwayGovCert (..), PoolParams (PoolParams), StrictMaybe (..), ShelleyTxCert (..), EraCrypto, Coin (unCoin), GovState, StandardCrypto, PParams (PParams), KeyRole (DRepRole), Anchor (Anchor), Credential (ScriptHashObj))
+    ( ProposalProcedure(..),
+      GovAction(..) )
+import Cardano.Api.Ledger (ConwayTxCert(..), ConwayDelegCert (..), PoolCert (..), ConwayGovCert (..), StrictMaybe (..), EraCrypto, Coin (unCoin), StandardCrypto)
 import qualified Cardano.Ledger.Api as Ledger
-import qualified Cardano.Api.Shelley as CAPI
-import qualified Cardano.Ledger.Shelley.API.Wallet as Ledger (evaluateTransactionFee)
-import qualified Cardano.Ledger.Coin as Ledger
-import Cardano.Crypto.DSIGN
-import Cardano.Crypto.Hash (Blake2b_224)
-import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Kuber.Data.EraUpdate
 import Cardano.Ledger.Api.PParams (ppKeyDepositL)
 import Cardano.Ledger.Conway.PParams (ppDRepDepositL)
 import qualified Cardano.Ledger.Conway.PParams as Ledger
-import Cardano.Ledger.Conway.Governance (enactStateGovStateL, ensCurPParamsL, ensPrevPParamUpdateL, ensPrevCommitteeL, ensPrevConstitutionL, ensPrevHardForkL)
-import Cardano.Kuber.Data.TxBuilderAeson
-import Control.Monad.IO.Class (liftIO)
-import qualified Cardano.Ledger.Credential as Ledger
+import Cardano.Ledger.Conway.Governance ( ConwayEraGov (proposalsGovStateL), pRootsL, PRoot (prRoot))
 import qualified Data.OSet.Strict as OSet
 
 import Cardano.Ledger.CertState (DRepState(DRepState))
-import Cardano.Kuber.Data.Models (ProposalModal(ProposalModal))
 type BoolChange   = Bool
 type BoolFee = Bool
 type ChangeValue = Value
@@ -226,30 +176,33 @@ executeTxBuilder builder = do
         TxSelectableTxIn tis -> (a,Set.union i (Set.fromList tis),u)
         TxSelectableSkey skeys -> (Set.union a (Set.fromList $ map (\s ->  toAddressAny $ skeyToAddr s networkId ) skeys), i , u )
 
-    applyPrevGovActionIdNDeposit :: HasChainQueryAPI api => Maybe (ConwayEraOnwards era) -> PParams (ShelleyLedgerEra era) -> [TxProposal era] ->  Kontract api w FrameworkError [TxProposal era]
+    applyPrevGovActionIdNDeposit :: HasChainQueryAPI api => Maybe (ConwayEraOnwards era) -> Ledger.PParams (ShelleyLedgerEra era) -> [TxProposal era] ->  Kontract api w FrameworkError [TxProposal era]
     applyPrevGovActionIdNDeposit beraOnward pParam props=
           case beraOnward of
-            Just ConwayEraOnwardsConway ->  do
+            Just v@ConwayEraOnwardsConway ->  do
               govAction <- kQueryGovState
-              let enactions =govAction ^. enactStateGovStateL
+              let enactions =  govAction ^. proposalsGovStateL ^. pRootsL
               pure $ map (
                 (TxProposal
-                  . updatePrevGovActionsNDeposit ConwayEraOnwardsConway enactions pParam )
+                  . updatePrevGovActionsNDeposit v enactions pParam )
                   . (\x -> case x of
                       TxProposal ppm -> ppm
                       TxProposalScript ppm -> ppm )) props
             Nothing -> pure props
 
-    updatePrevGovActionsNDeposit :: (Ledger.ConwayEraPParams
-                      (ShelleyLedgerEra era) ,EraCrypto (ShelleyLedgerEra era) ~ StandardCrypto) =>ConwayEraOnwards era ->  EnactState (ShelleyLedgerEra era) -> PParams (ShelleyLedgerEra era) -> ProposalProcedureModal era -> ProposalProcedureModal era
+
     updatePrevGovActionsNDeposit eon enacedGovActions pParams (ProposalProcedureModal (ProposalProcedure (Coin co) ra ga an)) =let
+        prevParamUpdate =  prRoot $ Ledger.grPParamUpdate enacedGovActions
+        prevHardfork = prRoot $ Ledger.grHardFork enacedGovActions
+        prevUpdateCommitted = prRoot $ Ledger.grCommittee enacedGovActions
+        prevConstitution = prRoot $ Ledger.grConstitution enacedGovActions
         newga = case ga of
-          ParameterChange sm ppu govPol -> ParameterChange (updateMaybe sm (enacedGovActions ^. ensPrevPParamUpdateL)) ppu govPol
-          HardForkInitiation sm pv -> HardForkInitiation (updateMaybe sm (enacedGovActions ^. ensPrevHardForkL)) pv
+          ParameterChange sm ppu govPol -> ParameterChange (updateMaybe sm prevParamUpdate) ppu govPol
+          HardForkInitiation sm pv -> HardForkInitiation (updateMaybe sm (prevHardfork)) pv
           TreasuryWithdrawals map _ -> ga
-          NoConfidence sm ->  NoConfidence (updateMaybe sm (enacedGovActions ^. ensPrevCommitteeL))
-          UpdateCommittee sm set map ui -> UpdateCommittee (updateMaybe sm (enacedGovActions ^. ensPrevCommitteeL )) set map ui
-          NewConstitution sm con -> NewConstitution (updateMaybe sm (enacedGovActions ^. ensPrevConstitutionL )) con
+          NoConfidence sm ->  NoConfidence (updateMaybe sm (prevUpdateCommitted))
+          UpdateCommittee sm set map ui -> UpdateCommittee (updateMaybe sm (prevUpdateCommitted)) set map ui
+          NewConstitution sm con -> NewConstitution (updateMaybe sm prevConstitution) con
           InfoAction -> ga
       in ProposalProcedureModal (ProposalProcedure (if co ==0 then pParams ^. Ledger.ppGovActionDepositL else Coin co) ra newga an)
     updateMaybe SNothing v =v
@@ -281,7 +234,7 @@ executeTxBuilder builder = do
                 SNothing -> do
                   result <- kQueryStakeDeposit (Set.singleton (fromShelleyStakeCredential cre) )
                   case Map.toList result of
-                    [(cred,Lovelace deposit)]->  pure $ ConwayUnRegCert cre (SJust  $ Coin deposit)
+                    [(cred, deposit)]->  pure $ ConwayUnRegCert cre (SJust  $  deposit)
                     _ -> kError TxValidationError $ "Stake address is not registered : " ++ show cre
             ConwayDelegCert cre del -> pure $ ConwayDelegCert cre del
             ConwayRegDelegCert cre del co -> pure $ ConwayRegDelegCert cre del (pParam ^.ppKeyDepositL )) <&> ConwayTxCertDeleg
@@ -315,7 +268,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                     txBuilder@(TxBuilder_ selections _inputs _inputRefs _outputs _collaterals validityStart validityEnd mintData extraSignatures proposals votes certs explicitFee mChangeAddr metadata )
   = do
   (totalMintVal, mints_) <- parseMints (UTxO availableUtxo)
-
+  
   let --mergedMetadata = foldl injectMetadataPolicy (foldl  injectMetadataPolicy metadata resolvedMints) _txMint
       (partialMints, parsedMints ) = partitionEithers mints_
       injectMetadataPolicy :: Map Word64 A.Value -> TxMintData (PolicyId,a) -> Map Word64  A.Value
@@ -382,7 +335,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         Cardano.Api.Shelley.txFee=TxFeeExplicit txShelleyBasedEra  fee,
         txValidityLowerBound = txLowerBound,
         txValidityUpperBound = txUpperBound,
-        Cardano.Api.Shelley.txMetadata=meta  ,
+        Cardano.Api.Shelley.txMetadata=meta,
         txAuxScripts=TxAuxScriptsNone,
         txExtraKeyWits=keyWitnesses,
         txProtocolParams=BuildTxWith (Just   pParam),
@@ -393,8 +346,11 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         txScriptValidity=TxScriptValidityNone,
         -- TODO : Parese proposal and voting proposals accordingly
         txProposalProcedures  = txPropsoals,
-        txVotingProcedures  = parseToCApiVotingProcedures votes
-         })
+        txVotingProcedures  = parseToCApiVotingProcedures votes,
+       txCurrentTreasuryValue = Nothing,
+       -- | Treasury donation to perform
+       txTreasuryDonation   = Nothing
+      })
 
       parseToCApiVotingProcedures voting =
         case voting of
@@ -417,11 +373,11 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       fixedInputSum =   utxoMapSum builderInputUtxo <> totalMintVal <> negateValue (cDeposits <> pDeposits)
 
       startingFee=case explicitFee of
-        Nothing ->  Lovelace 400_000
-        Just n -> Lovelace n
+        Nothing ->  Coin 400_000
+        Just n -> Coin n
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin builderInputUtxo) spendableUtxos
       calculator exmap1 exmap2 onMissing=
-        computeBody bBabbageOnward pParam
+        computeBody bBabbageOnward pParam (UTxO availableUtxo)
           (txBodyContentf exmap1 exmap2 onMissing)
           txChangeAddr  compulsarySignatories
           fixedInputSum availableInputs fixedOutputs
@@ -455,7 +411,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                                         )
       makeNewFee (a,b,fee) =case explicitFee of
         Nothing -> (a,b,fee)
-        Just n -> (a,b,Lovelace n)
+        Just n -> (a,b,Coin n)
   iteratedBalancing  10 txBody1 fee1 <&> respond
 
   where
@@ -576,7 +532,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
           ConwayUpdateDRep cre sm ->       ledgerCredToPaymentKeyHash txShelleyBasedEra cre
           ConwayAuthCommitteeHotKey cre cre' -> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
           ConwayResignCommitteeColdKey cre _anchor-> ledgerCredToPaymentKeyHash txShelleyBasedEra cre
-    txEra = babbageEraOnwardsToCardanoEra bBabbageOnward
+    txEra = toCardanoEra bBabbageOnward
     txCardanoEra=txEra
     txShelleyBasedEra = babbageEraOnwardsToShelleyBasedEra bBabbageOnward
     txMaryEraOnwards = babbageEraOnwardsToMaryEraOnwards bBabbageOnward
@@ -661,7 +617,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         canBeCollateral :: (IsShelleyBasedEra era) => (TxIn  , TxOut ctx era) -> Maybe (TxIn, Hash PaymentKey, Integer)
         canBeCollateral v@(ti, to@(TxOut addr val mDatumHash _)) = case mDatumHash of
                               TxOutDatumNone -> case val of
-                                TxOutValueByron (Lovelace v) ->  addressInEraToPaymentKeyHash  addr >>= (\pkh -> Just (ti,pkh,v))
+                                TxOutValueByron ( v) ->  addressInEraToPaymentKeyHash  addr >>= (\pkh -> Just (ti,pkh,unCoin v))
                                 TxOutValueShelleyBased sbe va ->  let _list = valueToList (fromLedgerValue sbe va)
                                                     in if length _list == 1
                                                         then  case addressInEraToPaymentKeyHash  addr of
@@ -774,7 +730,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         -- - then the ones with higher lovelace amount come
         sortingFunc :: (TxIn,TxOut CtxUTxO era) -> (TxIn,TxOut CtxUTxO era)-> Ordering
         sortingFunc (_,TxOut _ (TxOutValueByron v1) _ _) (_, TxOut _ (TxOutValueByron v2)  _ _)         = v1 `compare` v2
-        sortingFunc (_,TxOut _ (TxOutValueByron (Lovelace v))  _ _) (_, TxOut _ (TxOutValueShelleyBased _ v2) _ _) = LT
+        sortingFunc (_,TxOut _ (TxOutValueByron ( v))  _ _) (_, TxOut _ (TxOutValueShelleyBased _ v2) _ _) = LT
         sortingFunc (_,TxOut _ _ _ (ReferenceScript _ _)) (_, _)                                      =  LT
         sortingFunc (_,TxOut _ _ (TxOutDatumInline _ _) _) (_, _)                                     =  LT
         sortingFunc (_,_) (_, TxOut _ _ _ (ReferenceScript _ _))                                      =  GT
@@ -907,7 +863,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                   witnessF <- case psv of
                       PlutusScriptV1 -> makeTxPlutusScriptWitness shelleyBasedEra ( toTxPlutusScript ps   ) (Just _in)
                       PlutusScriptV2 -> makeTxPlutusScriptWitness shelleyBasedEra ( toTxPlutusScript ps   ) (Just _in)
-                      PlutusScriptV3 -> Left $ FrameworkError FeatureNotSupported "PlutusVersion3 is not Supported"
+                      PlutusScriptV3 -> makeTxPlutusScriptWitness shelleyBasedEra ( toTxPlutusScript ps   ) (Just _in)
                   withExUnits witnessF mData r mExunit tout
           Just _ ->Left $ FrameworkError BalancingError $ "Utxo used as refreence script doesn't contain reference script: " ++ T.unpack (renderTxIn scriptRefTin)
 
@@ -928,7 +884,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     ledgerPParam = unLedgerProtocolParameters pParam
 
     totalCertDeposits ::[Certificate era] -> Value
-    totalCertDeposits certs= lovelaceToValue $ Lovelace $ sum (map certDeposit certs)
+    totalCertDeposits certs= lovelaceToValue $ Coin $ sum (map certDeposit certs)
       where
       certDeposit cert =  case cert of
         ShelleyRelatedCertificate stbe stc -> 0
@@ -951,7 +907,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
             SNothing -> 0
             SJust (Coin co) -> co
     totalProposalDeposits :: (Ledger.EraPParams (ShelleyLedgerEra era)) => [TxProposal era]  -> Value
-    totalProposalDeposits proposals = lovelaceToValue $ Lovelace $
+    totalProposalDeposits proposals = lovelaceToValue $ Coin $
         sum (map  txProposalDeposit proposals)
       where
       proposalDeposit (ProposalProcedure (Coin co) ra ga an) = co
@@ -1024,7 +980,7 @@ makeTxProposals  conOnward proposals=do
     in
     inEonForEra (Left $ FrameworkError FeatureNotSupported "Proposals are not supported in Babbage era")
            (\conwayOnward -> Right$ Just  $ Featured conwayOnward (TxProposalProcedures (OSet.fromSet (Set.fromList ( unProcedures))) (BuildTxWith mempty)) )
-           (conwayEraOnwardsToCardanoEra conOnward)
+           (toCardanoEra conOnward)
       }
 
 
@@ -1036,16 +992,17 @@ ledgerCredToPaymentKeyHash sbera cred = case cred of
 
 computeBody ::  (IsShelleyBasedEra era, IsTxBuilderEra era) =>  BabbageEraOnwards era
       -> LedgerProtocolParameters era
-      ->( [TxIn] -> [TxOut CtxTx era]-> Lovelace->  Either FrameworkError (TxBodyContent BuildTx era))
+      -> (UTxO era)
+      ->( [TxIn] -> [TxOut CtxTx era]-> Coin->  Either FrameworkError (TxBodyContent BuildTx era))
       -> AddressInEra era
       -> Set (Hash PaymentKey)
       -> Value
       -> [(TxIn, TxOut CtxUTxO era)]
       -> [TxOutput (TxOut CtxTx era)]
-      -> Lovelace
+      -> Coin
       -> Either
-          FrameworkError (TxBody era, Set (Hash PaymentKey), Lovelace)
-computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam)  bodyContentf changeAddr signatories   fixedInputSum availableInputs  fixedOutputs  fee = do
+          FrameworkError (TxBody era, Set (Hash PaymentKey), Coin)
+computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam) utxo bodyContentf changeAddr signatories   fixedInputSum availableInputs  fixedOutputs  fee = do
   -- Debug.traceM $ "ComputeBody:" 
   --            ++  "\n mintValue: " ++ show txMintValue'
   --            ++  "\n fee: " ++ show fee
@@ -1078,8 +1035,7 @@ computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam)  bodyContentf 
   case createAndValidateTransactionBody  shelleyBasedEra bc of
       Left tbe ->Left  $ FrameworkError  LibraryError  (show tbe)
       Right tb -> do
-        let evaluateTransactionFee1=evaluateTransactionFee  (babbageEraOnwardsToShelleyBasedEra beraOnward) lpparam   tb  signatureCount 0
-            --evaluateTransactionFee2=Lovelace $  Ledger.unCoin $  Ledger.evaluateTransactionFee   lpparam  (toLedgerTx tb)  signatureCount
+        let evaluateTransactionFee1=calculateMinTxFee (babbageEraOnwardsToShelleyBasedEra beraOnward) lpparam utxo tb signatureCount 
         pure (tb,requiredSignatories, evaluateTransactionFee1 )
 
   where
@@ -1088,7 +1044,6 @@ computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam)  bodyContentf 
     toLedgerTx :: TxBody era -> Ledger.Tx (ShelleyLedgerEra era)
     toLedgerTx tb = case makeSignedTransaction [] tb of
       ShelleyTx _ tx -> tx
-      _ -> error "Cardano.Kuber.Core.TxFramework.txBuildertoTxBody.computeBody.toLedgerTx : Impossible "
     fixedOutputSum = foldMap txOutputVal fixedOutputs
       where
       txOutputVal :: ParsedOutput era -> Value
@@ -1160,17 +1115,17 @@ computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam)  bodyContentf 
     findChange :: [ParsedOutput era] -> Maybe (TxOut CtxTx era )
     findChange ous =   find (\(TxOutput _ _ c _)  -> c ) ous <&> (\(TxOutput v _ _ _)-> v)
     updateOutputs :: (IsTxBuilderEra era)=> MaryEraOnwards era
-      -> Lovelace
+      -> Coin
       -> Value
       -> [ParsedOutput era]
       -> (BoolFee, BoolChange, [TxOut CtxTx era])
     updateOutputs  meraOnward fee change outputs' = updateOutput meraOnward False False  fee change outputs'
 
-    updateOutput :: (IsTxBuilderEra era)=> MaryEraOnwards era -> BoolFee -> BoolChange ->  Lovelace -> Value -> [ParsedOutput era] ->  (BoolFee,BoolChange,[TxOut CtxTx era])
+    updateOutput :: (IsTxBuilderEra era)=> MaryEraOnwards era -> BoolFee -> BoolChange ->  Coin -> Value -> [ParsedOutput era] ->  (BoolFee,BoolChange,[TxOut CtxTx era])
     updateOutput  _ _ _ _ _ []  =  (False,False,[])
-    updateOutput  meraOnward _fUsed _cUsed  (Lovelace fee) change (txOutput:outs) =let
+    updateOutput  meraOnward _fUsed _cUsed  (fee) change (txOutput:outs) =let
         (feeUsed,changeUsed,result) = transformOut _fUsed _cUsed txOutput
-        (feeUsed2,changeUsed2,others) = updateOutput meraOnward feeUsed changeUsed  (Lovelace fee) change outs
+        (feeUsed2,changeUsed2,others) = updateOutput meraOnward feeUsed changeUsed  (fee) change outs
         updatedOutput = (feeUsed  || feeUsed2 , changeUsed || changeUsed2, result : others )
         in   updatedOutput
       where
@@ -1184,7 +1139,7 @@ computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam)  bodyContentf 
             -- deduct fee from the val if needed
             includeFee val
               | feeUsed = (True, val)
-              | addFee = (True, valueFromList [(AdaAssetId ,Quantity (- fee))] <> val)
+              | addFee = (True, valueFromList [(AdaAssetId ,Quantity (- (unCoin fee)))] <> val)
               | otherwise = (False,val)
 
             -- add change to the val if needed

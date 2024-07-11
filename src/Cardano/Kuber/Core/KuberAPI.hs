@@ -26,6 +26,7 @@ import qualified Data.Set as Set
 import Data.Time.Clock.POSIX (POSIXTime)
 import qualified Debug.Trace as Debug
 import Cardano.Api.Byron
+import Cardano.Api.Ledger (Coin)
 
 type ShelleyWitCount = Word
 
@@ -37,7 +38,7 @@ class HasKuberAPI a where
   kTimeToSlot :: POSIXTime -> Kontract a w FrameworkError SlotNo
   kSlotToTime :: SlotNo -> Kontract a w FrameworkError POSIXTime
   kEvaluateExUnits :: IsTxBuilderEra era => Tx era -> Kontract a w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
-  kCalculateMinFee :: IsTxBuilderEra era => Tx era -> Kontract a w FrameworkError Lovelace
+  kCalculateMinFee :: IsTxBuilderEra era => Tx era -> Kontract a w FrameworkError Coin
   kBuildAndSubmit :: IsTxBuilderEra era => TxBuilder_ era -> Kontract a w FrameworkError (Tx era)
 
 instance HasKuberAPI LocalNodeConnectInfo where
@@ -72,34 +73,37 @@ kEvaluateExUnits'' tx = do
 
   utxos <- kQueryUtxoByTxin allInputs
   kEvaluateExUnits' (getTxBody tx) utxos
-  where
-    resolveEra :: ShelleyBasedEra era -> TxBody era -> Set.Set TxIn
-    resolveEra sbera body = case sbera of
-      ShelleyBasedEraBabbage -> getTxUnknownInputs (body :: TxBody BabbageEra)
-      ShelleyBasedEraConway -> getTxUnknownInputs (body :: TxBody ConwayEra)
-      _ -> error "Unexpected"
 
-    getTxUnknownInputs txBody =
-      let ledgerTxBody = case txBody of ShelleyTxBody sbe tb scs tbsd m_ad tsv -> tb
-          ins = ledgerTxBody ^. inputsTxBodyL
-          refs = ledgerTxBody ^. referenceInputsTxBodyL --case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> btbReferenceInputs tb }
-       in Set.map fromShelleyTxIn (ins <> refs)
+resolveEra :: ShelleyBasedEra era -> TxBody era -> Set.Set TxIn
+resolveEra sbera body = case sbera of
+  ShelleyBasedEraBabbage -> getTxUnknownInputs (body :: TxBody BabbageEra)
+  ShelleyBasedEraConway -> getTxUnknownInputs (body :: TxBody ConwayEra)
+  _ -> error "Unexpected"
 
-kCalculateMinFee' :: (HasChainQueryAPI a, IsTxBuilderEra era) => Tx era -> Kontract a w FrameworkError Lovelace
+getTxUnknownInputs txBody =
+  let ledgerTxBody = case txBody of ShelleyTxBody sbe tb scs tbsd m_ad tsv -> tb
+      ins = ledgerTxBody ^. inputsTxBodyL
+      refs = ledgerTxBody ^. referenceInputsTxBodyL --case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> btbReferenceInputs tb }
+    in Set.map fromShelleyTxIn (ins <> refs)
+
+kCalculateMinFee' :: (HasChainQueryAPI a, IsTxBuilderEra era) => Tx era -> Kontract a w FrameworkError Coin
 kCalculateMinFee' tx = do
   kCalculateMinFee'' (getTxBody tx) (fromInteger $ toInteger $ length (getTxWitnesses tx)) 0
 
-kCalculateMinFee'' :: (HasChainQueryAPI a, IsTxBuilderEra era) => TxBody era -> Word -> Word -> Kontract a w FrameworkError Lovelace
+kCalculateMinFee'' :: (HasChainQueryAPI a, IsTxBuilderEra era) => TxBody era -> Word -> Word -> Kontract a w FrameworkError Coin
 kCalculateMinFee'' txbody shelleyWitnesses byronWitnesses = do
   protocolParams <- kQueryProtocolParams
   let 
+    allInputs = resolveEra bShelleyBasedEra txbody
     era =case txbody of
       ShelleyTxBody sbe tb scs tbsd m_tad tsv -> sbe
     capiParams = fromLedgerPParams era (unLedgerProtocolParameters protocolParams)
+  utxo <- kQueryUtxoByTxin allInputs
   bpparams <- case convertToLedgerProtocolParameters shelleyBasedEra capiParams of
     Left ppce -> error "Couldn't Convert protocol parameters."
     Right bpp -> pure bpp
-  pure $ evaluateTransactionFee shelleyBasedEra (unLedgerProtocolParameters bpparams) txbody shelleyWitnesses byronWitnesses
+  -- todo: fix this to support reference scripts
+  pure $ calculateMinTxFee shelleyBasedEra (unLedgerProtocolParameters bpparams) utxo txbody shelleyWitnesses 
 
 kBuildAndSubmit' :: (HasChainQueryAPI api, HasLocalNodeAPI api, IsTxBuilderEra era,  HasSubmitApi api) => TxBuilder_ era -> Kontract api w FrameworkError (Tx era)
 kBuildAndSubmit' builder = do

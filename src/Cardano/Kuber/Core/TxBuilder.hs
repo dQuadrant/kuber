@@ -14,52 +14,17 @@
 module Cardano.Kuber.Core.TxBuilder where
 
 import Cardano.Api hiding (txCertificates, txFee, txMetadata)
-import Cardano.Api.Ledger (EraCrypto, GovActionId, StandardCrypto)
+import Cardano.Api.Ledger (EraCrypto, StandardCrypto)
 import Cardano.Api.Shelley hiding (txCertificates, txFee, txMetadata)
-import Cardano.Kuber.Error
 import qualified Cardano.Ledger.Address as Ledger
-import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
-import Cardano.Ledger.Api (Babbage)
 import qualified Cardano.Ledger.Api as Ledger
-import qualified Cardano.Ledger.Api.Era as Ledger
-import Cardano.Slotting.Time
-import Codec.Serialise (serialise)
-import Control.Applicative (Alternative)
-import Control.Exception
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Aeson (KeyValue ((.=)), ToJSON (toJSON), (.!=), (.:?))
-import qualified Data.Aeson as A
-import qualified Data.Aeson as A.Object
 import qualified Data.Aeson as Aeson
-import Data.Aeson.Types (FromJSON (parseJSON), Parser, (.:))
-import Data.Bifunctor
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString.Short as SBS
-import Data.Either
-import qualified Data.Foldable as Foldable
-import Data.Functor ((<&>))
-import qualified Data.HashMap.Internal.Strict as H
-import qualified Data.HashMap.Strict as HM
-import Data.List (intercalate, sortBy)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, mapMaybe)
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.String (IsString (fromString))
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
-import Data.Time.Clock
-import Data.Time.Clock.POSIX
-import qualified Data.Vector as V
+import Data.Time.Clock.POSIX ( POSIXTime )
 import Data.Word (Word64)
-import Debug.Trace (trace, traceM)
-import qualified Debug.Trace as Debug
-import Foreign.C (CTime)
 import GHC.Generics (Generic)
-import PlutusLedgerApi.V2 (CurrencySymbol, PubKeyHash (PubKeyHash))
-import qualified PlutusLedgerApi.V2 as Plutus hiding (TxOut)
-import PlutusTx (ToData)
+import PlutusLedgerApi.V3 (PubKeyHash)
 import qualified Cardano.Ledger.Api as L
 
 
@@ -84,6 +49,7 @@ newtype TxVote era = TxVote (TxVoteL (ShelleyLedgerEra era)) deriving (Show, Eq)
 data TxPlutusScript
   = TxPlutusScriptV1 (PlutusScript PlutusScriptV1)
   | TxPlutusScriptV2 (PlutusScript PlutusScriptV2)
+  | TxPlutusScriptV3 (PlutusScript PlutusScriptV3)
   deriving (Show)
 
 data TxInputResolved_ era
@@ -447,6 +413,9 @@ instance IsPlutusVersion PlutusScriptV1 where
 instance IsPlutusVersion PlutusScriptV2 where
   toTxPlutusScriptInstance = TxPlutusScriptV2
 
+instance IsPlutusVersion PlutusScriptV3 where
+  toTxPlutusScriptInstance = TxPlutusScriptV3  
+
 class IsPlutusScript sc where
   toTxPlutusScript :: sc -> TxPlutusScript
 
@@ -466,6 +435,7 @@ hashPlutusScript :: TxPlutusScript -> ScriptHash
 hashPlutusScript sc = case sc of
   TxPlutusScriptV1 ps -> hashScript (PlutusScript PlutusScriptV1 ps)
   TxPlutusScriptV2 ps -> hashScript (PlutusScript PlutusScriptV2 ps)
+  TxPlutusScriptV3 ps -> hashScript (PlutusScript PlutusScriptV3 ps)
 
 plutusScriptAddr :: IsShelleyBasedEra era => TxPlutusScript -> NetworkId -> AddressInEra era
 plutusScriptAddr sc networkId =
@@ -478,6 +448,7 @@ plutusScriptToScriptAny :: TxPlutusScript -> ScriptInAnyLang
 plutusScriptToScriptAny sc = case sc of
   TxPlutusScriptV1 ps -> ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1) (PlutusScript PlutusScriptV1 ps)
   TxPlutusScriptV2 ps -> ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2) (PlutusScript PlutusScriptV2 ps)
+  TxPlutusScriptV3 ps -> ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV3) (PlutusScript PlutusScriptV3 ps)
 
 instance IsPlutusVersion ver => IsPlutusScript (PlutusScript ver) where
   toTxPlutusScript = toTxPlutusScriptInstance
@@ -518,8 +489,7 @@ txScriptFromScriptAny = \case
     PlutusScript psv ps -> case psv of
       PlutusScriptV1 -> TxScriptPlutus $ toTxPlutusScript ps
       PlutusScriptV2 -> TxScriptPlutus $ toTxPlutusScript ps
-      _ -> error "Cardano.Kuber.Core.Txbuilder.txScriptFromScriptAny TODO: for pv3"
-
+      PlutusScriptV3 -> TxScriptPlutus $ toTxPlutusScript ps
 class IsScriptVersion v where
   translationFunc :: Script v -> TxScript
 
@@ -527,6 +497,9 @@ instance IsScriptVersion PlutusScriptV1 where
   translationFunc (PlutusScript psv ps) = TxScriptPlutus $ toTxPlutusScript ps
 
 instance IsScriptVersion PlutusScriptV2 where
+  translationFunc (PlutusScript psv ps) = TxScriptPlutus $ toTxPlutusScript ps
+
+instance IsScriptVersion PlutusScriptV3 where
   translationFunc (PlutusScript psv ps) = TxScriptPlutus $ toTxPlutusScript ps
 
 instance (IsPlutusVersion ver) => IsMintingScript (PlutusScript ver) where
