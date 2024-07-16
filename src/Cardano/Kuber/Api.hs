@@ -92,6 +92,7 @@ module Cardano.Kuber.Api(
     , txScriptHash
     , hashTxScript
     , txScriptToScriptAny
+    , txScriptByteSize
 
     -- ** Error Class
     ,   ErrorType(..)
@@ -130,9 +131,11 @@ module Cardano.Kuber.Api(
 
 where
 
+
 import Cardano.Kuber.Utility.WalletUtil
 import Cardano.Kuber.Core.ChainInfo
 import Cardano.Kuber.Data.Parsers
+import Cardano.Kuber.Core.TxScript
 import Cardano.Kuber.Core.TxBuilder
 import Cardano.Kuber.Core.TxFramework
 import Cardano.Kuber.Data.TxBuilderAeson

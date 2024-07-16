@@ -15,85 +15,42 @@
 module Cardano.Kuber.Data.TxBuilderAeson where
 
 import Cardano.Api hiding (txFee, txMetadata)
-import Cardano.Api.Ledger (Coin (Coin), ConwayTxCert (..), ShelleyTxCert (..), StrictMaybe (..), unboundRational)
-import qualified Cardano.Api.Ledger as Ledger
 import Cardano.Api.Shelley
-  ( Proposal (unProposal),
-    ReferenceScript (ReferenceScript, ReferenceScriptNone),
-    ShelleyLedgerEra,
-    VotingProcedure (unVotingProcedure),
-    VotingProcedures (VotingProcedures, unVotingProcedures),
-    fromLedgerPParamsUpdate,
-    fromShelleyStakeAddr,
+  ( ReferenceScript (ReferenceScript, ReferenceScriptNone),
     scriptDataToJsonDetailedSchema,
     toShelleyAddr,
   )
-import qualified Cardano.Api.Shelley as CApi
-import Cardano.Binary (serializeEncoding)
-import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable (toConsoleText, toConsoleTextNoPrefix))
 import Cardano.Kuber.Core.TxBuilder
 import Cardano.Kuber.Data.EraUpdate (updateAddressEra)
-import Cardano.Kuber.Data.Models (CertificateModal (CertificateModal), GovActionModal (GovActionModal), ProposalModal (ProposalModal), Wrapper (unWrap), unAddressModal)
-import Cardano.Kuber.Data.Parsers (anyScriptParser, parseAddress, parseAddressBech32, parseAddressBinary, parseAddressRaw, parseAnyScript, parseAssetId, parseAssetNQuantity, parseAssetName, parseCbor, parseCborHex, parseHexString, parseScriptData, parseSignKey, parseTxIn, parseUtxo, parseUtxoCbor, parseValueText, parseValueToAsset, scriptDataParser, txInParser, txinOrUtxoParser)
-import Cardano.Kuber.Error
+import Cardano.Kuber.Data.Models (CertificateModal (CertificateModal), unAddressModal)
+import Cardano.Kuber.Data.Parsers (anyScriptParser, parseAddress, parseAddressBech32, parseAddressBinary, parseAddressRaw, parseAssetName, parseCbor, parseCborHex, parseHexString, parseSignKey, parseTxIn, parseUtxoCbor, parseValueText, scriptDataParser, txinOrUtxoParser)
 import Cardano.Kuber.Util
-import Cardano.Kuber.Utility.DataTransformation (addressInEraToAddressAny, fromLedgerAddress, pkhToPaymentKeyHash)
-import Cardano.Kuber.Utility.ScriptUtil
-import Cardano.Ledger.Api (Anchor (Anchor), GovAction (..), ProposalProcedure (..), VotingProcedures, serialiseRewardAcnt)
-import Cardano.Ledger.Binary
-  ( Annotator (..),
-    DecCBOR (decCBOR),
-    EncCBOR (encCBOR),
-    ToCBOR (..),
-    serialize,
-    shelleyProtVer,
-  )
-import Cardano.Ledger.Core (PParamsUpdate (..))
-import Cardano.Slotting.Time
-import Codec.Serialise (serialise)
+import Cardano.Kuber.Utility.DataTransformation (fromLedgerAddress)
 import Control.Applicative ((<|>))
-import Control.Exception
-import Control.Monad (unless, when)
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Aeson (KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey), (.!=), (.:?))
+import Control.Monad (unless)
+import Data.Aeson (KeyValue ((.=)), ToJSON (toJSON), (.!=), (.:?))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as A
 import qualified Data.Aeson.KeyMap as A
-import Data.Aeson.Types (FromJSON (parseJSON), Parser, parseEither, parseMaybe, (.:))
+import Data.Aeson.Types (FromJSON (parseJSON), Parser, (.:))
 import qualified Data.Aeson.Types as A
 import Data.Bifunctor (second)
-import qualified Data.ByteString as B
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString.Lazy.Char8 as BSL8
-import qualified Data.ByteString.Short as SBS
-import Data.Either
-import qualified Data.Foldable as Foldable
-import Data.Functor (($>), (<&>))
-import qualified Data.HashMap.Internal.Strict as H
-import qualified Data.HashMap.Strict as HM
-import Data.List (intercalate, sortBy)
+import Data.Functor ((<&>))
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, fromMaybe, isNothing, mapMaybe, maybeToList)
-import Data.Ratio (denominator, numerator)
-import Data.Set (Set)
+import Data.Maybe (isNothing, maybeToList)
 import qualified Data.Set as Set
 import Data.String (IsString (fromString))
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.Text.Internal.Fusion.CaseMapping (upperMapping)
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Vector as V
 import Data.Word (Word64)
-import qualified Debug.Trace as Debug
-import PlutusLedgerApi.V2 (CurrencySymbol, PubKeyHash (PubKeyHash, getPubKeyHash), ToData (toBuiltinData), TxOut, fromBuiltin, toBuiltin)
-import PlutusTx (ToData)
+import PlutusLedgerApi.V2 (PubKeyHash (PubKeyHash, getPubKeyHash), ToData (toBuiltinData), fromBuiltin, toBuiltin)
 import PlutusTx.IsData (toData)
-import qualified Cardano.Ledger.Conway.PParams
+import Cardano.Kuber.Core.TxScript
 
 
 
@@ -471,7 +428,7 @@ instance FromJSON TxScript where
       tryPlutus = parseJSON v <&> TxScriptPlutus
       trySimple = do
         v :: SimpleScript <- parseJSON v
-        pure $ TxScriptSimple $ TxSimpleScript v
+        pure $ TxScriptSimple $  v
   parseJSON _ = error "Expected Object"
 
 instance ToJSON TxSimpleScript where

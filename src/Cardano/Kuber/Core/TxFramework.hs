@@ -54,6 +54,8 @@ import Ouroboros.Consensus.HardFork.History.EpochInfo (interpreterToEpochInfo)
 import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (..))
 import Cardano.Kuber.Utility.Misc
 import Cardano.Kuber.Core.Kontract
+import Cardano.Kuber.Core.TxScript
+
 import Cardano.Kuber.Core.LocalNodeChainApi (HasLocalNodeAPI (..))
 import Control.Lens ((^.))
 import Cardano.Ledger.Api
@@ -990,7 +992,7 @@ ledgerCredToPaymentKeyHash sbera cred = case cred of
   _ -> Nothing
 
 
-computeBody ::  (IsShelleyBasedEra era, IsTxBuilderEra era) =>  BabbageEraOnwards era
+computeBody ::  (IsTxBuilderEra era) =>  BabbageEraOnwards era
       -> LedgerProtocolParameters era
       -> (UTxO era)
       ->( [TxIn] -> [TxOut CtxTx era]-> Coin->  Either FrameworkError (TxBodyContent BuildTx era))

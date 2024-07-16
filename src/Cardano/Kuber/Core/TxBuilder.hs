@@ -26,16 +26,8 @@ import Data.Word (Word64)
 import GHC.Generics (Generic)
 import PlutusLedgerApi.V3 (PubKeyHash)
 import qualified Cardano.Ledger.Api as L
+import Cardano.Kuber.Core.TxScript
 
-
-
-newtype TxSimpleScript = TxSimpleScript SimpleScript
-  deriving (Show)
-
-data TxScript
-  = TxScriptSimple TxSimpleScript
-  | TxScriptPlutus TxPlutusScript
-  deriving (Show)
 
 data TxVoteL ledgerera
   = TxVoteL
@@ -46,11 +38,6 @@ data TxVoteL ledgerera
 
 newtype TxVote era = TxVote (TxVoteL (ShelleyLedgerEra era)) deriving (Show, Eq)
 
-data TxPlutusScript
-  = TxPlutusScriptV1 (PlutusScript PlutusScriptV1)
-  | TxPlutusScriptV2 (PlutusScript PlutusScriptV2)
-  | TxPlutusScriptV3 (PlutusScript PlutusScriptV3)
-  deriving (Show)
 
 data TxInputResolved_ era
   = TxInputUtxo (UTxO era)
@@ -123,7 +110,7 @@ data TxInputSelection era
 data TxMintingScriptSource
   = TxMintingPlutusScript TxPlutusScript (Maybe ExecutionUnits) HashableScriptData
   | TxMintingReferenceScript TxIn (Maybe ExecutionUnits) (Maybe HashableScriptData)
-  | TxMintingSimpleScript TxSimpleScript
+  | TxMintingSimpleScript SimpleScript
   deriving (Show)
 
 data TxMintData s = TxMintData s [(AssetName, Quantity)] (Map Word64 (Map AssetName Aeson.Value)) deriving (Show)
@@ -317,8 +304,8 @@ txMintPlutusScript :: IsPlutusScript script => script -> HashableScriptData -> [
 txMintPlutusScript script sData amounts = _txMint $ TxMintData (TxMintingPlutusScript (toTxPlutusScript script) Nothing sData) amounts Map.empty
 
 -- | Mint token with simple script
-txMintSimpleScript :: IsSimpleScript script => script -> [(AssetName, Quantity)] -> TxBuilder
-txMintSimpleScript script amounts = _txMint $ TxMintData (TxMintingSimpleScript (toTxSimpleScript script)) amounts Map.empty
+txMintSimpleScript ::  SimpleScript -> [(AssetName, Quantity)] -> TxBuilder
+txMintSimpleScript script amounts = _txMint $ TxMintData (TxMintingSimpleScript ( script)) amounts Map.empty
 
 -- txMintWithMetadata :: IsMintingScript script =>script  ->   [(AssetName,Integer)] -> Map Word64 (Map AssetName Aeson.Value)  -> TxBuilder
 -- txMintWithMetadata script amounts mp = _txMint $ TxMintData (TxMintingScriptCode $ toTxMintingScript script) amounts mp
@@ -404,106 +391,6 @@ txSetFee v = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [] (Just v) Not
 txMetadata :: Map Word64 Aeson.Value -> TxBuilder
 txMetadata = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing
 
-class IsPlutusVersion v where
-  toTxPlutusScriptInstance :: PlutusScript v -> TxPlutusScript
-
-instance IsPlutusVersion PlutusScriptV1 where
-  toTxPlutusScriptInstance = TxPlutusScriptV1
-
-instance IsPlutusVersion PlutusScriptV2 where
-  toTxPlutusScriptInstance = TxPlutusScriptV2
-
-instance IsPlutusVersion PlutusScriptV3 where
-  toTxPlutusScriptInstance = TxPlutusScriptV3  
-
-class IsPlutusScript sc where
-  toTxPlutusScript :: sc -> TxPlutusScript
-
-class IsSimpleScript sc where
-  toTxSimpleScript :: sc -> TxSimpleScript
-
-instance IsPlutusScript TxPlutusScript where
-  toTxPlutusScript = id
-
-instance IsSimpleScript TxSimpleScript where
-  toTxSimpleScript = id
-
-instance IsSimpleScript SimpleScript where
-  toTxSimpleScript = TxSimpleScript
-
-hashPlutusScript :: TxPlutusScript -> ScriptHash
-hashPlutusScript sc = case sc of
-  TxPlutusScriptV1 ps -> hashScript (PlutusScript PlutusScriptV1 ps)
-  TxPlutusScriptV2 ps -> hashScript (PlutusScript PlutusScriptV2 ps)
-  TxPlutusScriptV3 ps -> hashScript (PlutusScript PlutusScriptV3 ps)
-
-plutusScriptAddr :: IsShelleyBasedEra era => TxPlutusScript -> NetworkId -> AddressInEra era
-plutusScriptAddr sc networkId =
-  let payCred = PaymentCredentialByScript (hashPlutusScript sc)
-      addr = makeShelleyAddress networkId payCred NoStakeAddress
-      addrInEra = AddressInEra (ShelleyAddressInEra shelleyBasedEra) addr
-   in addrInEra
-
-plutusScriptToScriptAny :: TxPlutusScript -> ScriptInAnyLang
-plutusScriptToScriptAny sc = case sc of
-  TxPlutusScriptV1 ps -> ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1) (PlutusScript PlutusScriptV1 ps)
-  TxPlutusScriptV2 ps -> ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2) (PlutusScript PlutusScriptV2 ps)
-  TxPlutusScriptV3 ps -> ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV3) (PlutusScript PlutusScriptV3 ps)
-
-instance IsPlutusVersion ver => IsPlutusScript (PlutusScript ver) where
-  toTxPlutusScript = toTxPlutusScriptInstance
-
--- instance  IsPlutusVersion ver => IsPlutusScript (PlutusScript ver) where
---   toTxPlutusScript  = toTxPlutusScriptInstance
-
-instance IsPlutusVersion ver => IsPlutusScript (Script ver) where
-  toTxPlutusScript (PlutusScript psv ps) = toTxPlutusScript ps
-  toTxPlutusScript _ = error "Impossible"
-
-class IsMintingScript sc where
-  toTxMintingScript :: sc -> TxScript
-
-txScriptPolicyId :: TxScript -> PolicyId
-txScriptPolicyId sc = PolicyId (hashTxScript sc)
-
-txScriptAddress :: IsShelleyBasedEra era => TxScript -> NetworkId -> StakeAddressReference -> AddressInEra era
-txScriptAddress sc net = makeShelleyAddressInEra shelleyBasedEra net (PaymentCredentialByScript $ txScriptHash sc)
-
-txScriptHash :: TxScript -> ScriptHash
-txScriptHash = hashTxScript
-
-hashTxScript :: TxScript -> ScriptHash
-hashTxScript sc = case sc of
-  TxScriptSimple (TxSimpleScript ss) -> hashScript (SimpleScript ss)
-  TxScriptPlutus tps -> hashPlutusScript tps
-
-txScriptToScriptAny :: TxScript -> ScriptInAnyLang
-txScriptToScriptAny sc = case sc of
-  TxScriptSimple (TxSimpleScript ss) -> ScriptInAnyLang SimpleScriptLanguage (SimpleScript ss)
-  TxScriptPlutus tps -> plutusScriptToScriptAny tps
-
-txScriptFromScriptAny :: ScriptInAnyLang -> TxScript
-txScriptFromScriptAny = \case
-  ScriptInAnyLang sl sc -> case sc of
-    SimpleScript ss -> TxScriptSimple $ toTxSimpleScript ss
-    PlutusScript psv ps -> case psv of
-      PlutusScriptV1 -> TxScriptPlutus $ toTxPlutusScript ps
-      PlutusScriptV2 -> TxScriptPlutus $ toTxPlutusScript ps
-      PlutusScriptV3 -> TxScriptPlutus $ toTxPlutusScript ps
-class IsScriptVersion v where
-  translationFunc :: Script v -> TxScript
-
-instance IsScriptVersion PlutusScriptV1 where
-  translationFunc (PlutusScript psv ps) = TxScriptPlutus $ toTxPlutusScript ps
-
-instance IsScriptVersion PlutusScriptV2 where
-  translationFunc (PlutusScript psv ps) = TxScriptPlutus $ toTxPlutusScript ps
-
-instance IsScriptVersion PlutusScriptV3 where
-  translationFunc (PlutusScript psv ps) = TxScriptPlutus $ toTxPlutusScript ps
-
-instance (IsPlutusVersion ver) => IsMintingScript (PlutusScript ver) where
-  toTxMintingScript v = TxScriptPlutus (toTxPlutusScript v)
 
 -- | Add a  script utxo containing datum-hash to  transaction input . Script code, datum matching datumHash and redeemer should be  passed for building transaction.
 txRedeemUtxoWithDatum :: IsPlutusScript sc => TxIn -> Cardano.Api.Shelley.TxOut CtxUTxO ConwayEra -> sc -> HashableScriptData -> HashableScriptData -> Maybe ExecutionUnits -> TxBuilder
