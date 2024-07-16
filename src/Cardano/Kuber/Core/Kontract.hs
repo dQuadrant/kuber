@@ -20,8 +20,9 @@ data  Exception e =>  Kontract api  w e r  =
   |   KError !e
   |   KLift  ( api -> IO (Either e r))
 
+eitherToKontract :: Exception e => Either e r -> Kontract api w e r
 eitherToKontract e = case e of
-  Left e  -> KError e
+  Left err  -> KError err
   Right r ->  KResult r
 
 instance  Exception e => Functor (Kontract api w e ) where
@@ -52,8 +53,8 @@ instance Exception e => Applicative (Kontract api w e ) where
 
 instance  Exception e => Alternative (Kontract api w e) where
     empty ::  Kontract api w e a
-    empty = liftIO $ throw ( FrameworkError LibraryError "Empty Alternative for Kontract" ) 
-    
+    empty = liftIO $ throw ( FrameworkError LibraryError "Empty Alternative for Kontract" )
+
     (<|>) ::  Kontract api w e a -> Kontract api w e a -> Kontract api w e a
     (KError _) <|> b = b
     a <|> _ = a
@@ -63,7 +64,7 @@ instance Exception e =>  Monad (Kontract api w e ) where
   (>>=) :: Kontract api w e a -> (a -> Kontract api w e b) -> Kontract api w e b
   (>>=) (KResult r) f =  f r
   (>>=) (KError r) _ = KError r
-  (>>=) v@(KLift ior) f = KLift $ \api -> do
+  (>>=) (KLift ior) f = KLift $ \api -> do
             result <- ior api
             case result of
               Left e -> pure $ Left  e
@@ -109,14 +110,18 @@ instance  MonadError FrameworkError  (Kontract api w FrameworkError) where
     catchError (KResult r) _ = KResult r
     catchError (KError e) handler = handler e
     catchError (KLift action) handler = KLift $ \api -> do
-        result <- try  (action api)  
-        case result of 
-          Left e -> someExHandler e
-          Right (Left err) -> case  handler err of
+        result <- try @SomeException  (action api)
+        let handlerResult err = case  handler err of
                 KResult r -> return (Right r)
                 KError e' -> return (Left e')
                 KLift action' -> action' api
+        case result of
+          Left e -> handlerResult $ unHandledError e
+          Right (Left err) -> handlerResult err
           Right(Right r) -> return (Right r)
 
+unHandledError :: SomeException -> FrameworkError
+unHandledError e = FrameworkError LibraryError ("Unhandled : " ++ show e)
+
 someExHandler :: Applicative f => SomeException -> f (Either FrameworkError b)
-someExHandler (e::SomeException ) = pure $ Left $  FrameworkError LibraryError ("Unhandled : " ++ show e)
+someExHandler (e::SomeException ) = pure $ Left $  unHandledError e
