@@ -67,10 +67,15 @@ import Cardano.Kuber.Data.EraUpdate
 import Cardano.Ledger.Api.PParams (ppKeyDepositL)
 import Cardano.Ledger.Conway.PParams (ppDRepDepositL)
 import qualified Cardano.Ledger.Conway.PParams as Ledger
-import Cardano.Ledger.Conway.Governance ( ConwayEraGov (proposalsGovStateL), pRootsL, PRoot (prRoot))
+import Cardano.Ledger.Conway.Governance ( ConwayEraGov (proposalsGovStateL,constitutionGovStateL),constitutionScriptL,proposalsGovStateL, pRootsL, PRoot (prRoot))
+
 import qualified Data.OSet.Strict as OSet
 
 import Cardano.Ledger.CertState (DRepState(DRepState))
+import qualified Cardano.Api.Ledger as L
+import Cardano.Kuber.Data.Models (fromStrictMaybe)
+import qualified Debug.Trace as Debug
+
 type BoolChange   = Bool
 type BoolFee = Bool
 type ChangeValue = Value
@@ -80,14 +85,18 @@ type FeeValue = Value
 --                          -> ScriptRedeemer
 --                          -> ExecutionUnits
 --                          -> ScriptWitness witctx era)
+
 type PartialInput era = (TxIn,ExecutionUnits -> BuildTxWith BuildTx (Witness WitCtxTxIn era)  )
 type ParsedInput era =  (TxIn,BuildTxWith BuildTx (Witness WitCtxTxIn era))
 type ParsedMint era = (PolicyId, ScriptWitness WitCtxMint era)
 type PartialMint era = (PolicyId,ExecutionUnits -> ScriptWitness WitCtxMint era)
 
+type PartialProposal era = (Proposal era , ExecutionUnits -> ScriptWitness WitCtxMint era)
+
 type  ParsedOutput era  = TxOutput (TxOut CtxTx era)
 type  ParseMintsF m era = Map PolicyId ExecutionUnits -> m TxMintValue BuildTx era
 type  ParseInputsF m era =  Map TxIn ExecutionUnits -> [TxIn] -> m [(TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn era))]
+type ParseProposalF m era = Map (L.ProposalProcedure (ShelleyLedgerEra era)) ExecutionUnits-> TxProposalProcedures BuildTx era
 
 
 valueToRequiredEra:: CardanoEra era -> Value -> TxOutValue era
@@ -184,26 +193,31 @@ executeTxBuilder builder = do
             Just v@ConwayEraOnwardsConway ->  do
               govAction <- kQueryGovState
               let enactions =  govAction ^. proposalsGovStateL ^. pRootsL
-              pure $ map (
-                (TxProposal
-                  . updatePrevGovActionsNDeposit v enactions pParam )
-                  . (\x -> case x of
-                      TxProposal ppm -> ppm
-                      TxProposalScript ppm -> ppm )) props
+              let constitutionScript = govAction ^. constitutionGovStateL ^. constitutionScriptL
+
+              pure $ map
+                   (\x -> case x of
+                        TxProposal ppm -> TxProposal (updatePrevGovActionsNDeposit v enactions pParam constitutionScript ppm)
+                        TxProposalScript ppm mex sc -> TxProposalScript  (updatePrevGovActionsNDeposit v enactions pParam constitutionScript ppm) mex sc
+                        TxProposalScriptReference ppm mex sc ->
+                          TxProposalScriptReference (updatePrevGovActionsNDeposit v enactions pParam constitutionScript ppm) mex sc
+                      ) props
+
+
             Nothing -> pure props
 
 
-    updatePrevGovActionsNDeposit eon enacedGovActions pParams (ProposalProcedureModal (ProposalProcedure (Coin co) ra ga an)) =let
+    updatePrevGovActionsNDeposit eon enacedGovActions pParams constitutionScript (ProposalProcedureModal (ProposalProcedure (Coin co) ra ga an))  =let
         prevParamUpdate =  prRoot $ Ledger.grPParamUpdate enacedGovActions
         prevHardfork = prRoot $ Ledger.grHardFork enacedGovActions
         prevUpdateCommitted = prRoot $ Ledger.grCommittee enacedGovActions
         prevConstitution = prRoot $ Ledger.grConstitution enacedGovActions
         newga = case ga of
-          ParameterChange sm ppu govPol -> ParameterChange (updateMaybe sm prevParamUpdate) ppu govPol
-          HardForkInitiation sm pv -> HardForkInitiation (updateMaybe sm (prevHardfork)) pv
-          TreasuryWithdrawals map _ -> ga
-          NoConfidence sm ->  NoConfidence (updateMaybe sm (prevUpdateCommitted))
-          UpdateCommittee sm set map ui -> UpdateCommittee (updateMaybe sm (prevUpdateCommitted)) set map ui
+          ParameterChange sm ppu govScript -> ParameterChange (updateMaybe sm prevParamUpdate) ppu (updateMaybe govScript constitutionScript)
+          HardForkInitiation sm pv -> HardForkInitiation (updateMaybe sm prevHardfork) pv
+          TreasuryWithdrawals map govScript -> TreasuryWithdrawals map (updateMaybe govScript constitutionScript)
+          NoConfidence sm ->  NoConfidence (updateMaybe sm prevUpdateCommitted)
+          UpdateCommittee sm set map ui -> UpdateCommittee (updateMaybe sm prevUpdateCommitted) set map ui
           NewConstitution sm con -> NewConstitution (updateMaybe sm prevConstitution) con
           InfoAction -> ga
       in ProposalProcedureModal (ProposalProcedure (if co ==0 then pParams ^. Ledger.ppGovActionDepositL else Coin co) ra newga an)
@@ -267,10 +281,10 @@ txBuilderToTxBody:: (IsTxBuilderEra targetEra) =>
    -> Either FrameworkError  (Cardano.Api.TxBody targetEra,Tx targetEra )
 txBuilderToTxBody   network  pParam  systemStart eraHistory
                     ( UTxO availableUtxo)
-                    txBuilder@(TxBuilder_ selections _inputs _inputRefs _outputs _collaterals validityStart validityEnd mintData extraSignatures proposals votes certs explicitFee mChangeAddr metadata )
+                    txBuilder@(TxBuilder_ selections _inputs _inputRefs _outputs _collaterals validityStart validityEnd mintData extraSignatures proposals votes certs explicitFee mChangeAddr metadata auxScripts )
   = do
   (totalMintVal, mints_) <- parseMints (UTxO availableUtxo)
-  
+
   let --mergedMetadata = foldl injectMetadataPolicy (foldl  injectMetadataPolicy metadata resolvedMints) _txMint
       (partialMints, parsedMints ) = partitionEithers mints_
       injectMetadataPolicy :: Map Word64 A.Value -> TxMintData (PolicyId,a) -> Map Word64  A.Value
@@ -292,42 +306,40 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
             Left tmje -> Left $ FrameworkError BadMetadata  (show tmje)
             Right tm -> Right $ TxMetadataInEra  shelleyBasedEra tm
   resolvedInputs <- mapM resolveInputs _inputs
+  (hasScritProposals,pDeposits,parsedProposals) <- makeTxProposals txCardanoEra (UTxO availableUtxo) proposals
   (partialInputs,parsedInputs) <-  mapM parseResolvedInputs resolvedInputs <&> partitionEithers . concat
   parsedOutputs' <- mapM (parseOutputs network) _outputs
   fixedOutputs <-case updateTxOutMinAda  parsedOutputs' of
-    Left (i, output,txoutAda,minAda) -> Left $ FrameworkError TxValidationError $  "$.outputs["++show i ++ "] Minimum lovelace txout is " ++ show minAda ++ ", But it has only " ++ show txoutAda
+    Left (i, output,txoutAda,minAda) -> Left $ FrameworkError TxValidationError $  "$.outputs["++ show i ++ "] Minimum lovelace txout is " ++ show minAda ++ ", But it has only " ++ show txoutAda
     Right tos -> pure tos
+
   txChangeAddr <- monadFailChangeAddr
-  collaterals <- if hasScriptInput || hasPlutusMint
-                  then  (case collaterals of
+  collaterals <- if hasScriptInput || hasPlutusMint || hasScritProposals
+                  then  (case maybeCollaterals of
                     Nothing ->  Left $ FrameworkError BalancingError "No utxo available for collateral"
                     Just tis -> pure tis
                     )
                   else pure []
-  (txPropsoals,pDeposits) <- ( if null proposals
-    then pure (Nothing,zeroValue)
-    else case bConwayOnward of
-                     Nothing -> pure (Nothing,zeroValue)
-                     Just ceo -> do 
-                      val <- makeTxProposals ceo proposals
-                      pure (val,case ceo of { ConwayEraOnwardsConway -> totalProposalDeposits proposals } )
-    )
 
   (txCerts,cDeposits) <- ( if null certs
     then pure $ (TxCertificatesNone,zeroValue)
     else inEonForEra
            (Left $ FrameworkError FeatureNotSupported "Certificate are not supported in Babbage era in Kuber")
            (\conwayOnward -> pure $    (
-            Cardano.Api.Shelley.TxCertificates 
-              (conwayEraOnwardsToShelleyBasedEra conwayOnward) 
-              certs 
+            Cardano.Api.Shelley.TxCertificates
+              (conwayEraOnwardsToShelleyBasedEra conwayOnward)
+              certs
               (BuildTxWith mempty),
               totalCertDeposits certs) ) txCardanoEra
     )
+  validatedAuxScripts <- mapM (\(i,sc) ->  case toScriptInEra txShelleyBasedEra (txScriptToScriptAny sc) of
+      Nothing -> Left $ FrameworkError FeatureNotSupported ("$.auxScripts[" ++ show i ++ "[] Script type is not supported in this era")
+      Just scInEra -> Right scInEra
+     )  (zip [0..] auxScripts)
   let
       toBuildTxWith v = map (second BuildTxWith)
-      txBodyContentf1 ins  mints outs fee
-          =(TxBodyContent {
+      txBodyContentf1 ins  mints fProposals outs fee
+          = (TxBodyContent {
         txIns=   parsedInputs ++ ins,
         txInsCollateral= if null collaterals then TxInsCollateralNone  else TxInsCollateral txAlonzoEraOnwards (map fst collaterals),
         txOuts=outs,
@@ -338,7 +350,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         txValidityLowerBound = txLowerBound,
         txValidityUpperBound = txUpperBound,
         Cardano.Api.Shelley.txMetadata=meta,
-        txAuxScripts=TxAuxScriptsNone,
+        Cardano.Api.Shelley.txAuxScripts=if null auxScripts then TxAuxScriptsNone else TxAuxScripts txAllegraEraOnwards validatedAuxScripts  ,
         txExtraKeyWits=keyWitnesses,
         txProtocolParams=BuildTxWith (Just   pParam),
         txWithdrawals=TxWithdrawalsNone,
@@ -347,7 +359,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         txMintValue=mints,
         txScriptValidity=TxScriptValidityNone,
         -- TODO : Parese proposal and voting proposals accordingly
-        txProposalProcedures  = txPropsoals,
+        txProposalProcedures  = fProposals,
         txVotingProcedures  = parseToCApiVotingProcedures votes,
        txCurrentTreasuryValue = Nothing,
        -- | Treasury donation to perform
@@ -359,13 +371,14 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
           [] -> Just $ Featured (fromJust bConwayOnward) TxVotingProceduresNone
           v -> Just $ Featured (fromJust bConwayOnward) (TxVotingProcedures votingProcedures (BuildTxWith mempty) )
         where
-          mapOfGovernanceIdAndVotingProcedure = Map.fromList $ map (\(TxVote tvl) -> case tvl of { TxVoteL gai vp vo -> (gai,vp) })voting
-          votingProcedures = Ledger.VotingProcedures $ Map.fromList $ map (\(TxVote tvl)-> case tvl of { TxVoteL gai vp vo -> (vo,mapOfGovernanceIdAndVotingProcedure) })voting
+          mapOfGovernanceIdAndVotingProcedure = Map.fromList $ map (\(TxVote tvl) -> case tvl of { TxVoteL gai vp vo -> (gai,vp) }) voting
+          votingProcedures = Ledger.VotingProcedures $ Map.fromList $ map (\(TxVote tvl)-> case tvl of { TxVoteL gai vp vo -> (vo,mapOfGovernanceIdAndVotingProcedure) }) voting
 
-      txBodyContentf mintExUnits inputExUnits onMissing extraIns touts fee   = do
+      txBodyContentf (ExUnitResult inputExUnits mintExUnits proposalExunits) onMissing extraIns touts fee   = do
         inputs <- applyExUnitToPartial inputExUnits onMissing partialInputs
         mints  <- applyExUnitToPartial mintExUnits  onMissing partialMints
-        pure $ txBodyContentf1 (inputs ++ toKeyWitnesses extraIns) (txMintValue' mints ) touts fee
+        finalProposals <- parsedProposals proposalExunits onMissing
+        pure $ txBodyContentf1 (inputs ++ toKeyWitnesses extraIns) (txMintValue' mints ) finalProposals touts fee
 
       txMintValue' postResolved =
           if null (valueToList totalMintVal)
@@ -378,16 +391,16 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         Nothing ->  Coin 400_000
         Just n -> Coin n
       availableInputs = sortUtxos $ UTxO  $ Map.filterWithKey (\ tin _ -> Map.notMember tin builderInputUtxo) spendableUtxos
-      calculator exmap1 exmap2 onMissing=
+      calculator exunitResult onMissing=
         computeBody bBabbageOnward pParam (UTxO availableUtxo)
-          (txBodyContentf exmap1 exmap2 onMissing)
+          (txBodyContentf exunitResult onMissing)
           txChangeAddr  compulsarySignatories
           fixedInputSum availableInputs fixedOutputs
-      calculatorWithDefaults = calculator  mempty mempty (pure defaultExunits)
+      calculatorWithDefaults = calculator  (emptyExUnitResult txCardanoEra) (pure defaultExunits)
       colalteralSignatories = Set.fromList ( map snd collaterals)
       withExtraSigs = appendExtraSignatures  colalteralSignatories extraSignatures
       withMintSignatures = appendMintingScriptSignatures withExtraSigs $ map snd parsedMints
-      withCertSignatures = appendCertSignatures withExtraSigs certs
+      withCertSignatures = appendCertSignatures withMintSignatures certs
       withVoteSigs = appendVotingSignatures withCertSignatures
       compulsarySignatories = foldl (\acc (TxOut a _ _ _) ->  case addressInEraToPaymentKeyHash  a of
                                                     Nothing -> acc
@@ -396,12 +409,14 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
 
   iteration1@(txBody1,signatories,fee1) <-  calculatorWithDefaults    startingFee
   let iterationFunc lastBody lastFee   =
-        if  null partialInputs && null  partialMints
-          then calculatorWithDefaults    lastFee <&> makeNewFee
+        if  null partialInputs && null  partialMints && not hasScritProposals
+          then Debug.trace "calculatorWithDefaults" $ calculatorWithDefaults  lastFee <&> makeNewFee
           else do
               let onMissing = Left $ FrameworkError LibraryError "Unexpected missing Exunits"
-              (inputExmap,mintExmap) <- evaluateExUnitMapWithUtxos systemStart (Cardano.Api.Shelley.toLedgerEpochInfo eraHistory) pParam   ( UTxO availableUtxo) lastBody
-              calculator mintExmap inputExmap onMissing lastFee <&> makeNewFee
+              exUnitResult <- evaluateExUnitMapWithUtxos systemStart (Cardano.Api.Shelley.toLedgerEpochInfo eraHistory) pParam   ( UTxO availableUtxo) lastBody
+              let func = calculator exUnitResult onMissing
+              v@(newBody,_,newFee) <-  func lastFee <&> makeNewFee 
+              func newFee <&> makeNewFee     -- 2 consecutive call is required to prevent cycle in some transaction  
       iteratedBalancing n lastBody lastFee=do
         v@(txBody',signatories',fee')<- iterationFunc lastBody lastFee
         if (if n >0 then  (==) else (<=) ) fee'  lastFee
@@ -411,13 +426,13 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                                             (map (toWitness txBody) $ mapMaybe (`Map.lookup` availableSkeys) $ Set.toList signatories)
                                             txBody
                                         )
+    
       makeNewFee (a,b,fee) =case explicitFee of
         Nothing -> (a,b,fee)
         Just n -> (a,b,Coin n)
   iteratedBalancing  10 txBody1 fee1 <&> respond
 
   where
-
     applyExUnitToPartial :: Ord a => Map a ExecutionUnits -> Either FrameworkError ExecutionUnits->  [(a,ExecutionUnits -> b)] -> Either FrameworkError [(a, b)]
     applyExUnitToPartial mp onMissing pi = mapM (\(k,v)-> case Map.lookup k mp of
           Nothing -> do
@@ -513,9 +528,9 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
               Nothing -> set
        ) old votes
 
-    appendCertSignatures old certs = foldl  (\set item -> case getPaymentKey item of
+    appendCertSignatures = foldl  (\set item -> case getPaymentKey item of
       Nothing -> set
-      Just ha -> Set.insert ha set ) old certs
+      Just ha -> Set.insert ha set )
 
     getPaymentKey cert = case cert of
       ShelleyRelatedCertificate stbe stc -> Nothing
@@ -539,6 +554,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     txShelleyBasedEra = babbageEraOnwardsToShelleyBasedEra bBabbageOnward
     txMaryEraOnwards = babbageEraOnwardsToMaryEraOnwards bBabbageOnward
     txAlonzoEraOnwards = babbageEraOnwardsToAlonzoEraOnwards bBabbageOnward
+    txAllegraEraOnwards = bAllegraOnward
 
     parseMints mp  = do
        result <- mapM  (resolveAndParseMint  mp) mintData
@@ -609,8 +625,8 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
           RequireMOf n sss -> foldMap getScriptSignatures sss
 
 
-    collaterals ::   Maybe [(TxIn,Hash PaymentKey )]
-    collaterals   = case txContextCollaterals of
+    maybeCollaterals ::   Maybe [(TxIn,Hash PaymentKey )]
+    maybeCollaterals   = case txContextCollaterals of
                           [] -> case mapMaybe canBeCollateral $ Map.toList spendableUtxos of
                             [] -> Nothing
                             v -> let  (tin,pkh,_) =minimumBy sortingFunc v in Just [(tin,pkh)]
@@ -724,7 +740,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     sortUtxos :: UTxO era ->  [(TxIn,TxOut CtxUTxO era )]
     sortUtxos  ( UTxO utxoMap) = sortBy sortingFunc ( Map.toList  $ Map.difference  utxoMap (Map.fromList collaterals)) ++ collaterals
         where
-        collaterals = mapMaybe  (\(x,pkh) -> Map.lookup x utxoMap <&> (x,) )txContextCollaterals
+        collaterals = mapMaybe  (\(x,pkh) -> Map.lookup x utxoMap <&> (x,) ) txContextCollaterals
         -- sort the txouts based on following condition
         -- - the ones with inline datum or script come at very first
         -- - the ones with multiple assets comes then
@@ -869,12 +885,12 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                   withExUnits witnessF mData r mExunit tout
           Just _ ->Left $ FrameworkError BalancingError $ "Utxo used as refreence script doesn't contain reference script: " ++ T.unpack (renderTxIn scriptRefTin)
 
-    --TODO: FIX THIS AFTER it's fixed in cardano-api 
-    txLowerBound :: TxValidityLowerBound era
+
     txLowerBound = case validityStart of
       NoValidityTime -> TxValidityNoLowerBound
-      ValidityPosixTime ndt -> TxValidityNoLowerBound   -- TxValidityLowerBound  (ByronAndAllegraEraOnwards   )   (toSlot ndt)
-      ValiditySlot sn -> TxValidityNoLowerBound -- TxValidityLowerBound allegraEraOnwardsToByronAndAllegraOnwardsEra sn
+      ValidityPosixTime ndt -> TxValidityLowerBound txAllegraEraOnwards  (toSlot ndt)
+      ValiditySlot sn -> TxValidityLowerBound txAllegraEraOnwards sn
+
     txUpperBound = case validityEnd of
       NoValidityTime ->  TxValidityUpperBound txShelleyBasedEra Nothing
       ValidityPosixTime ndt -> TxValidityUpperBound txShelleyBasedEra (Just$ toSlot ndt)
@@ -908,28 +924,9 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
       maybeToCoin sm = case sm of
             SNothing -> 0
             SJust (Coin co) -> co
-    totalProposalDeposits :: (Ledger.EraPParams (ShelleyLedgerEra era)) => [TxProposal era]  -> Value
-    totalProposalDeposits proposals = lovelaceToValue $ Coin $
-        sum (map  txProposalDeposit proposals)
-      where
-      proposalDeposit (ProposalProcedure (Coin co) ra ga an) = co
-
-      txProposalDeposit= \case
-          TxProposal (ProposalProcedureModal pp) -> proposalDeposit pp
-          TxProposalScript (ProposalProcedureModal pp) -> 0
 
 
-buildBlancedTx :: ([ParsedInput era] ->  TxMintValue BuildTx era -> [TxOut CtxTx era] -> Value -> TxBodyContent BuildTx era )
-   -> [PartialInput era]
-   -> [ParsedOutput era]
-   -> ParseMintsF m era
-   -> Set (Hash PaymentKey)
-   -> Set (Hash PaymentKey)
-   -> ChangeValue
-   -> Value
-   ->  Either FrameworkError (TxBody era, Tx era)
 
-buildBlancedTx func = do error "sad"
 
 toLedgerEpochInfo :: EraHistory -> EpochInfo (Either Text.Text)
 toLedgerEpochInfo (EraHistory interpreter) =
@@ -971,20 +968,128 @@ fromLedgerKeyHash cera = case cera of
 
 
     -- -> BuildTxWith build (Map (L.ProposalProcedure (ShelleyLedgerEra era)) (ScriptWitness WitCtxStake era))
+    --  PlutusScriptWitness :: ScriptLanguageInEra lang era
+    --                      -> PlutusScriptVersion lang
+    --                      -> PlutusScriptOrReferenceInput lang
+    --                      -> ScriptDatum witctx
+    --                      -> ScriptRedeemer
+    --                      -> ExecutionUnits
+    --                      -> ScriptWitness witctx era
 
+unitRedeemer = unsafeHashableScriptData $ ScriptDataConstructor 0 []
 
-makeTxProposals ::  Eon eon => ConwayEraOnwards era  -> [TxProposal era] -> Either FrameworkError (Maybe (Featured eon era (TxProposalProcedures BuildTx era)))
-makeTxProposals  conOnward proposals=do
-  case conOnward of { v@ConwayEraOnwardsConway ->
-    let unProcedures= map (\x -> case x of
-          TxProposal (ProposalProcedureModal pp) ->  pp
-          TxProposalScript (ProposalProcedureModal pp) ->pp ) proposals
-    in
-    inEonForEra (Left $ FrameworkError FeatureNotSupported "Proposals are not supported in Babbage era")
-           (\conwayOnward -> Right$ Just  $ Featured conwayOnward (TxProposalProcedures (OSet.fromSet (Set.fromList ( unProcedures))) (BuildTxWith mempty)) )
-           (toCardanoEra conOnward)
-      }
+makeTxProposals :: (Eon eon, IsTxBuilderEra era) =>  CardanoEra era  -> UTxO era ->  [TxProposal era] ->
+      Either  FrameworkError
+        (Bool,Value, Map (L.ProposalProcedure (ShelleyLedgerEra era)) ExecutionUnits ->
+                Either FrameworkError ExecutionUnits
+              -> Either FrameworkError (Maybe (Featured eon era (TxProposalProcedures BuildTx era)))
+        )
+makeTxProposals  conOnward  (UTxO utxos) proposals=do
+  case conOnward of
+      v@ConwayEra ->
+        let totalDeposit = totalProposalDeposits proposals
+            unProcedures= mapMaybe (\x -> case x of
+              TxProposal (ProposalProcedureModal pp) ->  Just pp
+              _ -> Nothing
+              ) proposals
+            makeWitness :: TxProposal ConwayEra
+              -> Maybe
+                  (Either
+                      FrameworkError (ProposalProcedure (ShelleyLedgerEra ConwayEra), Either (ExecutionUnits -> ScriptWitness WitCtxStake ConwayEra)  (ScriptWitness WitCtxStake ConwayEra) ))
+            makeWitness  x =  case x of
+              TxProposalScript (ProposalProcedureModal pp) eu sc ->Just $ do
+                witness <- makeTxPlutusScriptWitness shelleyBasedEra sc Nothing
+                let partial = witness NoScriptDatumForStake unitRedeemer
+                Right $ (pp,case eu of
+                  Nothing -> Left partial
+                  Just aeu -> Right $ partial aeu)
 
+              TxProposalScriptReference (ProposalProcedureModal pp) eu ti -> Just ( do
+                  partial <- case Map.lookup ti utxos of
+                      Nothing -> Left $ FrameworkError BalancingError  $ "Reference Script Utxo is missing :" ++ T.unpack ( renderTxIn ti)
+                      Just (TxOut _ _ _ (ReferenceScript _ anySc@(ScriptInAnyLang sl sc'))) ->do
+                        let txScript=txScriptFromScriptAny anySc
+                            scriptHash = txScriptHash  txScript
+                        witnessE <- makeTxScriptWitness shelleyBasedEra txScript (Just ti)
+                        case getUsedScriptHash pp of
+                          Nothing -> Left $ FrameworkError BalancingError "Script provided for proposal, but its not required"
+                          Just actonScHash -> if scriptHash /= actonScHash
+                            then  Left (FrameworkError BalancingError "Script provided for reference has different hash from the constitution")
+                            else
+                              case witnessE of
+                                Left f -> do
+                                    Right $  f  NoScriptDatumForStake (unsafeHashableScriptData $ ScriptDataConstructor 0 [])
+                                Right witness ->  Left $ FrameworkError WrongScriptType "Simple script referenced in proposal"
+                      Just _ -> Left $ FrameworkError BalancingError "Reference script Utxo used in proposal doesn't have the script"
+                  Right $ case eu of
+                    Nothing -> (pp,Left partial)
+                    Just aeu -> (pp,Right $ partial aeu)
+                  )
+              _ -> Nothing
+
+            getUsedScriptHash  (ProposalProcedure (Coin co) ra ga an)  = case ga of
+                    ParameterChange sm ppu govScript ->  fromStrictMaybe  govScript <&> fromShelleyScriptHash
+                    TreasuryWithdrawals map govScript -> fromStrictMaybe govScript <&> fromShelleyScriptHash
+                    _ -> Nothing
+            scriptProcedures :: Either FrameworkError [(ProposalProcedure (ShelleyLedgerEra ConwayEra), Either (ExecutionUnits -> ScriptWitness WitCtxStake ConwayEra) (ScriptWitness WitCtxStake ConwayEra))]
+            scriptProcedures = sequence $  mapMaybe makeWitness proposals
+
+        in
+        inEonForEra (Left $ FrameworkError FeatureNotSupported "Proposals are not supported in Babbage era")
+              (\conwayOnward -> do
+                scProcedures <- scriptProcedures
+
+                let nonScriptProcedures =  OSet.fromSet (Set.fromList unProcedures)
+                    (unresolved,resoved)  =  partitionEithers $ map (\(a,b)->case b of
+                        Left e -> Left (a,e)
+                        Right v -> Right (a,v)
+                        ) scProcedures
+                    revolveWihExUnits :: Ord a => Map a t -> Either FrameworkError t -> (a, t -> b) -> Either FrameworkError (a, b)
+                    revolveWihExUnits euMap val (pp,partial) =
+                        case Map.lookup  pp  euMap of
+                          Nothing -> do
+                            result <- val
+                            pure  (pp,partial result)
+                          Just eu -> pure  (pp,partial eu)
+
+                    -- resolveAll  eu = sequence $ map (revolveWihExUnits eu) unresolved
+
+                    resolvedMap :: Map (ProposalProcedure (ShelleyLedgerEra ConwayEra)) (ScriptWitness WitCtxStake ConwayEra)
+                    resolvedMap = Map.fromList resoved
+                if null unresolved
+                  then
+                    if null resoved  && null nonScriptProcedures
+                      then Right (False,totalDeposit,\_ _-> pure Nothing)
+                      else
+                        Right $ (length resolvedMap > 0 || length nonScriptProcedures > 0, totalDeposit,\_ _-> do
+                          Debug.traceM $  show totalDeposit ++  " resolvedMap" ++ (show resolvedMap)
+                          pure $  Just$
+                            Featured conwayOnward
+                              (TxProposalProcedures nonScriptProcedures (BuildTxWith resolvedMap)))
+                  else
+                      Right $ (True, totalDeposit,\eu val   -> do
+                        exUnitApplied <- mapM (revolveWihExUnits  eu val )  unresolved
+                        Debug.traceM  (show totalDeposit ++ " resolved_unresolved" ++ show  (resolvedMap <>(Map.fromList exUnitApplied)))
+                        Right $  Just$
+                          Featured conwayOnward
+                            (TxProposalProcedures nonScriptProcedures (BuildTxWith (resolvedMap <>(Map.fromList exUnitApplied) ))) )
+              )
+
+              (toCardanoEra conOnward)
+      _ -> pure $ (False, nullValue, \_ _-> pure Nothing)
+  -- where
+  --   nonGuardrailScripts = filter (\TxProposa -> )
+  where
+    totalProposalDeposits :: (Ledger.EraPParams (ShelleyLedgerEra era)) => [TxProposal era]  -> Value
+    totalProposalDeposits proposals = lovelaceToValue $ Coin $
+        sum (map  txProposalDeposit proposals)
+      where
+      proposalDeposit (ProposalProcedure (Coin co) ra ga an) = co
+
+      txProposalDeposit= \case
+          TxProposal (ProposalProcedureModal pp) -> proposalDeposit pp
+          TxProposalScript (ProposalProcedureModal pp) _ _ -> proposalDeposit pp
+          TxProposalScriptReference (ProposalProcedureModal pp) _ _ -> proposalDeposit pp
 
 ledgerCredToPaymentKeyHash :: ShelleyBasedEra targetEra -> Credential r (EraCrypto (ShelleyLedgerEra targetEra)) -> Maybe (Hash PaymentKey)
 ledgerCredToPaymentKeyHash sbera cred = case cred of
@@ -994,7 +1099,7 @@ ledgerCredToPaymentKeyHash sbera cred = case cred of
 
 computeBody ::  (IsTxBuilderEra era) =>  BabbageEraOnwards era
       -> LedgerProtocolParameters era
-      -> (UTxO era)
+      -> UTxO era
       ->( [TxIn] -> [TxOut CtxTx era]-> Coin->  Either FrameworkError (TxBodyContent BuildTx era))
       -> AddressInEra era
       -> Set (Hash PaymentKey)
@@ -1037,7 +1142,7 @@ computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam) utxo bodyConte
   case createAndValidateTransactionBody  shelleyBasedEra bc of
       Left tbe ->Left  $ FrameworkError  LibraryError  (show tbe)
       Right tb -> do
-        let evaluateTransactionFee1=calculateMinTxFee (babbageEraOnwardsToShelleyBasedEra beraOnward) lpparam utxo tb signatureCount 
+        let evaluateTransactionFee1=calculateMinTxFee (babbageEraOnwardsToShelleyBasedEra beraOnward) lpparam utxo tb signatureCount
         pure (tb,requiredSignatories, evaluateTransactionFee1 )
 
   where
@@ -1052,7 +1157,7 @@ computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam) utxo bodyConte
       txOutputVal (TxOutput (TxOut _ (TxOutValueShelleyBased era v) _ _) _  _ _) = fromLedgerValue era v
       txOutputVal (TxOutput (TxOut _ (TxOutValueByron a) _ _) _  _ _) = lovelaceToValue a
 
-    startingChange=   fixedInputSum <>   negateValue(fixedOutputSum<> (if _hasFeeUtxo then mempty else lovelaceToValue fee ) )
+    startingChange=   fixedInputSum <>   negateValue (fixedOutputSum<> (if _hasFeeUtxo then mempty else lovelaceToValue fee ) )
     _hasFeeUtxo = any (\(TxOutput _ f _ _)->f) fixedOutputs
 
 

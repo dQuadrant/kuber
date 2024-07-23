@@ -71,7 +71,8 @@ instance
             "proposal",
             "vote",
             "cert",
-            "certificate"
+            "certificate",
+            "auxScript"
           ]
         nonPluralKeys =
           [ "changeAddress",
@@ -92,8 +93,7 @@ instance
           ShelleyBasedEraConway -> do
             -- TODO: Implement parsing of proposals
             proposals <- (do
-                res <- v .?< "proposal" 
-                pure $ map (\(ppm@(ProposalProcedureModal m)) -> (TxProposal ppm )) res
+                v .?< "proposal"
               )
             certs <-
               ( do
@@ -113,7 +113,7 @@ instance
           eraBasedParser bShelleyBasedEra
     where
       commonParser :: [TxProposal era]
-        -> [TxVote era] -> [Certificate era] -> Parser (TxBuilder_ era)  
+        -> [TxVote era] -> [Certificate era] -> Parser (TxBuilder_ era)
       commonParser proposals votes certs = do
         TxBuilder_
           <$> (v .?< "selection")
@@ -131,6 +131,7 @@ instance
           <*> v .:? "fee"
           <*> (v .:? "changeAddress" <&> fmap (updateAddressEra . unAddressModal))
           <*> (v .:? "metadata" .!= Map.empty)
+          <*> (v .?< "auxScript" )
 
       parseValidity obj key = do
         mPosixTime <- obj .:? key
@@ -163,6 +164,27 @@ instance
         A.Array vec -> True
         _ -> False
   parseJSON _ = fail "TxBuilder must be an object"
+
+
+instance FromJSON (TxProposal ConwayEra) where
+  parseJSON obj@(A.Object v) = do
+    propsalProcecure <- parseJSON obj
+    exUnitsM <- v .:? "executionUnits"
+
+    mScriptAny <- v .:? "script"
+    case mScriptAny of
+      Nothing -> pure $ TxProposal propsalProcecure
+      Just (A.String s) -> do
+        txin <- parseTxIn s
+        pure $ TxProposalScriptReference propsalProcecure exUnitsM txin
+      Just scany@(A.Object _) -> do
+        txScript <- parseJSON scany
+        case txScript of
+          TxScriptPlutus psc -> do
+            pure $ TxProposalScript propsalProcecure  exUnitsM psc
+          _ -> fail "GotSimple Script for proposal expected PlutusV3 script"
+      _ -> fail "Either ReferenceInput or Script Object expected "
+  parseJSON _ = fail "Expected Proposal Object"
 
 instance FromJSON (TxMintData TxMintingScriptSource) where
   parseJSON (A.Object v) = do
@@ -224,7 +246,7 @@ instance IsString a => MonadFail (Either a) where
   fail msg = Left $ fromString msg
 
 instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
-  toJSON (TxBuilder_ selections inputs refInputs outputs collaterals validityStart validityEnd mintData signatures proposals votes certs fee defaultChangeAddr metadata) =
+  toJSON (TxBuilder_ selections inputs refInputs outputs collaterals validityStart validityEnd mintData signatures proposals votes certs fee defaultChangeAddr metadata auxScripts) =
     A.object nonEmpyPair
     where
       -- appendNonEmpty :: (Foldable t, KeyValue a1, ToJSON (t a2)) => A.Key -> t a2 -> [a1] -> [a1]
@@ -251,7 +273,8 @@ instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
           <+> "certificates" >= map (transformCerts bShelleyBasedEra) certs
           <+> "fee" >= fee
           <+> "changeAddress" >= defaultChangeAddr
-          <#> "metadata" >= metadata
+          <+> "metadata" >= metadata
+          <#> "auxScripts" >= auxScripts
       infixl 8 >=
       (>=) a b = appendNonEmpty a b
       infixr 7 <#>
@@ -260,13 +283,14 @@ instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
       (<+>) f v = f v
 
 translateProposal :: Maybe (ConwayEraOnwards era) -> TxProposal era -> A.Value
-translateProposal sbera (proposal) = 
+translateProposal sbera proposal =
   case sbera of
     Nothing -> A.Null
-    Just ceo -> case ceo of 
-      ConwayEraOnwardsConway -> case proposal of 
+    Just ceo -> case ceo of
+      ConwayEraOnwardsConway -> case proposal of
         TxProposal  ppm -> toJSON $  ppm
-        TxProposalScript ppm -> A.Null
+        TxProposalScript ppm eu sc -> A.object [ "proposal" .= ppm ,"exUnits" .= eu ,"script" .= sc]
+        TxProposalScriptReference ppm eu ti -> A.object [ "proposal" .= ppm,"exUnits" .= eu, "script" .= ti ]
 
 transformCerts :: ShelleyBasedEra era -> Certificate era -> A.Value
 transformCerts sbera c = case sbera of
@@ -382,7 +406,7 @@ instance ToJSON (TxInputResolved_ era) where
 collectResolvedInputs :: TxInputResolved_ era -> [Aeson.Value]
 collectResolvedInputs v = case v of
   TxInputUtxo umap -> map (A.Object . A.fromList) (collectUtxoPair umap)
-  TxInputScriptUtxo tvs sd sd' m_eu uto -> 
+  TxInputScriptUtxo tvs sd sd' m_eu uto ->
     map
       ( \v ->
           A.Object $

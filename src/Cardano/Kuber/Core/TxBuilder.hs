@@ -13,9 +13,9 @@
 
 module Cardano.Kuber.Core.TxBuilder where
 
-import Cardano.Api hiding (txCertificates, txFee, txMetadata)
+import Cardano.Api hiding (txCertificates, txFee, txMetadata,txAuxScripts)
 import Cardano.Api.Ledger (EraCrypto, StandardCrypto)
-import Cardano.Api.Shelley hiding (txCertificates, txFee, txMetadata)
+import Cardano.Api.Shelley hiding (txCertificates, txFee, txMetadata,txAuxScripts)
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Api as Ledger
 import qualified Data.Aeson as Aeson
@@ -153,7 +153,8 @@ newtype (L.EraPParams (ShelleyLedgerEra era)) =>  ProposalProcedureModal  era =
 
 
 data TxProposal era = TxProposal  (ProposalProcedureModal era)
-      | TxProposalScript (ProposalProcedureModal era) -- TODO: for future
+      | TxProposalScript (ProposalProcedureModal era) (Maybe ExecutionUnits) TxPlutusScript
+      | TxProposalScriptReference (ProposalProcedureModal era) (Maybe ExecutionUnits) TxIn
 
 
 data TxBuilder_ era = TxBuilder_
@@ -171,7 +172,8 @@ data TxBuilder_ era = TxBuilder_
     txCertificates :: [Certificate era],
     txFee :: Maybe Integer,
     txDefaultChangeAddr :: Maybe (AddressInEra era),
-    txMetadata' :: Map Word64 Aeson.Value
+    txMetadata' :: Map Word64 Aeson.Value,
+    txAuxScripts :: [TxScript]
   } 
 
 
@@ -179,6 +181,7 @@ class IsShelleyBasedEra era => IsTxBuilderEra era where
   bMaryOnward :: MaryEraOnwards era
   bAlonzoOnward :: AlonzoEraOnwards era
   bBabbageOnward :: BabbageEraOnwards era
+  bAllegraOnward :: AllegraEraOnwards era
   bConwayOnward :: Maybe (ConwayEraOnwards era)
   bShelleyBasedEra :: ShelleyBasedEra era
   bCardanoEra :: CardanoEra era
@@ -187,15 +190,18 @@ class IsShelleyBasedEra era => IsTxBuilderEra era where
 instance IsTxBuilderEra ConwayEra where
   bMaryOnward = MaryEraOnwardsConway
   bAlonzoOnward = AlonzoEraOnwardsConway
+  bAllegraOnward = AllegraEraOnwardsConway
   bBabbageOnward = BabbageEraOnwardsConway
   bConwayOnward = Just ConwayEraOnwardsConway
   bShelleyBasedEra = ShelleyBasedEraConway
   bCardanoEra = ConwayEra
   bAsEra = AsConwayEra
 
+
 instance IsTxBuilderEra BabbageEra where
   bMaryOnward = MaryEraOnwardsBabbage
   bAlonzoOnward = AlonzoEraOnwardsBabbage
+  bAllegraOnward = AllegraEraOnwardsBabbage
   bBabbageOnward = BabbageEraOnwardsBabbage
   bConwayOnward = Nothing
   bShelleyBasedEra = ShelleyBasedEraBabbage
@@ -203,7 +209,7 @@ instance IsTxBuilderEra BabbageEra where
   bAsEra = AsBabbageEra
 
 instance Monoid (TxBuilder_ era) where
-  mempty = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
+  mempty = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
 instance Semigroup (TxBuilder_ era) where
   (<>) txb1 txb2 =
@@ -228,59 +234,60 @@ instance Semigroup (TxBuilder_ era) where
         txDefaultChangeAddr = case txDefaultChangeAddr txb1 of
           Just addr -> Just addr
           _ -> txDefaultChangeAddr txb2,
-        txMetadata' = txMetadata' txb1 <> txMetadata' txb2
+        txMetadata' = txMetadata' txb1 <> txMetadata' txb2,
+        txAuxScripts = txAuxScripts txb1 <> txAuxScripts txb2
       }
 
 txSelection :: TxInputSelection ConwayEra -> TxBuilder
-txSelection v = TxBuilder_ [v] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
+txSelection v = TxBuilder_ [v] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
 txInput :: TxInput ConwayEra -> TxBuilder
-txInput v = TxBuilder_ [] [v] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
+txInput v = TxBuilder_ [] [v] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
 txInputReference :: TxInputReference ConwayEra -> TxBuilder
-txInputReference v = TxBuilder_ [] [] [v] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
+txInputReference v = TxBuilder_ [] [] [v] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
 txMints :: [TxMintData TxMintingScriptSource] -> TxBuilder
-txMints md = TxBuilder_ [] [] [] [] [] mempty mempty md [] [] [] [] Nothing Nothing Map.empty
+txMints md = TxBuilder_ [] [] [] [] [] mempty mempty md [] [] [] [] Nothing Nothing Map.empty []
 
 txOutput :: TxOutput (TxOutputContent ConwayEra) -> TxBuilder
-txOutput v = TxBuilder_ [] [] [] [v] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
+txOutput v = TxBuilder_ [] [] [] [v] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
 txCollateral' :: TxCollateral ConwayEra -> TxBuilder
-txCollateral' v = TxBuilder_ [] [] [] [] [v] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty
+txCollateral' v = TxBuilder_ [] [] [] [] [v] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
 txSignature :: TxSignature ConwayEra -> TxBuilder
-txSignature v = TxBuilder_ [] [] [] [] [] mempty mempty [] [v] [] [] [] Nothing Nothing Map.empty
+txSignature v = TxBuilder_ [] [] [] [] [] mempty mempty [] [v] [] [] [] Nothing Nothing Map.empty []
 
 
 txReplacePoposalsNCert :: TxBuilder_ era -> [TxProposal era] -> [Certificate era] -> TxBuilder_ era
-txReplacePoposalsNCert (TxBuilder_ a b c d e f g h i _ k _ m n o) ps cs = TxBuilder_ a b c d e f g h i ps k cs m n o
+txReplacePoposalsNCert (TxBuilder_ a b c d e f g h i _ k _ m n o p) ps cs = TxBuilder_ a b c d e f g h i ps k cs m n o p
 
 -- Transaction validity
 
 -- Set validity Start and end time in posix seconds
 txValidPosixTimeRange :: POSIXTime -> POSIXTime -> TxBuilder
-txValidPosixTimeRange start end = TxBuilder_ [] [] [] [] [] (ValidityPosixTime start) (ValidityPosixTime end) [] [] [] [] [] Nothing Nothing Map.empty
+txValidPosixTimeRange start end = TxBuilder_ [] [] [] [] [] (ValidityPosixTime start) (ValidityPosixTime end) [] [] [] [] [] Nothing Nothing Map.empty []
 
 -- set  validity statart time in posix seconds
 txValidFromPosixTime :: POSIXTime -> TxBuilder
-txValidFromPosixTime start = TxBuilder_ [] [] [] [] [] (ValidityPosixTime start) mempty [] [] [] [] [] Nothing Nothing Map.empty
+txValidFromPosixTime start = TxBuilder_ [] [] [] [] [] (ValidityPosixTime start) mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
 -- set transaction validity end time in posix seconds
 txValidUntilPosixTime :: POSIXTime -> TxBuilder
-txValidUntilPosixTime end = TxBuilder_ [] [] [] [] [] mempty (ValidityPosixTime end) [] [] [] [] [] Nothing Nothing Map.empty
+txValidUntilPosixTime end = TxBuilder_ [] [] [] [] [] mempty (ValidityPosixTime end) [] [] [] [] [] Nothing Nothing Map.empty []
 
 -- Set validity Start and end slot
 txValidSlotRange :: SlotNo -> SlotNo -> TxBuilder
-txValidSlotRange start end = TxBuilder_ [] [] [] [] [] (ValiditySlot start) (ValiditySlot end) [] [] [] [] [] Nothing Nothing Map.empty
+txValidSlotRange start end = TxBuilder_ [] [] [] [] [] (ValiditySlot start) (ValiditySlot end) [] [] [] [] [] Nothing Nothing Map.empty []
 
 -- set  validity statart time in posix seconds
 txValidFromSlot :: SlotNo -> TxBuilder
-txValidFromSlot start = TxBuilder_ [] [] [] [] [] (ValiditySlot start) mempty [] [] [] [] [] Nothing Nothing Map.empty
+txValidFromSlot start = TxBuilder_ [] [] [] [] [] (ValiditySlot start) mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
 -- set transaction validity end time in posix seconds
 txValidUntilSlot :: SlotNo -> TxBuilder
-txValidUntilSlot end = TxBuilder_ [] [] [] [] [] mempty (ValiditySlot end) [] [] [] [] [] Nothing Nothing Map.empty
+txValidUntilSlot end = TxBuilder_ [] [] [] [] [] mempty (ValiditySlot end) [] [] [] [] [] Nothing Nothing Map.empty []
 
 -- governanceProposals
 -- txProposal ::
@@ -290,11 +297,11 @@ txValidUntilSlot end = TxBuilder_ [] [] [] [] [] mempty (ValiditySlot end) [] []
 
 -- voting
 txVote :: TxVote ConwayEra -> TxBuilder
-txVote v = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [v] [] Nothing Nothing Map.empty
+txVote v = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [v] [] Nothing Nothing Map.empty []
 
 -- voting
 txCertificate :: Certificate ConwayEra -> TxBuilder
-txCertificate v = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [v] Nothing Nothing Map.empty
+txCertificate v = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [v] Nothing Nothing Map.empty []
 
 --- minting
 _txMint v = txMints [v]
@@ -386,10 +393,10 @@ txSign p = txSignature $ TxSignatureSkey p
 
 -- | explicitly set Fee for the transaction
 txSetFee :: Integer -> TxBuilder
-txSetFee v = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [] (Just v) Nothing Map.empty
+txSetFee v = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [] (Just v) Nothing Map.empty []
 
 txMetadata :: Map Word64 Aeson.Value -> TxBuilder
-txMetadata = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing
+txMetadata md = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing md []
 
 
 -- | Add a  script utxo containing datum-hash to  transaction input . Script code, datum matching datumHash and redeemer should be  passed for building transaction.
@@ -455,4 +462,4 @@ txCollateralUtxo :: TxIn -> TxOut CtxUTxO ConwayEra -> TxBuilder
 txCollateralUtxo tin tout = txCollateral' $ TxCollateralUtxo $ UTxO $ Map.singleton tin tout
 
 txChangeAddress :: AddressInEra ConwayEra -> TxBuilder
-txChangeAddress addr = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing (Just addr) Map.empty
+txChangeAddress addr = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [] Nothing (Just addr) Map.empty []

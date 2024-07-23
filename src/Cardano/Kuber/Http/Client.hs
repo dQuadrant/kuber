@@ -109,7 +109,7 @@ deserialiseTxToEra (InAnyCardanoEra ce tx) asType = do
 
 parseToConwayTxBuilder :: TxBuilder_ BabbageEra -> TxBuilder_ ConwayEra
 parseToConwayTxBuilder txbBabbage = case txbBabbage of
-  TxBuilder_ tiss tis tirs tos tcs vt vt' tmds tss pros tvs cers m_n m_aie map ->
+  TxBuilder_ tiss tis tirs tos tcs vt vt' tmds tss pros tvs cers m_n m_aie metadata auxScripts ->
     TxBuilder_
       (Prelude.map updateTxInputSelectionEra tiss)
       (Prelude.map updateTxInputEra tis)
@@ -125,7 +125,8 @@ parseToConwayTxBuilder txbBabbage = case txbBabbage of
       []
       m_n
       (updateMaybeAddressEra m_aie)
-      map
+      metadata
+      auxScripts
 
 -- updateShelleyLedgerEra :: IsTxBuilderEra era => ShelleyLedgerEra era1 -> ShelleyLedgerEra era
 -- updateShelleyLedgerEra shelleyLedger = shelleyLedger

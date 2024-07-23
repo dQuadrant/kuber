@@ -11,22 +11,17 @@ module Cardano.Kuber.Http.MediaType
 where
 
 import Network.HTTP.Media ((//), (/:), MediaType)
-import Servant.API.ContentTypes (Accept (contentType,contentTypes), MimeUnrender (mimeUnrender), MimeRender (mimeRender))
+import Servant.API.ContentTypes (Accept (contentTypes), MimeUnrender (mimeUnrender), MimeRender (mimeRender))
 import GHC.Base (NonEmpty ((:|)))
 import qualified Data.ByteString.Lazy as BSL
-import qualified Data.ByteString as BSS
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
-import Cardano.Binary (FromCBOR)
-import qualified Cardano.Binary as CBOR
 import Data.Text.Conversions (Base16(Base16), convertText)
 import Data.Data (Proxy (Proxy))
-import Data.ByteString (ByteString)
-import Data.Proxy (asProxyTypeOf)
 import qualified Data.ByteString.Lazy
 import Cardano.Kuber.Data.Models (SubmitTxModal(SubmitTxModal), TxModal (TxModal))
 import Data.ByteString.Lazy (fromStrict)

@@ -19,6 +19,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# LANGUAGE TypeOperators #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 
 module Cardano.Kuber.Data.Models where
@@ -714,21 +715,23 @@ instance FromJSON  (ProposalProcedureModal ConwayEra) where
             Just (UtxoIdModal ( prevGovTxId, TxIx prevGovTxIx)) -> SJust $ createPreviousGovernanceActionId prevGovTxId (fromIntegral prevGovTxIx)
         knownKeys = [
           "refundaccount","deposit","anchor","prevgovaction"
-          ,"newconstitution","noconfidence","info","withdraw","hardfork","updatecommittee","parameterupdate"
+          ,"newconstitution","noconfidence","info","withdraw","hardfork","updatecommittee","parameterupdate","guardrailscript","script","executionunits"
           ]
         extraKeys= Set.difference  (Set.map ( T.unpack . T.toLower) $  Map.keysSet $  A.toMapText o) (Set.fromList knownKeys)
     if null extraKeys then pure ()
     else fail $ "Invalid key: " ++ intercalate ", " (Set.toList extraKeys)
+    constitutionHash  <- o .:? "guardrailscript"
+
+    let maybeGuardrailScript = toStrictMaybe constitutionHash
     govAction <-
           chain  "newconstitution"  (parseNewConstitution prevGovActionId)
         $ chain "noconfidence" (parseNoConfidence prevGovActionId)
         $ chain "info" parseInfo
-        $ chain "withdraw" parseTreasuryWithdrawal
+        $ chain "withdraw" (parseTreasuryWithdrawal maybeGuardrailScript)
         $ chain "hardfork" (parseHardforkInitiation prevGovActionId)
         $ chain "updatecommittee" (parseUpdateCommittee prevGovActionId)
-        $ chain "parameterupdate" (parseParamUpdate prevGovActionId)
+        $ chain "parameterupdate" (parseParamUpdate prevGovActionId maybeGuardrailScript)
         $ pure InfoAction
-
 
     pure $ ProposalProcedureModal $
           ProposalProcedure (Coin deposit) returnAddress  govAction  anchor
@@ -762,7 +765,7 @@ instance FromJSON  (ProposalProcedureModal ConwayEra) where
 
         parseNoConfidenceProposasl prevAction _ = pure $ Ledger.NoConfidence prevAction
 
-        parseTreasuryWithdrawal  (A.Object treasuryObj ) = do
+        parseTreasuryWithdrawal guardrailScript (A.Object treasuryObj )  = do
           hmap :: Map (RewardAcntModal ledgerera') Coin <- o .: "withdraw"
           let
               mapKeysM f hm = mapM (\(k,v)->do
@@ -772,8 +775,8 @@ instance FromJSON  (ProposalProcedureModal ConwayEra) where
 
           let hmap'' = Map.mapKeys unWrap hmap
           -- TODO: Replace SNOTHING with actual script policy
-          pure $ TreasuryWithdrawals hmap'' SNothing
-        parseTreasuryWithdrawal  _ = fail "Expected \"accounts\" to be present for treasuryWithdrawal"
+          pure $ TreasuryWithdrawals hmap'' guardrailScript
+        parseTreasuryWithdrawal  _ _ = fail "Expected \"accounts\" to be present for treasuryWithdrawal"
 
         parseInfo (A.Bool True) = pure InfoAction
         parseInfo _ = fail "Expected \"info\" value to be true"
@@ -781,7 +784,7 @@ instance FromJSON  (ProposalProcedureModal ConwayEra) where
   parseJSON  _ = fail "Expected GovActionModal Object"
 
 
-parseParamUpdate prevGovAction v@(A.Object obj)= do
+parseParamUpdate prevGovAction maybeGuardrailScript v@(A.Object obj) = do
   let hmap=  A.fromHashMapText $  HM.mapKeys (T.toLower . A.toText ) $ toHashMap obj
   -- pUpdate<- parseJSON v
   let pParamUpdate=emptyPParamsUpdate
@@ -827,9 +830,9 @@ parseParamUpdate prevGovAction v@(A.Object obj)= do
           >>= paramParser "DRepDeposit" Ledger.ppuDRepDepositL id
           >>= paramParser "DRepActivity" Ledger.ppuDRepActivityL id
   -- TODO: Replace SNothing with actual policy
-  pure $ ParameterChange  prevGovAction  param SNothing
+  pure $ ParameterChange  prevGovAction  param maybeGuardrailScript
 
-parseParamUpdate _  _ = fail "Expected Protocol Parameter Update Object"
+parseParamUpdate _  _ _ = fail "Expected Protocol Parameter Update Object"
 
 instance (era ~  ConwayEra) => ToJSON (ProposalProcedureModal era) where
   toJSON (ProposalProcedureModal (ProposalProcedure (Coin co) refundAccnt ga an))
