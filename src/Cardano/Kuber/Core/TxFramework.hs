@@ -410,7 +410,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
   iteration1@(txBody1,signatories,fee1) <-  calculatorWithDefaults    startingFee
   let iterationFunc lastBody lastFee   =
         if  null partialInputs && null  partialMints && not hasScritProposals
-          then Debug.trace "calculatorWithDefaults" $ calculatorWithDefaults  lastFee <&> makeNewFee
+          then calculatorWithDefaults  lastFee <&> makeNewFee
           else do
               let onMissing = Left $ FrameworkError LibraryError "Unexpected missing Exunits"
               exUnitResult <- evaluateExUnitMapWithUtxos systemStart (Cardano.Api.Shelley.toLedgerEpochInfo eraHistory) pParam   ( UTxO availableUtxo) lastBody
@@ -1062,14 +1062,12 @@ makeTxProposals  conOnward  (UTxO utxos) proposals=do
                       then Right (False,totalDeposit,\_ _-> pure Nothing)
                       else
                         Right $ (length resolvedMap > 0 || length nonScriptProcedures > 0, totalDeposit,\_ _-> do
-                          Debug.traceM $  show totalDeposit ++  " resolvedMap" ++ (show resolvedMap)
                           pure $  Just$
                             Featured conwayOnward
                               (TxProposalProcedures nonScriptProcedures (BuildTxWith resolvedMap)))
                   else
                       Right $ (True, totalDeposit,\eu val   -> do
                         exUnitApplied <- mapM (revolveWihExUnits  eu val )  unresolved
-                        Debug.traceM  (show totalDeposit ++ " resolved_unresolved" ++ show  (resolvedMap <>(Map.fromList exUnitApplied)))
                         Right $  Just$
                           Featured conwayOnward
                             (TxProposalProcedures nonScriptProcedures (BuildTxWith (resolvedMap <>(Map.fromList exUnitApplied) ))) )
