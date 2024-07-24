@@ -863,7 +863,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         withExUnits witF mData r  mExUnit (_in, _out) = case mExUnit of
             Nothing -> pure [Left (_in,BuildTxWith . ScriptWitness ScriptWitnessForSpending . witF  (datumForTxin mData) r)]
             Just eu -> pure [Right (_in,  BuildTxWith $ ScriptWitness ScriptWitnessForSpending $  witF  (datumForTxin mData) r eu)]
-        datumForTxin d = maybe InlineScriptDatum ScriptDatumForTxIn d
+        datumForTxin d =  ScriptDatumForTxIn d -- TODO: check if this one works for inline datum or not.
       in case inCtx of
       TxInputUtxo (UTxO txin) ->  pure $ map (\(_in,_) -> Right (_in, BuildTxWith $ KeyWitness KeyWitnessForSpending ))  $ Map.toList txin
       TxInputScriptUtxo sc mData r mExunit tout ->do

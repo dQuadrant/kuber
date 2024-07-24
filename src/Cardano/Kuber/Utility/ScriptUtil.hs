@@ -8,45 +8,14 @@ import PlutusLedgerApi.Common (serialiseCompiledCode)
 import Cardano.Kuber.Core.TxScript
 import Data.Functor ((<&>))
 import PlutusTx.Prelude (BuiltinUnit)
+
+
 type TxScriptParsed witctx era =  Either
           (  ScriptDatum witctx
                          -> ScriptRedeemer
                          -> ExecutionUnits
                          -> ScriptWitness witctx era)
           (ScriptWitness witctx era)
-
-createTxInScriptWitness :: ScriptInAnyLang -> Maybe HashableScriptData -> HashableScriptData -> ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxTxIn ConwayEra)
-createTxInScriptWitness anyScript mDatum redeemer exUnits = do
-  ScriptInEra langInEra script' <- validateScriptSupportedInEra' ShelleyBasedEraConway anyScript
-  case script' of
-    PlutusScript version pscript ->
-      pure $ PlutusScriptWitness langInEra version (PScript pscript) datumForTxin redeemer exUnits
-    SimpleScript sscript ->Left $ FrameworkError  WrongScriptType "Simple Script used in Txin"
-  where
-    datumForTxin = maybe InlineScriptDatum ScriptDatumForTxIn mDatum
-
-
-createTxInReferenceScriptWitness :: TxIn -> Maybe ScriptHash -> Maybe HashableScriptData -> ScriptRedeemer -> ExecutionUnits -> Either FrameworkError (ScriptWitness WitCtxTxIn ConwayEra)
-createTxInReferenceScriptWitness scTxIn mScriptHash mDatum redeemer exUnits = pure $ PlutusScriptWitness PlutusScriptV2InConway PlutusScriptV2 (PReferenceScript scTxIn mScriptHash) datumForTxin redeemer exUnits
-  where
-    datumForTxin = maybe InlineScriptDatum ScriptDatumForTxIn mDatum
-
-createPlutusMintingWitness :: ScriptInAnyLang ->HashableScriptData ->ExecutionUnits -> Either FrameworkError  (ScriptWitness WitCtxMint ConwayEra)
-createPlutusMintingWitness anyScript redeemer exUnits = do
-  ScriptInEra langInEra script' <- validateScriptSupportedInEra' ShelleyBasedEraConway anyScript
-  case script' of
-    PlutusScript version pscript ->
-      pure $ PlutusScriptWitness langInEra version (PScript pscript) NoScriptDatumForMint redeemer exUnits
-    SimpleScript sscript -> Left $ FrameworkError WrongScriptType "Simple script not supported on creating plutus script witness."
-
-createSimpleMintingWitness :: ScriptInAnyLang -> Either FrameworkError (ScriptWitness WitCtxMint ConwayEra)
-createSimpleMintingWitness anyScript = do
-  ScriptInEra langInEra script' <- validateScriptSupportedInEra' ShelleyBasedEraConway anyScript
-  case script' of
-    PlutusScript version pscript -> Left $ FrameworkError  WrongScriptType "Plutus script not supported on creating simple script witness"
-    SimpleScript sscript -> pure $ SimpleScriptWitness langInEra (SScript sscript)
-
-
 validateScriptSupportedInEra' :: ShelleyBasedEra era -> ScriptInAnyLang -> Either FrameworkError (ScriptInEra era)
 validateScriptSupportedInEra' era script@(ScriptInAnyLang lang _) =
   case toScriptInEra era script of
