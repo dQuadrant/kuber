@@ -425,7 +425,7 @@ collectResolvedInputs v = case v of
               ["utxo" .= A.Object (A.fromList v)]
                 ++ map (\sd -> "datum" .= scriptDataToJsonDetailedSchema sd) (maybeToList sd)
                 ++ ["redeemer" .= scriptDataToJsonDetailedSchema sd']
-                ++ ["referenceScript" .= renderTxIn refSc]
+                ++ ["script" .= renderTxIn refSc]
       )
       (collectUtxoPair $ UTxO $ uncurry Map.singleton uto)
 
