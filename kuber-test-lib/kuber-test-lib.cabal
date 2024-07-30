@@ -1,0 +1,67 @@
+cabal-version:      2.4
+name:               kuber-test-lib
+version:            0.2.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+-- The license under which the package is released.
+-- license:
+author:             Sudip
+maintainer:         sudipbhattarai100@gmail.com
+
+-- A copyright notice.
+-- copyright:
+-- category:
+extra-source-files: CHANGELOG.md
+
+executable kuber-test-lib
+    main-is:          Main.hs
+
+    -- Modules included in this executable, other than Main.
+    other-modules:
+        Cardano.Kuber.Test.Testnet
+        Cardano.Kuber.Test.Common
+        Cardano.Kuber.Test.HasTestnet
+        Cardano.Kuber.Test.KuberTestnet
+
+    -- LANGUAGE extensions used by modules in this package.
+    -- other-extensions:
+    build-depends:   
+            base 
+        ,   aeson
+        ,   cardano-api
+        ,   cardano-ledger-core
+        ,   kuber
+        ,   time
+        ,   containers
+        ,   cardano-ledger-babbage
+        ,   cardano-slotting
+        ,   cardano-ledger-api
+        ,   lens
+        , cardano-ledger-conway
+        , cardano-ledger-alonzo
+        , mtl
+        ,   cardano-testnet
+        ,   scientific
+        ,   process
+        ,   unix
+        ,   filepath
+        ,   directory
+        ,   prettyprinter
+        ,   hedgehog-extras
+        ,   hedgehog
+        ,   bytestring
+        , data-default-class
+        , tasty
+        , tasty-hedgehog
+
+
+    hs-source-dirs:   src
+    default-language: Haskell2010
