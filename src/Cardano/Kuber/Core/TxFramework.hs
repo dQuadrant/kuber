@@ -75,6 +75,8 @@ import Cardano.Ledger.CertState (DRepState(DRepState))
 import qualified Cardano.Api.Ledger as L
 import Cardano.Kuber.Data.Models (fromStrictMaybe)
 import qualified Debug.Trace as Debug
+import           Data.Map.Ordered.Strict (OMap)
+import qualified Data.Map.Ordered.Strict as OMap
 
 type BoolChange   = Bool
 type BoolFee = Bool
@@ -408,7 +410,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                             ) withVoteSigs   $ Map.elems  builderInputUtxo
 
   iteration1@(txBody1,signatories,fee1) <-  calculatorWithDefaults    startingFee
-  let iterationFunc lastBody lastFee   =
+  let iterationFunc lastBody lastFee   = 
         if  null partialInputs && null  partialMints && not hasScritProposals
           then calculatorWithDefaults  lastFee <&> makeNewFee
           else do
@@ -419,7 +421,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
               func newFee <&> makeNewFee     -- 2 consecutive call is required to prevent cycle in some transaction  
       iteratedBalancing n lastBody lastFee=do
         v@(txBody',signatories',fee')<- iterationFunc lastBody lastFee
-        if (if n >0 then  (==) else (<=) ) fee'  lastFee
+        if (if n > 0 then  (==) else (<=) ) fee'  lastFee
               then pure v
               else iteratedBalancing (n-1) txBody'  fee'
       respond (txBody,signatories,_) =  (txBody,makeSignedTransaction
@@ -1040,7 +1042,7 @@ makeTxProposals  conOnward  (UTxO utxos) proposals=do
                 scProcedures <- scriptProcedures
 
                 let nonScriptProcedures =  OSet.fromSet (Set.fromList unProcedures)
-                    (unresolved,resoved)  =  partitionEithers $ map (\(a,b)->case b of
+                    (unresolved,resolved)  =  partitionEithers $ map (\(a,b)->case b of
                         Left e -> Left (a,e)
                         Right v -> Right (a,v)
                         ) scProcedures
@@ -1052,25 +1054,25 @@ makeTxProposals  conOnward  (UTxO utxos) proposals=do
                             pure  (pp,partial result)
                           Just eu -> pure  (pp,partial eu)
 
-                    -- resolveAll  eu = sequence $ map (revolveWihExUnits eu) unresolved
+                    unProcedure pProcedure =  map (\(procedure, witness) -> (Proposal procedure, Just witness)) pProcedure  
 
-                    resolvedMap :: Map (ProposalProcedure (ShelleyLedgerEra ConwayEra)) (ScriptWitness WitCtxStake ConwayEra)
-                    resolvedMap = Map.fromList resoved
+                    resolvedMap = map (\(procedure, witness) -> (Proposal procedure, Just witness)) resolved  
+
                 if null unresolved
                   then
-                    if null resoved  && null nonScriptProcedures
+                    if null resolved  && null nonScriptProcedures
                       then Right (False,totalDeposit,\_ _-> pure Nothing)
                       else
                         Right $ (length resolvedMap > 0 || length nonScriptProcedures > 0, totalDeposit,\_ _-> do
                           pure $  Just$
                             Featured conwayOnward
-                              (TxProposalProcedures nonScriptProcedures (BuildTxWith resolvedMap)))
+                              (mkTxProposalProcedures (OMap.fromList $ resolvedMap)))
                   else
                       Right $ (True, totalDeposit,\eu val   -> do
                         exUnitApplied <- mapM (revolveWihExUnits  eu val )  unresolved
                         Right $  Just$
                           Featured conwayOnward
-                            (TxProposalProcedures nonScriptProcedures (BuildTxWith (resolvedMap <>(Map.fromList exUnitApplied) ))) )
+                            (mkTxProposalProcedures (OMap.fromList $ resolvedMap <> unProcedure exUnitApplied )))
               )
 
               (toCardanoEra conOnward)

@@ -96,6 +96,8 @@ import qualified Data.Maybe
 import qualified Cardano.Ledger.Api.Era as L
 import qualified Cardano.Ledger.Conway.Governance as L
 import qualified Debug.Trace as Debug
+import Data.Maybe (fromJust, fromMaybe)
+import Cardano.Crypto.Hash.Class (castHash, hashFromStringAsHex)
 
 class Wrapper  m a  where
   unWrap :: m  ->  a
@@ -680,9 +682,12 @@ instance EraCrypto ledgerera ~ StandardCrypto =>  FromJSON  (ConstitutionModal l
   parseJSON (A.Object o) = do
       url <- o .: "url"
       dataHash <- o .: "dataHash"
-      scriptHash :: Maybe T.Text <- o .:? "scriptHash"
-      pure $ ConstitutionModal $ Constitution (Anchor  url dataHash) SNothing
-
+      scriptHash <- o .:? "scriptHash"
+      case scriptHash of 
+        Just sh -> do 
+          let scriptHashLedger = SJust $ sh
+          pure $ ConstitutionModal $ Constitution (Anchor  url dataHash) scriptHashLedger
+        Nothing -> pure $ ConstitutionModal $ Constitution (Anchor  url dataHash) SNothing
   parseJSON  _ = fail "Expected Proposal Object"
 
 

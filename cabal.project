@@ -1,8 +1,8 @@
 -- See CONTRIBUTING for information about these, including some Nix commands
 -- you need to run if you change them
 index-state:
-  , hackage.haskell.org 2024-07-23T21:37:15Z
-  , cardano-haskell-packages 2024-07-23T08:58:13Z
+  , hackage.haskell.org 2024-08-07T17:50:14Z
+  , cardano-haskell-packages 2024-08-07T21:42:21Z
 
 -- Custom repository for cardano haskell packages, see CONTRIBUTING for more
 repository cardano-haskell-packages
@@ -37,12 +37,21 @@ package cryptonite
   -- generation is dubious. Set the flag so we use /dev/urandom by default.
   flags: -support_rdrand
 
+source-repository-package
+   type: git
+   location: https://github.com/IntersectMBO/cardano-api
+   tag: af98dfd063fe41152dec37286c78a7f373ae0dca
+   subdir:
+     cardano-api
+     cardano-api-gen
 
--- source-repository-package
---   type: git
---   location: https://github.com/IntersectMBO/cardano-node
---   tag: 2820a63dc934c6d5b5f450b6c2543b81c6476696
---   subdir:
---     cardano-testnet
+constraints:
+  , plutus-ledger-api ^>= 1.31
 
-  
+allow-newer:
+  -- These are required due to the above.
+  , cardano-ledger-alonzo:plutus-ledger-api
+  , cardano-ledger-alonzo-test:plutus-ledger-api
+  , cardano-ledger-babbage:plutus-ledger-api
+  , cardano-ledger-binary:plutus-ledger-api
+  , cardano-ledger-conway:plutus-ledger-api

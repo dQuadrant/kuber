@@ -103,6 +103,7 @@ library
     , lens
     , data-default
     , io-classes-mtl
+    , ordered-containers
 
 test-suite test
   default-language: Haskell2010
