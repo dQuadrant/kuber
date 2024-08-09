@@ -151,11 +151,9 @@ type TxBuilder = (TxBuilder_ ConwayEra)
 newtype (L.EraPParams (ShelleyLedgerEra era)) =>  ProposalProcedureModal  era = 
     ProposalProcedureModal (L.ProposalProcedure  (ShelleyLedgerEra era))
 
-
 data TxProposal era = TxProposal  (ProposalProcedureModal era)
       | TxProposalScript (ProposalProcedureModal era) (Maybe ExecutionUnits) TxPlutusScript
       | TxProposalScriptReference (ProposalProcedureModal era) (Maybe ExecutionUnits) TxIn
-
 
 data TxBuilder_ era = TxBuilder_
   { txSelections :: [TxInputSelection era],

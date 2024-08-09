@@ -726,7 +726,7 @@ instance FromJSON  (ProposalProcedureModal ConwayEra) where
     if null extraKeys then pure ()
     else fail $ "Invalid key: " ++ intercalate ", " (Set.toList extraKeys)
     constitutionHash  <- o .:? "guardrailscript"
-
+    
     let maybeGuardrailScript = toStrictMaybe constitutionHash
     govAction <-
           chain  "newconstitution"  (parseNewConstitution prevGovActionId)
@@ -737,10 +737,9 @@ instance FromJSON  (ProposalProcedureModal ConwayEra) where
         $ chain "updatecommittee" (parseUpdateCommittee prevGovActionId)
         $ chain "parameterupdate" (parseParamUpdate prevGovActionId maybeGuardrailScript)
         $ pure InfoAction
-
-    pure $ ProposalProcedureModal $
+    pure $ ProposalProcedureModal $ 
           ProposalProcedure (Coin deposit) returnAddress  govAction  anchor
-
+    
     where
         parseUpdateCommittee prevAction (A.Object  obj)= do
            addMap  <- obj .:? "add" .!= mempty
