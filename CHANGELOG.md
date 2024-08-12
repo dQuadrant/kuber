@@ -1,3 +1,30 @@
+## v3.1.0 : Stable Conway Era Support
+This stable release supports adds full support for new conway governance features.
+
+### Changes
+- when not set, kuber will automatically fill in following field by querying ledger state
+  - `proposal.deposit`
+  - `proposal.previousGovActionId`
+  - `proposal.executionUnits`
+  - `certificates.deposit`
+
+### Fixes 
+- Fix catchError function on Unhandled error
+- Add exception handler on txSubmission
+- Use FrameworkError explicitly to improve error handling
+- Make Kontract instance of MonadError and Alternative
+- Show proper error message for plutus error
+- add ex-unit test
+- Fix fromJson of proposal field
+- fix utxoModal parsing problem
+
+#### Known Issues:
+- `Kontract` is not working via `RemoteKuberConnection` when using **$.proposal[s]**, **$.votes[s]** or **$.certificate[s]**
+
+#### Litmiations:
+ - voting with script key is not supported
+
+
 ## v3.0.0-rc2 : Tx build bug fix , Add tests
 - Fix Bug : Server got irresponsive after requesting `/api/v1/tx` with plutus included transaction 
 - Add tests to validate that the kuber apis are working via LocalNode Socket connection.
