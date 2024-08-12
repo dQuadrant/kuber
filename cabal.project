@@ -40,7 +40,7 @@ package cryptonite
 source-repository-package
    type: git
    location: https://github.com/IntersectMBO/cardano-api
-   tag: af98dfd063fe41152dec37286c78a7f373ae0dca
+   tag: 91289ff6d28c8307cc3301747eaaacb27ab97fde
    subdir:
      cardano-api
      cardano-api-gen

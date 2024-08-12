@@ -1051,26 +1051,26 @@ makeTxProposals  conOnward  (UTxO utxos) proposals=do
                             pure  (pp,partial result)
                           Just eu -> pure  (pp,partial eu)
 
-                    unProcedure pProcedure =  map (\(procedure, witness) -> (Proposal procedure, Just witness)) pProcedure  
+                    unProcedure pProcedure =  map (\(procedure, witness) -> (procedure, Just witness)) pProcedure  
 
-                    resolvedMap = map (\(procedure, witness) -> (Proposal procedure, Just witness)) resolved  
-                    nonWitnessProposals = map (\p-> (p, Nothing))(map Proposal unProcedures)
+                    resolvedMap = map (\(procedure, witness) -> (procedure, Just witness)) resolved  
+                    nonWitnessProposals = map (\p-> (p, Nothing))(unProcedures)
                 if null unresolved
                 then
                   let proposal =
                         case (null resolved, null nonScriptProcedures, resolvedMap, nonWitnessProposals) of
                           (True, True, _, _) -> Right (False, totalDeposit, \_ _ -> pure Nothing)
                           (False, True, resMap, _) | not (null resMap) ->
-                            Right $ (True, totalDeposit, \_ _ -> pure $ Just $ Featured conwayOnward (mkTxProposalProcedures (OMap.fromList resolvedMap)))
+                            Right $ (True, totalDeposit, \_ _ -> pure $ Just $ Featured conwayOnward (mkTxProposalProcedures resolvedMap))
                           (True, False, _, nonScripts) | not (null nonScripts) ->
-                            Right $ (False, totalDeposit, \_ _ -> pure $ Just $ Featured conwayOnward (mkTxProposalProcedures (OMap.fromList nonWitnessProposals)))
+                            Right $ (False, totalDeposit, \_ _ -> pure $ Just $ Featured conwayOnward (mkTxProposalProcedures nonWitnessProposals))
                           (_, _, _, _) ->
-                            Right $ (True, totalDeposit, \_ _ -> pure $ Just $ Featured conwayOnward (mkTxProposalProcedures (OMap.fromList (resolvedMap <> nonWitnessProposals))))
+                            Right $ (True, totalDeposit, \_ _ -> pure $ Just $ Featured conwayOnward (mkTxProposalProcedures  (resolvedMap <> nonWitnessProposals)))
                   in proposal
                 else
                   Right $ (True, totalDeposit, \eu val -> do
                     exUnitApplied <- mapM (revolveWihExUnits eu val) unresolved
-                    pure $ Just $ Featured conwayOnward (mkTxProposalProcedures (OMap.fromList (resolvedMap <> unProcedure exUnitApplied))))
+                    pure $ Just $ Featured conwayOnward (mkTxProposalProcedures ((resolvedMap <> unProcedure exUnitApplied))))
               )
 
               (toCardanoEra conOnward)
