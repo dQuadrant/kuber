@@ -28,6 +28,7 @@ module Cardano.Kuber.Api(
     -- Such utxos should be related to user's wallet and
 
     ,   txWalletAddress
+    
     ,   txWalletAddresses
     ,   txWalletUtxos
     ,   txWalletUtxo
@@ -74,6 +75,72 @@ module Cardano.Kuber.Api(
     , txValidFromSlot
     , txValidUntilSlot
     , txValidSlotRange
+    ,   txConsumeTxIn_
+    ,   txConsumeUtxo_
+    ,   txConsumeUtxos_
+    ,   txRedeemTxin_
+    ,   txRedeemUtxo_
+    ,   txRedeemUtxoWithDatum_
+    ,   txRedeemUtxoWithReferenceScript_
+    ,   txRedeemTxinWithReferenceScript_
+    ,   txRedeemUtxoWithDatumAndReferenceScript_
+    ,   txRedeemTxinWithDatumAndReferenceScript_
+
+
+    -- $ Transaction Inputs
+
+    -- *** `TxSelection`s 
+    -- | `TxSelection`s represent Utxos that can be used for balancing a transaction. They will be added to input if required for balancing the transaciton.
+    -- Such utxos should be related to user's wallet and
+
+    ,   txWalletAddress_
+    
+    ,   txWalletAddresses_
+    ,   txWalletUtxos_
+    ,   txWalletUtxo_
+
+    ,   txWalletSignKey_
+    ,   txWalletSignKeys_
+
+
+   -- *** Payment functions
+    ,   txPayTo_
+    ,   txPayToPkh_
+    ,   txPayToScript_
+    ,   txPayToScriptWithData_
+    ,   txPayToScriptWithReference_
+    ,   txPayToScriptWithDataAndReference_
+    ,   txPayToWithReferenceScript_
+
+    -- *** Minting functions
+    ,   txMintSimpleScript_
+    ,   txMintPlutusScript_
+
+
+
+    -- *** Reference Inputs
+    ,   txReferenceTxIn_
+    ,   txReferenctUtxo_
+
+
+    -- *** Extra Vkey Witnesses in Transaction
+    ,   txSignBy_
+    ,   txSignByPkh_
+    ,   txSign_
+
+    -- | Explicitly set transaction fee
+    ,   txSetFee_
+
+    -- | Change address to send unbalanced value to. If change address is missing, it is automatically selected from one of the wallet addresses.
+    , txChangeAddress_
+
+    -- *** Transactoin validity functions
+    , txValidFromPosixTime_
+    , txValidUntilPosixTime_
+    , txValidPosixTimeRange_
+    , txValidFromSlot_
+    , txValidUntilSlot_
+    , txValidSlotRange_
 
     -- *** Transactoin validity functions
     -- | these functions help dealing with plutus validator and cardano-api script types.
