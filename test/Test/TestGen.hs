@@ -20,6 +20,7 @@ import qualified Hedgehog.Range as Range
 import Test.Gen.Cardano.Api.Typed
 import Cardano.Kuber.Api
 import Cardano.Kuber.Data.Parsers
+import Cardano.Api.Ledger (Coin(..))
 
 genSomeWalelt :: NetworkId -> Gen TxBuilder
 genSomeWalelt netid = do
@@ -38,9 +39,9 @@ genSomeWalelt netid = do
         address <- element addresses
         pure (txid, TxOut address (TxOutValueByron value) TxOutDatumNone ReferenceScriptNone)
       genAdaVal = do
-        Gen.integral (Range.linear 2_000_000 3_000_000_000_000) <&> Lovelace
+        Gen.integral (Range.linear 2_000_000 3_000_000_000_000) <&> Coin
       genCollateralVal = do
-        Gen.integral (Range.linear 5_000_000 10_000_000) <&> Lovelace
+        Gen.integral (Range.linear 5_000_000 10_000_000) <&> Coin
   utxos <- Gen.list (Range.linear 4 10) (genutxo (genValueForTxOut ShelleyBasedEraConway))
   adaUtxos <- Gen.list (Range.linear 4 10) (genAdaUtxo genAdaVal)
   collateralUtxo <- genAdaUtxo genCollateralVal
