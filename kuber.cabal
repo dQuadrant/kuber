@@ -72,7 +72,7 @@ library
     , directory
     , aeson >= 1.5.6.0
     , text-conversions
-    , cardano-api ^>= 9.1
+    , cardano-api ^>= 9.2
     , cardano-data >= 1.0
     , cardano-ledger-binary
     , cardano-ledger-core 
