@@ -128,7 +128,7 @@ executeTxBuilder builder = do
   network<- kGetNetworkId
   pParam <- kQueryProtocolParams
   systemStart <- kQuerySystemStart
-  eraHistory <- kQueryEraHistory
+  -- eraHistory <- kQueryEraHistory
   updatedProposals <- applyPrevGovActionIdNDeposit bConwayOnward (unLedgerProtocolParameters pParam) (txProposals builder)
   let (selectionAddrs,sel_txins,sel_utxo) = mergeSelections
       mergeSelections=foldl (mergeSelection network)  (Set.empty,Set.empty ,Map.empty ) (txSelections builder)
@@ -144,7 +144,7 @@ executeTxBuilder builder = do
   let allUtxos = UTxO $  combinedUtxos <>  txInUtxos
   updatedCerts <- mapM  (updateCertDeposit (unLedgerProtocolParameters pParam)) (Cardano.Kuber.Core.TxBuilder.txCertificates builder)
   let updatedTxBuilder = txReplacePoposalsNCert builder updatedProposals updatedCerts
-  eitherToKontract$  txBuilderToTxBody  network pParam systemStart eraHistory allUtxos  updatedTxBuilder
+  eitherToKontract$  txBuilderToTxBody  network pParam systemStart (error "Cannot query era history") allUtxos  updatedTxBuilder
 
   where
     queryIfNotEmpty v f v' = if null  v then pure v' else f
