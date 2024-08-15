@@ -109,15 +109,6 @@ valueToRequiredEra cera val = case cera of
     ConwayEra ->  TxOutValueShelleyBased ShelleyBasedEraConway (toLedgerValue MaryEraOnwardsConway val)
     _ -> error "Unexpected"
 
-getEra :: CardanoEra era1 -> ShelleyBasedEra era1
-getEra era = case era of
-  ShelleyEra -> ShelleyBasedEraShelley
-  AllegraEra -> ShelleyBasedEraAllegra
-  MaryEra -> ShelleyBasedEraMary
-  AlonzoEra -> ShelleyBasedEraAlonzo
-  BabbageEra -> ShelleyBasedEraBabbage
-  ConwayEra -> ShelleyBasedEraConway
-  _ -> error "Unexpected era"
 
 -- Given TxBuilder object, Construct a txBody
 -- This IO code, queries all the required parameters

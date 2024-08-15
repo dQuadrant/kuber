@@ -75,6 +75,8 @@ module Cardano.Kuber.Api(
     , txValidFromSlot
     , txValidUntilSlot
     , txValidSlotRange
+    , txVote
+
     ,   txConsumeTxIn_
     ,   txConsumeUtxo_
     ,   txConsumeUtxos_
@@ -141,6 +143,10 @@ module Cardano.Kuber.Api(
     , txValidFromSlot_
     , txValidUntilSlot_
     , txValidSlotRange_
+
+    -- gov actions 
+    , txVote_ 
+    , txCertificate_
 
     -- *** Transactoin validity functions
     -- | these functions help dealing with plutus validator and cardano-api script types.

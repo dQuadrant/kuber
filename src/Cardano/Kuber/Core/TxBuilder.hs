@@ -30,6 +30,15 @@ import Cardano.Kuber.Core.TxScript
 import Cardano.Ledger.Api (Babbage)
 import Data.Either (fromRight)
 
+getEra :: CardanoEra era1 -> ShelleyBasedEra era1
+getEra era = case era of
+  ShelleyEra -> ShelleyBasedEraShelley
+  AllegraEra -> ShelleyBasedEraAllegra
+  MaryEra -> ShelleyBasedEraMary
+  AlonzoEra -> ShelleyBasedEraAlonzo
+  BabbageEra -> ShelleyBasedEraBabbage
+  ConwayEra -> ShelleyBasedEraConway
+  _ -> error "Unexpected era"
 
 data TxVoteL ledgerera
   = TxVoteL
@@ -238,47 +247,27 @@ instance Semigroup (TxBuilder_ era) where
         txAuxScripts = txAuxScripts txb1 <> txAuxScripts txb2
       }
 
-txSelection :: TxInputSelection ConwayEra -> TxBuilder
+
+txSelection :: TxInputSelection era -> TxBuilder_ era
 txSelection v = TxBuilder_ [v] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
-txSelection_ :: TxInputSelection era -> TxBuilder_ era
-txSelection_ v = TxBuilder_ [v] [] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
-
-txInput :: TxInput ConwayEra -> TxBuilder
+txInput :: TxInput era -> TxBuilder_ era
 txInput v = TxBuilder_ [] [v] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
-txInput_ :: TxInput era -> TxBuilder_ era
-txInput_ v = TxBuilder_ [] [v] [] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
-
-txInputReference :: TxInputReference ConwayEra -> TxBuilder
+txInputReference :: TxInputReference era -> TxBuilder_ era
 txInputReference v = TxBuilder_ [] [] [v] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
-txInputReference_ :: TxInputReference era -> TxBuilder_ era
-txInputReference_ v = TxBuilder_ [] [] [v] [] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
-
-txMints :: [TxMintData TxMintingScriptSource] -> TxBuilder
+txMints :: [TxMintData TxMintingScriptSource] -> TxBuilder_ era
 txMints md = TxBuilder_ [] [] [] [] [] mempty mempty md [] [] [] [] Nothing Nothing Map.empty []
 
-txMints_ :: [TxMintData TxMintingScriptSource] -> TxBuilder_ era
-txMints_ md = TxBuilder_ [] [] [] [] [] mempty mempty md [] [] [] [] Nothing Nothing Map.empty []
-
-txOutput :: TxOutput (TxOutputContent ConwayEra) -> TxBuilder
+txOutput :: TxOutput (TxOutputContent era) -> TxBuilder_ era
 txOutput v = TxBuilder_ [] [] [] [v] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
-txOutput_ :: TxOutput (TxOutputContent era) -> TxBuilder_ era
-txOutput_ v = TxBuilder_ [] [] [] [v] [] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
-
-txCollateral' :: TxCollateral ConwayEra -> TxBuilder
+txCollateral' :: TxCollateral era -> TxBuilder_ era
 txCollateral' v = TxBuilder_ [] [] [] [] [v] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
-txCollateral'_ :: TxCollateral era -> TxBuilder_ era
-txCollateral'_ v = TxBuilder_ [] [] [] [] [v] mempty mempty [] [] [] [] [] Nothing Nothing Map.empty []
-
-txSignature :: TxSignature ConwayEra -> TxBuilder
+txSignature :: TxSignature era -> TxBuilder_ era
 txSignature v = TxBuilder_ [] [] [] [] [] mempty mempty [] [v] [] [] [] Nothing Nothing Map.empty []
-
-txSignature_ :: TxSignature era -> TxBuilder_ era
-txSignature_ v = TxBuilder_ [] [] [] [] [] mempty mempty [] [v] [] [] [] Nothing Nothing Map.empty []
 
 txReplacePoposalsNCert :: TxBuilder_ era -> [TxProposal era] -> [Certificate era] -> TxBuilder_ era
 txReplacePoposalsNCert (TxBuilder_ a b c d e f g h i _ k _ m n o p) ps cs = TxBuilder_ a b c d e f g h i ps k cs m n o p
@@ -287,44 +276,44 @@ txReplacePoposalsNCert (TxBuilder_ a b c d e f g h i _ k _ m n o p) ps cs = TxBu
 
 -- Set validity Start and end time in posix seconds
 txValidPosixTimeRange :: POSIXTime -> POSIXTime -> TxBuilder
-txValidPosixTimeRange start end = TxBuilder_ [] [] [] [] [] (ValidityPosixTime start) (ValidityPosixTime end) [] [] [] [] [] Nothing Nothing Map.empty []
+txValidPosixTimeRange start end = txValidPosixTimeRange_ start end
 
 txValidPosixTimeRange_ :: POSIXTime -> POSIXTime -> TxBuilder_ era
 txValidPosixTimeRange_ start end = TxBuilder_ [] [] [] [] [] (ValidityPosixTime start) (ValidityPosixTime end) [] [] [] [] [] Nothing Nothing Map.empty []
 
 -- set  validity statart time in posix seconds
 txValidFromPosixTime :: POSIXTime -> TxBuilder
-txValidFromPosixTime start = TxBuilder_ [] [] [] [] [] (ValidityPosixTime start) mempty [] [] [] [] [] Nothing Nothing Map.empty []
+txValidFromPosixTime start = txValidFromPosixTime_ start 
 
 txValidFromPosixTime_ :: POSIXTime -> TxBuilder_ era
 txValidFromPosixTime_ start = TxBuilder_ [] [] [] [] [] (ValidityPosixTime start) mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
 -- set transaction validity end time in posix seconds
 txValidUntilPosixTime :: POSIXTime -> TxBuilder
-txValidUntilPosixTime end = TxBuilder_ [] [] [] [] [] mempty (ValidityPosixTime end) [] [] [] [] [] Nothing Nothing Map.empty []
+txValidUntilPosixTime end = txValidUntilPosixTime_ end 
 
 txValidUntilPosixTime_ :: POSIXTime -> TxBuilder_ era
 txValidUntilPosixTime_ end = TxBuilder_ [] [] [] [] [] mempty (ValidityPosixTime end) [] [] [] [] [] Nothing Nothing Map.empty []
 
 -- Set validity Start and end slot
 txValidSlotRange :: SlotNo -> SlotNo -> TxBuilder
-txValidSlotRange start end = TxBuilder_ [] [] [] [] [] (ValiditySlot start) (ValiditySlot end) [] [] [] [] [] Nothing Nothing Map.empty []
+txValidSlotRange start end = txValidSlotRange_ start end
 
 txValidSlotRange_ :: SlotNo -> SlotNo -> TxBuilder_ era
 txValidSlotRange_ start end = TxBuilder_ [] [] [] [] [] (ValiditySlot start) (ValiditySlot end) [] [] [] [] [] Nothing Nothing Map.empty []
 
 -- set  validity statart time in posix seconds
 txValidFromSlot :: SlotNo -> TxBuilder
-txValidFromSlot start = TxBuilder_ [] [] [] [] [] (ValiditySlot start) mempty [] [] [] [] [] Nothing Nothing Map.empty []
+txValidFromSlot start = txValidFromSlot_ start
 
 txValidFromSlot_ :: SlotNo -> TxBuilder_ era
 txValidFromSlot_ start = TxBuilder_ [] [] [] [] [] (ValiditySlot start) mempty [] [] [] [] [] Nothing Nothing Map.empty []
 
 -- set transaction validity end time in posix seconds
 txValidUntilSlot :: SlotNo -> TxBuilder
-txValidUntilSlot end = TxBuilder_ [] [] [] [] [] mempty (ValiditySlot end) [] [] [] [] [] Nothing Nothing Map.empty []
+txValidUntilSlot end = txValidUntilSlot_ end
 
-txValidUntilSlot_ :: SlotNo -> TxBuilder_ era 
+txValidUntilSlot_ :: SlotNo -> TxBuilder_ era
 txValidUntilSlot_ end = TxBuilder_ [] [] [] [] [] mempty (ValiditySlot end) [] [] [] [] [] Nothing Nothing Map.empty []
 
 -- governanceProposals
@@ -335,32 +324,35 @@ txValidUntilSlot_ end = TxBuilder_ [] [] [] [] [] mempty (ValiditySlot end) [] [
 
 -- voting
 txVote :: TxVote ConwayEra -> TxBuilder
-txVote v = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [v] [] Nothing Nothing Map.empty []
+txVote v = txVote_ v 
 
--- voting
+txVote_ :: TxVote era -> TxBuilder_ era
+txVote_ v = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [v] [] Nothing Nothing Map.empty []
+
+-- certifying
 txCertificate :: Certificate ConwayEra -> TxBuilder
-txCertificate v = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [v] Nothing Nothing Map.empty []
+txCertificate v = txCertificate_ v 
+
+txCertificate_ :: Certificate era -> TxBuilder_ era
+txCertificate_ v = TxBuilder_ [] [] [] [] [] mempty mempty [] [] [] [] [v] Nothing Nothing Map.empty []
 
 --- minting
-_txMint :: TxMintData TxMintingScriptSource -> TxBuilder
+_txMint :: TxMintData TxMintingScriptSource -> TxBuilder_ era
 _txMint v = txMints [v]
-
-_txMint_ :: TxMintData TxMintingScriptSource -> TxBuilder_ era
-_txMint_ v = txMints_ [v]
 
 -- | Mint token with plutus v1 or v2 script
 txMintPlutusScript :: IsPlutusScript script => script -> HashableScriptData -> [(AssetName, Quantity)] -> TxBuilder
-txMintPlutusScript script sData amounts = _txMint $ TxMintData (TxMintingPlutusScript (toTxPlutusScript script) Nothing sData) amounts Map.empty
+txMintPlutusScript script sData amounts = txMintPlutusScript script sData amounts 
 
 txMintPlutusScript_ :: IsPlutusScript script => script -> HashableScriptData -> [(AssetName, Quantity)] -> TxBuilder_ era
-txMintPlutusScript_ script sData amounts = _txMint_ $ TxMintData (TxMintingPlutusScript (toTxPlutusScript script) Nothing sData) amounts Map.empty
+txMintPlutusScript_ script sData amounts = _txMint $ TxMintData (TxMintingPlutusScript (toTxPlutusScript script) Nothing sData) amounts Map.empty
 
 -- | Mint token with simple script
 txMintSimpleScript ::  SimpleScript -> [(AssetName, Quantity)] -> TxBuilder
-txMintSimpleScript script amounts = _txMint $ TxMintData (TxMintingSimpleScript ( script)) amounts Map.empty
+txMintSimpleScript script amounts = txMintSimpleScript_ script amounts
 
 txMintSimpleScript_ ::  SimpleScript -> [(AssetName, Quantity)] -> TxBuilder_ era 
-txMintSimpleScript_ script amounts = _txMint_ $ TxMintData (TxMintingSimpleScript ( script)) amounts Map.empty
+txMintSimpleScript_ script amounts = _txMint $ TxMintData (TxMintingSimpleScript ( script)) amounts Map.empty
 
 -- txMintWithMetadata :: IsMintingScript script =>script  ->   [(AssetName,Integer)] -> Map Word64 (Map AssetName Aeson.Value)  -> TxBuilder
 -- txMintWithMetadata script amounts mp = _txMint $ TxMintData (TxMintingScriptCode $ toTxMintingScript script) amounts mp
@@ -373,25 +365,37 @@ txMintSimpleScript_ script amounts = _txMint_ $ TxMintData (TxMintingSimpleScrip
 -- | Pay to this address in transaction
 
 txPayTo :: AddressInEra ConwayEra -> Value -> TxBuilder
-txPayTo addr v = txOutput $ TxOutput (TxOutNative $ TxOut addr (TxOutValueShelleyBased ShelleyBasedEraConway (toMaryValue v)) TxOutDatumNone ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
+txPayTo addr v = txPayTo_ addr v
 
-txPayTo_ :: AddressInEra BabbageEra -> Value -> TxBuilder_ BabbageEra
-txPayTo_ addr v = txOutput_ $ TxOutput (TxOutNative $ TxOut addr (TxOutValueShelleyBased ShelleyBasedEraBabbage (toMaryValue v)) TxOutDatumNone ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
+
+txPayTo_ :: (IsTxBuilderEra era ) =>  AddressInEra era -> Value -> TxBuilder_ era
+txPayTo_  addr v =  txPayTo_' (bCardanoEra) addr v
+
+txPayTo_' :: CardanoEra era -> AddressInEra era -> Value -> TxBuilder_ era
+txPayTo_' era addr v =
+  case era of 
+    BabbageEra -> txOutput $ TxOutput (TxOutNative $ TxOut addr (TxOutValueShelleyBased ShelleyBasedEraBabbage (toMaryValue v)) TxOutDatumNone ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
+    ConwayEra -> txOutput $ TxOutput (TxOutNative $ TxOut addr (TxOutValueShelleyBased ShelleyBasedEraConway (toMaryValue v)) TxOutDatumNone ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
+    _ -> error "txPayTo: Can only support Babbge and Conway Era" 
 
 -- | Pay to address  and inline the script in resulting utxo.
 txPayToWithReferenceScript :: AddressInEra ConwayEra -> Value -> TxScript -> TxBuilder
-txPayToWithReferenceScript addr v pScript = txOutput $ TxOutput (TxOutNative $ TxOut addr (TxOutValueShelleyBased ShelleyBasedEraConway (toMaryValue v)) TxOutDatumNone (ReferenceScript BabbageEraOnwardsConway (txScriptToScriptAny pScript))) False False OnInsufficientUtxoAdaUnset
+txPayToWithReferenceScript addr v pScript = txPayToWithReferenceScript_ bCardanoEra addr v pScript
 
-txPayToWithReferenceScript_ :: AddressInEra BabbageEra -> Value -> TxScript -> TxBuilder_ BabbageEra
-txPayToWithReferenceScript_ addr v pScript = txOutput_ $ TxOutput (TxOutNative $ TxOut addr (TxOutValueShelleyBased ShelleyBasedEraBabbage (toMaryValue v)) TxOutDatumNone (ReferenceScript BabbageEraOnwardsBabbage (txScriptToScriptAny pScript))) False False OnInsufficientUtxoAdaUnset
+txPayToWithReferenceScript_ :: CardanoEra era -> AddressInEra era -> Value -> TxScript -> TxBuilder_ era
+txPayToWithReferenceScript_ era addr v pScript = 
+  case era of 
+    BabbageEra -> txOutput $ TxOutput (TxOutNative $ TxOut addr (TxOutValueShelleyBased ShelleyBasedEraBabbage (toMaryValue v)) TxOutDatumNone (ReferenceScript BabbageEraOnwardsBabbage (txScriptToScriptAny pScript))) False False OnInsufficientUtxoAdaUnset
+    ConwayEra -> txOutput $ TxOutput (TxOutNative $ TxOut addr (TxOutValueShelleyBased ShelleyBasedEraConway (toMaryValue v)) TxOutDatumNone (ReferenceScript BabbageEraOnwardsBabbage (txScriptToScriptAny pScript))) False False OnInsufficientUtxoAdaUnset
+    _ -> error "txPayToWithReferenceScript: Can only support Babbge and Conway Era" 
+
 
 -- | Pay to the enterprise address of this PublicKeyHash
 txPayToPkh :: PubKeyHash -> Value -> TxBuilder
 txPayToPkh pkh v = txOutput $ TxOutput (TxOutPkh pkh v) False False OnInsufficientUtxoAdaUnset
 
-
 txPayToPkh_ :: PubKeyHash -> Value -> TxBuilder_ era
-txPayToPkh_ pkh v = txOutput_ $ TxOutput (TxOutPkh pkh v) False False OnInsufficientUtxoAdaUnset
+txPayToPkh_ pkh v = txOutput $ TxOutput (TxOutPkh pkh v) False False OnInsufficientUtxoAdaUnset
 
 txPayToScriptWithDataInTx :: AddressInEra ConwayEra -> Value -> HashableScriptData -> TxBuilder
 txPayToScriptWithDataInTx addr v d = txOutput $ TxOutput (TxOutNative $ TxOut addr (TxOutValueShelleyBased ShelleyBasedEraConway (toMaryValue v)) (TxOutDatumInTx AlonzoEraOnwardsConway d) ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
