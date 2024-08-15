@@ -14,7 +14,7 @@ module Cardano.Kuber.Http.Spec
 where
 
 import Cardano.Api.Shelley
-import Cardano.Kuber.Core.TxBuilder (TxBuilder, TxBuilder_)
+import Cardano.Kuber.Core.TxBuilder (TxBuilder_)
 import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Http.MediaType
 import Data.Data (Proxy (Proxy))
@@ -36,6 +36,7 @@ type QueryApi era =
     :<|> "utxo" :> QueryParams "address" Text :> QueryParams "txin" Text :> Get '[JSON] (UtxoModal ConwayEra)
     :<|> "system-start" :> Get '[JSON] SystemStartModal
     :<|> "genesis-params" :> Get '[JSON] (GenesisParamModal ShelleyEra)
+    :<|> "health" :>  Get '[JSON] HealthStatusModal
 type KuberApi era =
   "tx" :> QueryParam "submit" Bool :> ReqBody '[JSON] (TxBuilder_ era) :> Post '[JSON] TxModal
     :<|> "tx" :> "submit" :> ReqBody '[JSON] SubmitTxModal :> Post '[JSON] TxModal

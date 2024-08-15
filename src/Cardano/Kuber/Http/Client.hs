@@ -44,9 +44,11 @@ import Cardano.Kuber.Data.TxBuilderAeson ()
 
 cQueryPParams :: ClientM (LedgerProtocolParameters ConwayEra)
 cQueryChainPoint :: ClientM ChainPointModal
+cQueryCurrentEra :: ClientM AnyCardanoEraModal
 cQueryUtxos :: [Text] -> [Text] -> ClientM (UtxoModal ConwayEra)
 cQuerySystemStart :: ClientM SystemStartModal
 cQueryGenesisParams :: ClientM (GenesisParamModal ShelleyEra)
+cGetHealthStatus :: ClientM HealthStatusModal
 cBuildTx :: Maybe Bool -> TxBuilder_ ConwayEra -> ClientM TxModal
 cSubmitTx :: SubmitTxModal -> ClientM TxModal
 cQueryTime :: ClientM TranslationResponse
@@ -60,6 +62,7 @@ cEvaluateExUnits :: TxModal -> ClientM ExUnitsResponseModal
     :<|> cQueryUtxos
     :<|> cQuerySystemStart
     :<|> cQueryGenesisParams
+    :<|> cGetHealthStatus
   )
   :<|> ( cBuildTx
            :<|> cSubmitTx

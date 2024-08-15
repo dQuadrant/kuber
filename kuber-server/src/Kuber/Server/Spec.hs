@@ -93,6 +93,7 @@ queryServer queryEra a =
   :<|> makeHandler2  a (queryUtxosHandler queryEra)
   :<|> (makeHandler a kQuerySystemStart <&> SystemStartModal)
   :<|> (makeHandler a kQueryGenesisParams <&> GenesisParamModal)
+  :<|> (queryHeahtlHandler a )
 
 
 kuberServer a =

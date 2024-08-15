@@ -501,6 +501,23 @@ instance ToJSON SlotTranslationReq where
   toJSON (SlotTranslationReq (SlotNo slot)) =  toJSON    slot
 
 
+data HealthStatusModal = HealthStatusModal{
+    hsmCurrentChainPoint :: ChainPoint
+  , hsmsecsSinceLastBlock :: Integer
+} 
+
+instance ToJSON HealthStatusModal where
+  toJSON (HealthStatusModal cp secsSinceLastBlock) = A.object [
+        A.fromString "nodeTip"  A..= cp
+      , A.fromString "secsSinceLastBlock" A..= secsSinceLastBlock
+    ]
+
+instance FromJSON HealthStatusModal where
+    parseJSON (A.Object o) =do
+        ChainPointModal point  <- o  A..: "nodeTip"
+        secsSinceLastBlock <- o A..: "secsSinceLastBlock"
+        pure $ HealthStatusModal point secsSinceLastBlock
+
 newtype ChainPointModal = ChainPointModal ChainPoint
 
 instance Wrapper ChainPointModal ChainPoint where

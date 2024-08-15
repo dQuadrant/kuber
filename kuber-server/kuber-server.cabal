@@ -62,6 +62,7 @@ library
     , wai-extra
     , time
     , plutus-ledger-api
+    , cardano-slotting
 
 
 executable kuber-server
