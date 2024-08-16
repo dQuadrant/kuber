@@ -3,29 +3,24 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Kuber.Utility.Misc where
 
 import Cardano.Api
 import Cardano.Api.Shelley
-import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (kQueryProtocolParams, kQuerySystemStart, kQueryUtxoByTxin))
+import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (kQueryProtocolParams))
 import Cardano.Kuber.Core.Kontract (Kontract (KError))
 import Cardano.Kuber.Error
-import Cardano.Kuber.Utility.QueryHelper
 import qualified Cardano.Ledger.Shelley.API as Ledger
-import Cardano.Ledger.Shelley.UTxO (txins)
-import Cardano.Slotting.Time (SystemStart, fromRelativeTime, toRelativeTime)
-import Control.Exception (throw)
-import Control.Monad.IO.Class
+import Cardano.Slotting.Time (fromRelativeTime, toRelativeTime)
 import qualified Data.Aeson as A
 import qualified Data.Aeson.KeyMap as A
-import Data.Bifunctor (bimap)
 import Data.ByteString.Builder (charUtf8)
 import qualified Data.ByteString.Builder as BSL
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Char as C
-import Data.Either (partitionEithers)
-import Data.Functor ((<&>))
 import Data.Int (Int64)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -34,25 +29,26 @@ import qualified Data.Text as T
 import Data.Time.Clock.POSIX (POSIXTime, posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import qualified Data.Vector as Vector
 import Data.Word (Word64)
-import qualified Debug.Trace as Debug
 import Ouroboros.Consensus.HardFork.History (unsafeExtendSafeZone)
 import qualified Ouroboros.Consensus.HardFork.History.Qry as Qry
-import qualified PlutusLedgerApi.V1 as Plutus
-import qualified Cardano.Ledger.Alonzo.Core as Ledger
 import Control.Lens.Getter ((^.))
-import Cardano.Ledger.Mary.Value as L (MaryValue (..), MultiAsset (MultiAsset), PolicyID (PolicyID))
-import Cardano.Ledger.Alonzo.TxInfo (transPolicyID)
-import qualified Cardano.Ledger.Api.Era as Ledger
 import qualified Cardano.Ledger.Api as Leger
-import Cardano.Ledger.Api (mintTxBodyL)
+import Cardano.Ledger.Mary.Value
+import Cardano.Ledger.Api (MaryEraTxBody(..))
+import qualified Cardano.Ledger.Api as Ledger
+import Cardano.Api.Ledger (Coin(unCoin))
+import qualified Data.Foldable as Foldable
+import qualified Cardano.Api.Ledger as L
+import Data.Maybe (mapMaybe)
+import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra (bCardanoEra))
 
 
-calculateTxoutMinLovelaceOrErr :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Lovelace
+calculateTxoutMinLovelaceOrErr :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Ledger.Coin
 calculateTxoutMinLovelaceOrErr t p = case calculateTxoutMinLovelace t p of
   Nothing -> error "Error calculating minlovelace"
   Just lo -> lo
 
-calculateTxoutMinLovelace :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Maybe Lovelace
+calculateTxoutMinLovelace :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Maybe Ledger.Coin
 calculateTxoutMinLovelace txout pParams = do
   bpparams <- case convertToLedgerProtocolParameters ShelleyBasedEraConway pParams  of
     Left ppce -> fail "Couldn't conver protocol parameters."
@@ -96,7 +92,8 @@ txoutListSum :: [TxOut ctx era] -> Value
 txoutListSum = foldMap toValue
   where
     toValue (TxOut _ val _ _) = case val of
-      TxOutValue masie va -> va
+      TxOutValueByron lo -> lovelaceToValue lo
+      TxOutValueShelleyBased sbe va -> fromLedgerValue sbe va
 
 utxoListSum :: [(a, TxOut ctx era)] -> Value
 utxoListSum l = txoutListSum (map snd l)
@@ -113,8 +110,9 @@ evaluateFee tx = do
   let txbody = getTxBody tx
       -- _inputs :: Set.Set TxIn
       -- _inputs = case txbody of ShelleyTxBody sbe tb scripts scriptData mAuxData validity -> Set.map fromShelleyTxIn $ inputs tb
-      (Lovelace fee) = evaluateTransactionFee shelleyBasedEra (unLedgerProtocolParameters pParam) txbody (fromIntegral $ length $ getTxWitnesses tx) 0
-  pure fee
+      -- todo: FIX this fee calculation won't work when reference script is used.
+      fee = evaluateTransactionFee shelleyBasedEra (unLedgerProtocolParameters pParam) txbody (fromIntegral $ length $ getTxWitnesses tx) 0 0
+  pure (unCoin fee)
 
 -- evaluateExUnitMap ::  HasChainQueryAPI a =>    TxBody ConwayEra -> Kontract a  w FrameworkError   (Map TxIn ExecutionUnits,Map PolicyId  ExecutionUnits)
 -- evaluateExUnitMap  txbody = do
@@ -127,53 +125,88 @@ evaluateFee tx = do
 --
 -- 
 
-evaluateExUnitMapWithUtxos :: IsCardanoEra era => LedgerProtocolParameters era -> SystemStart -> LedgerEpochInfo -> UTxO era -> TxBody era -> Either      FrameworkError      (Map TxIn ExecutionUnits, Map PolicyId ExecutionUnits)
-evaluateExUnitMapWithUtxos  = evaluateExUnitMapWithUtxos_ cardanoEra
+evaluateExUnitMapWithUtxos :: IsTxBuilderEra era => SystemStart -> LedgerEpochInfo -> LedgerProtocolParameters era ->  UTxO era -> TxBody era -> Either      FrameworkError      (ExUnitResult era)
+evaluateExUnitMapWithUtxos = evaluateExUnitMapWithUtxos_ bCardanoEra
   where
-    evaluateExUnitMapWithUtxos_ :: CardanoEra era ->  LedgerProtocolParameters era -> SystemStart -> LedgerEpochInfo -> UTxO era -> TxBody era -> Either      FrameworkError      (Map TxIn ExecutionUnits, Map PolicyId ExecutionUnits)
-    evaluateExUnitMapWithUtxos_ bera = case bera of
-      BabbageEra -> evaluateExUnitMapWithUtxos__
-      ConwayEra -> evaluateExUnitMapWithUtxos__
-      _ -> (\ _ _ _ _ _ ->Left (FrameworkError FeatureNotSupported "not in era"))
+    evaluateExUnitMapWithUtxos_ :: CardanoEra era -> SystemStart -> LedgerEpochInfo -> LedgerProtocolParameters era -> UTxO era -> TxBody era -> Either      FrameworkError      (ExUnitResult era)
+    evaluateExUnitMapWithUtxos_ bera  ss leInfo lPparam utxo txbody = do
+        let     lTxBody = case txbody of ShelleyTxBody sbe tb scs tbsd m_ad tsv ->  tb
+        exMap <- case evaluateTransactionExecutionUnits
+              (toCardanoEra bera)
+              ss
+              leInfo
+              lPparam
+              utxo
+              txbody of
+          Left tve -> Left $ FrameworkError ExUnitCalculationError (show tve)
+          Right map -> pure map
+        case bera of
+          BabbageEra -> do
+            result <- evaluateExUnitMapWithUtxos__ txbody exMap
+            result (\_ _ -> pure mempty)
+          ConwayEra -> do
+            result <- evaluateExUnitMapWithUtxos__ txbody exMap
+            result extractPorposals
 
-evaluateExUnitMapWithUtxos__ protocolParams systemStart eraHistory usedUtxos txbody = do
+          _ ->Left (FrameworkError FeatureNotSupported "not in era")
 
-  exMap <- case evaluateTransactionExecutionUnits
-    systemStart
-    eraHistory
-    protocolParams
-    usedUtxos
-    txbody of
-    Left tve -> Left $ FrameworkError ExUnitCalculationError (show tve)
-    Right map -> pure map
 
-  eithers <- mapM doMap (Map.toList exMap)
-  pure $ bimap Map.fromList Map.fromList $ partitionEithers eithers
+data ExUnitResult era  =ExUnitResult  {
+      exUnitResultInput :: Map TxIn ExecutionUnits
+   ,  exUnitResultMint :: Map PolicyId ExecutionUnits
+   ,  exUnitResultProposal :: Map (L.ProposalProcedure (ShelleyLedgerEra era)) ExecutionUnits
+} 
+emptyExUnitResult cardanoEraParam = ExUnitResult mempty mempty  (makeEmptyExmapResult cardanoEraParam)
+
+
+
+
+makeEmptyExmapResult :: CardanoEra era ->   Map (L.ProposalProcedure (ShelleyLedgerEra era) ) ExecutionUnits 
+makeEmptyExmapResult era = case era of 
+  ConwayEra -> mempty
+  BabbageEra -> mempty
+  _ -> error "Error Unexpected"
+
+evaluateExUnitMapWithUtxos__ txBody exMap= do
+
+  inputs <- sequence $ mapMaybe  inputMap (Map.toList exMap)
+  mints <- sequence $ mapMaybe  mintMap (Map.toList exMap)
+  pure $ (\x -> do
+    result <- x exMap txBody
+    pure $ ExUnitResult (Map.fromList inputs) (Map.fromList mints) result  )
   where
-    lTxBody = case txbody of ShelleyTxBody sbe tb scs tbsd m_ad tsv ->  tb
-    inputList = case txbody of ShelleyTxBody sbe tb scs tbsd m_ad tsv -> Set.toList (txins tb)
-    policyList  =  case txbody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> case  tb ^. mintTxBodyL of { MultiAsset  mp ->  map  (\(PolicyID sh) -> PolicyId $ fromShelleyScriptHash sh )  $ Set.toAscList$  Map.keysSet mp } }
+    lTxBody = case txBody of ShelleyTxBody sbe tb scs tbsd m_ad tsv ->  tb
+    inputList = Set.toAscList (lTxBody ^. Ledger.inputsTxBodyL)
+    policyList   = case lTxBody  ^. mintTxBodyL of { MultiAsset  mp ->  map  (\(PolicyID sh) -> PolicyId $ fromShelleyScriptHash sh )  $ Set.toAscList$  Map.keysSet mp }
 
-    inputLookup = Map.fromAscList $ zip [0 ..] inputList
+    inputMap (i, mExUnitResult) = case i of
+        ScriptWitnessIndexTxIn wo ->
+          Just $ unEitherExUnits txBody (fromShelleyTxIn (inputList !! fromIntegral wo),) mExUnitResult
+        _ -> Nothing
 
-    doMap (i, mExUnitResult) = case i of
-      ScriptWitnessIndexTxIn wo -> do
-        unEitherExUnits (fromShelleyTxIn (inputList !! fromIntegral wo),) mExUnitResult <&> Left
-      ScriptWitnessIndexMint wo -> unEitherExUnits (policyList !! fromIntegral wo,) mExUnitResult <&> Right
-      ScriptWitnessIndexCertificate wo -> Left $ FrameworkError FeatureNotSupported "Witness for Certificates is not supported"
-      ScriptWitnessIndexWithdrawal wo -> Left $ FrameworkError FeatureNotSupported "Plutus script for withdrawl is not supported"
+    mintMap (i, mExUnitResult) = case i of
+        ScriptWitnessIndexMint wo -> Just $  unEitherExUnits txBody (policyList !! fromIntegral wo,) mExUnitResult
 
-    unEitherExUnits f v = case v of
-      Right e -> pure $ f e
-      Left e -> case e of
-        ScriptErrorEvaluationFailed ee txts -> Left (FrameworkError PlutusScriptError (T.unpack $ T.intercalate (T.pack ", ") txts))
-        _ -> Left (FrameworkError ExUnitCalculationError (show e))
+        _ -> Nothing
 
-    transformIn (txIn, wit) exUnit =
-      ( txIn,
-        case BuildTxWith $ KeyWitness KeyWitnessForSpending of
-          BuildTxWith wit' -> wit
-      )
+unEitherExUnits ::TxBody era -> (ExecutionUnits -> (a, ExecutionUnits))
+  -> Either ScriptExecutionError (b,ExecutionUnits)
+  -> Either FrameworkError (a, ExecutionUnits)
+unEitherExUnits txbody f v = case v of
+  Right e -> pure $ f $ snd e
+  Left e -> Left $ fromScriptExecutionError e txbody
+
+
+extractPorposals exMap txBody = do
+      result <- sequence $ mapMaybe proposalMap (Map.toList exMap)
+      pure $ Map.fromList result
+    where
+      proposalList = Foldable.toList (lTxBody ^. Ledger.proposalProceduresTxBodyL)
+      proposalMap (i, mExUnitResult) = case i of
+        ScriptWitnessIndexProposing wo -> Just $  unEitherExUnits txBody (proposalList !! fromIntegral wo,) mExUnitResult
+        _ -> Nothing
+      lTxBody = case txBody of ShelleyTxBody sbe tb scs tbsd m_ad tsv ->  tb
+
 
 splitMetadataStrings :: Map Word64 A.Value -> Map Word64 A.Value
 splitMetadataStrings = Map.map morphValue
@@ -225,16 +258,16 @@ splitMetadataStrings = Map.map morphValue
 toCharUtf8 :: Char -> BSL.Builder
 toCharUtf8 = charUtf8
 
-timestampToSlot :: SystemStart -> EraHistory mode -> POSIXTime -> SlotNo
-timestampToSlot sstart (EraHistory _ interpreter) utcTime = case Qry.interpretQuery (unsafeExtendSafeZone interpreter) (Qry.wallclockToSlot relativeTime) of
+timestampToSlot :: SystemStart -> EraHistory -> POSIXTime -> SlotNo
+timestampToSlot sstart (EraHistory interpreter) utcTime = case Qry.interpretQuery (unsafeExtendSafeZone interpreter) (Qry.wallclockToSlot relativeTime) of
   -- left should never occur because we have used unsafeExtendSafeZone.
   Left phe -> error $ "Unexpected : " ++ show phe
   Right (slot, _, _) -> slot
   where
     relativeTime = toRelativeTime sstart (posixSecondsToUTCTime utcTime)
 
-slotToTimestamp :: SystemStart -> EraHistory mode -> SlotNo -> POSIXTime
-slotToTimestamp sstart (EraHistory _ interpreter) slotNo = case Qry.interpretQuery
+slotToTimestamp :: SystemStart -> EraHistory -> SlotNo -> POSIXTime
+slotToTimestamp sstart (EraHistory interpreter) slotNo = case Qry.interpretQuery
   (unsafeExtendSafeZone interpreter)
   (Qry.slotToWallclock slotNo) of
   Left phe -> error $ "Unexpected : " ++ show phe

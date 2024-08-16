@@ -62,7 +62,7 @@ import Cardano.Api
 -- import Shelley.Spec.Ledger.API (Credential(ScriptHashObj, KeyHashObj), KeyHash (KeyHash), StakeReference (StakeRefNull))
 
 import Cardano.Api.Byron (Address (ByronAddress))
-import Cardano.Api.Shelley (Address (ShelleyAddress), Lovelace (Lovelace), TxBody (ShelleyTxBody), fromPlutusData, fromShelleyAddr, fromShelleyPaymentCredential, fromShelleyScriptHash, fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyTxIn, toShelleyAddr, toShelleyTxOut)
+import Cardano.Api.Shelley (Address (ShelleyAddress), TxBody (ShelleyTxBody), fromPlutusData, fromShelleyAddr, fromShelleyPaymentCredential, fromShelleyScriptHash, fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyTxIn, toShelleyAddr, toShelleyTxOut)
 import qualified Cardano.Api.Shelley as Shelley
 import qualified Cardano.Binary as Cborg
 import Cardano.Kuber.Core.ChainInfo
@@ -126,7 +126,6 @@ import Ouroboros.Consensus.HardFork.History (unsafeExtendSafeZone)
 import qualified Ouroboros.Consensus.HardFork.History as Qry
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult (SubmitFail, SubmitSuccess))
 import PlutusLedgerApi.V2 (Address, CurrencySymbol (CurrencySymbol), PubKeyHash (PubKeyHash), ToData, TokenName (TokenName), fromBuiltin, toBuiltin, toData)
-import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 import System.Directory (doesFileExist)
 import System.Environment (getEnv)
 import System.FilePath (joinPath)

@@ -30,13 +30,18 @@ import qualified Data.Text as T
 import Data.Text.Conversions (Base16 (Base16), convertText)
 import qualified Data.Text.Lazy as TL
 import Data.Text.Lazy.Encoding as TL
-import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
+import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime, utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
 import Data.Word (Word64)
 import qualified Debug.Trace as Debug
 import Kuber.Server.Model
 import System.Environment (getEnv)
 import System.Exit (die)
 import System.FilePath (joinPath)
+import Cardano.Api.Ledger (Coin)
+import Cardano.Slotting.Time (SystemStart (..))
+import Data.Time ( diffUTCTime, getCurrentTime )
+import Servant (ServerError(errBody), Handler, err503 )
+
 
 makeHandler a kontract =
   liftIO $
@@ -50,7 +55,7 @@ makeHandler1 a f p1 = makeHandler a (f p1)
 
 makeHandler2 a f p1 p2 = makeHandler a (f p1 p2)
 
-calculateMinFeeHandler :: (HasKuberAPI api) => TxModal -> Kontract api w FrameworkError Lovelace
+calculateMinFeeHandler :: (HasKuberAPI api) => TxModal -> Kontract api w FrameworkError Coin
 calculateMinFeeHandler (TxModal (InAnyCardanoEra cera tx)) = case cera of
   BabbageEra -> kCalculateMinFee tx
   ConwayEra -> kCalculateMinFee tx
@@ -122,6 +127,26 @@ queryTimeHandler :: HasKuberAPI a => Kontract a w FrameworkError TranslationResp
 queryTimeHandler = do
   now <- liftIO getPOSIXTime
   translatePosixTimeHandler (TimeTranslationReq now)
+
+queryHealthStatusKontract :: (HasKuberAPI a, HasChainQueryAPI a) => Kontract a w FrameworkError HealthStatusModal
+queryHealthStatusKontract = do
+  now <- liftIO getCurrentTime
+  nodePoint <- kQueryChainPoint
+  nodeTime <- case chainPointToSlotNo nodePoint of
+        Nothing ->   kQuerySystemStart <&>  getSystemStart
+        Just nodeSlot -> kSlotToTime nodeSlot <&> posixSecondsToUTCTime
+  pure $ HealthStatusModal  nodePoint (round $ diffUTCTime  now nodeTime)
+
+queryHeahtlHandler :: (HasKuberAPI a, HasChainQueryAPI a) => a -> Handler HealthStatusModal
+queryHeahtlHandler  a = do
+    result <- liftIO $ evaluateKontract a queryHealthStatusKontract
+                    >>= ( \case
+                            Left fe -> throw fe
+                            Right pp -> pure pp
+                        )
+    if hsmsecsSinceLastBlock result > 300 -- TODO: this should be derrived from slot length instead of hard 300secs.
+      then throwError $ err503 { errBody = A.encode result }
+      else pure result
 
 queryBalanceHandler :: HasChainQueryAPI a => Text -> Kontract a w FrameworkError BalanceResponse
 queryBalanceHandler addrStr =

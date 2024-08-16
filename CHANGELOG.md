@@ -1,3 +1,36 @@
+## v3.1.0 : Stable Conway Era Support
+This stable release supports adds full support for new conway governance features.
+
+##### DependsOn
+- cardano-api:9.2.0.0
+
+### Changes: kuber-server
+- new endpoint `/api/v3/health` now returns nodes current tip and secondsSince last block was minted. If lastBlock was seen before 300 secs, status code will be `503`
+
+### Changes: lib:kuber
+- when not set, kuber will automatically fill in following field by querying ledger state
+  - `proposal.deposit`
+  - `proposal.previousGovActionId`
+  - `proposal.executionUnits`
+  - `certificates.deposit`
+
+### Fixes 
+- Fix catchError function on Unhandled error
+- Add exception handler on txSubmission
+- Use FrameworkError explicitly to improve error handling
+- Make Kontract instance of MonadError and Alternative
+- Show proper error message for plutus error
+- add ex-unit test
+- Fix fromJson of proposal field
+- fix utxoModal parsing problem
+
+#### Known Issues:
+-  **(lib:kuber)**  : `Kontract` will omit following fields when using `RemoteKuberConnection` :  **\$.proposal[s]**, **\$.votes[s]** or **\$.certificate[s]**
+
+#### Litmiations:
+ - voting with script key is not supported
+
+
 ## v3.0.0-rc2 : Tx build bug fix , Add tests
 - Fix Bug : Server got irresponsive after requesting `/api/v1/tx` with plutus included transaction 
 - Add tests to validate that the kuber apis are working via LocalNode Socket connection.

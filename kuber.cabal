@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               kuber
-version:            3.0.0.2
+version:            3.1.0.0
 
 -- A short (one-line) description of the package.
 -- synopsis:
@@ -32,6 +32,7 @@ library
 
   other-modules:
     Cardano.Kuber.Error
+    Cardano.Kuber.Core.TxScript
     Cardano.Kuber.Core.ChainInfo
     Cardano.Kuber.Core.LocalNodeChainApi
     Cardano.Kuber.Core.Kontract
@@ -59,7 +60,7 @@ library
 
   hs-source-dirs: src
   build-depends:
-      base >= 4.14 && <4.17
+      base >= 4.14 && <5
     , containers
     , bytestring
     , bech32
@@ -71,11 +72,12 @@ library
     , directory
     , aeson >= 1.5.6.0
     , text-conversions
-    , cardano-api == 8.29.0.0
+    , cardano-api ^>= 9.2
+    , cardano-data >= 1.0
     , cardano-ledger-binary
     , cardano-ledger-core 
     , cardano-ledger-babbage
-    , cardano-ledger-alonzo
+    , cardano-ledger-alonzo >= 1.6.0
     , cardano-ledger-shelley
     , cardano-ledger-api 
     , cardano-ledger-mary
@@ -100,6 +102,8 @@ library
     , http-client-tls
     , lens
     , data-default
+    , io-classes-mtl
+    , ordered-containers
 
 test-suite test
   default-language: Haskell2010
@@ -124,9 +128,10 @@ test-suite test
     , text
     , aeson
     , text-conversions
-    , cardano-api
+    , cardano-api 
+    , cardano-data 
     , cardano-api-gen
-    , cardano-ledger-alonzo
+    , cardano-ledger-alonzo >= 1.6.0
     , cardano-ledger-shelley
     , cardano-ledger-conway
     , cardano-slotting

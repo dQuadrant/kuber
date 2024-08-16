@@ -9,21 +9,10 @@ import Control.Exception (throw)
 import Cardano.Api
 import PlutusLedgerApi.V1 (EvaluationError(..))
 import qualified Data.Map as Map
-import qualified Data.ByteString as BS
 import qualified Data.Text as T
 import qualified Data.ByteString.Char8 as BS8
-import Cardano.Api.Shelley
-import Cardano.Ledger.Babbage.Tx (ScriptPurpose)
-import Cardano.Ledger.Shelley.LedgerState (witsFromTxWitnesses)
-import Cardano.Ledger.Alonzo.TxWits (RdmrPtr)
-import Cardano.Ledger.Crypto (StandardCrypto)
-import qualified Cardano.Ledger.Hashes as Ledger
-import Cardano.Kuber.Utility.Text (toHexString)
 import Data.List (intercalate)
-import Codec.Serialise (serialise)
-import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Aeson as A
-import Cardano.Ledger.Alonzo.Language (Language)
 
 data ErrorType =  ConnectionError
                 | BalancingError
@@ -98,9 +87,6 @@ instance ToJSON FrameworkError where
   toJSON (FrameworkErrors errs) = object [ "messages" .= errs]
 
 
-
-
-
 instance Exception FrameworkError
 
 
@@ -111,7 +97,7 @@ throwFrameworkError = \case
 
 
 fromScriptExecutionError :: ScriptExecutionError -> TxBody era -> FrameworkError
-fromScriptExecutionError see  txbody=  case see of
+fromScriptExecutionError see  _txbody= case see of
                 ScriptErrorMissingTxIn ti -> makeErr  ("Input Missing : " ++ T.unpack (renderTxIn ti))
                 ScriptErrorTxInWithoutDatum ti -> makeErr  ("Input doesn't have datum " ++  T.unpack (renderTxIn ti))
                 ScriptErrorWrongDatum ha ->  makeErr  ("Worng datum provided for hash " ++  BS8.unpack (serialiseToRawBytesHex ha))
@@ -120,21 +106,21 @@ fromScriptExecutionError see  txbody=  case see of
                   DeBruijnError fve -> mkPlutusErr ("DeBruijnError : " ++ show fve ++ " : " ++ show txts)
                   CodecError df -> mkPlutusErr ("CodecError Deserialization : " ++ show df ++ " : " ++ show txts)
                   CostModelParameterMismatch -> mkPlutusErr "Unexpected costModel Parameter Mismatch"
+                  InvalidReturnValue -> mkPlutusErr "Script returned invalid type"
                 ScriptErrorExecutionUnitsOverflow -> makeErr "Execution Units Overflowed "
-                ScriptErrorNotPlutusWitnessedTxIn swi sh -> makeErr $ "Trying to execute non-plutus script : " ++  BS8.unpack (serialiseToRawBytesHex sh)
+                ScriptErrorNotPlutusWitnessedTxIn _swi sh -> makeErr $ "Trying to execute non-plutus script : " ++  BS8.unpack (serialiseToRawBytesHex sh)
                 ScriptErrorRedeemerPointsToUnknownScriptHash swi -> makeErr $ "Unknown scriptHash for " ++ (case swi of
                    ScriptWitnessIndexTxIn wo -> "Redeeming script at index : " ++ show wo
                    ScriptWitnessIndexMint wo -> "Minting Script at index: " ++ show wo
                    ScriptWitnessIndexCertificate wo -> "Certificate Script at index : " ++ show wo
-                   ScriptWitnessIndexWithdrawal wo -> "Withdrawal Script at index  : " ++ show wo) --TODO Show script Hash too
-                ScriptErrorMissingScript rp (ResolvablePointers era map) -> makeErr  $ "Missing script : " ++ show map
-                ScriptErrorMissingCostModel lan -> makeErr "Unexpected costModel Parameter Mismatch"
+                   ScriptWitnessIndexWithdrawal wo -> "Withdrawal Script at index  : " ++ show wo --TODO Show script Hash too
+                   ScriptWitnessIndexProposing wo -> "Proposal Script at index  : " ++ show wo --TODO Show script Hash too
+                   ScriptWitnessIndexVoting wo -> "Voting Script at index  : " ++ show wo) --TODO Show script Hash too
+                ScriptErrorMissingScript _rp (ResolvablePointers _era pointerMp) -> makeErr  $ "Missing script : " ++ show pointerMp
+                ScriptErrorMissingCostModel _lan -> makeErr "Unexpected costModel Parameter Mismatch"
+                ScriptErrorTranslationError contextErr -> makeErr  $ "ContextTranslation Error" ++ show contextErr
   where
-          -- wits = case tx' of { ValidatedTx tb tw iv sm -> witsFromTxWitnesses tb  }
-          makeErr t  = FrameworkError PlutusExecutionError t
-          mkPlutusErr t = FrameworkError PlutusScriptError t
+          makeErr  = FrameworkError PlutusExecutionError
+          mkPlutusErr = FrameworkError PlutusScriptError
           
           renderResolvablePointers mp = intercalate ", " $ map (\ (_ , (sp, mScript,scHash)) -> show sp ++ show scHash) $ Map.toList mp
-
-          hex  :: BSL.ByteString -> String
-          hex d = toHexString d

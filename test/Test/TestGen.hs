@@ -20,6 +20,7 @@ import qualified Hedgehog.Range as Range
 import Test.Gen.Cardano.Api.Typed
 import Cardano.Kuber.Api
 import Cardano.Kuber.Data.Parsers
+import Cardano.Api.Ledger (Coin(..))
 
 genSomeWalelt :: NetworkId -> Gen TxBuilder
 genSomeWalelt netid = do
@@ -31,16 +32,19 @@ genSomeWalelt netid = do
         value <- genVal
         txid <- genTxIn
         address <- element addresses
-        pure (txid, TxOut address (TxOutValue MaryEraOnwardsConway value) TxOutDatumNone ReferenceScriptNone)
+        pure (txid, TxOut address (TxOutValueShelleyBased ShelleyBasedEraConway value) TxOutDatumNone ReferenceScriptNone)
+      genAdaUtxo genVal = do
+        value <- genVal
+        txid <- genTxIn
+        address <- element addresses
+        pure (txid, TxOut address (TxOutValueByron value) TxOutDatumNone ReferenceScriptNone)
       genAdaVal = do
-        amount <- Gen.integral (Range.linear 2_000_000 3_000_000_000_000) <&> Quantity
-        pure $ valueFromList [(AdaAssetId, amount)]
+        Gen.integral (Range.linear 2_000_000 3_000_000_000_000) <&> Coin
       genCollateralVal = do
-        amount <- Gen.integral (Range.linear 5_000_000 10_000_000) <&> Quantity
-        pure $ valueFromList [(AdaAssetId, amount)]
-  utxos <- Gen.list (Range.linear 4 10) (genutxo genValueForTxOut)
-  adaUtxos <- Gen.list (Range.linear 4 10) (genutxo genAdaVal)
-  collateralUtxo <- genutxo genCollateralVal
+        Gen.integral (Range.linear 5_000_000 10_000_000) <&> Coin
+  utxos <- Gen.list (Range.linear 4 10) (genutxo (genValueForTxOut ShelleyBasedEraConway))
+  adaUtxos <- Gen.list (Range.linear 4 10) (genAdaUtxo genAdaVal)
+  collateralUtxo <- genAdaUtxo genCollateralVal
   pure $ txWalletUtxos (UTxO . Map.fromList $ collateralUtxo : utxos <> adaUtxos)
 
 chainApiNetworkIdTest :: (HasChainQueryAPI api) => Kontract api w FrameworkError NetworkId

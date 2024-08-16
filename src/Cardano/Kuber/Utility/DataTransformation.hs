@@ -8,7 +8,7 @@ import Cardano.Api.Byron (Address (ByronAddress))
 import Cardano.Api.Shelley (Address (ShelleyAddress), StakeCredential (StakeCredentialByKey, StakeCredentialByScript), fromPlutusData, fromShelleyAddr, fromShelleyPaymentCredential, fromShelleyStakeReference, shelleyPayAddrToPlutusPubKHash)
 import qualified Cardano.Api.Shelley as Shelley
 import Cardano.Kuber.Data.Parsers (parseAddress)
-import qualified Cardano.Ledger.Alonzo.TxInfo as Alonzo
+import qualified Cardano.Ledger.Plutus.TxInfo as Alonzo
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Shelley.API (Credential, Ptr (Ptr), StakeReference (StakeRefNull, StakeRefPtr))
 import Data.Functor ((<&>))

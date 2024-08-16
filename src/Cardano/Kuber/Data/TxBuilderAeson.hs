@@ -9,90 +9,55 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE DataKinds #-}
 
 module Cardano.Kuber.Data.TxBuilderAeson where
 
 import Cardano.Api hiding (txFee, txMetadata)
-import Cardano.Api.Ledger (Coin (Coin), ConwayTxCert (..), ShelleyTxCert (..), StrictMaybe (..), unboundRational)
-import qualified Cardano.Api.Ledger as Ledger
 import Cardano.Api.Shelley
-  ( Proposal (unProposal),
-    ReferenceScript (ReferenceScript, ReferenceScriptNone),
-    ShelleyLedgerEra,
-    VotingProcedure (unVotingProcedure),
-    VotingProcedures (VotingProcedures, unVotingProcedures),
-    fromLedgerPParamsUpdate,
-    fromShelleyStakeAddr,
+  ( ReferenceScript (ReferenceScript, ReferenceScriptNone),
     scriptDataToJsonDetailedSchema,
     toShelleyAddr,
   )
-import qualified Cardano.Api.Shelley as CApi
-import Cardano.Binary (serializeEncoding)
-import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable (toConsoleText, toConsoleTextNoPrefix))
 import Cardano.Kuber.Core.TxBuilder
 import Cardano.Kuber.Data.EraUpdate (updateAddressEra)
-import Cardano.Kuber.Data.Models (CertificateModal (CertificateModal), GovActionModal (GovActionModal), ProposalModal (ProposalModal), ProposalProcedureModal (ProposalProcedureModal), Wrapper (unWrap), unAddressModal)
-import Cardano.Kuber.Data.Parsers (anyScriptParser, parseAddress, parseAddressBech32, parseAddressBinary, parseAddressRaw, parseAnyScript, parseAssetId, parseAssetNQuantity, parseAssetName, parseCbor, parseCborHex, parseHexString, parseScriptData, parseSignKey, parseTxIn, parseUtxo, parseUtxoCbor, parseValueText, parseValueToAsset, scriptDataParser, txInParser, txinOrUtxoParser)
-import Cardano.Kuber.Error
+import Cardano.Kuber.Data.Models (CertificateModal (CertificateModal), unAddressModal)
+import Cardano.Kuber.Data.Parsers (anyScriptParser, parseAddress, parseAddressBech32, parseAddressBinary, parseAddressRaw, parseAssetName, parseCbor, parseCborHex, parseHexString, parseSignKey, parseTxIn, parseUtxoCbor, parseValueText, scriptDataParser, txinOrUtxoParser)
 import Cardano.Kuber.Util
-import Cardano.Kuber.Utility.DataTransformation (addressInEraToAddressAny, fromLedgerAddress, pkhToPaymentKeyHash)
-import Cardano.Kuber.Utility.ScriptUtil
-import Cardano.Ledger.Api (Anchor (Anchor), GovAction (..), PrevGovActionId (PrevGovActionId), ProposalProcedure (..), VotingProcedures, serialiseRewardAcnt)
-import Cardano.Ledger.Binary
-  ( Annotator (..),
-    DecCBOR (decCBOR),
-    EncCBOR (encCBOR),
-    ToCBOR (..),
-    serialize,
-    shelleyProtVer,
-  )
-import Cardano.Ledger.Core (PParamsUpdate (..))
-import Cardano.Slotting.Time
-import Codec.Serialise (serialise)
+import Cardano.Kuber.Utility.DataTransformation (fromLedgerAddress)
 import Control.Applicative ((<|>))
-import Control.Exception
-import Control.Monad (unless, when)
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Aeson (KeyValue ((.=)), ToJSON (toJSON), ToJSONKey (toJSONKey), (.!=), (.:?))
+import Control.Monad (unless)
+import Data.Aeson (KeyValue ((.=)), ToJSON (toJSON), (.!=), (.:?))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as A
 import qualified Data.Aeson.KeyMap as A
-import Data.Aeson.Types (FromJSON (parseJSON), Parser, parseEither, parseMaybe, (.:))
+import Data.Aeson.Types (FromJSON (parseJSON), Parser, (.:))
 import qualified Data.Aeson.Types as A
 import Data.Bifunctor (second)
-import qualified Data.ByteString as B
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString.Lazy.Char8 as BSL8
-import qualified Data.ByteString.Short as SBS
-import Data.Either
-import qualified Data.Foldable as Foldable
-import Data.Functor (($>), (<&>))
-import qualified Data.HashMap.Internal.Strict as H
-import qualified Data.HashMap.Strict as HM
-import Data.List (intercalate, sortBy)
+import Data.Functor ((<&>))
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, fromMaybe, isNothing, mapMaybe, maybeToList)
-import Data.Ratio (denominator, numerator)
-import Data.Set (Set)
+import Data.Maybe (isNothing, maybeToList)
 import qualified Data.Set as Set
 import Data.String (IsString (fromString))
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.Text.Internal.Fusion.CaseMapping (upperMapping)
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Vector as V
 import Data.Word (Word64)
-import qualified Debug.Trace as Debug
-import PlutusLedgerApi.V2 (CurrencySymbol, PubKeyHash (PubKeyHash, getPubKeyHash), ToData (toBuiltinData), TxOut, fromBuiltin, toBuiltin)
-import PlutusTx (ToData)
+import PlutusLedgerApi.V2 (PubKeyHash (PubKeyHash, getPubKeyHash), ToData (toBuiltinData), fromBuiltin, toBuiltin)
 import PlutusTx.IsData (toData)
+import Cardano.Kuber.Core.TxScript
 
-instance IsTxBuilderEra era => FromJSON (TxBuilder_ era) where
+
+
+instance
+  (IsTxBuilderEra era) =>
+  FromJSON (TxBuilder_ era)
+  where
   parseJSON (A.Object v) =
     let objectKeys = Set.fromList $ map A.toText $ A.keys v
         pluralKeys :: [T.Text] =
@@ -106,7 +71,8 @@ instance IsTxBuilderEra era => FromJSON (TxBuilder_ era) where
             "proposal",
             "vote",
             "cert",
-            "certificate"
+            "certificate",
+            "auxScript"
           ]
         nonPluralKeys =
           [ "changeAddress",
@@ -125,14 +91,17 @@ instance IsTxBuilderEra era => FromJSON (TxBuilder_ era) where
         eraBasedParser :: ShelleyBasedEra era -> Parser (TxBuilder_ era)
         eraBasedParser sbera = case sbera of
           ShelleyBasedEraConway -> do
-            proposals <- v .?< "proposal"
+            -- TODO: Implement parsing of proposals
+            proposals <- (do
+                v .?< "proposal"
+              )
             certs <-
               ( do
                   res <- v .?< "certificate"
                   pure $ map (\(CertificateModal m) -> m) res
                 )
             votes <- v .?< "vote"
-            commonParser (map (\(ProposalProcedureModal p) -> CApi.Proposal p) proposals) votes certs
+            commonParser proposals votes certs
           ShelleyBasedEraBabbage -> do
             requireAbsent "certificate" $ fail ".certificate[s] not supported. Kuber is in Babbage era"
             requireAbsent "proposal" $ fail ".proposal[s] not supported. Kuber is in Babbage era"
@@ -143,12 +112,8 @@ instance IsTxBuilderEra era => FromJSON (TxBuilder_ era) where
           unless (null extraKeys) (fail $ "Invalid fields in txBuilder :" ++ show extraKeys)
           eraBasedParser bShelleyBasedEra
     where
-      commonParser ::
-        IsTxBuilderEra e1 =>
-        [Proposal e1] ->
-        [TxVote e1] ->
-        [Certificate e1] ->
-        Parser (TxBuilder_ e1)
+      commonParser :: [TxProposal era]
+        -> [TxVote era] -> [Certificate era] -> Parser (TxBuilder_ era)
       commonParser proposals votes certs = do
         TxBuilder_
           <$> (v .?< "selection")
@@ -166,6 +131,7 @@ instance IsTxBuilderEra era => FromJSON (TxBuilder_ era) where
           <*> v .:? "fee"
           <*> (v .:? "changeAddress" <&> fmap (updateAddressEra . unAddressModal))
           <*> (v .:? "metadata" .!= Map.empty)
+          <*> (v .?< "auxScript" )
 
       parseValidity obj key = do
         mPosixTime <- obj .:? key
@@ -177,7 +143,7 @@ instance IsTxBuilderEra era => FromJSON (TxBuilder_ era) where
               Just slot -> pure $ ValiditySlot $ SlotNo $ slot
               _ -> pure $ NoValidityTime
 
-      (.?<) :: FromJSON v => A.Object -> T.Text -> Parser [v]
+      (.?<) ::  (FromJSON v) => A.Object -> T.Text -> Parser [v]
       (.?<) obj key = do
         mVal1 <- obj .:? A.fromText key
         case mVal1 of
@@ -198,6 +164,27 @@ instance IsTxBuilderEra era => FromJSON (TxBuilder_ era) where
         A.Array vec -> True
         _ -> False
   parseJSON _ = fail "TxBuilder must be an object"
+
+
+instance FromJSON (TxProposal ConwayEra) where
+  parseJSON obj@(A.Object v) = do
+    propsalProcecure <- parseJSON obj
+    exUnitsM <- v .:? "executionUnits"
+
+    mScriptAny <- v .:? "script"
+    case mScriptAny of
+      Nothing -> pure $ TxProposal propsalProcecure
+      Just (A.String s) -> do
+        txin <- parseTxIn s
+        pure $ TxProposalScriptReference propsalProcecure exUnitsM txin
+      Just scany@(A.Object _) -> do
+        txScript <- parseJSON scany
+        case txScript of
+          TxScriptPlutus psc -> do
+            pure $ TxProposalScript propsalProcecure  exUnitsM psc
+          _ -> fail "GotSimple Script for proposal expected PlutusV3 script"
+      _ -> fail "Either ReferenceInput or Script Object expected "
+  parseJSON _ = fail "Expected Proposal Object"
 
 instance FromJSON (TxMintData TxMintingScriptSource) where
   parseJSON (A.Object v) = do
@@ -259,10 +246,10 @@ instance IsString a => MonadFail (Either a) where
   fail msg = Left $ fromString msg
 
 instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
-  toJSON (TxBuilder_ selections inputs refInputs outputs collaterals validityStart validityEnd mintData signatures proposals votes certs fee defaultChangeAddr metadata) =
+  toJSON (TxBuilder_ selections inputs refInputs outputs collaterals validityStart validityEnd mintData signatures proposals votes certs fee defaultChangeAddr metadata auxScripts) =
     A.object nonEmpyPair
     where
-      appendNonEmpty :: (Foldable t, KeyValue a1, ToJSON (t a2)) => A.Key -> t a2 -> [a1] -> [a1]
+      -- appendNonEmpty :: (Foldable t, KeyValue a1, ToJSON (t a2)) => A.Key -> t a2 -> [a1] -> [a1]
       appendNonEmpty key val obj = if null val then obj else (key .= val) : obj
 
       appendValidity key val obj = case val of
@@ -281,12 +268,13 @@ instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
           <+> "validityStart" `appendValidity` validityStart
           <+> "validityEnd" `appendValidity` validityEnd
           <+> "signatures" >= signatures
-          <+> "proposals" >= map (translateProposal bConwayOnward) proposals
+          <+> "proposals" >= map (translateProposal bConwayOnward) proposals --todo
           <+> "votes" >= map (transformVote bShelleyBasedEra) votes
           <+> "certificates" >= map (transformCerts bShelleyBasedEra) certs
           <+> "fee" >= fee
           <+> "changeAddress" >= defaultChangeAddr
-          <#> "metadata" >= metadata
+          <+> "metadata" >= metadata
+          <#> "auxScripts" >= auxScripts
       infixl 8 >=
       (>=) a b = appendNonEmpty a b
       infixr 7 <#>
@@ -294,10 +282,15 @@ instance IsTxBuilderEra era => ToJSON (TxBuilder_ era) where
       infixr 6 <+>
       (<+>) f v = f v
 
-translateProposal :: Maybe (ConwayEraOnwards era) -> Proposal era -> A.Value
-translateProposal sbera (CApi.Proposal proposal) = case sbera of
-  Nothing -> A.Null
-  Just ceo -> case ceo of ConwayEraOnwardsConway -> toJSON $ ProposalProcedureModal @ConwayEra proposal
+translateProposal :: Maybe (ConwayEraOnwards era) -> TxProposal era -> A.Value
+translateProposal sbera proposal =
+  case sbera of
+    Nothing -> A.Null
+    Just ceo -> case ceo of
+      ConwayEraOnwardsConway -> case proposal of
+        TxProposal  ppm -> toJSON $  ppm
+        TxProposalScript ppm eu sc -> A.object [ "proposal" .= ppm ,"exUnits" .= eu ,"script" .= sc]
+        TxProposalScriptReference ppm eu ti -> A.object [ "proposal" .= ppm,"exUnits" .= eu, "script" .= ti ]
 
 transformCerts :: ShelleyBasedEra era -> Certificate era -> A.Value
 transformCerts sbera c = case sbera of
@@ -326,19 +319,19 @@ instance ToJSON (TxMintData TxMintingScriptSource) where
     A.object $
       [ "script"
           .= ( case script of
-                 TxMintingPlutusScript tps m_eu sd -> toJSON tps
-                 TxMintingReferenceScript ti m_eu m_sd -> A.String $ renderTxIn ti
+                 TxMintingPlutusScript tps _m_eu _sd -> toJSON tps
+                 TxMintingReferenceScript ti _m_eu _m_sd -> A.String $ renderTxIn ti
                  TxMintingSimpleScript tss -> toJSON tss
              ),
         "amount" .= Map.fromList value,
         "metadata" .= metadata
       ]
         ++ ( case script of
-               TxMintingPlutusScript tps m_eu hsd -> ["redeemer" .= scriptDataToJsonDetailedSchema hsd]
-               TxMintingReferenceScript ti m_eu m_hsd -> case m_hsd of
+               TxMintingPlutusScript _tps _m_eu hsd -> ["redeemer" .= scriptDataToJsonDetailedSchema hsd]
+               TxMintingReferenceScript _ti _m_eu m_hsd -> case m_hsd of
                  Nothing -> []
                  Just hsd -> ["redeemer" .= scriptDataToJsonDetailedSchema hsd]
-               TxMintingSimpleScript tss -> []
+               TxMintingSimpleScript _tss -> []
            )
 
 instance ToJSON (TxInputSelection era) where
@@ -347,7 +340,7 @@ instance ToJSON (TxInputSelection era) where
   toJSON (TxSelectableUtxos utxo) = case utxo of UTxO map_ -> A.Array $ V.fromList $ map (toJSON . fst) (Map.toList map_)
   toJSON (TxSelectableSkey sk) = A.Array $ V.fromList $ map (A.String . serialiseToBech32) sk
 
-collectSelection :: IsTxBuilderEra era => TxInputSelection era -> [Aeson.Value]
+collectSelection :: TxInputSelection era -> [Aeson.Value]
 collectSelection (TxSelectableAddresses v) = map (A.String . serialiseAddress @(AddressInEra ConwayEra) . fromLedgerAddress) v
 collectSelection (TxSelectableTxIn v) = map (A.String . renderTxIn) v
 collectSelection (TxSelectableUtxos utxo) = utxoToAeson utxo
@@ -409,6 +402,7 @@ instance ToJSON (TxInputUnResolved_ era) where
 instance ToJSON (TxInputResolved_ era) where
   toJSON v = A.Array $ V.fromList $ collectResolvedInputs v
 
+
 collectResolvedInputs :: TxInputResolved_ era -> [Aeson.Value]
 collectResolvedInputs v = case v of
   TxInputUtxo umap -> map (A.Object . A.fromList) (collectUtxoPair umap)
@@ -431,7 +425,7 @@ collectResolvedInputs v = case v of
               ["utxo" .= A.Object (A.fromList v)]
                 ++ map (\sd -> "datum" .= scriptDataToJsonDetailedSchema sd) (maybeToList sd)
                 ++ ["redeemer" .= scriptDataToJsonDetailedSchema sd']
-                ++ ["referenceScript" .= renderTxIn refSc]
+                ++ ["script" .= renderTxIn refSc]
       )
       (collectUtxoPair $ UTxO $ uncurry Map.singleton uto)
 
@@ -439,6 +433,7 @@ instance ToJSON TxPlutusScript where
   toJSON tps = case tps of
     TxPlutusScriptV1 ps -> toJSON $ serialiseToTextEnvelope Nothing ps
     TxPlutusScriptV2 ps -> toJSON $ serialiseToTextEnvelope Nothing ps
+    TxPlutusScriptV3 ps -> toJSON $ serialiseToTextEnvelope Nothing ps
 
 instance FromJSON TxPlutusScript where
   parseJSON (A.Object o) = do
@@ -446,7 +441,8 @@ instance FromJSON TxPlutusScript where
     case _type of
       "PlutusScriptV1" -> o .: "cborHex" >>= parseCborHex @T.Text <&> TxPlutusScriptV1
       "PlutusScriptV2" -> o .: "cborHex" >>= parseCborHex @T.Text <&> TxPlutusScriptV2
-      _ -> fail "Expected either PlutsScriptV1 or PlutusScriptV2 type"
+      "PlutusScriptV3" -> o .: "cborHex" >>= parseCborHex @T.Text <&> TxPlutusScriptV3
+      _ -> fail "Expected either PlutsScriptV1 or PlutusScriptV2 or PlutusScriptV3 type"
   parseJSON _ = error "Expected Object"
 
 instance FromJSON TxScript where
@@ -456,7 +452,7 @@ instance FromJSON TxScript where
       tryPlutus = parseJSON v <&> TxScriptPlutus
       trySimple = do
         v :: SimpleScript <- parseJSON v
-        pure $ TxScriptSimple $ TxSimpleScript v
+        pure $ TxScriptSimple $  v
   parseJSON _ = error "Expected Object"
 
 instance ToJSON TxSimpleScript where
@@ -483,7 +479,7 @@ instance IsCardanoEra era => ToJSON (TxOutput (TxOutputContent era)) where
                OnInsufficientUtxoAdaUnset -> []
            )
 
-outputContentJsonPair :: IsCardanoEra era => KeyValue a => TxOutputContent era -> [a]
+-- outputContentJsonPair :: IsCardanoEra era => KeyValue a => TxOutputContent era -> [a]
 outputContentJsonPair v = case v of
   TxOutPkh pkh va ->
     [ "pkh" .= show pkh,
@@ -522,19 +518,18 @@ outputContentJsonPair v = case v of
       "value" .= va,
       "datum" .= scriptDataToJsonDetailedSchema sd
     ]
-  TxOutNative (TxOut addr (TxOutValue _ v) txoutData refScript) ->
+  TxOutNative (TxOut addr (TxOutValueShelleyBased sbe v) txoutData refScript) ->
     ["address" .= addr]
-      ++ ["value" .= v]
-      ++ (case txoutData of
-          TxOutDatumNone -> []
-          TxOutDatumHash aeo ha -> ["datumHash" .= serialiseToRawBytesHexText ha]
-          TxOutDatumInTx aeo hsd -> ["datum" .= scriptDataToJsonDetailedSchema hsd, "inlineDatum".= False]
-          TxOutDatumInline beo hsd -> ["datum" .= scriptDataToJsonDetailedSchema hsd]
-
-            --  TxOutDatumHash sdsie ha -> ["datumHash" .= serialiseToRawBytesHexText ha]
-            --  TxOutDatumInline rtisidsie sd -> ["datum" .= scriptDataToJsonDetailedSchema sd]
-            --  TxOutDatumInTx 
-            --  _ -> []
+      ++ ["value" .= fromLedgerValue sbe v]
+      ++ ( case txoutData of
+             TxOutDatumNone -> []
+             TxOutDatumHash aeo ha -> ["datumHash" .= serialiseToRawBytesHexText ha]
+             TxOutDatumInTx aeo hsd -> ["datum" .= scriptDataToJsonDetailedSchema hsd, "inlineDatum" .= False]
+             TxOutDatumInline beo hsd -> ["datum" .= scriptDataToJsonDetailedSchema hsd]
+             --  TxOutDatumHash sdsie ha -> ["datumHash" .= serialiseToRawBytesHexText ha]
+             --  TxOutDatumInline rtisidsie sd -> ["datum" .= scriptDataToJsonDetailedSchema sd]
+             --  TxOutDatumInTx
+             --  _ -> []
          )
       ++ ( case refScript of
              ReferenceScript rtisidsie sial -> ["inlineScript" .= sial]
@@ -654,7 +649,7 @@ instance FromJSON InsufficientUtxoAdaAction where
   parseJSON A.Null = pure OnInsufficientUtxoAdaUnset
   parseJSON _ = fail "Expected InsufficientUtxoAdaAction string : 'drop', 'increase' or 'error'"
 
-instance IsTxBuilderEra era => FromJSON (TxOutput (TxOutputContent era)) where
+instance (IsTxBuilderEra era) => FromJSON (TxOutput (TxOutputContent era)) where
   parseJSON json@(A.Object v) = do
     -- Parse TxOutput according to address type if simple
     -- then use address with value TxOutAddress otherwise use TxOutScriptAddress or TxOutScript
@@ -713,11 +708,11 @@ instance IsTxBuilderEra era => FromJSON (TxOutput (TxOutputContent era)) where
             TxOutDatumInline rtisidsie sd -> pure $ TxOutScriptWithDataAndReference sc value sd
             _ -> error "Unexpected"
       Just (Left addr) -> case mScript of
-        Nothing -> pure $ TxOutNative $ TxOut addr (TxOutValue bMaryOnward value) txOutDatum ReferenceScriptNone
-        Just (A.Bool _) -> pure $ TxOutNative $ TxOut addr (TxOutValue bMaryOnward value) txOutDatum ReferenceScriptNone
+        Nothing -> pure $ TxOutNative $ TxOut addr (valueToRequiredEra bCardanoEra value) txOutDatum ReferenceScriptNone
+        Just (A.Bool _) -> pure $ TxOutNative $ TxOut addr (valueToRequiredEra bCardanoEra value) txOutDatum ReferenceScriptNone
         Just obj -> do
           sc <- anyScriptParser obj
-          pure $ TxOutNative $ TxOut addr (TxOutValue bMaryOnward value) txOutDatum (ReferenceScript bBabbageOnward sc)
+          pure $ TxOutNative $ TxOut addr (valueToRequiredEra bCardanoEra value) txOutDatum (ReferenceScript bBabbageOnward sc)
       Just (Right script) ->
         let defaultAct = case txOutDatum of
               TxOutDatumNone -> fail "Missing datum in script output"
@@ -741,6 +736,14 @@ instance IsTxBuilderEra era => FromJSON (TxOutput (TxOutputContent era)) where
                   _ -> error "Unexpected"
     pure $ TxOutput output deductFee' addChange' insuffientUtxoAda
     where
+      valueToRequiredEra :: CardanoEra era -> Value -> TxOutValue era
+      valueToRequiredEra era v = case era of
+        MaryEra -> TxOutValueShelleyBased ShelleyBasedEraMary (toLedgerValue MaryEraOnwardsMary v)
+        AlonzoEra -> TxOutValueShelleyBased ShelleyBasedEraAlonzo (toLedgerValue MaryEraOnwardsAlonzo v)
+        BabbageEra -> TxOutValueShelleyBased ShelleyBasedEraBabbage (toLedgerValue MaryEraOnwardsBabbage v)
+        ConwayEra -> TxOutValueShelleyBased ShelleyBasedEraConway (toLedgerValue MaryEraOnwardsConway v)
+        _ -> error "unexpected era"
+
       parseData :: Parser (Maybe (Either HashableScriptData (Hash ScriptData)))
       parseData = do
         mDatum <- v .:? "datum"
@@ -779,7 +782,7 @@ instance IsTxBuilderEra era => FromJSON (TxSignature era) where
         Just aie -> pure $ TxSignatureAddr aie
   parseJSON _ = fail "TxSignature must be an String Address or PubKeyHash"
 
-collectUtxoPair :: KeyValue a => UTxO era -> [[a]]
+-- collectUtxoPair :: KeyValue a => UTxO era -> [[a]]
 collectUtxoPair (UTxO uMap) = map txOutToKeyVal $ Map.toList uMap
   where
     txOutToKeyVal (TxIn hash index, TxOut addr val datum sc) =
@@ -794,14 +797,14 @@ collectUtxoPair (UTxO uMap) = map txOutToKeyVal $ Map.toList uMap
         ++ scriptToPair sc
         ++ datumToPair datum
 
-    toVal (TxOutValue _ v) = toJSON v
-    toVal (TxOutAdaOnly _ l) = toJSON $ lovelaceToValue l
+    toVal (TxOutValueShelleyBased sbe v) = toJSON $ fromLedgerValue sbe v
+    toVal (TxOutValueByron l) = toJSON $ lovelaceToValue l
 
     scriptToPair sc = case sc of
       ReferenceScript rtisidsie sial -> ["inlineScript" .= toHexString @T.Text (case sial of ScriptInAnyLang sl sc' -> serialiseToRawBytes $ hashScript sc')]
       ReferenceScriptNone -> []
 
-    datumToPair :: KeyValue a => TxOutDatum ctx era -> [a]
+    -- datumToPair :: KeyValue a => TxOutDatum ctx era -> [a]
     datumToPair datum = case datum of
       TxOutDatumNone -> []
       TxOutDatumHash sdsie ha -> ["datumHash" .= toHexString @T.Text (serialiseToRawBytes ha)]

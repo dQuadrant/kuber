@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               kuber-server
-version:            3.0.0.2
+version:            3.1.0.0
 
 -- A short (one-line) description of the package.
 -- synopsis:
@@ -40,12 +40,12 @@ library
     , cardano-api
     , cardano-ledger-core
     , cardano-ledger-shelley
-    , cardano-ledger-alonzo
+    , cardano-ledger-alonzo >= 1.6.0
     , text
     , bytestring
     , containers
     , filepath
-    , base >= 4.14 && < 4.17
+    , base >= 4.14 && < 5
     , aeson             >= 1.5.6.0
     , cardano-binary
     , http-media
@@ -62,6 +62,7 @@ library
     , wai-extra
     , time
     , plutus-ledger-api
+    , cardano-slotting
 
 
 executable kuber-server
@@ -82,8 +83,9 @@ executable kuber-server
     , directory
     , aeson
     , text-conversions
-    , cardano-api
-    , cardano-ledger-alonzo
+    , cardano-api 
+    , cardano-data 
+    , cardano-ledger-alonzo >= 1.6.0
     , cardano-ledger-shelley
     , cardano-slotting 
     , plutus-ledger-api

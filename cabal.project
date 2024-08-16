@@ -1,12 +1,12 @@
 -- See CONTRIBUTING for information about these, including some Nix commands
 -- you need to run if you change them
 index-state:
-  , hackage.haskell.org  2023-10-30T09:45:31Z
-  , cardano-haskell-packages  2023-10-30T04:08:41Z
+  , hackage.haskell.org 2024-08-16T06:32:51Z
+  , cardano-haskell-packages 2024-08-15T12:55:30Z
 
 -- Custom repository for cardano haskell packages, see CONTRIBUTING for more
 repository cardano-haskell-packages
-  url: https://input-output-hk.github.io/cardano-haskell-packages
+  url: https://chap.intersectmbo.org/
   secure: True
   root-keys:
     3e0cce471cf09815f930210f7827266fd09045445d65923e6d0238a6cd15126f
@@ -20,6 +20,7 @@ packages:
   .
   ./kuber-server
   ./kontract-example
+--  ./kuber-test-lib
   
 -- You never, ever, want this.
 write-ghc-environment-files: never
@@ -35,6 +36,3 @@ package cryptonite
   -- Using RDRAND instead of /dev/urandom as an entropy source for key
   -- generation is dubious. Set the flag so we use /dev/urandom by default.
   flags: -support_rdrand
-
-
-  

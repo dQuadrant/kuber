@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Cardano.Kuber.Core.LocalNodeChainApi where
 import Cardano.Api hiding (queryGovState, queryCurrentEra, queryEraHistory, queryChainPoint, querySystemStart)
@@ -10,7 +11,7 @@ import Cardano.Kuber.Core.ChainAPI
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Error
 import Cardano.Slotting.Time (SystemStart)
-import Cardano.Kuber.Utility.QueryHelper (queryProtocolParam, querySystemStart, queryEraHistory, queryGenesesisParams, queryUtxos, queryTxins, queryChainPoint, submitTx, queryGenesesisParams', queryCurrentEra, queryGovState, queryStakeDeposits, queryDRepState)
+import Cardano.Kuber.Utility.QueryHelper (queryProtocolParam, querySystemStart, queryEraHistory, queryGenesesisParams, queryUtxos, queryTxins, queryChainPoint, submitTx, queryGenesesisParams', queryCurrentEra, queryGovState, queryStakeDeposits, queryDRepState, queryDRepDistribution)
 import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Map (Map)
 import qualified Cardano.Ledger.Babbage.Tx as Ledger
@@ -21,17 +22,17 @@ import Data.Functor ((<&>))
 import Cardano.Kuber.Data.EraUpdate (updatePParamEra)
 
 class ChainInfo v where
-  getConnectInfo :: v-> LocalNodeConnectInfo CardanoMode
+  getConnectInfo :: v-> LocalNodeConnectInfo
   getNetworkId :: v -> NetworkId
 
 class HasLocalNodeAPI a where
-    kQueryEraHistory      :: Kontract a w FrameworkError (EraHistory CardanoMode)
+    kQueryEraHistory      :: Kontract a w FrameworkError EraHistory
 
 -- ChainConnectInfo wraps (LocalNodeConnectInfo CardanoMode)
 -- This is the minimal information required to connect to a cardano node
-newtype ChainConnectInfo= ChainConnectInfo (LocalNodeConnectInfo CardanoMode)
+newtype ChainConnectInfo= ChainConnectInfo LocalNodeConnectInfo
 
-instance HasChainQueryAPI (LocalNodeConnectInfo CardanoMode) where
+instance HasChainQueryAPI LocalNodeConnectInfo where
     kQueryProtocolParams = liftLnciQuery queryProtocolParam
     kQuerySystemStart = liftLnciQuery querySystemStart
     kQueryGenesisParams = liftLnciQuery queryGenesesisParams'
@@ -43,10 +44,11 @@ instance HasChainQueryAPI (LocalNodeConnectInfo CardanoMode) where
     kQueryGovState = liftLnciQuery queryGovState
     kQueryStakeDeposit = liftLnciQuery2 (queryStakeDeposits ShelleyBasedEraConway)
     kQueryDrepState  = liftLnciQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepState ShelleyBasedEraConway)
+    kQueryDRepDistribution = liftLnciQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepDistribution ShelleyBasedEraConway)
 
-instance HasLocalNodeAPI (LocalNodeConnectInfo CardanoMode) where
+instance HasLocalNodeAPI LocalNodeConnectInfo where
     kQueryEraHistory = liftLnciQuery queryEraHistory
-instance HasSubmitApi (LocalNodeConnectInfo CardanoMode) where
+instance HasSubmitApi LocalNodeConnectInfo where
     kSubmitTx  = liftLnciQuery2 submitTx
 
 
@@ -62,7 +64,8 @@ instance HasChainQueryAPI ChainConnectInfo where
     kQueryGovState = liftCinfoQuery queryGovState
     kQueryStakeDeposit = liftCinfoQuery2 (queryStakeDeposits ShelleyBasedEraConway)
     kQueryDrepState  = liftCinfoQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepState ShelleyBasedEraConway)
-
+    kQueryDRepDistribution = liftCinfoQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepDistribution ShelleyBasedEraConway)
+    
 instance HasLocalNodeAPI ChainConnectInfo where
     kQueryEraHistory = liftCinfoQuery queryEraHistory
 
@@ -81,12 +84,13 @@ kEvaluateExUnits' txbody utxos = do
   eHhistory <- kQueryEraHistory
   pParams <- kQueryProtocolParams
   case evaluateTransactionExecutionUnits
+    cardanoEra
     sStart
     (toLedgerEpochInfo eHhistory)
-    (updatePParamEra bCardanoEra pParams)
+    pParams
     utxos
     txbody of
       Left tve -> KError $  FrameworkError ExUnitCalculationError (show tve)
-      Right map -> pure $ Map.map (\case
+      Right mp -> pure $ Map.map (\case
              Left see -> Left (fromScriptExecutionError  see txbody)
-             Right eu -> pure eu ) map
+             Right (_,eu) -> pure eu ) mp

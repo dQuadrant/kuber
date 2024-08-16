@@ -5,33 +5,29 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE GADTs #-}
 
 module Cardano.Kuber.Http.MediaType
 where
 
 import Network.HTTP.Media ((//), (/:), MediaType)
-import Servant.API.ContentTypes (Accept (contentType,contentTypes), MimeUnrender (mimeUnrender), MimeRender (mimeRender))
+import Servant.API.ContentTypes (Accept (contentTypes), MimeUnrender (mimeUnrender), MimeRender (mimeRender))
 import GHC.Base (NonEmpty ((:|)))
 import qualified Data.ByteString.Lazy as BSL
-import qualified Data.ByteString as BSS
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
-import Cardano.Binary (FromCBOR)
-import qualified Cardano.Binary as CBOR
 import Data.Text.Conversions (Base16(Base16), convertText)
 import Data.Data (Proxy (Proxy))
-import Data.ByteString (ByteString)
-import Data.Proxy (asProxyTypeOf)
 import qualified Data.ByteString.Lazy
 import Cardano.Kuber.Data.Models (SubmitTxModal(SubmitTxModal), TxModal (TxModal))
 import Data.ByteString.Lazy (fromStrict)
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra (bAsEra))
 import Cardano.Api.Shelley (AsType(..))
-import Cardano.Api (InAnyCardanoEra(..), Tx, SerialiseAsCBOR (deserialiseFromCBOR, serialiseToCBOR))
+import Cardano.Api (InAnyCardanoEra(..), Tx, SerialiseAsCBOR (deserialiseFromCBOR, serialiseToCBOR), CardanoEra (..))
 import qualified Data.ByteString.Lazy as BS
 import Cardano.Kuber.Data.Parsers (parseRawTxInAnyEra)
 
@@ -67,7 +63,14 @@ instance  MimeUnrender  CBORBinary  TxModal where
          Nothing -> Left "Tx string: Invalid CBOR format "
 
 instance  MimeRender CBORBinary TxModal where
-  mimeRender p (TxModal (InAnyCardanoEra era tx)) = fromStrict $  serialiseToCBOR tx
+  mimeRender p (TxModal (InAnyCardanoEra era tx)) = case era of
+    ShelleyEra -> fromStrict $ serialiseToCBOR tx
+    AllegraEra -> fromStrict $ serialiseToCBOR tx
+    MaryEra -> fromStrict $ serialiseToCBOR tx
+    AlonzoEra -> fromStrict $ serialiseToCBOR tx
+    BabbageEra -> fromStrict $ serialiseToCBOR tx
+    ConwayEra -> fromStrict $ serialiseToCBOR tx
+   -- fromStrict $  serialiseToCBOR tx
 
 
 
