@@ -28,7 +28,6 @@ module Cardano.Kuber.Api(
     -- Such utxos should be related to user's wallet and
 
     ,   txWalletAddress
-    
     ,   txWalletAddresses
     ,   txWalletUtxos
     ,   txWalletUtxo
@@ -75,8 +74,12 @@ module Cardano.Kuber.Api(
     , txValidFromSlot
     , txValidUntilSlot
     , txValidSlotRange
-    , txVote
 
+    -- gov action functions
+    , txVote
+    , txCertificate
+
+    -- era indendedent Tx builder functions 
     ,   txConsumeTxIn_
     ,   txConsumeUtxo_
     ,   txConsumeUtxos_
@@ -96,7 +99,6 @@ module Cardano.Kuber.Api(
     -- Such utxos should be related to user's wallet and
 
     ,   txWalletAddress_
-    
     ,   txWalletAddresses_
     ,   txWalletUtxos_
     ,   txWalletUtxo_
@@ -105,7 +107,7 @@ module Cardano.Kuber.Api(
     ,   txWalletSignKeys_
 
 
-   -- *** Payment functions
+    -- *** Payment functions
     ,   txPayTo_
     ,   txPayToPkh_
     ,   txPayToScript_
@@ -131,7 +133,7 @@ module Cardano.Kuber.Api(
     ,   txSign_
 
     -- | Explicitly set transaction fee
-    ,   txSetFee_
+    ,   txSetFee_ 
 
     -- | Change address to send unbalanced value to. If change address is missing, it is automatically selected from one of the wallet addresses.
     , txChangeAddress_
@@ -143,9 +145,9 @@ module Cardano.Kuber.Api(
     , txValidFromSlot_
     , txValidUntilSlot_
     , txValidSlotRange_
-
-    -- gov actions 
-    , txVote_ 
+    
+    -- gov action functions
+    , txVote_
     , txCertificate_
 
     -- *** Transactoin validity functions
