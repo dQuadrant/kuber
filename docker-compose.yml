@@ -1,6 +1,6 @@
 version: "3.9"
 volumes:
-  node-pic:
+  node-ipc:
   node-db:
 services:
   cardano-node:
