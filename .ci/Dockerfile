@@ -9,6 +9,7 @@ RUN bash -e /merge-root /layer1 \
 FROM ubuntu:20.04
 LABEL "maintainer"="Sudip Bhattarai"
 COPY --from=layer1  / /
+ENV CARDANO_ERA=Conway
 WORKDIR /app
 EXPOSE 8081
 HEALTHCHECK --interval=40s --timeout=10s --start-period=30s --retries=2 CMD [ "/bin/kuber-server" , "--healthcheck" ]

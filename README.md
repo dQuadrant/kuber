@@ -16,7 +16,7 @@ OpenSource Kuber playground is [here](https://github.com/dquadrant/kuber-playgro
 ## IDE
  Official IDE with Plutus compilation support is available at [kuberide.com/ide](https://kuberide.com/kuber/login/?state=\%2fide)
 
-## Example Project using Kuber (v2)
+## Example Project using Kuber
 [cardano-marketplace](https://github.com/dQuadrant/cardano-marketplace)
 
 
@@ -26,7 +26,7 @@ Kuber can be stared easily with [docker-compose.yml](./docker-compose.yml) file.
 
 ```bash
 git clone https://github.com/dquadrant/kuber.git
-git checkout 3.0.0-rc1
+git checkout 3.1.0
 docker-compose up -d
 ```
 

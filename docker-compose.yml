@@ -1,10 +1,10 @@
-version: "3.5"
+version: "3.9"
 volumes:
   node-pic:
   node-db:
 services:
   cardano-node:
-    image: inputoutput/cardano-node:${CARDANO_NODE_VERSION:-1.35.3}
+    image: inputoutput/cardano-node:${CARDANO_NODE_VERSION:-9.1.0}
     environment:
       NETWORK: ${NETWORK:-preprod}
     volumes:
@@ -13,10 +13,10 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "200k"
+        max-size: "2M"
         max-file: "10"
   kuber:
-    image: dquadrant/kuber:${KUBER_VERSION:-3.0.0-rc1}
+    image: dquadrant/kuber:${KUBER_VERSION:-3.1.0}
     environment:
       NETWORK: ${NETWORK:- preprod}
     volumes:
@@ -28,7 +28,7 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "200k"
+        max-size: "2M"
         max-file: "10"
 
 
