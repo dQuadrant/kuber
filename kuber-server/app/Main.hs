@@ -7,7 +7,7 @@ module Main where
 import Network.Wai.Handler.Warp (run, setPort, defaultSettings, setHost, runSettings)
 import Kuber.Server.Spec (appWithBackenAndEra)
 import Cardano.Kuber.Api (chainInfoFromEnv, throwFrameworkError, ChainConnectInfo, HasChainQueryAPI (kQueryChainPoint, kQueryCurrentEra), evaluateKontract, FrameworkError (..))
-import System.Environment (getArgs)
+import System.Environment (getArgs, lookupEnv)
 import Cardano.Kuber.Util (timestampToSlot)
 import Data.Text (stripStart)
 import Data.Data (Data)
@@ -26,8 +26,10 @@ import Data.Function ((&))
 
 import Options.Applicative
 import Data.Semigroup ((<>))
-import Cardano.Api (BabbageEraOnwards (BabbageEraOnwardsBabbage, BabbageEraOnwardsConway), AnyCardanoEra (AnyCardanoEra), CardanoEra (..))
+import Cardano.Api (BabbageEraOnwards (BabbageEraOnwardsBabbage, BabbageEraOnwardsConway), AnyCardanoEra (AnyCardanoEra), CardanoEra (..), ConwayEraOnwards (ConwayEraOnwardsConway))
 import Control.Concurrent (threadDelay)
+import Data.Char (toLower, toTitle)
+import Data.Maybe (fromMaybe)
 
 data KuberConfig = KuberConfig
   { host  :: Maybe String
@@ -38,7 +40,7 @@ data KuberConfig = KuberConfig
 
 sample :: Parser KuberConfig
 sample = KuberConfig
-      <$> option auto(
+      <$> option auto (
             long "host"
         <>  short 'H'
         <>  metavar "IP-Address"
@@ -69,7 +71,7 @@ opts = info (sample <**> helper)
   )
 main :: IO ()
 main = do
-  
+
   KuberConfig hostStr port healthCheckUrl doHealthCheck <- execParser  opts
 
   if  doHealthCheck
@@ -78,23 +80,16 @@ main = do
 
     else do
       -- enable line buffering for instantaneous logs when kuber-server is run in docker container
-      hSetBuffering stdout LineBuffering 
+      hSetBuffering stdout LineBuffering
       dcinfo <- chainInfoFromEnv
       let settings = setPort port defaultSettings
       let settings2  = (case hostStr of
             Nothing -> settings
             Just s -> setHost (fromString s) settings  )
-      (AnyCardanoEra nodeEra) <- queryNodeEra dcinfo
-      let app =case nodeEra of  
-            ConwayEra -> appWithBackenAndEra dcinfo BabbageEraOnwardsConway
-            _ -> appWithBackenAndEra dcinfo BabbageEraOnwardsBabbage
-      putStrLn $ case nodeEra of
-        BabbageEra ->  "Connected to Node at Babbage era"
-        ConwayEra ->  "Connected to Node at Conway era"
-        era -> "Node is at " ++ show era ++" Kuber will start in BabbageEra"
-      
+      app <- appWithEra dcinfo
+
       putStrLn $ "Server started listening on port " ++ show port ++ "."
-      
+
       runSettings settings2 app
 
 queryNodeEra :: ChainConnectInfo -> IO AnyCardanoEra
@@ -126,3 +121,32 @@ performRequest  url = do
         HttpExceptionRequest re hec -> putStr  (url ++": " ++  show hec)
         InvalidUrlException s str -> putStr  $  str ++ ": " ++ s
       exitFailure
+
+
+defaultEra :: String
+defaultEra = "Conway"
+
+appWithEra dcinfo = do
+    -- Try to lookup the environment variable
+    maybeEra <- lookupEnv "CARDANO_ERA"
+    (AnyCardanoEra nodeEra) <- queryNodeEra dcinfo
+    eraStr <- case nodeEra of
+              BabbageEra -> do
+                putStrLn "Connected to Node at Babbage era"
+                pure "babbage"
+              ConwayEra -> do
+                 putStrLn "Connected to Node at Conway era"
+                 pure "conway"
+              era -> do
+                putStrLn $ "Node is at " ++ show era ++" Kuber will start in Conway era"
+                pure "conway"
+    era <- case maybeEra of
+          Nothing -> pure eraStr
+          Just  era -> do
+            putStrLn$  "Starting Kuber with " ++  era ++" era support"
+            pure era
+
+    pure $ case map toLower era of
+      "conway" -> appWithBackenAndEra dcinfo BabbageEraOnwardsConway
+      "babbage" -> appWithBackenAndEra dcinfo BabbageEraOnwardsBabbage
+      _ -> error $ "Invalid value of era : " ++ era
