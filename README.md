@@ -26,7 +26,7 @@ Kuber can be stared easily with [docker-compose.yml](./docker-compose.yml) file.
 
 ```bash
 git clone https://github.com/dquadrant/kuber.git
-git checkout 3.1.0
+git checkout 3.1.1
 docker-compose up -d
 ```
 

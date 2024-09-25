@@ -1,3 +1,9 @@
+## v3.1.1 : Collateral Selection Fix
+
+### Fixes
+  - Collateral selection logic now prefers 5Ada inputs
+  - Multiple collateral inputs if collateral is not sufficient with 1 utxo.
+
 ## v3.1.0 : Stable Conway Era Support
 This stable release supports adds full support for new conway governance features.
 

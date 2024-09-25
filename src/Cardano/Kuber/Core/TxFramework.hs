@@ -30,7 +30,7 @@ import Data.Functor ((<&>))
 
 import Data.Set (Set)
 import Data.Maybe (mapMaybe, fromMaybe, fromJust)
-import Data.List (sortBy, minimumBy, find)
+import Data.List (sortBy,find, intercalate)
 import qualified Data.Foldable as Foldable
 import PlutusLedgerApi.V2 (PubKeyHash(PubKeyHash), fromBuiltin)
 import Cardano.Kuber.Core.TxBuilder
@@ -313,7 +313,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                     Just tis -> pure tis
                     )
                   else pure []
-
+  Debug.traceM $ "collaterals: " ++  intercalate "\n" ( map show collaterals)
   (txCerts,cDeposits) <- ( if null certs
     then pure $ (TxCertificatesNone,zeroValue)
     else inEonForEra
@@ -622,9 +622,26 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
     maybeCollaterals   = case txContextCollaterals of
                           [] -> case mapMaybe canBeCollateral $ Map.toList spendableUtxos of
                             [] -> Nothing
-                            v -> let  (tin,pkh,_) =minimumBy sortingFunc v in Just [(tin,pkh)]
+                            v -> let  sorted =  sortBy collateralSortingFunc v 
+                                      selected = collectCollateral 0 sorted []
+                                  in 
+                                 Debug.trace ("sorted: " ++ ( intercalate "\n" $ map show sorted )
+                                          ++ "selected: " ++ ( intercalate "\n" $ map show selected)) $ Just $ selected
+
                           v-> Just v
         where
+        collectCollateral _         [] selected = selected
+        collectCollateral amount (v@(ti,to,quantity):rest) selected =
+            let
+              newAmount=quantity +amount
+            in 
+              if length selected > 2 
+              then selected
+              else if newAmount > 8 
+                    then (ti,to):selected
+                    else collectCollateral newAmount rest selected
+          
+
         canBeCollateral :: (IsShelleyBasedEra era) => (TxIn  , TxOut ctx era) -> Maybe (TxIn, Hash PaymentKey, Integer)
         canBeCollateral v@(ti, to@(TxOut addr val mDatumHash _)) = case mDatumHash of
                               TxOutDatumNone -> case val of
@@ -636,14 +653,16 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                                                                 Just pkh -> Just ( ti,pkh,case snd $ head _list of { Quantity n -> n } )
                                                         else Nothing
                               _ -> Nothing
-        filterCollateral = mapMaybe  canBeCollateral $ Map.toList spendableUtxos
 
         -- sort based on following conditions => Utxos having >4ada come eariler and the lesser ones come later.
-        sortingFunc :: (TxIn,a,Integer) -> (TxIn,a,Integer)-> Ordering
-        sortingFunc (_,_,v1) (_,_,v2)
-          | v1 < 5 = if v2 < 5 then  v1 `compare` v2 else GT
-          | v2 < 5 = LT
-          | otherwise = v1 `compare` v2
+        collateralSortingFunc :: (TxIn,a,Integer) -> (TxIn,a,Integer)-> Ordering
+        collateralSortingFunc (_,_,v1) (_,_,v2)= 
+          Debug.trace (show v1  ++ " compare "++ show v2 ++ "=" ++ show doCompare ) doCompare
+          where
+            doCompare
+              | v1 <= 5_000_000 = if v2 <= 5_000_000 then  v2 `compare` v1 else GT
+              | v2 <= 5_000_000 = LT
+              | otherwise = v1 `compare` v2
 
     txContextCollaterals =foldl getCollaterals [] _collaterals
     getCollaterals  accum  x = case x  of

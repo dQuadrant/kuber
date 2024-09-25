@@ -4,7 +4,7 @@ volumes:
   node-db:
 services:
   cardano-node:
-    image: inputoutput/cardano-node:${CARDANO_NODE_VERSION:-9.1.0}
+    image: inputoutput/cardano-node:${CARDANO_NODE_VERSION:-9.2.0}
     environment:
       NETWORK: ${NETWORK:-preprod}
     volumes:
@@ -16,7 +16,7 @@ services:
         max-size: "2M"
         max-file: "10"
   kuber:
-    image: dquadrant/kuber:${KUBER_VERSION:-3.1.0}
+    image: dquadrant/kuber:${KUBER_VERSION:-3.1.1}
     environment:
       NETWORK: ${NETWORK:- preprod}
     volumes:
