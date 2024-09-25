@@ -344,7 +344,7 @@ _txMint v = txMints [v]
 
 -- | Mint token with plutus v1 or v2 script
 txMintPlutusScript :: IsPlutusScript script => script -> HashableScriptData -> [(AssetName, Quantity)] -> TxBuilder
-txMintPlutusScript script sData amounts = txMintPlutusScript script sData amounts 
+txMintPlutusScript script sData amounts = txMintPlutusScript_ script sData amounts 
 
 txMintPlutusScript_ :: IsPlutusScript script => script -> HashableScriptData -> [(AssetName, Quantity)] -> TxBuilder_ era
 txMintPlutusScript_ script sData amounts = _txMint $ TxMintData (TxMintingPlutusScript (toTxPlutusScript script) Nothing sData) amounts Map.empty
