@@ -313,7 +313,6 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                     Just tis -> pure tis
                     )
                   else pure []
-  Debug.traceM $ "collaterals: " ++  intercalate "\n" ( map show collaterals)
   (txCerts,cDeposits) <- ( if null certs
     then pure $ (TxCertificatesNone,zeroValue)
     else inEonForEra
@@ -655,14 +654,15 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                               _ -> Nothing
 
         -- sort based on following conditions => Utxos having >4ada come eariler and the lesser ones come later.
+        -- this will sort the items in descending order when using sortBy.
         collateralSortingFunc :: (TxIn,a,Integer) -> (TxIn,a,Integer)-> Ordering
         collateralSortingFunc (_,_,v1) (_,_,v2)= 
           Debug.trace (show v1  ++ " compare "++ show v2 ++ "=" ++ show doCompare ) doCompare
           where
             doCompare
-              | v1 <= 5_000_000 = if v2 <= 5_000_000 then  v2 `compare` v1 else GT
-              | v2 <= 5_000_000 = LT
-              | otherwise = v1 `compare` v2
+              | v1 <= 10_000_000 = if v2 <= 10_000_000 then  v1 `compare` v2 else LT
+              | v2 <= 10_000_000 = GT
+              | otherwise = v2 `compare` v1
 
     txContextCollaterals =foldl getCollaterals [] _collaterals
     getCollaterals  accum  x = case x  of
