@@ -1,4 +1,4 @@
-FROM ubuntu:20.04 as layer1
+FROM ubuntu:20.04 AS layer1
 ARG OVERRIDE_CHROOT_DIR=./chroot-env
 COPY --chown=root:root ${OVERRIDE_CHROOT_DIR} /layer1
 COPY  ./.ci/merge-root.sh /merge-root

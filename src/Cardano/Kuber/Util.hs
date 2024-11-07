@@ -61,7 +61,6 @@ where
 import Cardano.Api
 -- import Shelley.Spec.Ledger.API (Credential(ScriptHashObj, KeyHashObj), KeyHash (KeyHash), StakeReference (StakeRefNull))
 
-import Cardano.Api.Byron (Address (ByronAddress))
 import Cardano.Api.Shelley (Address (ShelleyAddress), TxBody (ShelleyTxBody), fromPlutusData, fromShelleyAddr, fromShelleyPaymentCredential, fromShelleyScriptHash, fromShelleyStakeCredential, fromShelleyStakeReference, fromShelleyTxIn, toShelleyAddr, toShelleyTxOut)
 import qualified Cardano.Api.Shelley as Shelley
 import qualified Cardano.Binary as Cborg

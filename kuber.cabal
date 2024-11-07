@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               kuber
-version:            3.1.1.0
+version:            3.1.2.0
 
 -- A short (one-line) description of the package.
 -- synopsis:
@@ -72,12 +72,12 @@ library
     , directory
     , aeson >= 1.5.6.0
     , text-conversions
-    , cardano-api ^>= 9.2
+    , cardano-api ^>= 10.1
     , cardano-data >= 1.0
     , cardano-ledger-binary
     , cardano-ledger-core 
     , cardano-ledger-babbage
-    , cardano-ledger-alonzo >= 1.6.0
+    , cardano-ledger-alonzo
     , cardano-ledger-shelley
     , cardano-ledger-api 
     , cardano-ledger-mary

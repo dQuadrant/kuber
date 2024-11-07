@@ -24,8 +24,6 @@ import Data.Functor ((<&>))
 import Data.Map (Map)
 import qualified Data.Set as Set
 import Data.Time.Clock.POSIX (POSIXTime)
-import qualified Debug.Trace as Debug
-import Cardano.Api.Byron
 import Cardano.Api.Ledger (Coin)
 
 type ShelleyWitCount = Word
@@ -95,15 +93,11 @@ kCalculateMinFee'' txbody shelleyWitnesses byronWitnesses = do
   protocolParams <- kQueryProtocolParams
   let 
     allInputs = resolveEra bShelleyBasedEra txbody
-    era =case txbody of
-      ShelleyTxBody sbe tb scs tbsd m_tad tsv -> sbe
-    capiParams = fromLedgerPParams era (unLedgerProtocolParameters protocolParams)
+
   utxo <- kQueryUtxoByTxin allInputs
-  bpparams <- case convertToLedgerProtocolParameters shelleyBasedEra capiParams of
-    Left ppce -> error "Couldn't Convert protocol parameters."
-    Right bpp -> pure bpp
+
   -- todo: fix this to support reference scripts
-  pure $ calculateMinTxFee shelleyBasedEra (unLedgerProtocolParameters bpparams) utxo txbody shelleyWitnesses 
+  pure $ calculateMinTxFee shelleyBasedEra (unLedgerProtocolParameters protocolParams) utxo txbody shelleyWitnesses 
 
 kBuildAndSubmit' :: (HasChainQueryAPI api, HasLocalNodeAPI api, IsTxBuilderEra era,  HasSubmitApi api) => TxBuilder_ era -> Kontract api w FrameworkError (Tx era)
 kBuildAndSubmit' builder = do

@@ -260,7 +260,7 @@ executeTxBuilder builder = do
                 drepState <- kQueryDrepState (Set.singleton cre)
 
                 case  Map.toList drepState of
-                  [(cre', DRepState en sm co')]-> pure $ ConwayUnRegDRep cre co'
+                  [(cre', DRepState _epochNo _sm co' _delegators)]-> pure $ ConwayUnRegDRep cre co'
                   _ ->  kError TxValidationError $ "Drep  is not registered : " ++ show cre
             ConwayUpdateDRep cre mAnchor -> pure $ ConwayUpdateDRep cre mAnchor
             ConwayAuthCommitteeHotKey cre cre' -> pure $ ConwayAuthCommitteeHotKey cre cre'

@@ -1,3 +1,9 @@
+## v3.1.2 : Upgrade cardano-api to 10.x
+
+### Changes
+  - Bump cardano-api version to 10.1
+
+
 ## v3.1.1 : Collateral Selection Fix
 
 ### Fixes

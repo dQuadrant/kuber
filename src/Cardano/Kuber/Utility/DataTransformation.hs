@@ -4,7 +4,6 @@
 module Cardano.Kuber.Utility.DataTransformation where
 
 import Cardano.Api
-import Cardano.Api.Byron (Address (ByronAddress))
 import Cardano.Api.Shelley (Address (ShelleyAddress), StakeCredential (StakeCredentialByKey, StakeCredentialByScript), fromPlutusData, fromShelleyAddr, fromShelleyPaymentCredential, fromShelleyStakeReference, shelleyPayAddrToPlutusPubKHash)
 import qualified Cardano.Api.Shelley as Shelley
 import Cardano.Kuber.Data.Parsers (parseAddress)
@@ -58,10 +57,11 @@ skeyToPaymentKeyHash skey = verificationKeyHash $ getVerificationKey skey
 addressInEraToPaymentKeyHash :: AddressInEra era -> Maybe (Hash PaymentKey)
 addressInEraToPaymentKeyHash a = case a of
   AddressInEra atie ad -> case ad of
-    ByronAddress ad' -> Nothing
     ShelleyAddress net cre sr -> case fromShelleyPaymentCredential cre of
       PaymentCredentialByKey ha -> Just ha
       PaymentCredentialByScript sh -> Nothing
+    _ -> Nothing
+
 
 -- | convert PubKeyhash (plutus tupe) to corresponding Enterprise address (cardano-api type).
 -- Note that the transformation  Address <-> Pkh is not symmetrical for all addresses
@@ -89,28 +89,31 @@ addrToMaybePkh = shelleyPayAddrToPlutusPubKHash
 addrInEraToPkh :: MonadFail m => AddressInEra e -> m Plutus.PubKeyHash
 addrInEraToPkh a = case a of
   AddressInEra atie ad -> case ad of
-    ByronAddress ad' -> fail "Byron address is not supported"
     a@(ShelleyAddress net cre sr) -> case addrToMaybePkh a of
       Nothing -> fail "Expected PublicKey address got Script Address"
       Just pkh -> pure pkh
+    _ -> fail "Byron address is not supported"
+
 
 addrInEraToValHash :: MonadFail m => AddressInEra e -> m Plutus.ScriptHash
 addrInEraToValHash a = case a of
   AddressInEra atie ad -> case ad of
-    ByronAddress ad' -> fail "Byron address is not supported"
     a@(ShelleyAddress net cre sr) ->
       let credential = toPlutusCredential cre
        in case credential of
             Plutus.PubKeyCredential pkh -> fail "Expected Script address got PublicKey Address"
             Plutus.ScriptCredential vh -> pure vh
+    _ -> fail "Byron address is not supported"
+
 
 -- | Convert the address to Enterprise Address.
 -- Enterprise address is an address having no stakeKey. Returns same address if the address is a Byron era address.
 unstakeAddr :: IsShelleyBasedEra era => AddressInEra era -> AddressInEra era
 unstakeAddr a = case a of
   AddressInEra atie ad -> case ad of
-    ByronAddress ad' -> a
     ShelleyAddress net cre sr -> shelleyAddressInEra shelleyBasedEra $ ShelleyAddress net cre Cardano.Ledger.Shelley.API.StakeRefNull
+    _                        -> a
+
 
 -- | Create Plutus library AssetClass structure from Cardano.Api's AssetId
 toPlutusAssetClass :: AssetId -> AssetClass
@@ -147,8 +150,8 @@ toPlutusAddress (ShelleyAddress net cre sr) = Plutus.Address (toPlutusCredential
 addrInEraToPlutusAddress :: AddressInEra era -> Plutus.Address
 addrInEraToPlutusAddress addr = case addr of
   AddressInEra atie ad -> case ad of
-    ByronAddress ad' -> error "addrInEraToPlutusAddress(): got byron address"
     ShelleyAddress net cre sr -> Plutus.Address (toPlutusCredential cre) (Alonzo.transStakeReference sr)
+    _  -> error "addrInEraToPlutusAddress(): got byron address"
 
 -- | Convert Address (plutus type) to Shelley Address (cardano-api type).
 -- Address is re-deserialized, which might fail. This is because it's possible to set arbitary byteString as hashes in plutus.

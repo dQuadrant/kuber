@@ -10,7 +10,6 @@
 
 module Cardano.Kuber.Http.Client where
 
-import Cardano.Api.Byron
 import Cardano.Api.Shelley
 import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (..), HasSubmitApi (..))
 import Cardano.Kuber.Core.Kontract
