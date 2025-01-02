@@ -128,13 +128,13 @@ Integrating Hydra into the Kuber library will enable users to leverage Hydra’s
 - kuber-client npm package integration and testing: 1 month
 - kuber playgroung integration and testing: 2 months
 
-## Milestones and Dileverables
+## Dileverables
 
 #### Kuber Library
 
 - **Deliverables**
-  - API functionality for Hydra transactions
-  - A working Haskell library with Hydra features
+  - Ability to connect to Hydra node and query network parameters/state
+  - API functionality for Hydra transaction building
   - Extensive test coverage
 - **Acceptance Criteria**
   - Successful implementation of the API and Haskell library
@@ -143,14 +143,13 @@ Integrating Hydra into the Kuber library will enable users to leverage Hydra’s
 #### Kuber playground
 
 - **Deliverables**
-  - Real-time display of connected Hydra peers and their statuses.
+  - Real-time display of a connected Hydra peer and their status.
   - Visualization of Hydra Head status, participants, and UTxO details.
   - Interface for creating Hydra transactions using JSON.
-  - Option to sign and submit transactions directly from the UI using browser wallet extension.
-  - Searchable transaction logs with details of Hydra transactions.
+  - Option to sign and submit transactions directly from the UI using browser wallet extension (if supported by extension)
   - Options to close the Hydra Head, contest the close, and distribute the final state.
 - **Acceptance Criteria**
-  - Hydra peers and their statuses are correctly displayed and updated in real time.
+  - Hydra peer and connection status correctly displayed and updated in real time.
   - Hydra Head state and transaction history are accurately shown.
   - Users can create, sign, and submit transactions easily.
   - The UI supports closing, contesting, and finalizing the Hydra Head state.
@@ -158,9 +157,10 @@ Integrating Hydra into the Kuber library will enable users to leverage Hydra’s
 #### **Kuber Client**
 
 - **Deliverables**
-  - A functional NPM package providing options for all Hydra-related operations.
+  - A functional NPM package supporting all the hydra features in kuber server library
   - Comprehensive test coverage to ensure reliability and robustness.
-  - Compatibility with DApps, enabling seamless integration with decentralized applications.
+  - Compatibility with DApps, enabling seamless integration with decentralized applications
+  - Ability to connect to wallet and sign transactions.
 - **Acceptance Criteria**
   - Successful implementation of all Hydra-related features within the NPM package.
   - All tests pass.
