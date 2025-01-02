@@ -143,7 +143,7 @@ Integrating Hydra into the Kuber library will enable users to leverage Hydra’s
 #### Kuber playground
 
 - **Deliverables**
-  - Real-time display of a connected Hydra peer and their status.
+  - Real-time display of a connected Hydra peer and its status.
   - Visualization of Hydra Head status, participants, and UTxO details.
   - Interface for creating Hydra transactions using JSON.
   - Option to sign and submit transactions directly from the UI using browser wallet extension (if supported by extension)
