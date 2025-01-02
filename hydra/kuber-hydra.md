@@ -130,7 +130,7 @@ Integrating Hydra into the Kuber library will enable users to leverage Hydra’s
 
 ## Dileverables
 
-#### Kuber Library
+#### Kuber API
 
 - **Deliverables**
   - Ability to connect to Hydra node and query network parameters/state
