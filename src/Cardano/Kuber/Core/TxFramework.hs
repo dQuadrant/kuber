@@ -623,9 +623,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
                             [] -> Nothing
                             v -> let  sorted =  sortBy collateralSortingFunc v 
                                       selected = collectCollateral 0 sorted []
-                                  in 
-                                 Debug.trace ("sorted: " ++ ( intercalate "\n" $ map show sorted )
-                                          ++ "selected: " ++ ( intercalate "\n" $ map show selected)) $ Just $ selected
+                                  in Just $ selected
 
                           v-> Just v
         where
@@ -657,7 +655,7 @@ txBuilderToTxBody   network  pParam  systemStart eraHistory
         -- this will sort the items in descending order when using sortBy.
         collateralSortingFunc :: (TxIn,a,Integer) -> (TxIn,a,Integer)-> Ordering
         collateralSortingFunc (_,_,v1) (_,_,v2)= 
-          Debug.trace (show v1  ++ " compare "++ show v2 ++ "=" ++ show doCompare ) doCompare
+          doCompare
           where
             doCompare
               | v1 <= 10_000_000 = if v2 <= 10_000_000 then  v1 `compare` v2 else LT
