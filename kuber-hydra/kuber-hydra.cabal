@@ -52,6 +52,7 @@ extra-doc-files:    CHANGELOG.md
 
 common warnings
     ghc-options: -Wall
+                 -threaded
 
 executable kuber-hydra
     -- Import common warning flags.
@@ -61,20 +62,57 @@ executable kuber-hydra
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
-    other-modules:  Websocket.Connect
+    other-modules:  Websocket.Forwarder
                     Websocket.Commands
+                    Websocket.Utils
+                    Websocket.SocketConnection
+                    Websocket.Aeson
+                    Api.Spec
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base ^>=4.18.0.0
+    build-depends:    base ^>=4.17.0.0
                     , websockets
-                    , text
-                    , kuber
                     , cardano-api
+                    , plutus-ledger-api
+                    , plutus-tx
+                    , aeson
+                    , kuber
+                    , text
+                    , bytestring
+                    , base16-bytestring
+                    , blaze-markup
+                    , blaze-html
+                    , network
+                    , http-conduit
+                    , wai-extra
+                    , wai-cors
+                    , wai-middleware-static
+                    , wai-websockets
+                    , servant
+                    , servant-server
+                    , servant-exceptions
+                    , wai
+                    , warp
+                    , servant-exceptions-server
+                    , http-types
+                    , http-media
+                    , cardano-crypto-class
+                    , cardano-ledger-core
+                    , quickcheck-arbitrary-adt
+                    , lens
+                    , lens-aeson
+                    , async
+                    , time
+                    , QuickCheck
+                    , formatting
+                    , cardano-ledger-binary
+                    , cardano-binary
+                    , cardano-ledger-shelley
+                    , cborg
                     , containers
-
     -- Directories containing source files.
     hs-source-dirs:   app
 

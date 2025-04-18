@@ -1,56 +1,68 @@
-module Websocket.Commands where 
-import qualified Data.Text as T
-import Websocket.Connect
-import System.Environment
-import Cardano.Kuber.Data.Models (UtxoModal)
+{-# LANGUAGE OverloadedStrings #-}
+
+module Websocket.Commands where
+
 import Cardano.Api
-import Data.Map as Map hiding (map)
+import Cardano.Api.Experimental
 import Cardano.Api.Shelley
 import Cardano.Kuber.Api
-import Cardano.Kuber.Util
+import Cardano.Kuber.Data.Models (UtxoModal)
 import Cardano.Kuber.Data.Parsers
-import Data.Set as Set hiding (map)
+import Cardano.Kuber.Util
+import Cardano.Ledger.Core
+-- import Websocket.Aeson (ProtocolParams)
 
-data Action =  InitializeHead
-            | CommitUTxO
-            | Abort
-            | QueryUTxO
-            | CloseHead
-            | FanOut
+import Control.Exception
+import Data.Aeson ((.=))
+import qualified Data.Aeson as A
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TLE
+import qualified Debug.Trace as Debug
+import GHC.IO (unsafePerformIO)
+import Network.HTTP.Simple
+import qualified Network.WebSockets as WS
+import System.Environment
+import Websocket.Forwarder
+import Websocket.SocketConnection
+import Websocket.Utils
 
+hydraHeadMessageForwardingFailed :: T.Text
+hydraHeadMessageForwardingFailed = T.pack "Failed to forward message to hydra head"
 
-sendMessage :: IO (T.Text -> IO ())
-sendMessage = do 
-    hydraIp <- getEnv "HYDRA_IP"
-    hydraPort <- getEnv "HYDRA_PORT"
-    webSocketProxy hydraIp (read hydraPort :: Int)
+-- Function to initialize Hydra by sending { "tag": "Init" } and waiting for a response
 
+initialize :: IO T.Text
+initialize = do 
+  sendCommandToHydraNodeSocket InitializeHead
 
-initialize :: IO ()
-initialize = sendMessage >>= \send -> send (T.pack "{\"tag\": \"Init\"}")
+abort :: IO T.Text
+abort = do
+  sendCommandToHydraNodeSocket Abort
 
-abort :: IO ()
-abort = sendMessage >>= \send -> send (T.pack "{\"tag\": \"Abort\"}")
+queryUTxO :: IO T.Text
+queryUTxO = do
+  sendCommandToHydraNodeSocket GetUTxO
 
-close :: IO ()
-close = sendMessage >>= \send -> send (T.pack "{\"tag\": \"Close\"}")
+-- hydraResponse <- sendCommandToHydraNodeSocket GetUTxO
+-- case hydraResponse of
+--   Nothing -> pure $ hydraHeadMessageForwardingFailed
+--   Just a -> pure a
 
-getUTxO :: IO ()
-getUTxO = sendMessage >>= \send -> send (T.pack "{\"tag\": \"GetUTxO\"}")
+-- close :: IO ()
+-- close = sendMessage >>= \send -> send (T.pack "{\"tag\": \"Close\"}")
 
--- commitUTxO :: UTxO ConwayEra -> IO ()
--- commitUTxO utxos = case utxos of
---     UTxO utxos -> Map.toList utxos
+-- getUTxO :: IO ()
+-- getUTxO = sendMessage >>= \send -> send (T.pack "{\"tag\": \"GetUTxO\"}")
 
-uTxOsToHydraJson :: UTxO era -> T.Text
-uTxOsToHydraJson utxos = case utxos of 
-    UTxO utxos -> do 
-        let utxoList = Map.toList utxos
-        let utxoJson = map (\(TxIn txId index, TxOut addrress value datum referenceScript) -> 
-                    ()
-                ) utxoList
-                -- "{\"txId\": \"" <> T.pack (show txId) <> "\", \"index\": " <> T.pack (show index) <> ", \"address\": \"" <> T.pack (show addr) <> "\", \"coin\": " <> T.pack (show coin) <> "}") utxoList
-        T.pack ""
+-- getProtocolParameters :: IO (PParams (ShelleyLedgerEra ConwayEra))
+getProtocolParameters :: IO A.Value
+getProtocolParameters = do
+  hydraProtocolParameters <- fetch >>= \query -> query (T.pack "protocol-parameters")
+  pure $ textToJSON hydraProtocolParameters
 
--- myUTxos :: (HasChainQueryAPI a) => Kontract a w FrameworkError (UTxO era)
--- myUTxos = kQueryUtxoByAddress (Set.singleton $ addressInEraToAddressAny $ parseAddress $ T.pack "")
+-- Debug.traceM(T.unpack hydraProtocolParameters)
+-- pure $ parseProtocolParameters hydraProtocolParameters

@@ -1,8 +1,8 @@
 -- See CONTRIBUTING for information about these, including some Nix commands
 -- you need to run if you change them
 index-state:
-  , hackage.haskell.org 2025-01-06T06:07:18Z
-  , cardano-haskell-packages 2025-01-04T13:50:25Z
+  , hackage.haskell.org 2025-03-03T01:12:46Z
+  , cardano-haskell-packages 2025-03-03T04:46:42Z
 
 -- Custom repository for cardano haskell packages, see CONTRIBUTING for more
 repository cardano-haskell-packages
