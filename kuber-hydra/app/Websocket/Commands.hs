@@ -54,19 +54,29 @@ queryUTxO :: IO T.Text
 queryUTxO = do
   sendCommandToHydraNodeSocket GetUTxO
 
--- commitUTxO :: [T.Text] -> IO [T.Text]
+commitUTxO :: [T.Text] -> IO T.Text
 commitUTxO utxos = do
+  utxoSchema <- createUTxOSchema utxos
+  getHydraCommitTx utxoSchema
+
+getHydraCommitTx :: T.Text -> IO T.Text
+getHydraCommitTx utxoSchema = do
+  let jsonResponse = textToJSON utxoSchema
+  post "commit" jsonResponse
+
+createUTxOSchema :: [T.Text] -> IO T.Text
+createUTxOSchema utxos = do
   localChain <- chainInfoFromEnv
-  result <- evaluateKontract localChain (visualize @ChainConnectInfo @ConwayEra utxos)
+  result <- evaluateKontract localChain (getUtxoDetails @ChainConnectInfo @ConwayEra utxos)
   case result of
     Left err -> error $ "Query failed: " <> show err
-    Right res -> pure $ map (T.pack . BS8.unpack . BSL.toStrict . A.encode) res
+    Right res -> pure $ (T.pack . BS8.unpack . BSL.toStrict . A.encode) res
 
-visualize ::
+getUtxoDetails ::
   (HasChainQueryAPI a, IsTxBuilderEra era) =>
   [T.Text] ->
-  Kontract a w FrameworkError [UTxO era]
-visualize utxoList = do
+  Kontract a w FrameworkError (UTxO era)
+getUtxoDetails utxoList = do
   parsed <-
     mapM
       ( \x -> case parseTxIn x of
@@ -74,7 +84,7 @@ visualize utxoList = do
           Nothing -> error ""
       )
       utxoList
-  mapM (kQueryUtxoByTxin . Set.singleton) parsed
+  kQueryUtxoByTxin (Set.fromList parsed)
 
 -- getProtocolParameters :: IO (PParams (ShelleyLedgerEra ConwayEra))
 getProtocolParameters :: IO A.Value

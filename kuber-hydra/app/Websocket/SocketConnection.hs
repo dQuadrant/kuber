@@ -7,6 +7,9 @@ import Control.Concurrent.Async (race_)
 import Control.Exception (SomeException, try)
 import Control.Monad (forever)
 import Data.Aeson
+import qualified Data.Aeson as A
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -15,7 +18,7 @@ import Data.Time.Clock.POSIX (getPOSIXTime)
 import qualified Debug.Trace as Debug
 import GHC.Conc (threadDelay)
 import Network.HTTP.Client.Conduit (parseRequest)
-import Network.HTTP.Simple (getResponseBody, httpLBS)
+import Network.HTTP.Simple (getResponseBody, httpLBS, setRequestBodyLBS, setRequestHeader, setRequestMethod)
 import Network.Wai
 import qualified Network.WebSockets as WS
 import System.Environment (getEnv)
@@ -107,5 +110,20 @@ fetch = do
     let url = baseUrl ++ T.unpack endpoint
     request <- parseRequest url
     response <- httpLBS request
-    let responseBody = T.pack $ show $ getResponseBody response
+    let responseBody = T.pack $ BS8.unpack $ BSL.toStrict $ getResponseBody response
     return responseBody
+
+post :: (ToJSON p) => [Char] -> p -> IO T.Text
+post path jsonData = do
+  ip <- hydraIP
+  port <- hydraPort
+  let url = "http://" ++ ip ++ ":" ++ port ++ "/" ++ path
+  initialRequest <- parseRequest url
+  let request =
+        setRequestMethod "POST" $
+          setRequestHeader "Content-Type" ["application/json"] $
+            setRequestBodyLBS (A.encode jsonData) $
+              initialRequest
+  response <- httpLBS request
+  let responseBody = T.pack $ BS8.unpack $ BSL.toStrict $ getResponseBody response
+  return responseBody

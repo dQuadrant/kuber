@@ -1,9 +1,11 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -11,8 +13,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveAnyClass #-}
 
 module Api.Spec where
 
@@ -26,6 +26,7 @@ import qualified Data.ByteString.Char8 as BS
 import Data.String
 import Data.Text hiding (map)
 import qualified Data.Text as T hiding (map)
+import qualified Debug.Trace as Debug
 import GHC.Generics
 import GHC.IO (unsafePerformIO)
 import Network.Wai
@@ -35,8 +36,6 @@ import Servant
 import Websocket.Aeson
 import Websocket.Commands
 import Websocket.Utils
-import qualified Debug.Trace as Debug
-
 
 -- Define CORS policy
 corsMiddlewarePolicy :: CorsResourcePolicy
@@ -64,7 +63,6 @@ newtype CommitUTxOs = CommitUTxOs
   }
   deriving (Show, Generic, FromJSON, ToJSON)
 
-
 type API =
   "hydra" :> (HydraCommands)
 
@@ -72,7 +70,7 @@ type HydraCommands =
   "init" :> Get '[JSON] A.Value
     :<|> "abort" :> Get '[JSON] A.Value
     :<|> "query" :> "utxo" :> Get '[JSON] A.Value
-    :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> Post '[JSON] [A.Value]
+    :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> Post '[JSON] A.Value
     :<|> "protocol-parameters" :> Get '[JSON] A.Value
 
 -- Define Handlers
@@ -98,10 +96,10 @@ queryUtxoHandler = do
   let jsonResponse = textToJSON queryUtxoResponse
   return jsonResponse
 
-commitHandler :: CommitUTxOs -> Handler [A.Value]
-commitHandler commits = do 
+commitHandler :: CommitUTxOs -> Handler A.Value
+commitHandler commits = do
   commitResponse <- liftIO $ commitUTxO (map T.pack $ commit commits)
-  let jsonResponse = map textToJSON commitResponse
+  let jsonResponse = textToJSON commitResponse
   return jsonResponse
 
 protocolParameterHandler :: Handler (A.Value)
