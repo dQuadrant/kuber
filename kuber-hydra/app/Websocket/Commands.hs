@@ -1,4 +1,7 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Websocket.Commands where
 
@@ -16,7 +19,11 @@ import Control.Exception
 import Data.Aeson ((.=))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
+import Data.ByteString.Char8 as BS8 hiding (map)
 import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.ByteString.Lazy.Char8 as BSL
+import Data.Monoid (Any)
+import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.Text.Lazy as TL
@@ -30,13 +37,13 @@ import Websocket.Forwarder
 import Websocket.SocketConnection
 import Websocket.Utils
 
+-- import qualified Control.Lens.Internal.Deque as Set
+
 hydraHeadMessageForwardingFailed :: T.Text
 hydraHeadMessageForwardingFailed = T.pack "Failed to forward message to hydra head"
 
--- Function to initialize Hydra by sending { "tag": "Init" } and waiting for a response
-
 initialize :: IO T.Text
-initialize = do 
+initialize = do
   sendCommandToHydraNodeSocket InitializeHead
 
 abort :: IO T.Text
@@ -47,16 +54,27 @@ queryUTxO :: IO T.Text
 queryUTxO = do
   sendCommandToHydraNodeSocket GetUTxO
 
--- hydraResponse <- sendCommandToHydraNodeSocket GetUTxO
--- case hydraResponse of
---   Nothing -> pure $ hydraHeadMessageForwardingFailed
---   Just a -> pure a
+-- commitUTxO :: [T.Text] -> IO [T.Text]
+commitUTxO utxos = do
+  localChain <- chainInfoFromEnv
+  result <- evaluateKontract localChain (visualize @ChainConnectInfo @ConwayEra utxos)
+  case result of
+    Left err -> error $ "Query failed: " <> show err
+    Right res -> pure $ map (T.pack . BS8.unpack . BSL.toStrict . A.encode) res
 
--- close :: IO ()
--- close = sendMessage >>= \send -> send (T.pack "{\"tag\": \"Close\"}")
-
--- getUTxO :: IO ()
--- getUTxO = sendMessage >>= \send -> send (T.pack "{\"tag\": \"GetUTxO\"}")
+visualize ::
+  (HasChainQueryAPI a, IsTxBuilderEra era) =>
+  [T.Text] ->
+  Kontract a w FrameworkError [UTxO era]
+visualize utxoList = do
+  parsed <-
+    mapM
+      ( \x -> case parseTxIn x of
+          Just txin -> pure txin
+          Nothing -> error ""
+      )
+      utxoList
+  mapM (kQueryUtxoByTxin . Set.singleton) parsed
 
 -- getProtocolParameters :: IO (PParams (ShelleyLedgerEra ConwayEra))
 getProtocolParameters :: IO A.Value
