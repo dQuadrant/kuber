@@ -14,6 +14,9 @@ import Data.Aeson
 import qualified Data.Aeson.Types as Aeson
 import qualified Data.Text as T
 import GHC.Generics (Generic)
+import Data.Time
+import Data.Time.Format.ISO8601 (iso8601ParseM)
+
 
 -- import GHC.Generics
 -- import Test.QuickCheck.Arbitrary.ADT (ToADTArbitrary)
@@ -49,7 +52,8 @@ import GHC.Generics (Generic)
 
 data WSMessage = WSMessage
   { tag :: T.Text,
-    seq :: Maybe Int
+    seq :: Maybe Int,
+    timestamp :: UTCTime
   }
   deriving (Show)
 
@@ -57,7 +61,9 @@ instance FromJSON WSMessage where
   parseJSON = withObject "WSMessage" $ \v -> do
     tagVal <- v .: "tag"
     seqVal <- v Aeson..:? "seq"
-    return $ WSMessage tagVal seqVal
+    tsVal <- v .: "timestamp"
+    ts <- iso8601ParseM tsVal
+    return $ WSMessage tagVal seqVal ts
 
 -- class
 --   ( Eq tx

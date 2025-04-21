@@ -32,6 +32,7 @@ import Cardano.Api.Shelley (ShelleyLedgerEra)
 import GHC.IO (unsafePerformIO)
 import Cardano.Ledger.Crypto
 import Websocket.Aeson 
+import Websocket.Utils
 
 -- Define CORS policy
 corsMiddlewarePolicy :: CorsResourcePolicy
@@ -56,9 +57,9 @@ instance ToJSON ResponseMessage
 type API =
   "hydra" :> (HydraCommands)
 
-type HydraCommands = "init" :> Get '[JSON] Text
-  :<|> "abort" :> Get '[JSON] Text
-  :<|> "query" :> "utxo" :> Get '[JSON] Text
+type HydraCommands = "init" :> Get '[JSON] A.Value
+  :<|> "abort" :> Get '[JSON] A.Value
+  :<|> "query" :> "utxo" :> Get '[JSON] A.Value
   :<|> "commit" :> Get '[JSON] ResponseMessage
   :<|> "protocol-parameters" :> Get '[JSON] A.Value
 
@@ -67,20 +68,23 @@ server :: Server API
 server = initHandler :<|> abortHandler :<|> queryUtxoHandler :<|> commitHandler  :<|> protocolParameterHandler 
 
 -- initHandler :: Handler Text
-initHandler :: Handler Text
+initHandler :: Handler A.Value
 initHandler = do
   initResponse <- liftIO $ initialize
-  return initResponse
+  let jsonResponse = textToJSON initResponse
+  return jsonResponse
 
-abortHandler :: Handler Text 
+abortHandler :: Handler A.Value 
 abortHandler = do 
   abortResponse <- liftIO $ abort
-  return abortResponse
+  let jsonResponse = textToJSON abortResponse
+  return jsonResponse
 
-queryUtxoHandler :: Handler Text
+queryUtxoHandler :: Handler A.Value
 queryUtxoHandler = do 
   queryUtxoResponse <- liftIO $ queryUTxO
-  return queryUtxoResponse
+  let jsonResponse = textToJSON queryUtxoResponse
+  return jsonResponse
 
 commitHandler :: Handler ResponseMessage
 commitHandler = return (ResponseMessage "commit")

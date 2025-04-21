@@ -28,9 +28,9 @@ data Action
   | ContestHead
   | FanOut
 
-generateResponseTag :: Action -> T.Text
+generateResponseTag :: Action -> T.Text 
 generateResponseTag action = case action of
-  InitializeHead -> "Greetings"
+  InitializeHead -> "HeadIsInitializing"
   CommitUTxO -> ""
   DeCommitUTxO -> ""
   Abort -> "HeadIsAborted"

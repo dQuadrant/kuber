@@ -34,6 +34,12 @@ hydraIP = getEnv "HYDRA_IP"
 hydraPort :: IO String
 hydraPort = getEnv "HYDRA_PORT"
 
+errorTags :: [T.Text]
+errorTags = ["CommandFailed", "PostTxOnChainFailed", "PeerHandshakeFailure", "TxInvalid", "InvalidInput", "IgnoredHeadInitializing", "DecommitInvalid", "CommitIgnored"]
+
+skipTags :: [T.Text]
+skipTags = ["Greetings"]
+
 -- WebSocket Proxy Server
 proxyServer :: String -> Int -> WS.ServerApp
 proxyServer ip port pending = do
@@ -56,34 +62,28 @@ forwardMessageWS srcConn dstConn = forever $ do
 
 -- Collect and filter WebSocket messages
 getLatestMessage :: WS.Connection -> T.Text -> IO (Maybe T.Text)
-getLatestMessage conn tag_ = do
-  start <- getPOSIXTime
-  let duration = 0.3 -- 300ms
-  let go latest = do
-        now <- getPOSIXTime
-        if now - start > duration
-          then return latest
-          else do
-            result <- timeout 50000 $ try (WS.receiveData conn) :: IO (Maybe (Either SomeException T.Text))
-            case result of
-              Nothing -> go latest
-              Just (Left _) -> return latest
-              Just (Right msg) -> do
-                let decoded = decode (BSL.fromStrict (T.encodeUtf8 msg)) :: Maybe WSMessage
-                case decoded of
-                  Just wsmsg | tag wsmsg == tag_ -> go (Just msg)
-                             | tag wsmsg == tag_ -> go (Just msg)
-                  _ -> go latest -- ignore other tags
-  go Nothing
-
--- getLatestMessage :: WS.Connection -> IO (Maybe T.Text)
--- getLatestMessage conn = go Nothing
---   where
---     go latest = do
---       result <- try (WS.receiveData conn) :: IO (Either SomeException T.Text)
---       case result of
---         Left _  -> return latest  -- Return the latest message received
---         Right msg -> go (Just msg)  -- Update latest message and keep going
+getLatestMessage conn expectedTag = do
+  start <- getCurrentTime
+  let go = do
+        result <- try (WS.receiveData conn) :: IO (Either SomeException T.Text)
+        case result of
+          Left _ -> go -- Retry on failure
+          Right msg -> do
+            let decoded = decode (BSL.fromStrict (T.encodeUtf8 msg)) :: Maybe WSMessage
+            case decoded of
+              Just wsmsg
+                | timestamp wsmsg <= start || tag wsmsg `elem` skipTags -> go -- Wait for fresh message
+                | tag wsmsg `elem` errorTags -> return (Just msg)
+                | tag wsmsg == expectedTag -> return (Just msg)
+                | otherwise -> do
+                    let wrapper =
+                          object
+                            [ "expected" .= expectedTag,
+                              "wsMessage" .= msg
+                            ]
+                    return (Just $ T.decodeUtf8 $ BSL.toStrict $ encode wrapper)
+              Nothing -> go -- Try again if decoding fails
+  go
 
 forwardCommands :: T.Text -> T.Text -> IO T.Text
 forwardCommands command tag = do
