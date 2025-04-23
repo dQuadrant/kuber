@@ -64,7 +64,7 @@ forwardMessageWS srcConn dstConn = forever $ do
   putStrLn $ "Forwarded: " ++ T.unpack msg ++ "\n"
 
 -- Collect and filter WebSocket messages
-getLatestMessage :: WS.Connection -> T.Text -> IO (Maybe T.Text)
+getLatestMessage :: WS.Connection -> [T.Text] -> IO (Maybe T.Text)
 getLatestMessage conn expectedTag = do
   start <- getCurrentTime
   let go = do
@@ -75,9 +75,10 @@ getLatestMessage conn expectedTag = do
             let decoded = decode (BSL.fromStrict (T.encodeUtf8 msg)) :: Maybe WSMessage
             case decoded of
               Just wsmsg
-                | timestamp wsmsg <= start || tag wsmsg `elem` skipTags -> go -- Wait for fresh message
+                | timestamp wsmsg <= start -> go -- Wait for fresh message
+                | tag wsmsg `elem` expectedTag -> return (Just msg)
                 | tag wsmsg `elem` errorTags -> return (Just msg)
-                | tag wsmsg == expectedTag -> return (Just msg)
+                | tag wsmsg `elem` skipTags -> go
                 | otherwise -> do
                     let wrapper =
                           object
@@ -88,7 +89,7 @@ getLatestMessage conn expectedTag = do
               Nothing -> go -- Try again if decoding fails
   go
 
-forwardCommands :: T.Text -> T.Text -> IO T.Text
+forwardCommands :: T.Text -> [T.Text] -> IO T.Text
 forwardCommands command tag = do
   WS.runClient serverIP serverPort "/" $ \conn -> do
     WS.sendTextData conn command

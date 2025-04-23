@@ -28,16 +28,16 @@ data Action
   | ContestHead
   | FanOut
 
-generateResponseTag :: Action -> T.Text 
+generateResponseTag :: Action -> [T.Text] 
 generateResponseTag action = case action of
-  InitializeHead -> "HeadIsInitializing"
-  CommitUTxO -> ""
-  DeCommitUTxO -> ""
-  Abort -> "HeadIsAborted"
-  GetUTxO -> "GetUTxOResponse"
-  CloseHead -> "HeadIsClosed"
-  ContestHead -> "HeadIsContested"
-  FanOut -> "ReadyToFanout"
+  InitializeHead -> ["HeadIsInitializing", "Greetings"]
+  CommitUTxO -> [""]
+  DeCommitUTxO -> [""]
+  Abort -> ["HeadIsAborted"]
+  GetUTxO -> ["GetUTxOResponse"]
+  CloseHead -> ["HeadIsClosed"]
+  ContestHead -> ["HeadIsContested"]
+  FanOut -> ["ReadyToFanout"]
 
 hydraHeadInitialized :: T.Text
 hydraHeadInitialized = T.pack "Hydra Head Initialized"
@@ -51,7 +51,7 @@ sendCommandToHydraNodeSocket message = do
         Abort -> "{\"tag\": \"Abort\"}"
         GetUTxO -> "{\"tag\": \"GetUTxO\"}"
         _ -> ""
-  let validResponseTag :: T.Text = generateResponseTag message
+  let validResponseTag :: [T.Text] = generateResponseTag message
   forwardCommands jsonMessage validResponseTag
 
 -- Function to listen for messages for a specified duration in seconds

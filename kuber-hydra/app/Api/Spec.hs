@@ -58,8 +58,9 @@ newtype ResponseMessage = ResponseMessage
 
 instance ToJSON ResponseMessage
 
-newtype CommitUTxOs = CommitUTxOs
-  { commit :: [String]
+data CommitUTxOs = CommitUTxOs
+  { commit :: [String],
+    signKey :: A.Value
   }
   deriving (Show, Generic, FromJSON, ToJSON)
 
@@ -98,7 +99,7 @@ queryUtxoHandler = do
 
 commitHandler :: CommitUTxOs -> Handler A.Value
 commitHandler commits = do
-  commitResponse <- liftIO $ commitUTxO (map T.pack $ commit commits)
+  commitResponse <- liftIO $ commitUTxO (map T.pack $ commit commits) (signKey commits)
   let jsonResponse = textToJSON commitResponse
   return jsonResponse
 

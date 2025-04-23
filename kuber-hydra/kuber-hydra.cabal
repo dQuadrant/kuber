@@ -113,6 +113,7 @@ executable kuber-hydra
                     , cardano-ledger-shelley
                     , cborg
                     , containers
+                    , text-conversions
     -- Directories containing source files.
     hs-source-dirs:   app
 
