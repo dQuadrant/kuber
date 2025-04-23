@@ -45,6 +45,7 @@ hydraHeadInitialized = T.pack "Hydra Head Initialized"
 hydraHeadAborted :: T.Text
 hydraHeadAborted = T.pack "Hydra Head Aborted"
 
+sendCommandToHydraNodeSocket :: Action -> IO T.Text
 sendCommandToHydraNodeSocket message = do
   let jsonMessage :: T.Text = case message of
         InitializeHead -> "{\"tag\": \"Init\"}"
@@ -53,45 +54,3 @@ sendCommandToHydraNodeSocket message = do
         _ -> ""
   let validResponseTag :: [T.Text] = generateResponseTag message
   forwardCommands jsonMessage validResponseTag
-
--- Function to listen for messages for a specified duration in seconds
--- listenForMessages :: WS.Connection -> Int -> IO (Maybe T.Text)
--- listenForMessages conn duration = do
---     let listenLoop remainingTime lastMsg = do
---             if remainingTime <= 0
---                 then return lastMsg
---                 else do
---                     msg <- WS.receiveData conn
---                     threadDelay 1000000
---                     listenLoop (remainingTime - 1) (Just msg)
---     listenLoop duration Nothing
-
--- webSocketProxy :: WS.ServerApp
--- webSocketProxy pendingConn = do
---     conn <- WS.acceptRequest pendingConn
---     putStrLn "Client connected to WebSocket proxy."
-
---     -- Get Hydra WebSocket address
---     ip <- hydraIp
---     port <- hydraPort
---     let hydraWsUrl = "ws://" ++ ip ++ ":" ++ port
-
---     -- Connect to Hydra WebSocket
---     WS.runClient ip (read port) "/" $ \hydraConn -> do
---         putStrLn $ "Connected to Hydra WebSocket at " ++ hydraWsUrl
-
---         -- Start bi-directional forwarding
---         _ <- forkIO $ forwardMessages conn hydraConn
---         forwardMessages hydraConn conn
-
--- Forward messages between WebSocket connections
--- forwardMessages :: WS.Connection -> WS.Connection -> IO ()
--- forwardMessages fromConn toConn = catch loop handleException
---   where
---     loop = do
---         msg <- WS.receiveData fromConn
---         TIO.putStrLn $ "Forwarding message: " <> msg
---         WS.sendTextData toConn msg
---         loop
---     handleException :: SomeException -> IO ()
---     handleException e = putStrLn $ "WebSocket connection closed: " ++ show e

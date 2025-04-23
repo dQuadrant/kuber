@@ -21,6 +21,7 @@ import Control.Exception
 import Data.Aeson ((.=))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
+import Data.Aeson.Types
 import Data.ByteString.Char8 as BS8 hiding (head, map)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.ByteString.Lazy.Char8 as BSL
@@ -41,6 +42,7 @@ import qualified Network.WebSockets as WS
 import System.Environment
 import Websocket.Forwarder
 import Websocket.SocketConnection
+import Websocket.TxBuilder
 import Websocket.Utils
 
 -- import qualified Control.Lens.Internal.Deque as Set
@@ -66,35 +68,62 @@ queryUTxO :: IO T.Text
 queryUTxO = do
   sendCommandToHydraNodeSocket GetUTxO
 
--- commitUTxO :: [T.Text] -> A.Value -> IO T.Text
-commitUTxO :: [T.Text] -> Aeson.Value -> IO T.Text
+commitUTxO :: [T.Text] -> Data.Aeson.Types.Value -> Either FrameworkError Data.Aeson.Types.Value
 commitUTxO utxos sk = do
+  let utxoSchema = unsafePerformIO $ createUTxOSchema utxos
+  case parseSignKey (jsonToText sk) of
+    Nothing -> Left $ FrameworkError ParserError "Invalid signing key"
+    Just parsedSk -> do
+      let unsignedCommitTx = unsafePerformIO $ getHydraCommitTx utxoSchema
+      case A.eitherDecode (fromStrict $ encodeUtf8 unsignedCommitTx) of
+        Left err -> Left $ FrameworkError ParserError $ "Error decoding Hydra response: " <> err
+        Right (HydraCommitTx cborHex _ _) -> do
+          case convertText (T.pack cborHex) <&> unBase16 of
+            Nothing -> Left $ FrameworkError ParserError "Invalid CBOR hex in commit transaction"
+            Just bs -> do
+              case deserialiseFromCBOR (AsTx AsConwayEra) bs of
+                Left dc -> Left $ FrameworkError ParserError $ "Deserialization failed: " <> show dc
+                Right tx -> do
+                  let (txBody, hydraWitness) = getTxBodyAndWitnesses tx
+                      signedTx = makeSignedTransaction (hydraWitness ++ [makeShelleyKeyWitness shelleyBasedEra txBody (WitnessPaymentKey parsedSk)]) txBody
+                  let submittedTx = unsafePerformIO $ submitHandler $ kSubmitTx (InAnyCardanoEra ConwayEra signedTx)
+                  case unsafePerformIO submittedTx of
+                    Left fe -> Left fe
+                    Right _ -> Right $ object ["tx" .= getTxId txBody]
+
+-- commitUTxO :: [T.Text] -> Data.Aeson.Types.Value -> IO (Either FrameworkError A.Value)
+-- commitUTxO utxos sk = do
+--   utxoSchema <- createUTxOSchema utxos
+
+--   case parseSignKey (jsonToText sk) of
+--     Nothing -> pure $ Left $ FrameworkError ParserError "Invalid signing key"
+--     Just signKey -> do
+--       unsignedCommitTx <- getHydraCommitTx utxoSchema
+
+--       case A.eitherDecode (fromStrict $ encodeUtf8 unsignedCommitTx) of
+--         Left err -> pure $ Left $ FrameworkError ParserError $ "Error decoding Hydra response: " <> err
+--         Right (HydraCommitTx cborHex _ _) ->
+--           case unBase16 (encodeUtf8 cborHex) of
+--             Nothing -> pure $ Left $ FrameworkError ParserError "Invalid CBOR hex in commit transaction"
+--             Just bs -> case deserialiseFromCBOR (AsTx AsConwayEra) bs of
+--               Left dc -> pure $ Left $ FrameworkError ParserError $ "Deserialization failed: " <> show dc
+--               Right tx -> do
+--                 let (txBody, hydraWitness) = getTxBodyAndWitnesses tx
+--                     signedTx = makeSignedTransaction
+--                       (hydraWitness ++ [makeShelleyKeyWitness shelleyBasedEra txBody (WitnessPaymentKey signKey)])
+--                       txBody
+
+--                 submittedTx <- submitHandler $ kSubmitTx (InAnyCardanoEra ConwayEra signedTx)
+--                 case unsafePerformIO submittedTx of
+--                   Left fe -> pure $ Left fe
+--                   Right _ -> pure $ Right $ object ["tx" .= getTxId txBody]
+
+decommitUTxO utxos sk = do
   utxoSchema <- createUTxOSchema utxos
   signKey <- case parseSignKey (jsonToText sk) of
     Just parsedSk -> pure parsedSk
     Nothing -> error "Failure parsing singing key"
-  unsignedCommitTx <- getHydraCommitTx utxoSchema
-  let txCbor = T.pack $ case A.eitherDecode (fromStrict $ encodeUtf8 unsignedCommitTx) of
-        Right (HydraCommitTx cborHex _ _) -> cborHex
-        Left _ -> error "Error decoding hydra response"
-  let hydraWitness = case convertText txCbor <&> unBase16 of
-        Nothing -> error ""
-        Just bs -> case deserialiseFromCBOR (AsTx AsConwayEra) bs of
-          Left dc -> Debug.trace (show dc) $ error "commitUTxO: Failure parsing Tx"
-          Right tx -> snd $ getTxBodyAndWitnesses tx
-  signedTx <- case convertText txCbor <&> unBase16 of
-    Nothing -> error ""
-    Just bs ->
-      case deserialiseFromCBOR (AsTx bAsEra) bs of
-        Left dc -> Debug.trace (show dc) $ error "commitUTxO: Failure parsing Tx"
-        Right tx -> pure $ makeSignedTransaction (hydraWitness ++ [(makeShelleyKeyWitness shelleyBasedEra (getTxBody tx) . WitnessPaymentKey) signKey]) (getTxBody tx)
-  let submittedTx = kSubmitTx (InAnyCardanoEra ConwayEra signedTx)
-  submitHandler submittedTx
-
-getHydraCommitTx :: T.Text -> IO T.Text
-getHydraCommitTx utxoSchema = do
-  let jsonResponse = textToJSON utxoSchema
-  post "commit" jsonResponse
+  pure $ unsafePerformIO $ buildHydraDecommitTx utxoSchema signKey
 
 createUTxOSchema :: [T.Text] -> IO T.Text
 createUTxOSchema utxos = do
@@ -113,23 +142,17 @@ getUtxoDetails utxoList = do
     mapM
       ( \x -> case parseTxIn x of
           Just txin -> pure txin
-          Nothing -> error ""
+          Nothing -> error $ "Error parsing TxIn: " <> T.unpack x
       )
       utxoList
   kQueryUtxoByTxin (Set.fromList parsed)
 
--- getProtocolParameters :: IO (PParams (ShelleyLedgerEra ConwayEra))
 getProtocolParameters :: IO A.Value
 getProtocolParameters = do
   hydraProtocolParameters <- fetch >>= \query -> query (T.pack "protocol-parameters")
   pure $ textToJSON hydraProtocolParameters
 
--- Debug.traceM(T.unpack hydraProtocolParameters)
--- pure $ parseProtocolParameters hydraProtocolParameters
-
+submitHandler :: Kontract ChainConnectInfo w FrameworkError r -> IO (IO (Either FrameworkError r))
 submitHandler tx = do
   localChain <- chainInfoFromEnv
-  result <- evaluateKontract localChain tx
-  case result of
-    Left fe -> pure $ T.pack $ BS8.unpack $ prettyPrintJSON fe
-    Right tx -> pure $ T.pack $ BS8.unpack $ prettyPrintJSON tx
+  pure $ evaluateKontract localChain tx

@@ -24,6 +24,7 @@ import qualified Network.WebSockets as WS
 import System.Environment (getEnv)
 import System.Timeout
 import Websocket.Aeson
+import Websocket.Utils
 
 serverIP :: String
 serverIP = "0.0.0.0"
@@ -128,3 +129,8 @@ post path jsonData = do
   response <- httpLBS request
   let responseBody = T.pack $ BS8.unpack $ BSL.toStrict $ getResponseBody response
   return responseBody
+
+getHydraCommitTx :: T.Text -> IO T.Text
+getHydraCommitTx utxoSchema = do
+  let jsonResponse = textToJSON utxoSchema
+  post "commit" jsonResponse
