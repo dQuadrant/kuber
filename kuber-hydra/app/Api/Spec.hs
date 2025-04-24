@@ -23,10 +23,13 @@ import Cardano.Api.Shelley (ShelleyLedgerEra)
 import Cardano.Kuber.Api
 import Cardano.Ledger.Core
 import Cardano.Ledger.Crypto
+import qualified Codec.CBOR.Write as BS8
 import Control.Exception hiding (Handler)
 import Data.Aeson
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.Lazy as BSL
 import Data.String
 import Data.Text hiding (map)
 import qualified Data.Text as T hiding (map)
@@ -41,7 +44,7 @@ import Network.Wai.Middleware.Rewrite
 import Network.Wai.Middleware.Static
 import Servant
 import Servant.Exception
-import Servant.Exception (ToServantErr (..))
+import Servant.Exception (ToServantErr (..), toServantException)
 import Websocket.Aeson
 import Websocket.Commands
 import Websocket.TxBuilder
@@ -90,9 +93,17 @@ type HydraCommands =
   "init" :> Get '[JSON] A.Value
     :<|> "abort" :> Get '[JSON] A.Value
     :<|> "query" :> "utxo" :> Get '[JSON] A.Value
-    :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> Post '[JSON] (Either FrameworkError A.Value)
+    :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> Post '[JSON] A.Value
     :<|> "decommit" :> ReqBody '[JSON] CommitUTxOs :> Post '[JSON] [GroupedUTXO]
     :<|> "protocol-parameters" :> Get '[JSON] A.Value
+
+frameworkErrorHandler :: Either FrameworkError A.Value -> Handler A.Value
+frameworkErrorHandler = either toServerError pure
+  where
+    toServerError :: FrameworkError -> Handler A.Value
+    toServerError err =
+      throwError $
+        err500 {errBody = BSL.fromStrict $ prettyPrintJSON err}
 
 -- Define Handlers
 server = initHandler :<|> abortHandler :<|> queryUtxoHandler :<|> commitHandler :<|> decommitHandler :<|> protocolParameterHandler
@@ -116,9 +127,9 @@ queryUtxoHandler = do
   let jsonResponse = textToJSON queryUtxoResponse
   return jsonResponse
 
-commitHandler :: CommitUTxOs -> Handler (Either FrameworkError A.Value)
+commitHandler :: CommitUTxOs -> Handler A.Value
 commitHandler commits = do
-  return $ commitUTxO (map T.pack $ commit commits) (signKey commits)
+  frameworkErrorHandler $ commitUTxO (map T.pack $ commit commits) (signKey commits)
 
 decommitHandler :: CommitUTxOs -> Handler [GroupedUTXO]
 decommitHandler decommits = do
