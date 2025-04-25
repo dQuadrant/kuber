@@ -91,39 +91,12 @@ commitUTxO utxos sk = do
                     Left fe -> Left fe
                     Right _ -> Right $ object ["tx" .= getTxId txBody]
 
--- commitUTxO :: [T.Text] -> Data.Aeson.Types.Value -> IO (Either FrameworkError A.Value)
--- commitUTxO utxos sk = do
---   utxoSchema <- createUTxOSchema utxos
-
---   case parseSignKey (jsonToText sk) of
---     Nothing -> pure $ Left $ FrameworkError ParserError "Invalid signing key"
---     Just signKey -> do
---       unsignedCommitTx <- getHydraCommitTx utxoSchema
-
---       case A.eitherDecode (fromStrict $ encodeUtf8 unsignedCommitTx) of
---         Left err -> pure $ Left $ FrameworkError ParserError $ "Error decoding Hydra response: " <> err
---         Right (HydraCommitTx cborHex _ _) ->
---           case unBase16 (encodeUtf8 cborHex) of
---             Nothing -> pure $ Left $ FrameworkError ParserError "Invalid CBOR hex in commit transaction"
---             Just bs -> case deserialiseFromCBOR (AsTx AsConwayEra) bs of
---               Left dc -> pure $ Left $ FrameworkError ParserError $ "Deserialization failed: " <> show dc
---               Right tx -> do
---                 let (txBody, hydraWitness) = getTxBodyAndWitnesses tx
---                     signedTx = makeSignedTransaction
---                       (hydraWitness ++ [makeShelleyKeyWitness shelleyBasedEra txBody (WitnessPaymentKey signKey)])
---                       txBody
-
---                 submittedTx <- submitHandler $ kSubmitTx (InAnyCardanoEra ConwayEra signedTx)
---                 case unsafePerformIO submittedTx of
---                   Left fe -> pure $ Left fe
---                   Right _ -> pure $ Right $ object ["tx" .= getTxId txBody]
-
+decommitUTxO :: [T.Text] -> Data.Aeson.Types.Value -> Either FrameworkError A.Value
 decommitUTxO utxos sk = do
-  utxoSchema <- createUTxOSchema utxos
   signKey <- case parseSignKey (jsonToText sk) of
     Just parsedSk -> pure parsedSk
     Nothing -> error "Failure parsing singing key"
-  pure $ unsafePerformIO $ buildHydraDecommitTx utxoSchema signKey
+  submitHydraDecommitTx utxos signKey
 
 createUTxOSchema :: [T.Text] -> IO T.Text
 createUTxOSchema utxos = do
@@ -151,8 +124,3 @@ getProtocolParameters :: IO A.Value
 getProtocolParameters = do
   hydraProtocolParameters <- fetch >>= \query -> query (T.pack "protocol-parameters")
   pure $ textToJSON hydraProtocolParameters
-
-submitHandler :: Kontract ChainConnectInfo w FrameworkError r -> IO (IO (Either FrameworkError r))
-submitHandler tx = do
-  localChain <- chainInfoFromEnv
-  pure $ evaluateKontract localChain tx

@@ -5,16 +5,14 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+
 
 module Api.Spec where
 
@@ -47,7 +45,7 @@ import Servant.Exception
 import Servant.Exception (ToServantErr (..), toServantException)
 import Websocket.Aeson
 import Websocket.Commands
-import Websocket.TxBuilder
+import Websocket.TxBuilder hiding (utxos)
 import Websocket.Utils
 
 -- Define CORS policy
@@ -72,7 +70,7 @@ newtype ResponseMessage = ResponseMessage
 instance ToJSON ResponseMessage
 
 data CommitUTxOs = CommitUTxOs
-  { commit :: [String],
+  { utxos :: [String],
     signKey :: A.Value
   }
   deriving (Show, Generic, FromJSON, ToJSON)
@@ -94,13 +92,13 @@ type HydraCommands =
     :<|> "abort" :> Get '[JSON] A.Value
     :<|> "query" :> "utxo" :> Get '[JSON] A.Value
     :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> Post '[JSON] A.Value
-    :<|> "decommit" :> ReqBody '[JSON] CommitUTxOs :> Post '[JSON] [GroupedUTXO]
+    :<|> "decommit" :> ReqBody '[JSON] CommitUTxOs :> Post '[JSON] A.Value
     :<|> "protocol-parameters" :> Get '[JSON] A.Value
 
-frameworkErrorHandler :: Either FrameworkError A.Value -> Handler A.Value
+frameworkErrorHandler :: Either FrameworkError a -> Handler a
 frameworkErrorHandler = either toServerError pure
   where
-    toServerError :: FrameworkError -> Handler A.Value
+    toServerError :: FrameworkError -> Handler a
     toServerError err =
       throwError $
         err500 {errBody = BSL.fromStrict $ prettyPrintJSON err}
@@ -129,12 +127,11 @@ queryUtxoHandler = do
 
 commitHandler :: CommitUTxOs -> Handler A.Value
 commitHandler commits = do
-  frameworkErrorHandler $ commitUTxO (map T.pack $ commit commits) (signKey commits)
+  frameworkErrorHandler $ commitUTxO (map T.pack $ utxos commits) (signKey commits)
 
-decommitHandler :: CommitUTxOs -> Handler [GroupedUTXO]
+decommitHandler :: CommitUTxOs -> Handler A.Value
 decommitHandler decommits = do
-  decommitResponse <- liftIO $ decommitUTxO (map T.pack $ commit decommits) (signKey decommits)
-  pure decommitResponse
+  frameworkErrorHandler $ decommitUTxO (map T.pack $ utxos decommits) (signKey decommits)
 
 protocolParameterHandler :: Handler (A.Value)
 protocolParameterHandler = do

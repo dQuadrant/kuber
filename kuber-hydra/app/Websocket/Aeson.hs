@@ -1,5 +1,6 @@
+{-# LANGUAGE DeriveGeneric #-}
 -- {-# LANGUAGE LambdaCase #-}
--- {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 -- {-# LANGUAGE UndecidableInstances #-}
 -- {-# LANGUAGE DerivingStrategies #-}
 -- {-# LANGUAGE ImportQualifiedPost #-}
@@ -12,43 +13,14 @@ module Websocket.Aeson where
 
 import Data.Aeson
 import qualified Data.Aeson.Types as Aeson
+import qualified Data.Map as Map
 import qualified Data.Text as T
-import GHC.Generics (Generic)
 import Data.Time
 import Data.Time.Format.ISO8601 (iso8601ParseM)
-
-
--- import GHC.Generics
--- import Test.QuickCheck.Arbitrary.ADT (ToADTArbitrary)
--- import Data.ByteString.Lazy qualified as LBS
--- import Control.Lens ((.~))
--- import Data.Aeson (Value (..), defaultOptions, encode, genericParseJSON, genericToJSON, omitNothingFields, withObject, (.:))
--- import Data.Aeson.KeyMap qualified as KeyMap
--- import Data.Aeson.Lens (atKey, key)
--- import GHC.Natural
--- import Data.Time
--- import Test.QuickCheck.Arbitrary
--- import Test.QuickCheck.Gen
--- import PlutusLedgerApi.V3 (fromBuiltin)
--- import Formatting.Buildable (build)
--- -- import Cardano.Api.UTxO qualified as UTxO
--- import Cardano.Ledger.Shelley.UTxO qualified as Ledger
--- import Codec.CBOR.Decoding qualified as CBOR
--- import Codec.CBOR.Encoding qualified as CBOR
--- import Data.Aeson (FromJSONKey, ToJSONKey, (.:), (.:?))
--- import Data.Aeson qualified as Aeson
--- import Data.Aeson.KeyMap qualified as KeyMap
--- import Data.Aeson.Types (withObject)
--- import Data.Text.Lazy.Builder (toLazyText)
--- import Data.Data
--- import Data.Aeson.Types
--- import Data.ByteString
--- import Cardano.Api
--- import Cardano.Binary
--- import Cardano.Api.Experimental
--- import Data.Text
--- import Data.String
--- import Network.Socket (PortNumber, close)
+import GHC.Generics (Generic)
+import GHC.Natural
+import Cardano.Api (AnyPlutusScriptVersion, ExecutionUnitPrices)
+import Cardano.Api.Shelley (ExecutionUnits)
 
 data WSMessage = WSMessage
   { tag :: T.Text,
@@ -64,6 +36,112 @@ instance FromJSON WSMessage where
     tsVal <- v .: "timestamp"
     ts <- iso8601ParseM tsVal
     return $ WSMessage tagVal seqVal ts
+
+data HydraProtocolParameters = HydraProtocolParameters
+  { collateralPercentage :: Maybe Natural,
+    committeeMaxTermLength :: Maybe Int,
+    committeeMinSize :: Maybe Int,
+    costModels :: Map.Map T.Text [Int],
+    dRepActivity :: Maybe Int,
+    dRepDeposit :: Maybe Int,
+    dRepVotingThresholds :: Maybe DRepVotingThresholds,
+    executionUnitPrices :: Maybe ExecutionUnitPrices,
+    govActionDeposit :: Maybe Int,
+    govActionLifetime :: Maybe Int,
+    maxBlockBodySize :: Natural,
+    maxBlockExecutionUnits :: Maybe ExecutionUnits,
+    maxBlockHeaderSize :: Natural,
+    maxCollateralInputs :: Maybe Natural,
+    maxTxExecutionUnits :: Maybe ExecutionUnits,
+    maxTxSize :: Natural,
+    maxValueSize :: Maybe Natural,
+    minFeeRefScriptCostPerByte :: Maybe Int,
+    minPoolCost :: Int,
+    monetaryExpansion :: Rational,
+    poolPledgeInfluence :: Rational,
+    poolRetireMaxEpoch :: Int,
+    poolVotingThresholds :: Maybe PoolVotingThresholds,
+    protocolVersion :: Maybe ProtocolVersion,
+    extraPraosEntropy :: Maybe Int,
+    stakeAddressDeposit :: Int,
+    stakePoolDeposit :: Int,
+    stakePoolTargetNum :: Int,
+    minUTxOValue :: Maybe Int,
+    decentralization :: Maybe Rational,
+    treasuryCut :: Rational,
+    txFeeFixed :: Int,
+    txFeePerByte :: Int,
+    utxoCostPerByte :: Maybe Int
+  }
+  deriving (Show, Generic)
+
+instance FromJSON HydraProtocolParameters
+
+data DRepVotingThresholds = DRepVotingThresholds
+  { committeeNoConfidence :: Maybe Double,
+    committeeNormal :: Maybe Double,
+    hardForkInitiation :: Maybe Double,
+    motionNoConfidence :: Maybe Double,
+    ppEconomicGroup :: Maybe Double,
+    ppGovGroup :: Maybe Double,
+    ppNetworkGroup :: Maybe Double,
+    ppTechnicalGroup :: Maybe Double,
+    treasuryWithdrawal :: Maybe Double,
+    updateToConstitution :: Maybe Double
+  }
+  deriving (Show, Generic)
+
+instance FromJSON DRepVotingThresholds
+
+data PoolVotingThresholds = PoolVotingThresholds
+  { committeeNoConfidence :: Maybe Double,
+    committeeNormal :: Maybe Double,
+    hardForkInitiation :: Maybe Double,
+    motionNoConfidence :: Maybe Double,
+    ppSecurityGroup :: Maybe Double
+  }
+  deriving (Show, Generic)
+
+instance FromJSON PoolVotingThresholds
+
+data ProtocolVersion = ProtocolVersion
+  { major :: Natural,
+    minor :: Natural
+  }
+  deriving (Show, Generic)
+
+instance FromJSON ProtocolVersion
+
+-- instance FromJSON ProtocolParameters where
+--   parseJSON =
+--     withObject "ProtocolParameters" $ \o -> do
+--       v <- o .: "protocolVersion"
+--       ProtocolParameters
+--         <$> ((,) <$> v .: "major" <*> v .: "minor")
+--         <*> o .:? "decentralization"
+--         <*> o .: "extraPraosEntropy"
+--         <*> o .: "maxBlockHeaderSize"
+--         <*> o .: "maxBlockBodySize"
+--         <*> o .: "maxTxSize"
+--         <*> o .: "txFeeFixed"
+--         <*> o .: "txFeePerByte"
+--         <*> o .: "minUTxOValue"
+--         <*> o .: "stakeAddressDeposit"
+--         <*> o .: "stakePoolDeposit"
+--         <*> o .: "minPoolCost"
+--         <*> o .: "poolRetireMaxEpoch"
+--         <*> o .: "stakePoolTargetNum"
+--         <*> o .: "poolPledgeInfluence"
+--         <*> o .: "monetaryExpansion"
+--         <*> o .: "treasuryCut"
+--         <*> (fmap unCostModels <$> o .:? "costModels") .!= Map.empty
+--         <*> o .:? "executionUnitPrices"
+--         <*> o .:? "maxTxExecutionUnits"
+--         <*> o .:? "maxBlockExecutionUnits"
+--         <*> o .:? "maxValueSize"
+--         <*> o .:? "collateralPercentage"
+--         <*> o .:? "maxCollateralInputs"
+--         <*> o .:? "utxoCostPerByte"
 
 -- class
 --   ( Eq tx
