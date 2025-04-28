@@ -17,7 +17,7 @@ data Action
   | ContestHead
   | FanOut
 
-generateResponseTag :: Action -> [T.Text] 
+generateResponseTag :: Action -> [T.Text]
 generateResponseTag action = case action of
   InitializeHead -> ["HeadIsInitializing", "Greetings"]
   CommitUTxO -> [""]
@@ -26,7 +26,7 @@ generateResponseTag action = case action of
   GetUTxO -> ["GetUTxOResponse"]
   CloseHead -> ["HeadIsClosed"]
   ContestHead -> ["HeadIsContested"]
-  FanOut -> ["ReadyToFanout"]
+  FanOut -> ["HeadIsFinalized"]
 
 hydraHeadInitialized :: T.Text
 hydraHeadInitialized = T.pack "Hydra Head Initialized"
@@ -40,6 +40,18 @@ sendCommandToHydraNodeSocket message = do
         InitializeHead -> "{\"tag\": \"Init\"}"
         Abort -> "{\"tag\": \"Abort\"}"
         GetUTxO -> "{\"tag\": \"GetUTxO\"}"
+        CloseHead -> "{\"tag\": \"Close\"}"
+        FanOut -> "{\"tag\": \"Fanout\"}"
         _ -> ""
   let validResponseTag :: [T.Text] = generateResponseTag message
   forwardCommands jsonMessage validResponseTag
+
+-- "reason": "Error in $.tag: parsing Hydra.API.ClientInput.ClientInput failed, expected tag field to be one of
+-- [\"Init\",
+-- \"Abort\",
+-- \"NewTx\",
+-- \"GetUTxO\",
+-- \"Decommit\",
+-- \"Close\",
+-- \"Contest\",
+-- \"Fanout\"],

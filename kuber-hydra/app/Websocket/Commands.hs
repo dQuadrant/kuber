@@ -45,6 +45,14 @@ abort :: IO T.Text
 abort = do
   sendCommandToHydraNodeSocket Abort
 
+close :: IO T.Text
+close = do
+  sendCommandToHydraNodeSocket CloseHead
+
+fanout :: IO T.Text
+fanout = do
+  sendCommandToHydraNodeSocket FanOut
+
 queryUTxO :: IO T.Text
 queryUTxO = do
   sendCommandToHydraNodeSocket GetUTxO

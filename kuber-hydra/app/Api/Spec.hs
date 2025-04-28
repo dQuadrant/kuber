@@ -3,6 +3,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MonoLocalBinds #-}
@@ -11,8 +12,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-
 
 module Api.Spec where
 
@@ -80,6 +79,8 @@ type HydraCommands =
     :<|> "query" :> "utxo" :> Get '[JSON] A.Value
     :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> Post '[JSON] A.Value
     :<|> "decommit" :> ReqBody '[JSON] CommitUTxOs :> Post '[JSON] A.Value
+    :<|> "close" :> Get '[JSON] A.Value
+    :<|> "fanout" :> Get '[JSON] A.Value
     :<|> "protocol-parameters" :> Get '[JSON] A.Value
 
 frameworkErrorHandler :: Either FrameworkError a -> Handler a
@@ -91,7 +92,7 @@ frameworkErrorHandler = either toServerError pure
         err500 {errBody = BSL.fromStrict $ prettyPrintJSON err}
 
 -- Define Handlers
-server = initHandler :<|> abortHandler :<|> queryUtxoHandler :<|> commitHandler :<|> decommitHandler :<|> protocolParameterHandler
+server = initHandler :<|> abortHandler :<|> queryUtxoHandler :<|> commitHandler :<|> decommitHandler :<|> closeHandler :<|> fanoutHandler :<|> protocolParameterHandler
 
 -- initHandler :: Handler Text
 initHandler :: Handler A.Value
@@ -102,13 +103,13 @@ initHandler = do
 
 abortHandler :: Handler A.Value
 abortHandler = do
-  abortResponse <- liftIO $ abort
+  abortResponse <- liftIO abort
   let jsonResponse = textToJSON abortResponse
   return jsonResponse
 
 queryUtxoHandler :: Handler A.Value
 queryUtxoHandler = do
-  queryUtxoResponse <- liftIO $ queryUTxO
+  queryUtxoResponse <- liftIO queryUTxO
   let jsonResponse = textToJSON queryUtxoResponse
   return jsonResponse
 
@@ -120,10 +121,21 @@ decommitHandler :: CommitUTxOs -> Handler A.Value
 decommitHandler decommits = do
   frameworkErrorHandler $ decommitUTxO (map T.pack $ utxos decommits) (signKey decommits)
 
-protocolParameterHandler :: Handler (A.Value)
+closeHandler :: Handler A.Value
+closeHandler = do
+  closeResponse <- liftIO close
+  let jsonResponse = textToJSON closeResponse
+  return jsonResponse
+
+fanoutHandler :: Handler A.Value
+fanoutHandler = do
+  fanoutResponse <- liftIO fanout
+  let jsonResponse = textToJSON fanoutResponse
+  return jsonResponse
+
+protocolParameterHandler :: Handler A.Value
 protocolParameterHandler = do
-  params <- liftIO $ getProtocolParameters
-  return params
+  liftIO getProtocolParameters
 
 -- Create API Proxy
 deployAPI :: Proxy API
