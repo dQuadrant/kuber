@@ -48,7 +48,7 @@ data GroupedUTXO = GroupedUTXO
 submitHydraDecommitTx :: [T.Text] -> SigningKey PaymentKey -> Either FrameworkError A.Value
 submitHydraDecommitTx utxosToDecommit sk = do
   let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOs) :: Maybe HydraGetUTxOResponse
-      allUTxOs = unsafePerformIO $ sendCommandToHydraNodeSocket GetUTxO
+      allUTxOs = fst $ unsafePerformIO $ sendCommandToHydraNodeSocket GetUTxO
   parsedHydraUTxOs <- case allHydraUTxOs of
     Just res -> Right res
     Nothing -> Left $ FrameworkError ParserError "buildHydraDecommitTx: Error parsing Hydra UTxOs"
@@ -88,7 +88,7 @@ submitHydraDecommitTx utxosToDecommit sk = do
                       decommitPostResponse = unsafePerformIO $ post "decommit" decommitTxObject
                   if T.strip (T.filter (/= '"') decommitPostResponse) == "OK"
                     then do
-                      Right $ textToJSON $ unsafePerformIO $ validateLatestWebsocketTag $ generateResponseTag DeCommitUTxO
+                      Right $ textToJSON $ fst $ unsafePerformIO $ validateLatestWebsocketTag $ generateResponseTag DeCommitUTxO
                     else Left $ FrameworkError TxSubmissionError ("submitHydraDecommitTx: Error submiting decommit transaction to Hydra : " ++ T.unpack decommitPostResponse)
             Left err -> Debug.trace err $ Left $ FrameworkError ParserError err
 

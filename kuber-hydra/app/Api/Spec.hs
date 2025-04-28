@@ -91,27 +91,46 @@ frameworkErrorHandler = either toServerError pure
       throwError $
         err500 {errBody = BSL.fromStrict $ prettyPrintJSON err}
 
+hydraErrorHandler :: (T.Text, Int) -> Handler A.Value
+hydraErrorHandler (msg, status) = do
+  let jsonResponse = textToJSON msg
+  if status == 200 || status == 201
+    then return jsonResponse
+    else
+      throwError $
+        err400
+          { errHTTPCode = status,
+            errReasonPhrase = "",
+            errBody = A.encode jsonResponse,
+            errHeaders = [("Content-Type", "application/json")]
+          }
+
 -- Define Handlers
-server = initHandler :<|> abortHandler :<|> queryUtxoHandler :<|> commitHandler :<|> decommitHandler :<|> closeHandler :<|> fanoutHandler :<|> protocolParameterHandler
+server =
+  initHandler
+    :<|> abortHandler
+    :<|> queryUtxoHandler
+    :<|> commitHandler
+    :<|> decommitHandler
+    :<|> closeHandler
+    :<|> fanoutHandler
+    :<|> protocolParameterHandler
 
 -- initHandler :: Handler Text
 initHandler :: Handler A.Value
 initHandler = do
-  initResponse <- liftIO $ initialize
-  let jsonResponse = textToJSON initResponse
-  return jsonResponse
+  initResponse <- liftIO initialize
+  hydraErrorHandler initResponse
 
 abortHandler :: Handler A.Value
 abortHandler = do
   abortResponse <- liftIO abort
-  let jsonResponse = textToJSON abortResponse
-  return jsonResponse
+  hydraErrorHandler abortResponse
 
 queryUtxoHandler :: Handler A.Value
 queryUtxoHandler = do
   queryUtxoResponse <- liftIO queryUTxO
-  let jsonResponse = textToJSON queryUtxoResponse
-  return jsonResponse
+  hydraErrorHandler queryUtxoResponse
 
 commitHandler :: CommitUTxOs -> Handler A.Value
 commitHandler commits = do
@@ -124,14 +143,12 @@ decommitHandler decommits = do
 closeHandler :: Handler A.Value
 closeHandler = do
   closeResponse <- liftIO close
-  let jsonResponse = textToJSON closeResponse
-  return jsonResponse
+  hydraErrorHandler closeResponse
 
 fanoutHandler :: Handler A.Value
 fanoutHandler = do
   fanoutResponse <- liftIO fanout
-  let jsonResponse = textToJSON fanoutResponse
-  return jsonResponse
+  hydraErrorHandler fanoutResponse
 
 protocolParameterHandler :: Handler A.Value
 protocolParameterHandler = do

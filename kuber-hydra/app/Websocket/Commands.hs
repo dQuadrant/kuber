@@ -20,6 +20,7 @@ import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.Text.Conversions
 import Data.Text.Encoding
+import qualified Debug.Trace as Debug
 import GHC.Generics
 import GHC.IO (unsafePerformIO)
 import Websocket.Forwarder
@@ -37,23 +38,23 @@ data HydraCommitTx = HydraCommitTx
 hydraHeadMessageForwardingFailed :: T.Text
 hydraHeadMessageForwardingFailed = T.pack "Failed to forward message to hydra head"
 
-initialize :: IO T.Text
+initialize :: IO (T.Text, Int)
 initialize = do
   sendCommandToHydraNodeSocket InitializeHead
 
-abort :: IO T.Text
+abort :: IO (T.Text, Int)
 abort = do
   sendCommandToHydraNodeSocket Abort
 
-close :: IO T.Text
+close :: IO (T.Text, Int)
 close = do
   sendCommandToHydraNodeSocket CloseHead
 
-fanout :: IO T.Text
+fanout :: IO (T.Text, Int)
 fanout = do
   sendCommandToHydraNodeSocket FanOut
 
-queryUTxO :: IO T.Text
+queryUTxO :: IO (T.Text, Int)
 queryUTxO = do
   sendCommandToHydraNodeSocket GetUTxO
 
@@ -65,7 +66,14 @@ commitUTxO utxos sk = do
     Just parsedSk -> do
       let unsignedCommitTx = unsafePerformIO $ getHydraCommitTx utxoSchema
       case A.eitherDecode (fromStrict $ encodeUtf8 unsignedCommitTx) of
-        Left err -> Left $ FrameworkError ParserError $ "Error decoding Hydra response: " <> err
+        Left err ->
+          Left $
+            FrameworkError ParserError $
+              "Received: "
+                <> T.unpack unsignedCommitTx
+                <> ". "
+                <> "Error decoding Hydra response: "
+                <> err
         Right (HydraCommitTx cborHex _ _) -> do
           case convertText (T.pack cborHex) <&> unBase16 of
             Nothing -> Left $ FrameworkError ParserError "Invalid CBOR hex in commit transaction"

@@ -9,9 +9,10 @@ import Data.Aeson
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
+import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.Time.Clock 
+import Data.Time.Clock
 import Network.HTTP.Client.Conduit (parseRequest)
 import Network.HTTP.Simple (getResponseBody, httpLBS, setRequestBodyLBS, setRequestHeader, setRequestMethod)
 import Network.Wai
@@ -19,6 +20,7 @@ import qualified Network.WebSockets as WS
 import System.Environment (getEnv)
 import Websocket.Aeson
 import Websocket.Utils
+import qualified Debug.Trace as Debug
 
 serverIP :: String
 serverIP = "0.0.0.0"
@@ -32,11 +34,21 @@ hydraIP = getEnv "HYDRA_IP"
 hydraPort :: IO String
 hydraPort = getEnv "HYDRA_PORT"
 
-errorTags :: [T.Text]
-errorTags = ["CommandFailed", "PostTxOnChainFailed", "PeerHandshakeFailure", "TxInvalid", "InvalidInput", "IgnoredHeadInitializing", "DecommitInvalid", "CommitIgnored"]
+errorTags :: [(T.Text, Int)]
+errorTags =
+  [ ("CommandFailed", 500), -- Internal Server Error
+    ("PostTxOnChainFailed", 500), -- Internal Server Error
+    ("PeerHandshakeFailure", 502), -- Bad Gateway
+    ("TxInvalid", 400), -- Bad Request
+    ("InvalidInput", 400), -- Bad Request
+    ("IgnoredHeadInitializing", 409), -- Conflict
+    ("DecommitInvalid", 400), -- Bad Request
+    ("CommitIgnored", 409), -- Conflict
+    ("FailedToDraftTxNotInitializing", 409) -- Conflict
+  ]
 
-skipTags :: [T.Text]
-skipTags = ["Greetings"]
+skipTags :: [(T.Text, Int)]
+skipTags = [("Greetings", 201)] -- Created
 
 -- WebSocket Proxy Server
 proxyServer :: String -> Int -> WS.ServerApp
@@ -59,8 +71,8 @@ forwardMessageWS srcConn dstConn = forever $ do
   putStrLn $ "Forwarded: " ++ T.unpack msg ++ "\n"
 
 -- Collect and filter WebSocket messages
-getLatestMessage :: WS.Connection -> [T.Text] -> IO (Maybe T.Text)
-getLatestMessage conn expectedTag = do
+getLatestMessage :: WS.Connection -> [(T.Text, Int)] -> IO (Maybe (T.Text, Int))
+getLatestMessage conn expectedTags = do
   start <- getCurrentTime
   let go = do
         result <- try (WS.receiveData conn) :: IO (Either SomeException T.Text)
@@ -71,29 +83,33 @@ getLatestMessage conn expectedTag = do
             case decoded of
               Just wsmsg
                 | timestamp wsmsg <= start -> go -- Wait for fresh message
-                | tag wsmsg `elem` expectedTag -> return (Just msg)
-                | tag wsmsg `elem` errorTags -> return (Just msg)
-                | tag wsmsg `elem` skipTags -> go
+                | tag wsmsg `elem` map fst expectedTags -> lookupTag msg (tag wsmsg) expectedTags
+                | tag wsmsg `elem` map fst errorTags -> lookupTag msg (tag wsmsg) errorTags
+                | tag wsmsg `elem` map fst skipTags -> go
                 | otherwise -> do
                     let wrapper =
                           object
-                            [ "expected" .= expectedTag,
+                            [ "expected" .= expectedTags,
                               "wsMessage" .= msg
                             ]
-                    return (Just $ T.decodeUtf8 $ BSL.toStrict $ encode wrapper)
+                    return (Just (T.decodeUtf8 $ BSL.toStrict $ encode wrapper, 500))
               Nothing -> go -- Try again if decoding fails
   go
+  where
+    lookupTag msg tag tagSet = do
+      let code = maybe 500 fromIntegral (lookup tag tagSet)
+      return (Just (msg, code))
 
-forwardCommands :: T.Text -> [T.Text] -> IO T.Text
+forwardCommands :: T.Text -> [(T.Text, Int)] -> IO (T.Text, Int)
 forwardCommands command tag = do
   WS.runClient serverIP serverPort "/" $ \conn -> do
     WS.sendTextData conn command
-    getLatestMessage conn tag >>= \msg -> return (maybe "No message received" id msg)
+    getLatestMessage conn tag >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
-validateLatestWebsocketTag :: [T.Text] -> IO T.Text
+validateLatestWebsocketTag :: [(T.Text, Int)] -> IO (T.Text, Int)
 validateLatestWebsocketTag tag =
   WS.runClient serverIP serverPort "/" $ \conn -> do
-    getLatestMessage conn tag >>= \msg -> return (maybe "No message received" id msg)
+    getLatestMessage conn tag >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
 -- Check if Request is a WebSocket Request
 isWebSocketRequest :: Request -> Bool
