@@ -2,27 +2,21 @@
 
 module Websocket.SocketConnection where
 
-import Control.Concurrent (forkIO)
 import Control.Concurrent.Async (race_)
 import Control.Exception (SomeException, try)
 import Control.Monad (forever)
 import Data.Aeson
 import qualified Data.Aeson as A
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.Time.Clock (addUTCTime, diffUTCTime, getCurrentTime)
-import Data.Time.Clock.POSIX (getPOSIXTime)
-import qualified Debug.Trace as Debug
-import GHC.Conc (threadDelay)
+import Data.Time.Clock 
 import Network.HTTP.Client.Conduit (parseRequest)
 import Network.HTTP.Simple (getResponseBody, httpLBS, setRequestBodyLBS, setRequestHeader, setRequestMethod)
 import Network.Wai
 import qualified Network.WebSockets as WS
 import System.Environment (getEnv)
-import System.Timeout
 import Websocket.Aeson
 import Websocket.Utils
 

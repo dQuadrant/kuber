@@ -8,44 +8,25 @@
 module Websocket.Commands where
 
 import Cardano.Api
-import Cardano.Api.Experimental hiding (ConwayEra)
 import Cardano.Api.Shelley
 import Cardano.Kuber.Api
-import Cardano.Kuber.Data.Models (UtxoModal)
 import Cardano.Kuber.Data.Parsers
-import Cardano.Kuber.Util
--- import Websocket.Aeson (ProtocolParams)
-
-import Cardano.Ledger.Core
-import Control.Exception
-import Data.Aeson ((.=))
 import qualified Data.Aeson as A
-import qualified Data.Aeson as Aeson
 import Data.Aeson.Types
 import Data.ByteString.Char8 as BS8 hiding (head, map)
-import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import Data.Functor
-import Data.Monoid (Any)
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.Text.Conversions
 import Data.Text.Encoding
-import qualified Data.Text.IO as TIO
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TLE
-import qualified Debug.Trace as Debug
 import GHC.Generics
 import GHC.IO (unsafePerformIO)
-import Network.HTTP.Simple
-import qualified Network.WebSockets as WS
-import System.Environment
 import Websocket.Forwarder
 import Websocket.SocketConnection
 import Websocket.TxBuilder
 import Websocket.Utils
 
--- import qualified Control.Lens.Internal.Deque as Set
 data HydraCommitTx = HydraCommitTx
   { cborHex :: String,
     description :: String,

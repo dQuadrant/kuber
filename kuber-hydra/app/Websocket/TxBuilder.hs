@@ -8,27 +8,17 @@
 module Websocket.TxBuilder where
 
 import Cardano.Api
--- import Cardano.Kuber.Core.LocalNodeChainApi (getNetworkId)
-
-import Cardano.Api.Ledger (PParams (PParams))
 import Cardano.Api.Shelley
 import Cardano.Kuber.Api
--- import Cardano.Kuber.Core.LocalNodeChainApi (ChainInfo (getNetworkId))
--- import Cardano.Kuber.Core.TxFramework (txBuilderToTxBodyWithoutScript)
-
 import Cardano.Kuber.Util
 import qualified Cardano.Ledger.BaseTypes as L
 import qualified Cardano.Ledger.Coin as L
-import Control.Monad.IO.Class
 import Data.Aeson
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
-import Data.Aeson.Types (parseMaybe)
-import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
 import Data.List (foldl')
-import Data.Map (filterWithKey, mapMaybe, notMember)
 import qualified Data.Map as Map
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromJust)
@@ -36,16 +26,13 @@ import qualified Data.Maybe as Maybe
 import qualified Data.Text as T
 import Data.Text.Encoding
 import qualified Data.Text.Encoding as T
-import Data.Time
 import qualified Debug.Trace as Debug
 import GHC.Generics
 import GHC.IO (unsafePerformIO)
-import GHC.Num (integerToNatural)
-import PlutusLedgerApi.V1.Address (toPubKeyHash)
 import Websocket.Aeson
 import Websocket.Forwarder
 import Websocket.SocketConnection (fetch, post, validateLatestWebsocketTag)
-import Websocket.Utils (jsonToText, textToJSON)
+import Websocket.Utils (textToJSON)
 
 newtype HydraGetUTxOResponse = HydraGetUTxOResponse
   { utxo :: M.Map T.Text A.Value
@@ -66,7 +53,7 @@ submitHydraDecommitTx utxosToDecommit sk = do
     Just res -> Right res
     Nothing -> Left $ FrameworkError ParserError "buildHydraDecommitTx: Error parsing Hydra UTxOs"
   let hydraUTxOs = utxo parsedHydraUTxOs
-  let missing = filter (`notMember` hydraUTxOs) utxosToDecommit
+  let missing = filter (`M.notMember` hydraUTxOs) utxosToDecommit
   if not (null missing)
     then Left $ FrameworkError ParserError $ "Missing UTxOs in Hydra: " ++ show missing
     else do
@@ -134,12 +121,6 @@ toCardanoTxBody txb hpp = do
     Right pp -> do
       let builtTx = unsafePerformIO $ submitHandler $ kBuildRawTx txb pp
       unsafePerformIO builtTx
-
--- dummyParams :: (SystemStart, EraHistory)
--- dummyParams = (ss, era)
---   where
---     ss = SystemStart (UTCTime (fromGregorian 2025 1 1) (secondsToDiffTime 0))
---     era = EraHistory
 
 hydraProtocolParamsToLedgerParams :: HydraProtocolParameters -> Either FrameworkError (LedgerProtocolParameters ConwayEra)
 hydraProtocolParamsToLedgerParams hpp = case convertToLedgerProtocolParameters ShelleyBasedEraConway $

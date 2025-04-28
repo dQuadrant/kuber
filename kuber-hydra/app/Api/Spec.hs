@@ -17,23 +17,13 @@
 module Api.Spec where
 
 import Cardano.Api
-import Cardano.Api.Shelley (ShelleyLedgerEra)
 import Cardano.Kuber.Api
-import Cardano.Ledger.Core
-import Cardano.Ledger.Crypto
-import qualified Codec.CBOR.Write as BS8
-import Control.Exception hiding (Handler)
-import Data.Aeson
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
 import Data.String
-import Data.Text hiding (map)
 import qualified Data.Text as T hiding (map)
-import qualified Debug.Trace as Debug
 import GHC.Generics
-import GHC.IO (unsafePerformIO)
 import Network.HTTP.Types (status400)
 import Network.Wai
 import Network.Wai.Handler.Warp
@@ -42,10 +32,7 @@ import Network.Wai.Middleware.Rewrite
 import Network.Wai.Middleware.Static
 import Servant
 import Servant.Exception
-import Servant.Exception (ToServantErr (..), toServantException)
-import Websocket.Aeson
 import Websocket.Commands
-import Websocket.TxBuilder hiding (utxos)
 import Websocket.Utils
 
 -- Define CORS policy
