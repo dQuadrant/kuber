@@ -96,6 +96,11 @@ forwardCommands command tag = do
     WS.sendTextData conn command
     getLatestMessage conn tag >>= \msg -> return (maybe "No message received" id msg)
 
+validateLatestWebsocketTag :: [T.Text] -> IO T.Text
+validateLatestWebsocketTag tag =
+  WS.runClient serverIP serverPort "/" $ \conn -> do
+    getLatestMessage conn tag >>= \msg -> return (maybe "No message received" id msg)
+
 -- Check if Request is a WebSocket Request
 isWebSocketRequest :: Request -> Bool
 isWebSocketRequest req =

@@ -44,7 +44,7 @@ import GHC.Num (integerToNatural)
 import PlutusLedgerApi.V1.Address (toPubKeyHash)
 import Websocket.Aeson
 import Websocket.Forwarder
-import Websocket.SocketConnection (fetch, post)
+import Websocket.SocketConnection (fetch, post, validateLatestWebsocketTag)
 import Websocket.Utils (jsonToText, textToJSON)
 
 newtype HydraGetUTxOResponse = HydraGetUTxOResponse
@@ -80,15 +80,6 @@ submitHydraDecommitTx utxosToDecommit sk = do
                   ( map
                       ( \(tin, tout) ->
                           txConsumeUtxo tin tout
-                            <> txPayToPkh
-                              ( case tout of
-                                  TxOut addr _ _ _ -> fromJust $ toPubKeyHash $ addrInEraToPlutusAddress addr
-                              )
-                              ( case tout of
-                                  TxOut _ val _ _ -> case val of
-                                    TxOutValueByron lo -> lovelaceToValue lo
-                                    TxOutValueShelleyBased sbe va -> fromLedgerValue sbe va
-                              )
                             <> txSetFee 0
                             <> txChangeAddress
                               ( case tout of
@@ -108,9 +99,10 @@ submitHydraDecommitTx utxosToDecommit sk = do
                   let cborHex :: T.Text = T.pack $ toHexString $ serialiseToCBOR tx
                       decommitTxObject = buildWitnessedTx cborHex
                       decommitPostResponse = unsafePerformIO $ post "decommit" decommitTxObject
-                  if decommitPostResponse == T.pack "OK"
-                    then Right $ object ["ok" .= T.pack "ok"]
-                    else Left $ FrameworkError TxSubmissionError "submitHydraDecommitTx: Error submiting decommit transaction to Hydra"
+                  if T.strip (T.filter (/= '"') decommitPostResponse) == "OK"
+                    then do
+                      Right $ textToJSON $ unsafePerformIO $ validateLatestWebsocketTag $ generateResponseTag DeCommitUTxO
+                    else Left $ FrameworkError TxSubmissionError ("submitHydraDecommitTx: Error submiting decommit transaction to Hydra : " ++ T.unpack decommitPostResponse)
             Left err -> Debug.trace err $ Left $ FrameworkError ParserError err
 
 groupUtxosByAddress :: M.Map T.Text A.Value -> [GroupedUTXO]

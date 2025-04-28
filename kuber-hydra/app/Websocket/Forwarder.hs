@@ -32,7 +32,7 @@ generateResponseTag :: Action -> [T.Text]
 generateResponseTag action = case action of
   InitializeHead -> ["HeadIsInitializing", "Greetings"]
   CommitUTxO -> [""]
-  DeCommitUTxO -> [""]
+  DeCommitUTxO -> ["DecommitRequested", "DecommitFinalized"]
   Abort -> ["HeadIsAborted"]
   GetUTxO -> ["GetUTxOResponse"]
   CloseHead -> ["HeadIsClosed"]
