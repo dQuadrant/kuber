@@ -20,7 +20,6 @@ import qualified Network.WebSockets as WS
 import System.Environment (getEnv)
 import Websocket.Aeson
 import Websocket.Utils
-import qualified Debug.Trace as Debug
 
 serverIP :: String
 serverIP = "0.0.0.0"
@@ -71,33 +70,43 @@ forwardMessageWS srcConn dstConn = forever $ do
   putStrLn $ "Forwarded: " ++ T.unpack msg ++ "\n"
 
 -- Collect and filter WebSocket messages
-getLatestMessage :: WS.Connection -> [(T.Text, Int)] -> IO (Maybe (T.Text, Int))
-getLatestMessage conn expectedTags = do
+getLatestMessage ::
+  -- | current connection
+  WS.Connection ->
+  -- | expected tags
+  [(T.Text, Int)] ->
+  IO (Maybe (T.Text, Int))
+getLatestMessage conn0 expectedTags = do
   start <- getCurrentTime
-  let go = do
+  let go conn = do
         result <- try (WS.receiveData conn) :: IO (Either SomeException T.Text)
         case result of
-          Left _ -> go -- Retry on failure
+          Left _ -> do
+            putStrLn "WebSocket disconnected, attempting to reconnect..."
+            ip <- hydraIP
+            port <- hydraPort
+            WS.runClient ip (read port) "/" $ \newConn -> do
+              go newConn
           Right msg -> do
             let decoded = decode (BSL.fromStrict (T.encodeUtf8 msg)) :: Maybe WSMessage
             case decoded of
               Just wsmsg
-                | timestamp wsmsg <= start -> go -- Wait for fresh message
-                | tag wsmsg `elem` map fst expectedTags -> lookupTag msg (tag wsmsg) expectedTags
-                | tag wsmsg `elem` map fst errorTags -> lookupTag msg (tag wsmsg) errorTags
-                | tag wsmsg `elem` map fst skipTags -> go
+                | timestamp wsmsg <= start -> go conn -- Wait for fresh message
+                | tag wsmsg `elem` map fst expectedTags -> lookupTag msg wsmsg expectedTags
+                | tag wsmsg `elem` map fst errorTags -> lookupTag msg wsmsg errorTags
+                | tag wsmsg `elem` map fst skipTags -> go conn
                 | otherwise -> do
                     let wrapper =
                           object
-                            [ "expected" .= expectedTags,
+                            [ "expected" .= map fst expectedTags,
                               "wsMessage" .= msg
                             ]
                     return (Just (T.decodeUtf8 $ BSL.toStrict $ encode wrapper, 500))
-              Nothing -> go -- Try again if decoding fails
-  go
+              Nothing -> go conn -- Try again if decoding fails
+  go conn0
   where
-    lookupTag msg tag tagSet = do
-      let code = maybe 500 fromIntegral (lookup tag tagSet)
+    lookupTag msg wsmsg tagSet = do
+      let code = maybe 500 fromIntegral (lookup (tag wsmsg) tagSet)
       return (Just (msg, code))
 
 forwardCommands :: T.Text -> [(T.Text, Int)] -> IO (T.Text, Int)
@@ -107,7 +116,7 @@ forwardCommands command tag = do
     getLatestMessage conn tag >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
 validateLatestWebsocketTag :: [(T.Text, Int)] -> IO (T.Text, Int)
-validateLatestWebsocketTag tag =
+validateLatestWebsocketTag tag = do
   WS.runClient serverIP serverPort "/" $ \conn -> do
     getLatestMessage conn tag >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 

@@ -5,7 +5,6 @@
 module Websocket.Forwarder where
 
 import qualified Data.Text as T
-import qualified Debug.Trace as Debug
 import Websocket.SocketConnection
 
 data Action
@@ -22,7 +21,7 @@ generateResponseTag :: Action -> [(T.Text, Int)]
 generateResponseTag action = case action of
   InitializeHead -> [("HeadIsInitializing", 200)]
   CommitUTxO -> [("", 00)]
-  DeCommitUTxO -> [("DecommitRequested", 201), ("DecommitFinalized", 200)]
+  DeCommitUTxO -> [("DecommitRequested", 201), ("DecommitApproved", 201), ("DecommitFinalized", 200)]
   Abort -> [("HeadIsAborted", 200)]
   GetUTxO -> [("GetUTxOResponse", 200)]
   CloseHead -> [("HeadIsClosed", 200)]

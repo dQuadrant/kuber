@@ -134,11 +134,13 @@ queryUtxoHandler = do
 
 commitHandler :: CommitUTxOs -> Handler A.Value
 commitHandler commits = do
-  frameworkErrorHandler $ commitUTxO (map T.pack $ utxos commits) (signKey commits)
+  commitResult <- liftIO $ commitUTxO (map T.pack $ utxos commits) (signKey commits)
+  frameworkErrorHandler commitResult
 
 decommitHandler :: CommitUTxOs -> Handler A.Value
 decommitHandler decommits = do
-  frameworkErrorHandler $ decommitUTxO (map T.pack $ utxos decommits) (signKey decommits)
+  decommitResult <- liftIO $ decommitUTxO (map T.pack $ utxos decommits) (signKey decommits)
+  frameworkErrorHandler decommitResult
 
 closeHandler :: Handler A.Value
 closeHandler = do

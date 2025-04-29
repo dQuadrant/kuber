@@ -68,6 +68,7 @@ executable kuber-hydra
                     Websocket.SocketConnection
                     Websocket.TxBuilder
                     Websocket.Aeson
+                    Websocket.Middleware
                     Api.Spec
 
     -- LANGUAGE extensions used by modules in this package.
@@ -115,6 +116,7 @@ executable kuber-hydra
                     , cborg
                     , containers
                     , text-conversions
+                    , case-insensitive
     -- Directories containing source files.
     hs-source-dirs:   app
 

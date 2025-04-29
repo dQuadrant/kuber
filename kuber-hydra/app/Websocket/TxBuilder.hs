@@ -28,7 +28,6 @@ import Data.Text.Encoding
 import qualified Data.Text.Encoding as T
 import qualified Debug.Trace as Debug
 import GHC.Generics
-import GHC.IO (unsafePerformIO)
 import Websocket.Aeson
 import Websocket.Forwarder
 import Websocket.SocketConnection (fetch, post, validateLatestWebsocketTag)
@@ -45,52 +44,58 @@ data GroupedUTXO = GroupedUTXO
   }
   deriving (Show, Generic, ToJSON, FromJSON)
 
-submitHydraDecommitTx :: [T.Text] -> SigningKey PaymentKey -> Either FrameworkError A.Value
+submitHydraDecommitTx :: [T.Text] -> SigningKey PaymentKey -> IO (Either FrameworkError A.Value)
 submitHydraDecommitTx utxosToDecommit sk = do
-  let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOs) :: Maybe HydraGetUTxOResponse
-      allUTxOs = fst $ unsafePerformIO $ sendCommandToHydraNodeSocket GetUTxO
-  parsedHydraUTxOs <- case allHydraUTxOs of
-    Just res -> Right res
-    Nothing -> Left $ FrameworkError ParserError "buildHydraDecommitTx: Error parsing Hydra UTxOs"
-  let hydraUTxOs = utxo parsedHydraUTxOs
-  let missing = filter (`M.notMember` hydraUTxOs) utxosToDecommit
-  if not (null missing)
-    then Left $ FrameworkError ParserError $ "Missing UTxOs in Hydra: " ++ show missing
-    else do
-      let hydraUTxOsToDecommit = M.filterWithKey (\k _ -> k `elem` utxosToDecommit) hydraUTxOs
-          encodedUTxOs = A.encode hydraUTxOsToDecommit
-      case parseUTxO encodedUTxOs of
-        Left fe -> Left fe
-        Right parsedUTxO -> do
-          let txb =
-                mconcat
-                  ( map
-                      ( \(tin, tout) ->
-                          txConsumeUtxo tin tout
-                            <> txSetFee 0
-                            <> txChangeAddress
-                              ( case tout of
-                                  TxOut addr _ _ _ -> addr
-                              )
+  (allUTxOsText, _) <- sendCommandToHydraNodeSocket GetUTxO
+  let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe HydraGetUTxOResponse
+  case allHydraUTxOs of
+    Nothing -> return $ Left $ FrameworkError ParserError "buildHydraDecommitTx: Error parsing Hydra UTxOs"
+    Just parsedHydraUTxOs -> do
+      let hydraUTxOs = utxo parsedHydraUTxOs
+          missing = filter (`M.notMember` hydraUTxOs) utxosToDecommit
+      if not (null missing)
+        then return $ Left $ FrameworkError ParserError $ "Missing UTxOs in Hydra: " ++ show missing
+        else do
+          let hydraUTxOsToDecommit = M.filterWithKey (\k _ -> k `elem` utxosToDecommit) hydraUTxOs
+              encodedUTxOs = A.encode hydraUTxOsToDecommit
+          case parseUTxO encodedUTxOs of
+            Left fe -> return $ Left fe
+            Right parsedUTxO -> do
+              let txb =
+                    mconcat
+                      ( map
+                          ( \(tin, tout) ->
+                              txConsumeUtxo tin tout
+                                <> txSetFee 0
+                                <> txChangeAddress
+                                  ( case tout of
+                                      TxOut addr _ _ _ -> addr
+                                  )
+                          )
+                          $ Map.toList
+                          $ unUTxO parsedUTxO
                       )
-                      $ Map.toList
-                      $ unUTxO parsedUTxO
-                  )
-                  <> txSign sk
-          let protocolParamText = fetch >>= \query -> query (T.pack "protocol-parameters")
-          case A.eitherDecode (BSL.fromStrict $ encodeUtf8 $ unsafePerformIO protocolParamText) of
-            Right (hpp :: HydraProtocolParameters) -> do
-              case toCardanoTxBody txb hpp of
-                Left fe -> Left fe
-                Right tx -> do
-                  let cborHex :: T.Text = T.pack $ toHexString $ serialiseToCBOR tx
-                      decommitTxObject = buildWitnessedTx cborHex
-                      decommitPostResponse = unsafePerformIO $ post "decommit" decommitTxObject
-                  if T.strip (T.filter (/= '"') decommitPostResponse) == "OK"
-                    then do
-                      Right $ textToJSON $ fst $ unsafePerformIO $ validateLatestWebsocketTag $ generateResponseTag DeCommitUTxO
-                    else Left $ FrameworkError TxSubmissionError ("submitHydraDecommitTx: Error submiting decommit transaction to Hydra : " ++ T.unpack decommitPostResponse)
-            Left err -> Debug.trace err $ Left $ FrameworkError ParserError err
+                      <> txSign sk
+              protocolParamText <- fetch >>= \query -> query (T.pack "protocol-parameters")
+              case A.eitherDecode (BSL.fromStrict $ encodeUtf8 protocolParamText) of
+                Left err -> return $ Left $ FrameworkError ParserError err
+                Right (hpp :: HydraProtocolParameters) -> do
+                  cardanoTxBody <- toCardanoTxBody txb hpp
+                  case cardanoTxBody of
+                    Left fe -> return $ Left fe
+                    Right tx -> do
+                      let cborHex :: T.Text = T.pack $ toHexString $ serialiseToCBOR tx
+                          decommitTxObject = buildWitnessedTx cborHex
+                      decommitPostResponse <- post "decommit" decommitTxObject
+                      if T.strip (T.filter (/= '"') decommitPostResponse) == "OK"
+                        then do
+                          wsResult <- validateLatestWebsocketTag $ generateResponseTag DeCommitUTxO
+                          return $ Right $ textToJSON $ fst wsResult
+                        else
+                          return $
+                            Left $
+                              FrameworkError TxSubmissionError $
+                                "submitHydraDecommitTx: Error submitting decommit transaction to Hydra: " ++ T.unpack decommitPostResponse
 
 groupUtxosByAddress :: M.Map T.Text A.Value -> [GroupedUTXO]
 groupUtxosByAddress utxoMap =
@@ -109,18 +114,18 @@ parseUTxO bs = case A.decode bs :: Maybe (UTxO ConwayEra) of
   Just x -> Right x
   Nothing -> Left $ FrameworkError ParserError "parseUTxO: Failulre parsing UTxO Json schema to UTxO ConwayEra"
 
-submitHandler :: Kontract ChainConnectInfo w FrameworkError r -> IO (IO (Either FrameworkError r))
+submitHandler :: Kontract ChainConnectInfo w FrameworkError r -> IO (Either FrameworkError r)
 submitHandler tx = do
   localChain <- chainInfoFromEnv
-  pure $ evaluateKontract localChain tx
+  evaluateKontract localChain tx
 
-toCardanoTxBody :: TxBuilder_ ConwayEra -> HydraProtocolParameters -> Either FrameworkError (Tx ConwayEra)
+toCardanoTxBody :: TxBuilder_ ConwayEra -> HydraProtocolParameters -> IO (Either FrameworkError (Tx ConwayEra))
 toCardanoTxBody txb hpp = do
   case hydraProtocolParamsToLedgerParams hpp of
-    Left fe -> Left fe
+    Left fe -> pure $ Left fe
     Right pp -> do
-      let builtTx = unsafePerformIO $ submitHandler $ kBuildRawTx txb pp
-      unsafePerformIO builtTx
+      let builtTx = submitHandler $ kBuildRawTx txb pp
+      builtTx
 
 hydraProtocolParamsToLedgerParams :: HydraProtocolParameters -> Either FrameworkError (LedgerProtocolParameters ConwayEra)
 hydraProtocolParamsToLedgerParams hpp = case convertToLedgerProtocolParameters ShelleyBasedEraConway $
