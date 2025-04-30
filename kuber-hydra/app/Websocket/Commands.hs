@@ -116,7 +116,7 @@ getUtxoDetails utxoList = do
       utxoList
   kQueryUtxoByTxin (Set.fromList parsed)
 
-getProtocolParameters :: IO A.Value
+getProtocolParameters :: IO (Either FrameworkError A.Value)
 getProtocolParameters = do
   hydraProtocolParameters <- fetch >>= \query -> query (T.pack "protocol-parameters")
   pure $ textToJSON hydraProtocolParameters

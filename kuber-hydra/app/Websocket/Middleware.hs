@@ -23,6 +23,7 @@ noCacheMiddleware app req sendResponse =
         res' = mapResponseHeaders (++ headers) res
      in sendResponse res'
 
+errorMiddleware :: (Eq a, Num a) => a -> ServerError
 errorMiddleware status
   | status == 300 = err300
   | status == 301 = err301

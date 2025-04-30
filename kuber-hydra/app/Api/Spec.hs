@@ -159,7 +159,8 @@ fanoutHandler = do
 
 protocolParameterHandler :: Handler A.Value
 protocolParameterHandler = do
-  liftIO getProtocolParameters
+  pParamResponse <- liftIO getProtocolParameters
+  frameworkErrorHandler pParamResponse
 
 -- Create API Proxy
 deployAPI :: Proxy API
