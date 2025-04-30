@@ -12,6 +12,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Api.Spec where
 
@@ -32,6 +34,7 @@ import Network.Wai.Middleware.Static
 import Servant
 import Servant.Exception
 import Websocket.Commands
+import Websocket.Middleware
 import Websocket.Utils
 
 -- Define CORS policy
@@ -85,25 +88,28 @@ type HydraCommands =
 
 frameworkErrorHandler :: Either FrameworkError a -> Handler a
 frameworkErrorHandler = either toServerError pure
-  where
-    toServerError :: FrameworkError -> Handler a
-    toServerError err =
-      throwError $
-        err500 {errBody = BSL.fromStrict $ prettyPrintJSON err}
+
+toServerError :: FrameworkError -> Handler a
+toServerError err =
+  throwError $
+    err500 {errBody = BSL.fromStrict $ prettyPrintJSON err}
 
 hydraErrorHandler :: (T.Text, Int) -> Handler A.Value
 hydraErrorHandler (msg, status) = do
-  let jsonResponse = textToJSON msg
-  if status == 200 || status == 201
-    then return jsonResponse
-    else
-      throwError $
-        err400
-          { errHTTPCode = status,
-            errReasonPhrase = "",
-            errBody = A.encode jsonResponse,
-            errHeaders = [("Content-Type", "application/json")]
-          }
+  let jsonResponseOrError = textToJSON msg
+  case jsonResponseOrError of
+    Left fe -> toServerError fe
+    Right jsonResponse -> do
+      if status == 200 || status == 201
+        then return jsonResponse
+        else
+          throwError $
+            (errorMiddleware status)
+              { errHTTPCode = status,
+                errReasonPhrase = "",
+                errBody = A.encode jsonResponse,
+                errHeaders = [("Content-Type", "application/json")]
+              }
 
 -- Define Handlers
 server =
@@ -116,7 +122,6 @@ server =
     :<|> fanoutHandler
     :<|> protocolParameterHandler
 
--- initHandler :: Handler Text
 initHandler :: Handler A.Value
 initHandler = do
   initResponse <- liftIO initialize

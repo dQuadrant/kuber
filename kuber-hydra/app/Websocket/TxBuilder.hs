@@ -90,7 +90,7 @@ submitHydraDecommitTx utxosToDecommit sk = do
                       if T.strip (T.filter (/= '"') decommitPostResponse) == "OK"
                         then do
                           wsResult <- validateLatestWebsocketTag $ generateResponseTag DeCommitUTxO
-                          return $ Right $ textToJSON $ fst wsResult
+                          return $ textToJSON $ fst wsResult
                         else
                           return $
                             Left $
