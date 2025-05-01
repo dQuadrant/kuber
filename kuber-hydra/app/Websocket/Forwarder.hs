@@ -39,11 +39,11 @@ sendCommandToHydraNodeSocket :: Action -> IO (T.Text, Int)
 sendCommandToHydraNodeSocket message = do
   let responseTag = generateResponseTag message
   case message of
-    InitializeHead -> forwardCommands "{\"tag\": \"Init\"}" responseTag False
-    Abort -> forwardCommands "{\"tag\": \"Abort\"}" responseTag False
-    GetUTxO -> forwardCommands "{\"tag\": \"GetUTxO\"}" responseTag False
-    CloseHead -> handleHydraHeadClose "{\"tag\": \"Close\"}" responseTag
-    FanOut -> forwardCommands "{\"tag\": \"Fanout\"}" responseTag False
+    InitializeHead -> forwardCommands "{\"tag\": \"Init\"}" responseTag
+    Abort -> forwardCommands "{\"tag\": \"Abort\"}" responseTag
+    GetUTxO -> forwardCommands "{\"tag\": \"GetUTxO\"}" responseTag
+    CloseHead -> forwardCommands "{\"tag\": \"Close\"}" responseTag
+    FanOut -> forwardCommands "{\"tag\": \"Fanout\"}" responseTag
 
 -- [\"Init\",
 -- \"Abort\",
