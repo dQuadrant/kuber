@@ -50,6 +50,10 @@ close :: IO (T.Text, Int)
 close = do
   sendCommandToHydraNodeSocket CloseHead
 
+contest :: IO (T.Text, Int)
+contest = do 
+  sendCommandToHydraNodeSocket ContestHead
+
 fanout :: IO (T.Text, Int)
 fanout = do
   sendCommandToHydraNodeSocket FanOut

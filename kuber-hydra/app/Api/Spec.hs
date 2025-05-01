@@ -84,6 +84,7 @@ type HydraCommands =
     :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> UVerb 'POST '[JSON] UVerbResponseTypes
     :<|> "decommit" :> ReqBody '[JSON] CommitUTxOs :> UVerb 'POST '[JSON] UVerbResponseTypes
     :<|> "close" :> UVerb 'GET '[JSON] UVerbResponseTypes
+    :<|> "contest" :> UVerb 'GET '[JSON] UVerbResponseTypes
     :<|> "fanout" :> UVerb 'GET '[JSON] UVerbResponseTypes
     :<|> "protocol-parameters" :> UVerb 'GET '[JSON] UVerbResponseTypes
 
@@ -121,6 +122,7 @@ server =
     :<|> commitHandler
     :<|> decommitHandler
     :<|> closeHandler
+    :<|> contestHandler
     :<|> fanoutHandler
     :<|> protocolParameterHandler
 
@@ -152,6 +154,11 @@ decommitHandler decommits = do
 closeHandler :: Handler (Union UVerbResponseTypes)
 closeHandler = do
   closeResponse <- liftIO close
+  hydraErrorHandler closeResponse
+
+contestHandler :: Handler (Union UVerbResponseTypes)
+contestHandler = do
+  closeResponse <- liftIO contest
   hydraErrorHandler closeResponse
 
 fanoutHandler :: Handler (Union UVerbResponseTypes)

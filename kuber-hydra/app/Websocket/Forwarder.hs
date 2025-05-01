@@ -43,6 +43,7 @@ sendCommandToHydraNodeSocket message = do
     Abort -> forwardCommands "{\"tag\": \"Abort\"}" responseTag
     GetUTxO -> forwardCommands "{\"tag\": \"GetUTxO\"}" responseTag
     CloseHead -> forwardCommands "{\"tag\": \"Close\"}" responseTag
+    ContestHead -> forwardCommands "{\"tag\": \"Contest\"}" responseTag
     FanOut -> forwardCommands "{\"tag\": \"Fanout\"}" responseTag
 
 -- [\"Init\",
