@@ -2,9 +2,12 @@
 
 module Websocket.SocketConnection where
 
-import Control.Concurrent.Async (race_)
+import Cardano.Kuber.Api (FrameworkError)
+import Control.Concurrent
+import Control.Concurrent.Async (race, race_)
 import Control.Exception (SomeException, try)
 import Control.Monad (forever)
+import Control.Monad.IO.Class
 import Data.Aeson
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS8
@@ -13,11 +16,13 @@ import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.Time.Clock
+import qualified Debug.Trace as Debug
 import Network.HTTP.Client.Conduit (parseRequest)
 import Network.HTTP.Simple (getResponseBody, httpLBS, setRequestBodyLBS, setRequestHeader, setRequestMethod)
 import Network.Wai
 import qualified Network.WebSockets as WS
 import System.Environment (getEnv)
+import System.Timeout
 import Websocket.Aeson
 import Websocket.Utils
 
@@ -86,6 +91,7 @@ getLatestMessage conn0 expectedTags = do
             ip <- hydraIP
             port <- hydraPort
             WS.runClient ip (read port) "/" $ \newConn -> do
+              putStrLn "Reconnected"
               go newConn
           Right msg -> do
             let decoded = decode (BSL.fromStrict (T.encodeUtf8 msg)) :: Maybe WSMessage
@@ -109,14 +115,66 @@ getLatestMessage conn0 expectedTags = do
       let code = maybe 500 fromIntegral (lookup (tag wsmsg) tagSet)
       return (Just (msg, code))
 
-forwardCommands :: T.Text -> [(T.Text, Int)] -> IO (T.Text, Int)
-forwardCommands command tag = do
+handleHydraHeadClose :: T.Text -> [(T.Text, Int)] -> IO (T.Text, Int)
+handleHydraHeadClose command tag_ = do
+  WS.runClient serverIP serverPort "/" $ \conn -> do
+    getLatestMessage_ conn tag_ >>= \msg -> return (fromMaybe ("No message received", 503) msg)
+  where
+    timeoutMicroseconds = 15 * 10 ^ 6
+
+    getLatestMessage_ conn0 expectedTags = do
+      start <- getCurrentTime
+      WS.sendTextData conn0 command
+
+      let go conn = do
+            result <- race (threadDelay timeoutMicroseconds) (try (WS.receiveData conn) :: IO (Either SomeException T.Text))
+            case result of
+              Left _ -> do
+                -- No response received in 15 seconds, send 201
+                let response201 =
+                      object
+                        [ "message" .= T.pack "Close request created"
+                        ]
+                return $ Just (T.decodeUtf8 $ BSL.toStrict $ encode response201, 201)
+              Right (Left ex) -> do
+                putStrLn $ "WebSocket error: " <> show ex
+                ip <- hydraIP
+                port <- hydraPort
+                WS.runClient ip (read port) "/" $ \newConn -> do
+                  putStrLn "Reconnected"
+                  go newConn
+              Right (Right msg) -> do
+                let decoded = decode (BSL.fromStrict (T.encodeUtf8 msg)) :: Maybe WSMessage
+                case decoded of
+                  Just wsmsg
+                    | timestamp wsmsg <= start -> go conn
+                    | tag wsmsg `elem` map fst expectedTags -> lookupTag msg wsmsg expectedTags
+                    | tag wsmsg `elem` map fst errorTags -> lookupTag msg wsmsg errorTags
+                    | tag wsmsg `elem` map fst skipTags -> go conn
+                    | otherwise -> do
+                        let wrapper =
+                              object
+                                [ "expected" .= map fst expectedTags,
+                                  "wsMessage" .= msg
+                                ]
+                        return (Just (T.decodeUtf8 $ BSL.toStrict $ encode wrapper, 500))
+                  Nothing -> do
+                    putStrLn "Failed to decode WebSocket message"
+                    go conn
+      go conn0
+
+    lookupTag msg wsmsg tagSet = do
+      let code = maybe 500 fromIntegral (lookup (tag wsmsg) tagSet)
+      return (Just (msg, code))
+
+forwardCommands :: T.Text -> [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
+forwardCommands command tag retry = do
   WS.runClient serverIP serverPort "/" $ \conn -> do
     WS.sendTextData conn command
     getLatestMessage conn tag >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
-validateLatestWebsocketTag :: [(T.Text, Int)] -> IO (T.Text, Int)
-validateLatestWebsocketTag tag = do
+validateLatestWebsocketTag :: [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
+validateLatestWebsocketTag tag retry = do
   WS.runClient serverIP serverPort "/" $ \conn -> do
     getLatestMessage conn tag >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
@@ -154,7 +212,11 @@ post path jsonData = do
   let responseBody = T.pack $ BS8.unpack $ BSL.toStrict $ getResponseBody response
   return responseBody
 
-getHydraCommitTx :: T.Text -> IO T.Text
+getHydraCommitTx :: T.Text -> IO (Either FrameworkError T.Text)
 getHydraCommitTx utxoSchema = do
-  let jsonResponse = textToJSON utxoSchema
-  post "commit" jsonResponse
+  let jsonResponseOrError = textToJSON utxoSchema
+  case jsonResponseOrError of
+    Left fe -> pure $ Left fe
+    Right jsonResponse -> do
+      response <- liftIO $ post "commit" jsonResponse
+      pure $ Right response

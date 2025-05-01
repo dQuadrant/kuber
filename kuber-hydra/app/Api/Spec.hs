@@ -11,6 +11,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -25,7 +26,7 @@ import qualified Data.ByteString.Lazy as BSL
 import Data.String
 import qualified Data.Text as T hiding (map)
 import GHC.Generics
-import Network.HTTP.Types (status400)
+import Network.HTTP.Types (status201, status400)
 import Network.Wai
 import Network.Wai.Handler.Warp
 import Network.Wai.Middleware.Cors
@@ -77,32 +78,33 @@ type HydraAPI =
   "hydra" :> HydraCommands
 
 type HydraCommands =
-  "init" :> Get '[JSON] A.Value
-    :<|> "abort" :> Get '[JSON] A.Value
-    :<|> "query" :> "utxo" :> Get '[JSON] A.Value
-    :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> Post '[JSON] A.Value
-    :<|> "decommit" :> ReqBody '[JSON] CommitUTxOs :> Post '[JSON] A.Value
-    :<|> "close" :> Get '[JSON] A.Value
-    :<|> "fanout" :> Get '[JSON] A.Value
-    :<|> "protocol-parameters" :> Get '[JSON] A.Value
+  "init" :> UVerb 'GET '[JSON] UVerbResponseTypes
+    :<|> "abort" :> UVerb 'GET '[JSON] UVerbResponseTypes
+    :<|> "query" :> "utxo" :> UVerb 'GET '[JSON] UVerbResponseTypes
+    :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> UVerb 'POST '[JSON] UVerbResponseTypes
+    :<|> "decommit" :> ReqBody '[JSON] CommitUTxOs :> UVerb 'POST '[JSON] UVerbResponseTypes
+    :<|> "close" :> UVerb 'GET '[JSON] UVerbResponseTypes
+    :<|> "fanout" :> UVerb 'GET '[JSON] UVerbResponseTypes
+    :<|> "protocol-parameters" :> UVerb 'GET '[JSON] UVerbResponseTypes
 
-frameworkErrorHandler :: Either FrameworkError a -> Handler a
-frameworkErrorHandler = either toServerError pure
+frameworkErrorHandler valueOrFe = case valueOrFe of
+  Left fe -> throwError $ err500 {errBody = BSL.fromStrict $ prettyPrintJSON fe}
+  Right val -> respond $ WithStatus @200 val
 
 toServerError :: FrameworkError -> Handler a
 toServerError err =
   throwError $
     err500 {errBody = BSL.fromStrict $ prettyPrintJSON err}
 
-hydraErrorHandler :: (T.Text, Int) -> Handler A.Value
 hydraErrorHandler (msg, status) = do
   let jsonResponseOrError = textToJSON msg
   case jsonResponseOrError of
     Left fe -> toServerError fe
-    Right jsonResponse -> do
-      if status == 200 || status == 201
-        then return jsonResponse
-        else
+    Right jsonResponse ->
+      case status of
+        200 -> respond $ WithStatus @200 jsonResponse
+        201 -> respond $ WithStatus @201 jsonResponse
+        _ ->
           throwError $
             (errorMiddleware status)
               { errHTTPCode = status,
@@ -122,42 +124,42 @@ server =
     :<|> fanoutHandler
     :<|> protocolParameterHandler
 
-initHandler :: Handler A.Value
+initHandler :: Handler (Union UVerbResponseTypes)
 initHandler = do
   initResponse <- liftIO initialize
   hydraErrorHandler initResponse
 
-abortHandler :: Handler A.Value
+abortHandler :: Handler (Union UVerbResponseTypes)
 abortHandler = do
   abortResponse <- liftIO abort
   hydraErrorHandler abortResponse
 
-queryUtxoHandler :: Handler A.Value
+queryUtxoHandler :: Handler (Union UVerbResponseTypes)
 queryUtxoHandler = do
   queryUtxoResponse <- liftIO queryUTxO
   hydraErrorHandler queryUtxoResponse
 
-commitHandler :: CommitUTxOs -> Handler A.Value
+commitHandler :: CommitUTxOs -> Handler (Union UVerbResponseTypes)
 commitHandler commits = do
   commitResult <- liftIO $ commitUTxO (map T.pack $ utxos commits) (signKey commits)
   frameworkErrorHandler commitResult
 
-decommitHandler :: CommitUTxOs -> Handler A.Value
+decommitHandler :: CommitUTxOs -> Handler (Union UVerbResponseTypes)
 decommitHandler decommits = do
   decommitResult <- liftIO $ decommitUTxO (map T.pack $ utxos decommits) (signKey decommits)
   frameworkErrorHandler decommitResult
 
-closeHandler :: Handler A.Value
+closeHandler :: Handler (Union UVerbResponseTypes)
 closeHandler = do
   closeResponse <- liftIO close
   hydraErrorHandler closeResponse
 
-fanoutHandler :: Handler A.Value
+fanoutHandler :: Handler (Union UVerbResponseTypes)
 fanoutHandler = do
   fanoutResponse <- liftIO fanout
   hydraErrorHandler fanoutResponse
 
-protocolParameterHandler :: Handler A.Value
+protocolParameterHandler :: Handler (Union UVerbResponseTypes)
 protocolParameterHandler = do
   pParamResponse <- liftIO getProtocolParameters
   frameworkErrorHandler pParamResponse

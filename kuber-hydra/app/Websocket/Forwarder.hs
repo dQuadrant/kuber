@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 module Websocket.Forwarder where
 
@@ -36,15 +37,13 @@ hydraHeadAborted = T.pack "Hydra Head Aborted"
 
 sendCommandToHydraNodeSocket :: Action -> IO (T.Text, Int)
 sendCommandToHydraNodeSocket message = do
-  let jsonMessage :: T.Text = case message of
-        InitializeHead -> "{\"tag\": \"Init\"}"
-        Abort -> "{\"tag\": \"Abort\"}"
-        GetUTxO -> "{\"tag\": \"GetUTxO\"}"
-        CloseHead -> "{\"tag\": \"Close\"}"
-        FanOut -> "{\"tag\": \"Fanout\"}"
-        _ -> ""
-  let validResponseTag :: [(T.Text, Int)] = generateResponseTag message
-  forwardCommands jsonMessage validResponseTag
+  let responseTag = generateResponseTag message
+  case message of
+    InitializeHead -> forwardCommands "{\"tag\": \"Init\"}" responseTag False
+    Abort -> forwardCommands "{\"tag\": \"Abort\"}" responseTag False
+    GetUTxO -> forwardCommands "{\"tag\": \"GetUTxO\"}" responseTag False
+    CloseHead -> handleHydraHeadClose "{\"tag\": \"Close\"}" responseTag
+    FanOut -> forwardCommands "{\"tag\": \"Fanout\"}" responseTag False
 
 -- [\"Init\",
 -- \"Abort\",
