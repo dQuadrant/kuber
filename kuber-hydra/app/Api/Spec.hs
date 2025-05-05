@@ -23,6 +23,7 @@ import Cardano.Kuber.Api
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BSL
+import Data.Maybe
 import Data.String
 import qualified Data.Text as T hiding (map)
 import GHC.Generics
@@ -78,14 +79,14 @@ type HydraAPI =
   "hydra" :> HydraCommands
 
 type HydraCommands =
-  "init" :> UVerb 'GET '[JSON] UVerbResponseTypes
-    :<|> "abort" :> UVerb 'GET '[JSON] UVerbResponseTypes
+  "init" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
+    :<|> "abort" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
     :<|> "query" :> "utxo" :> UVerb 'GET '[JSON] UVerbResponseTypes
     :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> UVerb 'POST '[JSON] UVerbResponseTypes
-    :<|> "decommit" :> ReqBody '[JSON] CommitUTxOs :> UVerb 'POST '[JSON] UVerbResponseTypes
-    :<|> "close" :> UVerb 'GET '[JSON] UVerbResponseTypes
-    :<|> "contest" :> UVerb 'GET '[JSON] UVerbResponseTypes
-    :<|> "fanout" :> UVerb 'GET '[JSON] UVerbResponseTypes
+    :<|> "decommit" :> QueryParam "wait" Bool :> ReqBody '[JSON] CommitUTxOs :> UVerb 'POST '[JSON] UVerbResponseTypes
+    :<|> "close" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
+    :<|> "contest" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
+    :<|> "fanout" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
     :<|> "protocol-parameters" :> UVerb 'GET '[JSON] UVerbResponseTypes
 
 frameworkErrorHandler valueOrFe = case valueOrFe of
@@ -126,14 +127,14 @@ server =
     :<|> fanoutHandler
     :<|> protocolParameterHandler
 
-initHandler :: Handler (Union UVerbResponseTypes)
-initHandler = do
-  initResponse <- liftIO initialize
+initHandler :: Maybe Bool -> Handler (Union UVerbResponseTypes)
+initHandler wait = do
+  initResponse <- liftIO $ initialize (fromMaybe False wait)
   hydraErrorHandler initResponse
 
-abortHandler :: Handler (Union UVerbResponseTypes)
-abortHandler = do
-  abortResponse <- liftIO abort
+abortHandler :: Maybe Bool -> Handler (Union UVerbResponseTypes)
+abortHandler wait = do
+  abortResponse <- liftIO $ abort (fromMaybe False wait)
   hydraErrorHandler abortResponse
 
 queryUtxoHandler :: Handler (Union UVerbResponseTypes)
@@ -146,24 +147,24 @@ commitHandler commits = do
   commitResult <- liftIO $ commitUTxO (map T.pack $ utxos commits) (signKey commits)
   frameworkErrorHandler commitResult
 
-decommitHandler :: CommitUTxOs -> Handler (Union UVerbResponseTypes)
-decommitHandler decommits = do
-  decommitResult <- liftIO $ decommitUTxO (map T.pack $ utxos decommits) (signKey decommits)
+decommitHandler :: Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
+decommitHandler wait decommits = do
+  decommitResult <- liftIO $ decommitUTxO (map T.pack $ utxos decommits) (signKey decommits) (fromMaybe False wait)
   frameworkErrorHandler decommitResult
 
-closeHandler :: Handler (Union UVerbResponseTypes)
-closeHandler = do
-  closeResponse <- liftIO close
+closeHandler :: Maybe Bool -> Handler (Union UVerbResponseTypes)
+closeHandler wait = do
+  closeResponse <- liftIO $ close (fromMaybe False wait)
   hydraErrorHandler closeResponse
 
-contestHandler :: Handler (Union UVerbResponseTypes)
-contestHandler = do
-  closeResponse <- liftIO contest
+contestHandler :: Maybe Bool -> Handler (Union UVerbResponseTypes)
+contestHandler wait = do
+  closeResponse <- liftIO $ contest (fromMaybe False wait)
   hydraErrorHandler closeResponse
 
-fanoutHandler :: Handler (Union UVerbResponseTypes)
-fanoutHandler = do
-  fanoutResponse <- liftIO fanout
+fanoutHandler :: Maybe Bool -> Handler (Union UVerbResponseTypes)
+fanoutHandler wait = do
+  fanoutResponse <- liftIO $ fanout (fromMaybe False wait)
   hydraErrorHandler fanoutResponse
 
 protocolParameterHandler :: Handler (Union UVerbResponseTypes)

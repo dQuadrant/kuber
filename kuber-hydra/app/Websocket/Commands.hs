@@ -38,29 +38,29 @@ data HydraCommitTx = HydraCommitTx
 hydraHeadMessageForwardingFailed :: T.Text
 hydraHeadMessageForwardingFailed = T.pack "Failed to forward message to hydra head"
 
-initialize :: IO (T.Text, Int)
-initialize = do
-  sendCommandToHydraNodeSocket InitializeHead
+initialize :: Bool -> IO (T.Text, Int)
+initialize wait = do
+  sendCommandToHydraNodeSocket InitializeHead wait
 
-abort :: IO (T.Text, Int)
-abort = do
-  sendCommandToHydraNodeSocket Abort
+abort :: Bool -> IO (T.Text, Int)
+abort wait = do
+  sendCommandToHydraNodeSocket Abort wait
 
-close :: IO (T.Text, Int)
-close = do
-  sendCommandToHydraNodeSocket CloseHead
+close :: Bool -> IO (T.Text, Int)
+close wait = do
+  sendCommandToHydraNodeSocket CloseHead wait
 
-contest :: IO (T.Text, Int)
-contest = do 
-  sendCommandToHydraNodeSocket ContestHead
+contest :: Bool -> IO (T.Text, Int)
+contest wait = do
+  sendCommandToHydraNodeSocket ContestHead wait
 
-fanout :: IO (T.Text, Int)
-fanout = do
-  sendCommandToHydraNodeSocket FanOut
+fanout :: Bool -> IO (T.Text, Int)
+fanout wait = do
+  sendCommandToHydraNodeSocket FanOut wait
 
 queryUTxO :: IO (T.Text, Int)
 queryUTxO = do
-  sendCommandToHydraNodeSocket GetUTxO
+  sendCommandToHydraNodeSocket GetUTxO False
 
 commitUTxO :: [T.Text] -> A.Value -> IO (Either FrameworkError A.Value)
 commitUTxO utxos sk = do
@@ -95,12 +95,12 @@ commitUTxO utxos sk = do
                         Right () -> pure $ Right $ object ["tx" .= getTxId txBody]
         Left fe -> pure $ Left fe
 
-decommitUTxO :: [T.Text] -> Data.Aeson.Types.Value -> IO (Either FrameworkError A.Value)
-decommitUTxO utxos sk = do
+decommitUTxO :: [T.Text] -> Data.Aeson.Types.Value -> Bool -> IO (Either FrameworkError A.Value)
+decommitUTxO utxos sk wait = do
   signKey <- case parseSignKey (jsonToText sk) of
     Just parsedSk -> pure parsedSk
     Nothing -> error "Failure parsing singing key"
-  submitHydraDecommitTx utxos signKey
+  submitHydraDecommitTx utxos signKey wait
 
 createUTxOSchema :: [T.Text] -> IO T.Text
 createUTxOSchema utxos = do

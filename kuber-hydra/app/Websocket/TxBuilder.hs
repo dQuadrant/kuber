@@ -44,9 +44,9 @@ data GroupedUTXO = GroupedUTXO
   }
   deriving (Show, Generic, ToJSON, FromJSON)
 
-submitHydraDecommitTx :: [T.Text] -> SigningKey PaymentKey -> IO (Either FrameworkError A.Value)
-submitHydraDecommitTx utxosToDecommit sk = do
-  (allUTxOsText, _) <- sendCommandToHydraNodeSocket GetUTxO
+submitHydraDecommitTx :: [T.Text] -> SigningKey PaymentKey -> Bool -> IO (Either FrameworkError A.Value)
+submitHydraDecommitTx utxosToDecommit sk wait = do
+  (allUTxOsText, _) <- sendCommandToHydraNodeSocket GetUTxO False
   let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe HydraGetUTxOResponse
   case allHydraUTxOs of
     Nothing -> return $ Left $ FrameworkError ParserError "buildHydraDecommitTx: Error parsing Hydra UTxOs"
@@ -89,7 +89,7 @@ submitHydraDecommitTx utxosToDecommit sk = do
                       decommitPostResponse <- post "decommit" decommitTxObject
                       if T.strip (T.filter (/= '"') decommitPostResponse) == "OK"
                         then do
-                          wsResult <- validateLatestWebsocketTag (generateResponseTag DeCommitUTxO)
+                          wsResult <- validateLatestWebsocketTag (generateResponseTag DeCommitUTxO) wait
                           return $ textToJSON $ fst wsResult
                         else
                           return $

@@ -79,13 +79,18 @@ getLatestMessage ::
   WS.Connection ->
   -- | expected tags
   [(T.Text, Int)] ->
+  Bool ->
   IO (Maybe (T.Text, Int))
-getLatestMessage conn0 expectedTags = do
+getLatestMessage conn0 expectedTags wait = do
   start <- getCurrentTime
   let timeoutMicroseconds = 15 * 10 ^ 6
       go conn = do
         -- wait for 15 seconds. If no message received, return 201
-        result <- race (threadDelay timeoutMicroseconds) (try (WS.receiveData conn) :: IO (Either SomeException T.Text))
+        result <-
+          if wait
+            then Right <$> (try (WS.receiveData conn) :: IO (Either SomeException T.Text))
+            else
+              race (threadDelay timeoutMicroseconds) (try (WS.receiveData conn) :: IO (Either SomeException T.Text))
         case result of
           Left _ -> do
             -- No response received in 15 seconds, send 201
@@ -123,16 +128,16 @@ getLatestMessage conn0 expectedTags = do
       let code = maybe 500 fromIntegral (lookup (tag wsmsg) tagSet)
       return (Just (msg, code))
 
-forwardCommands :: T.Text -> [(T.Text, Int)] -> IO (T.Text, Int)
-forwardCommands command tag = do
+forwardCommands :: T.Text -> [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
+forwardCommands command tag wait = do
   WS.runClient serverIP serverPort "/" $ \conn -> do
     WS.sendTextData conn command
-    getLatestMessage conn tag >>= \msg -> return (fromMaybe ("No message received", 503) msg)
+    getLatestMessage conn tag wait >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
-validateLatestWebsocketTag :: [(T.Text, Int)] -> IO (T.Text, Int)
-validateLatestWebsocketTag tag = do
+validateLatestWebsocketTag :: [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
+validateLatestWebsocketTag tag wait= do
   WS.runClient serverIP serverPort "/" $ \conn -> do
-    getLatestMessage conn tag >>= \msg -> return (fromMaybe ("No message received", 503) msg)
+    getLatestMessage conn tag wait >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
 -- Check if Request is a WebSocket Request
 isWebSocketRequest :: Request -> Bool

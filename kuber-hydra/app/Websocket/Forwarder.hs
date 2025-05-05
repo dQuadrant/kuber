@@ -35,16 +35,16 @@ hydraHeadInitialized = T.pack "Hydra Head Initialized"
 hydraHeadAborted :: T.Text
 hydraHeadAborted = T.pack "Hydra Head Aborted"
 
-sendCommandToHydraNodeSocket :: Action -> IO (T.Text, Int)
-sendCommandToHydraNodeSocket message = do
+sendCommandToHydraNodeSocket :: Action -> Bool -> IO (T.Text, Int)
+sendCommandToHydraNodeSocket message wait = do
   let responseTag = generateResponseTag message
   case message of
-    InitializeHead -> forwardCommands "{\"tag\": \"Init\"}" responseTag
-    Abort -> forwardCommands "{\"tag\": \"Abort\"}" responseTag
-    GetUTxO -> forwardCommands "{\"tag\": \"GetUTxO\"}" responseTag
-    CloseHead -> forwardCommands "{\"tag\": \"Close\"}" responseTag
-    ContestHead -> forwardCommands "{\"tag\": \"Contest\"}" responseTag
-    FanOut -> forwardCommands "{\"tag\": \"Fanout\"}" responseTag
+    InitializeHead -> forwardCommands "{\"tag\": \"Init\"}" responseTag wait
+    Abort -> forwardCommands "{\"tag\": \"Abort\"}" responseTag wait
+    GetUTxO -> forwardCommands "{\"tag\": \"GetUTxO\"}" responseTag wait
+    CloseHead -> forwardCommands "{\"tag\": \"Close\"}" responseTag wait
+    ContestHead -> forwardCommands "{\"tag\": \"Contest\"}" responseTag wait
+    FanOut -> forwardCommands "{\"tag\": \"Fanout\"}" responseTag wait
 
 -- [\"Init\",
 -- \"Abort\",
