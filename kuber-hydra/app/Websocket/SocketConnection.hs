@@ -79,7 +79,9 @@ getLatestMessage ::
   WS.Connection ->
   -- | expected tags
   [(T.Text, Int)] ->
+  -- | wait indefinitely?
   Bool ->
+  -- | response
   IO (Maybe (T.Text, Int))
 getLatestMessage conn0 expectedTags wait = do
   start <- getCurrentTime
@@ -135,7 +137,7 @@ forwardCommands command tag wait = do
     getLatestMessage conn tag wait >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
 validateLatestWebsocketTag :: [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
-validateLatestWebsocketTag tag wait= do
+validateLatestWebsocketTag tag wait = do
   WS.runClient serverIP serverPort "/" $ \conn -> do
     getLatestMessage conn tag wait >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 

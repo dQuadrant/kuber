@@ -5,6 +5,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use lambda-case" #-}
 
 module Websocket.Commands where
 
@@ -12,21 +15,29 @@ import Cardano.Api
 import Cardano.Api.Shelley
 import Cardano.Kuber.Api
 import Cardano.Kuber.Data.Parsers
+import Data.Aeson
 import qualified Data.Aeson as A
+import qualified Data.Aeson.Key as K
+import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Types
-import Data.ByteString.Char8 as BS8 hiding (head, map)
+import Data.ByteString.Char8 as BS8 hiding (elem, filter, head, map, null)
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import Data.Functor
+import qualified Data.HashMap.Strict as HM
+import Data.Map as M hiding (filter, null)
+import qualified Data.Map.Strict as M
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.Text.Conversions
-import Data.Text.Encoding
+import qualified Data.Text.Encoding as T
 import qualified Debug.Trace as Debug
 import GHC.Generics
+import GHC.List
 import Websocket.Forwarder
 import Websocket.SocketConnection
 import Websocket.TxBuilder
 import Websocket.Utils
+import Prelude hiding (null)
 
 data HydraCommitTx = HydraCommitTx
   { cborHex :: String,
@@ -58,9 +69,47 @@ fanout :: Bool -> IO (T.Text, Int)
 fanout wait = do
   sendCommandToHydraNodeSocket FanOut wait
 
-queryUTxO :: IO (T.Text, Int)
-queryUTxO = do
-  sendCommandToHydraNodeSocket GetUTxO False
+queryUTxO :: Maybe T.Text -> Maybe T.Text -> IO (Either FrameworkError A.Value)
+queryUTxO address txin = do
+  (allUTxOsText, _) <- sendCommandToHydraNodeSocket GetUTxO False
+  let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe HydraGetUTxOResponse
+  case allHydraUTxOs of
+    Nothing -> return $ Left $ FrameworkError ParserError "queryUTxO: Error parsing Hydra UTxOs"
+    Just parsedHydraUTxOs -> do
+      case txin of
+        Just tin -> do
+          case parseTxIn tin of
+            Just _ -> do
+              let hydraUTxOs = utxo parsedHydraUTxOs
+                  missing = filter (`M.notMember` hydraUTxOs) [tin]
+              if not (null missing)
+                then return $ Left $ FrameworkError ParserError $ "Missing UTxOs in Hydra: " ++ show missing
+                else do
+                  let hydraTxInFilteredUTxOs = M.filterWithKey (\k _ -> k == tin) hydraUTxOs
+                      converted = KM.fromList [(K.fromText k, v) | (k, v) <- M.toList hydraTxInFilteredUTxOs]
+                  return $ Right $ A.Object converted
+            Nothing -> pure $ Left $ FrameworkError ParserError $ "queryUTxO : Unable to parse TxIn: " <> T.unpack tin
+        Nothing ->
+          case address of
+            Just addr ->
+              case parseAddress @ConwayEra addr of
+                Just _ -> do
+                  let hydraUTxOs = utxo parsedHydraUTxOs
+                      hydraAddressFilteredUTxOs =
+                        M.filter
+                          ( \val ->
+                              case val of
+                                A.Object obj ->
+                                  case KM.lookup "address" obj of
+                                    Just (A.String a) -> a == addr
+                                    _ -> False
+                                _ -> False
+                          )
+                          hydraUTxOs
+                      converted = KM.fromList [(K.fromText k, v) | (k, v) <- M.toList hydraAddressFilteredUTxOs]
+                  return $ Right $ A.Object converted
+                Nothing -> pure $ Left $ FrameworkError ParserError $ "queryUTxO : Unable to parse address: " <> T.unpack addr
+            Nothing -> pure $ Right $ A.toJSON $ utxo parsedHydraUTxOs
 
 commitUTxO :: [T.Text] -> A.Value -> IO (Either FrameworkError A.Value)
 commitUTxO utxos sk = do
@@ -71,7 +120,7 @@ commitUTxO utxos sk = do
       unsignedCommitTxOrError <- getHydraCommitTx utxoSchema
       case unsignedCommitTxOrError of
         Right unsignedCommitTx -> do
-          case A.eitherDecode (fromStrict $ encodeUtf8 unsignedCommitTx) of
+          case A.eitherDecode (fromStrict $ T.encodeUtf8 unsignedCommitTx) of
             Left err ->
               pure $
                 Left $

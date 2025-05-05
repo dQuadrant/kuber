@@ -81,7 +81,7 @@ type HydraAPI =
 type HydraCommands =
   "init" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
     :<|> "abort" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
-    :<|> "query" :> "utxo" :> UVerb 'GET '[JSON] UVerbResponseTypes
+    :<|> "query" :> "utxo" :> QueryParam "address" T.Text :> QueryParam "txin" T.Text :> UVerb 'GET '[JSON] UVerbResponseTypes
     :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> UVerb 'POST '[JSON] UVerbResponseTypes
     :<|> "decommit" :> QueryParam "wait" Bool :> ReqBody '[JSON] CommitUTxOs :> UVerb 'POST '[JSON] UVerbResponseTypes
     :<|> "close" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
@@ -137,10 +137,10 @@ abortHandler wait = do
   abortResponse <- liftIO $ abort (fromMaybe False wait)
   hydraErrorHandler abortResponse
 
-queryUtxoHandler :: Handler (Union UVerbResponseTypes)
-queryUtxoHandler = do
-  queryUtxoResponse <- liftIO queryUTxO
-  hydraErrorHandler queryUtxoResponse
+queryUtxoHandler :: Maybe T.Text -> Maybe T.Text -> Handler (Union UVerbResponseTypes)
+queryUtxoHandler address txin = do
+  queryUtxoResponse <- liftIO $ queryUTxO address txin
+  frameworkErrorHandler queryUtxoResponse
 
 commitHandler :: CommitUTxOs -> Handler (Union UVerbResponseTypes)
 commitHandler commits = do

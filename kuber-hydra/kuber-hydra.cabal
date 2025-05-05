@@ -118,6 +118,7 @@ executable kuber-hydra
                     , text-conversions
                     , case-insensitive
                     , servant-client
+                    , unordered-containers
     -- Directories containing source files.
     hs-source-dirs:   app
 
