@@ -38,7 +38,7 @@ These APIs will be exposed as REST endpoints and integrated with a WebSocket bac
 
 A draft diagram is available [here](https://raw.githubusercontent.com/drep-id/image/main/preview/kuber-hydra_20250417075127614.png).  
 
-<img width="811" alt="Image" src="https://github.com/user-attachments/assets/02c9a043-902c-4e65-ace5-62a8e0bb0b0e" />
+<img alt="Hydra Architecture Diagram" src="./sequence-diagrams/hydra-architecture.png" />
 
 ### 🧭 High-Level Overview
 
@@ -126,6 +126,32 @@ This architecture supports a fully interactive development and production enviro
 - Kuber formats, validates, and constructs transactions using Hydra context.
 - Transactions are signed and submitted over WebSocket to a Hydra node.
 - The system maintains a mirrored view of Hydra state and simplifies all interactions for the user.
+
+### Sequence Diagrams
+#### Initialize Head
+<img alt="Hydra head initialization sequence diagram" src="./sequence-diagrams/init.jpg" />  
+
+#### Commit UTxOs  
+<img alt="Commit UTxOs to hydra head sequence diagram" src="./sequence-diagrams/commit.jpg" />  
+
+#### DeCommit UTxOs
+<img alt="DeCommit UTxOs from hydra head sequence diagram" src="./sequence-diagrams/decommit.jpg" />  
+
+#### Close Head 
+<img alt="Close hydra head sequence diagram" src="./sequence-diagrams/close.jpg" />  
+
+#### Query UTxOs 
+<img alt="Query hydra UTxOs sequence diagram" src="./sequence-diagrams/utxo.jpg" />  
+
+#### Abort Head
+<img alt="Abort hydra head sequence diagram" src="./sequence-diagrams/abort.jpg" />  
+
+#### Fanout Head
+<img alt="Fanout hydra head sequence diagram" src="./sequence-diagrams/fanout.jpg" />  
+
+
+
+
 
 ### Components Overview
 
