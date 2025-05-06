@@ -20,6 +20,7 @@ module Api.Spec where
 
 import Cardano.Api
 import Cardano.Kuber.Api
+import Cardano.Kuber.Data.Models (TxModal (TxModal))
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BSL
@@ -37,6 +38,7 @@ import Servant
 import Servant.Exception
 import Websocket.Commands
 import Websocket.Middleware
+import Websocket.TxBuilder (rawBuildHydraTx)
 import Websocket.Utils
 
 -- Define CORS policy
@@ -88,6 +90,7 @@ type HydraCommands =
     :<|> "contest" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
     :<|> "fanout" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
     :<|> "protocol-parameters" :> UVerb 'GET '[JSON] UVerbResponseTypes
+    :<|> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] TxModal
 
 frameworkErrorHandler valueOrFe = case valueOrFe of
   Left fe -> throwError $ err500 {errBody = BSL.fromStrict $ prettyPrintJSON fe}
@@ -126,6 +129,7 @@ server =
     :<|> contestHandler
     :<|> fanoutHandler
     :<|> protocolParameterHandler
+    :<|> txHandler
 
 initHandler :: Maybe Bool -> Handler (Union UVerbResponseTypes)
 initHandler wait = do
@@ -171,6 +175,16 @@ protocolParameterHandler :: Handler (Union UVerbResponseTypes)
 protocolParameterHandler = do
   pParamResponse <- liftIO getProtocolParameters
   frameworkErrorHandler pParamResponse
+
+txHandler txb = do
+  -- validate selections and inputs
+  let selections = txSelections txb
+      inputs = txInputs txb
+  
+  txBuilderResponse <- liftIO $ rawBuildHydraTx txb
+  case txBuilderResponse of
+    Left fe -> toServerError fe
+    Right tx -> pure $ TxModal $ InAnyCardanoEra bCardanoEra tx
 
 -- Create API Proxy
 deployAPI :: Proxy API

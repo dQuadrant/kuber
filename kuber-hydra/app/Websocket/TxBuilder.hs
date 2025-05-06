@@ -76,9 +76,9 @@ submitHydraDecommitTx utxosToDecommit sk wait = do
                           $ unUTxO parsedUTxO
                       )
                       <> txSign sk
-              protocolParamText <- fetch >>= \query -> query (T.pack "protocol-parameters")
-              case A.eitherDecode (BSL.fromStrict $ encodeUtf8 protocolParamText) of
-                Left err -> return $ Left $ FrameworkError ParserError err
+              protocolParamText <- hydraProtocolParams
+              case protocolParamText of
+                Left err -> return $ Left err
                 Right (hpp :: HydraProtocolParameters) -> do
                   cardanoTxBody <- toCardanoTxBody txb hpp
                   case cardanoTxBody of
@@ -96,6 +96,13 @@ submitHydraDecommitTx utxosToDecommit sk wait = do
                             Left $
                               FrameworkError TxSubmissionError $
                                 "submitHydraDecommitTx: Error submitting decommit transaction to Hydra: " ++ T.unpack decommitPostResponse
+
+hydraProtocolParams :: IO (Either FrameworkError HydraProtocolParameters)
+hydraProtocolParams = do
+  protocolParamText <- fetch >>= \query -> query (T.pack "protocol-parameters")
+  case A.eitherDecode (BSL.fromStrict $ encodeUtf8 protocolParamText) of
+    Left err -> pure $ Left $ FrameworkError ParserError err
+    Right (hpp :: HydraProtocolParameters) -> pure $ Right hpp
 
 groupUtxosByAddress :: M.Map T.Text A.Value -> [GroupedUTXO]
 groupUtxosByAddress utxoMap =
@@ -191,3 +198,14 @@ buildWitnessedTx cborHex =
       "type" .= T.pack "Witnessed Tx ConwayEra",
       "description" .= T.pack "Ledger Cddl Format"
     ]
+
+rawBuildHydraTx :: TxBuilder_ ConwayEra -> IO (Either FrameworkError (Tx ConwayEra))
+rawBuildHydraTx txb = do
+  protocolParamText <- hydraProtocolParams
+  case protocolParamText of
+    Left err -> return $ Left err
+    Right (hpp :: HydraProtocolParameters) -> do
+      cardanoTxBody <- toCardanoTxBody txb hpp
+      case cardanoTxBody of
+        Left fe -> return $ Left fe
+        Right tx -> return $ Right tx
