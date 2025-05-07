@@ -4,24 +4,32 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# HLINT ignore "Use lambda-case" #-}
+{-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module Websocket.TxBuilder where
 
 import Cardano.Api
 import Cardano.Api.Shelley
 import Cardano.Kuber.Api
+import Cardano.Kuber.Data.Models
+import Cardano.Kuber.Data.Parsers
 import Cardano.Kuber.Util
 import qualified Cardano.Ledger.BaseTypes as L
 import qualified Cardano.Ledger.Coin as L
 import Data.Aeson
 import qualified Data.Aeson as A
+import qualified Data.Aeson.Key as K
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
+import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
+import Data.Either
 import Data.List (foldl')
 import qualified Data.Map as Map
 import qualified Data.Map.Strict as M
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, mapMaybe)
 import qualified Data.Maybe as Maybe
 import qualified Data.Text as T
 import Data.Text.Encoding
@@ -32,17 +40,6 @@ import Websocket.Aeson
 import Websocket.Forwarder
 import Websocket.SocketConnection (fetch, post, validateLatestWebsocketTag)
 import Websocket.Utils (textToJSON)
-
-newtype HydraGetUTxOResponse = HydraGetUTxOResponse
-  { utxo :: M.Map T.Text A.Value
-  }
-  deriving (Generic, Show, ToJSON, FromJSON)
-
-data GroupedUTXO = GroupedUTXO
-  { address :: T.Text,
-    utxos :: [T.Text]
-  }
-  deriving (Show, Generic, ToJSON, FromJSON)
 
 submitHydraDecommitTx :: [T.Text] -> SigningKey PaymentKey -> Bool -> IO (Either FrameworkError A.Value)
 submitHydraDecommitTx utxosToDecommit sk wait = do
@@ -209,3 +206,90 @@ rawBuildHydraTx txb = do
       case cardanoTxBody of
         Left fe -> return $ Left fe
         Right tx -> return $ Right tx
+
+queryUTxO :: Maybe T.Text -> Maybe T.Text -> IO (Either FrameworkError A.Value)
+queryUTxO address txin = do
+  (allUTxOsText, _) <- sendCommandToHydraNodeSocket GetUTxO False
+  let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe HydraGetUTxOResponse
+  case allHydraUTxOs of
+    Nothing -> return $ Left $ FrameworkError ParserError "queryUTxO: Error parsing Hydra UTxOs"
+    Just parsedHydraUTxOs -> do
+      case txin of
+        Just tin -> do
+          case parseTxIn tin of
+            Just _ -> do
+              let hydraUTxOs = utxo parsedHydraUTxOs
+                  missing = filter (`M.notMember` hydraUTxOs) [tin]
+              if not (null missing)
+                then return $ Left $ FrameworkError ParserError $ "Missing UTxOs in Hydra: " ++ show missing
+                else do
+                  let hydraTxInFilteredUTxOs = M.filterWithKey (\k _ -> k == tin) hydraUTxOs
+                      converted = KM.fromList [(K.fromText k, v) | (k, v) <- M.toList hydraTxInFilteredUTxOs]
+                  return $ Right $ A.Object converted
+            Nothing -> pure $ Left $ FrameworkError ParserError $ "queryUTxO : Unable to parse TxIn: " <> T.unpack tin
+        Nothing ->
+          case address of
+            Just addr ->
+              case parseAddress @ConwayEra addr of
+                Just _ -> do
+                  let hydraUTxOs = utxo parsedHydraUTxOs
+                      hydraAddressFilteredUTxOs =
+                        M.filter
+                          ( \val ->
+                              case val of
+                                A.Object obj ->
+                                  case KM.lookup "address" obj of
+                                    Just (A.String a) -> a == addr
+                                    _ -> False
+                                _ -> False
+                          )
+                          hydraUTxOs
+                      converted = KM.fromList [(K.fromText k, v) | (k, v) <- M.toList hydraAddressFilteredUTxOs]
+                  return $ Right $ A.Object converted
+                Nothing -> pure $ Left $ FrameworkError ParserError $ "queryUTxO : Unable to parse address: " <> T.unpack addr
+            Nothing -> pure $ Right $ A.toJSON $ utxo parsedHydraUTxOs
+
+toValidHydraTxBuilder :: TxBuilder_ ConwayEra -> IO (Either FrameworkError TxModal)
+toValidHydraTxBuilder txb = do
+  -- validate selections and inputs
+  let selections = txSelections txb
+      inputs = txInputs txb
+  selectionUTxOs <- mapM getUTxOsFromSelection selections
+  let (utxos, err) = (rights selectionUTxOs, lefts selectionUTxOs)
+      selectionTxBuilder =
+        mconcat $
+          map txWalletUtxos (concat utxos)
+  if not (null err)
+    then
+      return $
+        Left $
+          FrameworkError
+            NodeQueryError
+            ("toValidHydraTxBuilder: Missing Selection In Hydra." <> concatMap ((++ "\n") . show) err)
+    else do
+      Debug.traceM (BS8.unpack $ prettyPrintJSON selectionTxBuilder)
+      txBuilderResponse <- liftIO $ rawBuildHydraTx $ txb <> selectionTxBuilder
+      case txBuilderResponse of
+        Left fe -> pure $ Left fe
+        Right tx -> pure $ Right $ TxModal $ InAnyCardanoEra bCardanoEra tx
+
+getUTxOsFromSelection :: TxInputSelection ConwayEra -> IO (Either FrameworkError [UTxO ConwayEra])
+getUTxOsFromSelection selection = case selection of
+  TxSelectableAddresses addrs -> do
+    let capiAddress = map fromLedgerAddress addrs :: [AddressInEra ConwayEra]
+        addressTexts = map serialiseAddress capiAddress
+    fetchUTxOsFromQuery (\addr -> queryUTxO (Just addr) Nothing) addressTexts "Error querying addresses from Hydra"
+  TxSelectableUtxos utxo -> pure $ Right [utxo]
+  TxSelectableTxIn txins -> do
+    let txInTexts =
+          map (\(TxIn hash (TxIx num)) -> serialiseToRawBytesHexText hash <> "#" <> T.pack (show $ toInteger num)) txins
+    fetchUTxOsFromQuery (queryUTxO Nothing . Just) txInTexts "Error querying TxIns from Hydra"
+  _ -> pure $ Right []
+  where
+    fetchUTxOsFromQuery :: (a -> IO (Either FrameworkError A.Value)) -> [a] -> String -> IO (Either FrameworkError [UTxO ConwayEra])
+    fetchUTxOsFromQuery queryFn inputs errorMsg = do
+      results <- mapM queryFn inputs
+      let (utxos, errors) = (rights results, lefts results)
+      if not (null errors)
+        then return $ Left $ FrameworkError NodeQueryError errorMsg
+        else pure $ Right $ rights $ map (parseUTxO . A.encode) utxos

@@ -38,7 +38,7 @@ import Servant
 import Servant.Exception
 import Websocket.Commands
 import Websocket.Middleware
-import Websocket.TxBuilder (rawBuildHydraTx)
+import Websocket.TxBuilder (rawBuildHydraTx, toValidHydraTxBuilder, queryUTxO)
 import Websocket.Utils
 
 -- Define CORS policy
@@ -176,15 +176,12 @@ protocolParameterHandler = do
   pParamResponse <- liftIO getProtocolParameters
   frameworkErrorHandler pParamResponse
 
+txHandler :: TxBuilder_ ConwayEra -> Handler TxModal
 txHandler txb = do
-  -- validate selections and inputs
-  let selections = txSelections txb
-      inputs = txInputs txb
-  
-  txBuilderResponse <- liftIO $ rawBuildHydraTx txb
-  case txBuilderResponse of
+  hydraTxModal <- liftIO $ toValidHydraTxBuilder txb
+  case hydraTxModal of
     Left fe -> toServerError fe
-    Right tx -> pure $ TxModal $ InAnyCardanoEra bCardanoEra tx
+    Right txm -> pure txm
 
 -- Create API Proxy
 deployAPI :: Proxy API

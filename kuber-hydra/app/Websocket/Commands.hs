@@ -35,9 +35,10 @@ import GHC.Generics
 import GHC.List
 import Websocket.Forwarder
 import Websocket.SocketConnection
-import Websocket.TxBuilder
 import Websocket.Utils
 import Prelude hiding (null)
+import Websocket.Aeson
+import Websocket.TxBuilder
 
 data HydraCommitTx = HydraCommitTx
   { cborHex :: String,
@@ -69,47 +70,6 @@ fanout :: Bool -> IO (T.Text, Int)
 fanout wait = do
   sendCommandToHydraNodeSocket FanOut wait
 
-queryUTxO :: Maybe T.Text -> Maybe T.Text -> IO (Either FrameworkError A.Value)
-queryUTxO address txin = do
-  (allUTxOsText, _) <- sendCommandToHydraNodeSocket GetUTxO False
-  let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe HydraGetUTxOResponse
-  case allHydraUTxOs of
-    Nothing -> return $ Left $ FrameworkError ParserError "queryUTxO: Error parsing Hydra UTxOs"
-    Just parsedHydraUTxOs -> do
-      case txin of
-        Just tin -> do
-          case parseTxIn tin of
-            Just _ -> do
-              let hydraUTxOs = utxo parsedHydraUTxOs
-                  missing = filter (`M.notMember` hydraUTxOs) [tin]
-              if not (null missing)
-                then return $ Left $ FrameworkError ParserError $ "Missing UTxOs in Hydra: " ++ show missing
-                else do
-                  let hydraTxInFilteredUTxOs = M.filterWithKey (\k _ -> k == tin) hydraUTxOs
-                      converted = KM.fromList [(K.fromText k, v) | (k, v) <- M.toList hydraTxInFilteredUTxOs]
-                  return $ Right $ A.Object converted
-            Nothing -> pure $ Left $ FrameworkError ParserError $ "queryUTxO : Unable to parse TxIn: " <> T.unpack tin
-        Nothing ->
-          case address of
-            Just addr ->
-              case parseAddress @ConwayEra addr of
-                Just _ -> do
-                  let hydraUTxOs = utxo parsedHydraUTxOs
-                      hydraAddressFilteredUTxOs =
-                        M.filter
-                          ( \val ->
-                              case val of
-                                A.Object obj ->
-                                  case KM.lookup "address" obj of
-                                    Just (A.String a) -> a == addr
-                                    _ -> False
-                                _ -> False
-                          )
-                          hydraUTxOs
-                      converted = KM.fromList [(K.fromText k, v) | (k, v) <- M.toList hydraAddressFilteredUTxOs]
-                  return $ Right $ A.Object converted
-                Nothing -> pure $ Left $ FrameworkError ParserError $ "queryUTxO : Unable to parse address: " <> T.unpack addr
-            Nothing -> pure $ Right $ A.toJSON $ utxo parsedHydraUTxOs
 
 commitUTxO :: [T.Text] -> A.Value -> IO (Either FrameworkError A.Value)
 commitUTxO utxos sk = do

@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Websocket.Aeson where
 
@@ -8,12 +10,24 @@ import Cardano.Api (ExecutionUnitPrices)
 import Cardano.Api.Shelley (ExecutionUnits)
 import Data.Aeson
 import qualified Data.Aeson.Types as Aeson
-import qualified Data.Map as Map
+import qualified Data.Map as M
 import qualified Data.Text as T
 import Data.Time
 import Data.Time.Format.ISO8601 (iso8601ParseM)
 import GHC.Generics (Generic)
 import GHC.Natural
+import qualified Data.Aeson as A
+
+newtype HydraGetUTxOResponse = HydraGetUTxOResponse
+  { utxo :: M.Map T.Text A.Value
+  }
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+data GroupedUTXO = GroupedUTXO
+  { address :: T.Text,
+    utxos :: [T.Text]
+  }
+  deriving (Show, Generic, ToJSON, FromJSON)
 
 data WSMessage = WSMessage
   { tag :: T.Text,
@@ -34,7 +48,7 @@ data HydraProtocolParameters = HydraProtocolParameters
   { collateralPercentage :: Maybe Natural,
     committeeMaxTermLength :: Maybe Int,
     committeeMinSize :: Maybe Int,
-    costModels :: Map.Map T.Text [Int],
+    costModels :: M.Map T.Text [Int],
     dRepActivity :: Maybe Int,
     dRepDeposit :: Maybe Int,
     dRepVotingThresholds :: Maybe DRepVotingThresholds,
