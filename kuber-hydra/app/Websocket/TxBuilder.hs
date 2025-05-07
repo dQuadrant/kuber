@@ -18,6 +18,7 @@ import Cardano.Kuber.Data.Parsers
 import Cardano.Kuber.Util
 import qualified Cardano.Ledger.BaseTypes as L
 import qualified Cardano.Ledger.Coin as L
+import Control.Applicative
 import Data.Aeson
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Key as K
@@ -253,38 +254,48 @@ toValidHydraTxBuilder :: TxBuilder_ ConwayEra -> IO (Either FrameworkError TxMod
 toValidHydraTxBuilder txb = do
   let selections = txSelections txb
       inputs = txInputs txb
+      specifiedChangeAddress = case txDefaultChangeAddr txb of
+        Just chAddr -> Right chAddr
+        Nothing -> do
+          let changeAddressFromSelection = getChangeAddressFromSelections selections :: Maybe (AddressInEra ConwayEra)
+          case changeAddressFromSelection of
+            Just chAddr -> Right chAddr
+            Nothing -> Left $ FrameworkError TxValidationError "Missing Change Address"
   selectionUTxOs <- mapM getUTxOsFromSelection selections
   sKeyFromSelections <- mapM getKeysFromSelections selections
   sKeyFromInputs <- mapM getKeysFromInputs inputs
   inputUTxOs <- mapM getUTxOFromInputs inputs
   let (utxosFromSelections, errorsFromSelections) = (rights selectionUTxOs, lefts selectionUTxOs)
       (utxosFromInputs, errorsFromInputs) = (rights inputUTxOs, lefts inputUTxOs)
-      selectionTxBuilder =
-        mconcat $
-          map txWalletUtxos (concat utxosFromSelections)
-      inputTxBuilder =
-        mconcat $
-          map txConsumeUtxos (concat utxosFromInputs)
-      skeyTxBuilder =
-        mconcat $ map txSign $ concat sKeyFromSelections <> concat sKeyFromInputs
-  if not (null $ errorsFromSelections <> errorsFromInputs)
-    then
-      return $
-        Left $
-          FrameworkError
-            NodeQueryError
-            ("toValidHydraTxBuilder: Missing Selection In Hydra." <> concatMap ((++ "\n") . show) (errorsFromSelections <> errorsFromInputs))
-    else do
-      let validHydraTxBuilder =
-            txb
-              <> selectionTxBuilder
-              <> inputTxBuilder
-              <> skeyTxBuilder
-      Debug.traceM (BS8.unpack $ prettyPrintJSON validHydraTxBuilder)
-      txBuilderResponse <- liftIO $ rawBuildHydraTx validHydraTxBuilder
-      case txBuilderResponse of
-        Left fe -> pure $ Left fe
-        Right tx -> pure $ Right $ TxModal $ InAnyCardanoEra bCardanoEra tx
+  case specifiedChangeAddress of
+    Left err -> return $ Left err
+    Right changeAddress -> do
+      let selectionTxBuilder =
+            mconcat $ map txWalletUtxos (concat utxosFromSelections)
+          inputTxBuilder =
+            mconcat $ map txConsumeUtxos (concat utxosFromInputs)
+          skeyTxBuilder =
+            mconcat $ map txSign $ concat sKeyFromSelections <> concat sKeyFromInputs
+          changeAddressTxBuilder = txChangeAddress changeAddress
+      if not (null $ errorsFromSelections <> errorsFromInputs)
+        then
+          return $
+            Left $
+              FrameworkError
+                NodeQueryError
+                ("toValidHydraTxBuilder: Error building Hydra Tx." <> concatMap ((++ "\n") . show) (errorsFromSelections <> errorsFromInputs))
+        else do
+          let validHydraTxBuilder =
+                txb
+                  <> selectionTxBuilder
+                  <> inputTxBuilder
+                  <> skeyTxBuilder
+                  <> changeAddressTxBuilder
+          -- Debug.traceM (BS8.unpack $ prettyPrintJSON validHydraTxBuilder)
+          txBuilderResponse <- liftIO $ rawBuildHydraTx validHydraTxBuilder
+          case txBuilderResponse of
+            Left fe -> pure $ Left fe
+            Right tx -> pure $ Right $ TxModal $ InAnyCardanoEra bCardanoEra tx
 
 getUTxOsFromSelection :: TxInputSelection ConwayEra -> IO (Either FrameworkError [UTxO ConwayEra])
 getUTxOsFromSelection selection = case selection of
@@ -311,6 +322,20 @@ getKeysFromSelections :: TxInputSelection ConwayEra -> IO [SigningKey PaymentKey
 getKeysFromSelections selection = case selection of
   TxSelectableSkey skeys -> pure skeys
   _ -> pure []
+
+getChangeAddressFromSelections :: [TxInputSelection era] -> Maybe (AddressInEra ConwayEra)
+getChangeAddressFromSelections selections =
+  let parsedSelectionAddresses =
+        concat $
+          mapMaybe
+            ( \s -> case s of
+                TxSelectableAddresses addrs -> Just (map fromLedgerAddress addrs :: [AddressInEra ConwayEra])
+                _ -> Nothing
+            )
+            selections
+   in case parsedSelectionAddresses of
+        [] -> Nothing
+        a : _ -> Just a
 
 getUTxOFromInputs :: TxInput ConwayEra -> IO (Either FrameworkError [UTxO ConwayEra])
 getUTxOFromInputs inputs = validateTxInUTxOs $ getTxInsAndAddressFromInputs inputs
