@@ -5,7 +5,13 @@
 
 module Websocket.Forwarder where
 
+import Cardano.Api (prettyPrintJSON)
+import Cardano.Kuber.Data.Models
+import Data.Aeson
+import qualified Data.Aeson as A
+import qualified Data.Aeson.Text as AT
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import Websocket.SocketConnection
 
 data Action
@@ -17,6 +23,7 @@ data Action
   | CloseHead
   | ContestHead
   | FanOut
+  | NewTx
 
 generateResponseTag :: Action -> [(T.Text, Int)]
 generateResponseTag action = case action of
@@ -28,6 +35,7 @@ generateResponseTag action = case action of
   CloseHead -> [("HeadIsClosed", 200)]
   ContestHead -> [("HeadIsContested", 200)]
   FanOut -> [("HeadIsFinalized", 200)]
+  NewTx -> [("SnapshotConfirmed", 200)]
 
 hydraHeadInitialized :: T.Text
 hydraHeadInitialized = T.pack "Hydra Head Initialized"
@@ -45,6 +53,16 @@ sendCommandToHydraNodeSocket message wait = do
     CloseHead -> forwardCommands "{\"tag\": \"Close\"}" responseTag wait
     ContestHead -> forwardCommands "{\"tag\": \"Contest\"}" responseTag wait
     FanOut -> forwardCommands "{\"tag\": \"Fanout\"}" responseTag wait
+
+submitHydraTx :: TxModal -> IO (T.Text, Int)
+submitHydraTx txm = forwardCommands newTxCommand (generateResponseTag NewTx) False
+  where
+    newTxCommand =
+      TL.toStrict . AT.encodeToLazyText $
+        A.object
+          [ "tag" .= ("NewTx" :: T.Text),
+            "transaction" .= txm
+          ]
 
 -- [\"Init\",
 -- \"Abort\",

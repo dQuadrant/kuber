@@ -14,6 +14,7 @@ module Websocket.Commands where
 import Cardano.Api
 import Cardano.Api.Shelley
 import Cardano.Kuber.Api
+import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Data.Parsers
 import Data.Aeson
 import qualified Data.Aeson as A
@@ -33,12 +34,12 @@ import qualified Data.Text.Encoding as T
 import qualified Debug.Trace as Debug
 import GHC.Generics
 import GHC.List
+import Websocket.Aeson
 import Websocket.Forwarder
 import Websocket.SocketConnection
+import Websocket.TxBuilder
 import Websocket.Utils
 import Prelude hiding (null)
-import Websocket.Aeson
-import Websocket.TxBuilder
 
 data HydraCommitTx = HydraCommitTx
   { cborHex :: String,
@@ -70,6 +71,9 @@ fanout :: Bool -> IO (T.Text, Int)
 fanout wait = do
   sendCommandToHydraNodeSocket FanOut wait
 
+submit :: TxModal -> IO (T.Text, Int)
+submit txm = do
+  submitHydraTx txm
 
 commitUTxO :: [T.Text] -> A.Value -> IO (Either FrameworkError A.Value)
 commitUTxO utxos sk = do

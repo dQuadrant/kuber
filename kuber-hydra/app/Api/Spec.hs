@@ -38,7 +38,7 @@ import Servant
 import Servant.Exception
 import Websocket.Commands
 import Websocket.Middleware
-import Websocket.TxBuilder (rawBuildHydraTx, toValidHydraTxBuilder, queryUTxO)
+import Websocket.TxBuilder (queryUTxO, rawBuildHydraTx, toValidHydraTxBuilder)
 import Websocket.Utils
 
 -- Define CORS policy
@@ -91,6 +91,7 @@ type HydraCommands =
     :<|> "fanout" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
     :<|> "protocol-parameters" :> UVerb 'GET '[JSON] UVerbResponseTypes
     :<|> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] TxModal
+    :<|> "submit" :> ReqBody '[JSON] TxModal :> UVerb 'POST '[JSON] UVerbResponseTypes
 
 frameworkErrorHandler valueOrFe = case valueOrFe of
   Left fe -> throwError $ err500 {errBody = BSL.fromStrict $ prettyPrintJSON fe}
@@ -130,6 +131,7 @@ server =
     :<|> fanoutHandler
     :<|> protocolParameterHandler
     :<|> txHandler
+    :<|> submitHandler
 
 initHandler :: Maybe Bool -> Handler (Union UVerbResponseTypes)
 initHandler wait = do
@@ -182,6 +184,11 @@ txHandler txb = do
   case hydraTxModal of
     Left fe -> toServerError fe
     Right txm -> pure txm
+
+submitHandler :: TxModal -> Handler (Union UVerbResponseTypes)
+submitHandler txm = do
+  submitResponse <- liftIO $ submit txm
+  hydraErrorHandler submitResponse
 
 -- Create API Proxy
 deployAPI :: Proxy API

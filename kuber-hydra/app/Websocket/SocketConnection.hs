@@ -51,7 +51,7 @@ errorTags =
   ]
 
 skipTags :: [(T.Text, Int)]
-skipTags = [("Greetings", 201)] -- Created
+skipTags = [("Greetings", 201), ("TxValid", 201)] -- Created
 
 -- WebSocket Proxy Server
 proxyServer :: String -> Int -> WS.ServerApp
