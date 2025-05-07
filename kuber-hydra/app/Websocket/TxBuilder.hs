@@ -251,24 +251,37 @@ queryUTxO address txin = do
 
 toValidHydraTxBuilder :: TxBuilder_ ConwayEra -> IO (Either FrameworkError TxModal)
 toValidHydraTxBuilder txb = do
-  -- validate selections and inputs
   let selections = txSelections txb
       inputs = txInputs txb
   selectionUTxOs <- mapM getUTxOsFromSelection selections
-  let (utxos, err) = (rights selectionUTxOs, lefts selectionUTxOs)
+  sKeyFromSelections <- mapM getKeysFromSelections selections
+  sKeyFromInputs <- mapM getKeysFromInputs inputs
+  inputUTxOs <- mapM getUTxOFromInputs inputs
+  let (utxosFromSelections, errorsFromSelections) = (rights selectionUTxOs, lefts selectionUTxOs)
+      (utxosFromInputs, errorsFromInputs) = (rights inputUTxOs, lefts inputUTxOs)
       selectionTxBuilder =
         mconcat $
-          map txWalletUtxos (concat utxos)
-  if not (null err)
+          map txWalletUtxos (concat utxosFromSelections)
+      inputTxBuilder =
+        mconcat $
+          map txConsumeUtxos (concat utxosFromInputs)
+      skeyTxBuilder =
+        mconcat $ map txSign $ concat sKeyFromSelections <> concat sKeyFromInputs
+  if not (null $ errorsFromSelections <> errorsFromInputs)
     then
       return $
         Left $
           FrameworkError
             NodeQueryError
-            ("toValidHydraTxBuilder: Missing Selection In Hydra." <> concatMap ((++ "\n") . show) err)
+            ("toValidHydraTxBuilder: Missing Selection In Hydra." <> concatMap ((++ "\n") . show) (errorsFromSelections <> errorsFromInputs))
     else do
-      Debug.traceM (BS8.unpack $ prettyPrintJSON selectionTxBuilder)
-      txBuilderResponse <- liftIO $ rawBuildHydraTx $ txb <> selectionTxBuilder
+      let validHydraTxBuilder =
+            txb
+              <> selectionTxBuilder
+              <> inputTxBuilder
+              <> skeyTxBuilder
+      Debug.traceM (BS8.unpack $ prettyPrintJSON validHydraTxBuilder)
+      txBuilderResponse <- liftIO $ rawBuildHydraTx validHydraTxBuilder
       case txBuilderResponse of
         Left fe -> pure $ Left fe
         Right tx -> pure $ Right $ TxModal $ InAnyCardanoEra bCardanoEra tx
@@ -278,12 +291,12 @@ getUTxOsFromSelection selection = case selection of
   TxSelectableAddresses addrs -> do
     let capiAddress = map fromLedgerAddress addrs :: [AddressInEra ConwayEra]
         addressTexts = map serialiseAddress capiAddress
-    fetchUTxOsFromQuery (\addr -> queryUTxO (Just addr) Nothing) addressTexts "Error querying addresses from Hydra"
+    fetchUTxOsFromQuery (\addr -> queryUTxO (Just addr) Nothing) addressTexts "Error querying  Selections Address from Hydra"
   TxSelectableUtxos utxo -> pure $ Right [utxo]
   TxSelectableTxIn txins -> do
     let txInTexts =
           map (\(TxIn hash (TxIx num)) -> serialiseToRawBytesHexText hash <> "#" <> T.pack (show $ toInteger num)) txins
-    fetchUTxOsFromQuery (queryUTxO Nothing . Just) txInTexts "Error querying TxIns from Hydra"
+    fetchUTxOsFromQuery (queryUTxO Nothing . Just) txInTexts "Error querying Selections TxIn from Hydra"
   _ -> pure $ Right []
   where
     fetchUTxOsFromQuery :: (a -> IO (Either FrameworkError A.Value)) -> [a] -> String -> IO (Either FrameworkError [UTxO ConwayEra])
@@ -293,3 +306,41 @@ getUTxOsFromSelection selection = case selection of
       if not (null errors)
         then return $ Left $ FrameworkError NodeQueryError errorMsg
         else pure $ Right $ rights $ map (parseUTxO . A.encode) utxos
+
+getKeysFromSelections :: TxInputSelection ConwayEra -> IO [SigningKey PaymentKey]
+getKeysFromSelections selection = case selection of
+  TxSelectableSkey skeys -> pure skeys
+  _ -> pure []
+
+getUTxOFromInputs :: TxInput ConwayEra -> IO (Either FrameworkError [UTxO ConwayEra])
+getUTxOFromInputs inputs = validateTxInUTxOs $ getTxInsAndAddressFromInputs inputs
+  where
+    validateTxInUTxOs :: Either [AddressInEra ConwayEra] [TxIn] -> IO (Either FrameworkError [UTxO ConwayEra])
+    validateTxInUTxOs inputs = do
+      txInsAndErrors <- case inputs of
+        Left addr -> mapM ((\a -> queryUTxO (Just a) Nothing) . serialiseAddress) addr
+        Right txins -> mapM ((queryUTxO Nothing . Just) . (\(TxIn hash (TxIx num)) -> serialiseToRawBytesHexText hash <> "#" <> T.pack (show $ toInteger num))) txins
+      let (utxos, errors) = (rights txInsAndErrors, lefts txInsAndErrors)
+      if not (null errors)
+        then return $ Left $ FrameworkError NodeQueryError "Error querying Inputs from Hydra"
+        else pure $ Right $ rights $ map (parseUTxO . A.encode) utxos
+
+    getTxInsAndAddressFromInputs :: TxInput ConwayEra -> Either [AddressInEra ConwayEra] [TxIn]
+    getTxInsAndAddressFromInputs input = case input of
+      TxInputResolved resolvedTxIn -> case resolvedTxIn of
+        TxInputUtxo (UTxO utxoMap) -> Right $ map fst $ M.toList utxoMap
+        TxInputScriptUtxo _ _ _ _ (tin, _) -> Right [tin]
+        TxInputReferenceScriptUtxo tin _ _ _ _ -> Right [tin]
+      TxInputUnResolved unresolvedTxIn -> case unresolvedTxIn of
+        TxInputTxin tin -> Right [tin]
+        TxInputSkey _ -> Right mempty
+        TxInputAddr addr -> Left ([addr] :: [AddressInEra ConwayEra])
+        TxInputScriptTxin _ _ _ _ tin -> Right [tin]
+        TxInputReferenceScriptTxin tin _ _ _ _ -> Right [tin]
+
+getKeysFromInputs :: TxInput ConwayEra -> IO [SigningKey PaymentKey]
+getKeysFromInputs inputs = pure $ case inputs of
+  TxInputUnResolved unresolvedTxIn -> case unresolvedTxIn of
+    TxInputSkey skey -> [skey]
+    _ -> []
+  _ -> []

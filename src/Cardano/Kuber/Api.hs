@@ -7,6 +7,9 @@ module Cardano.Kuber.Api(
     ,   TxBuilder_(..)
     ,   IsTxBuilderEra (..)
     ,   TxInputSelection(..)
+    ,   TxInput(..)
+    ,   TxInputResolved_(..)
+    ,   TxInputUnResolved_(..)
 
     -- *** Transaction Inputs
     -- | Add the txin to  transaction input
