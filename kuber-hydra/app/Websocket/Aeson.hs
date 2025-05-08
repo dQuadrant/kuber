@@ -3,6 +3,9 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use newtype instead of data" #-}
 
 module Websocket.Aeson where
 
@@ -34,7 +37,47 @@ data WSMessage = WSMessage
     seq :: Maybe Int,
     timestamp :: UTCTime
   }
-  deriving (Show)
+  deriving (Generic, Show, ToJSON)
+
+data ContentsAndTag = ContentsAndTag
+  { contents :: A.Value,
+    tag :: T.Text
+  }
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+data HydraState = HydraState
+  { state :: ContentsAndTag
+  }
+  deriving (Generic, Show, ToJSON, FromJSON)
+
+data InitializedHeadParameters = InitializedHeadParameters
+  { parties :: [VKeys]
+  }
+  deriving (Show, Generic, ToJSON, FromJSON)
+
+data InitializedHeadContents = InitializedHeadContents
+  { parameters :: InitializedHeadParameters,
+    pendingCommits :: Maybe [VKeys]
+  }
+  deriving (Show, Generic, ToJSON, FromJSON)
+
+data VKeys = VKeys
+  { vkey :: T.Text
+  }
+  deriving (Show, Generic, ToJSON, FromJSON)
+
+data InitializedHeadContentsAndTag = InitializedHeadContentsAndTag
+  { tag :: T.Text,
+    contents :: InitializedHeadContents
+  }
+  deriving (Show, Generic, ToJSON, FromJSON)
+
+data InitializedHeadResponse = InitializedHeadResponse
+  { seq :: Maybe Int,
+    timestamp :: UTCTime,
+    state :: InitializedHeadContentsAndTag
+  }
+  deriving (Show, Generic, ToJSON, FromJSON)
 
 instance FromJSON WSMessage where
   parseJSON = withObject "WSMessage" $ \v -> do
@@ -123,8 +166,6 @@ data HeadState
   = HeadIsIdle
   | WaitingCommitments
   | PartiallyCommitted
-  | Committed
-  | Ready
-  | Closed
-  | Contested
-  | Finalized
+  | HeadIsReady
+  | HeadIsClosed
+  | HeadIsContested

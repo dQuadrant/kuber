@@ -99,6 +99,7 @@ type HydraCommandAPI =
 type HydraQueryAPI =
   "utxo" :> QueryParam "address" T.Text :> QueryParam "txin" T.Text :> GetResp
     :<|> "protocol-parameters" :> GetResp
+    :<|> "state" :> GetResp
 
 frameworkErrorHandler valueOrFe = case valueOrFe of
   Left fe -> throwError $ err500 {errBody = BSL.fromStrict $ prettyPrintJSON fe}
@@ -148,6 +149,7 @@ server =
     queryServer =
       queryUtxoHandler
         :<|> queryProtocolParameterHandler
+        :<|> queryStateHandler
 
 initHandler :: Maybe Bool -> Handler (Union UVerbResponseTypes)
 initHandler wait = do
@@ -193,6 +195,11 @@ queryProtocolParameterHandler :: Handler (Union UVerbResponseTypes)
 queryProtocolParameterHandler = do
   pParamResponse <- liftIO getProtocolParameters
   frameworkErrorHandler pParamResponse
+
+queryStateHandler :: Handler (Union UVerbResponseTypes)
+queryStateHandler = do
+  stateResponse <- liftIO getHydraState
+  frameworkErrorHandler (stateResponse :: Either FrameworkError A.Value)
 
 txHandler :: TxBuilder_ ConwayEra -> Handler TxModal
 txHandler txb = do

@@ -1,8 +1,9 @@
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Websocket.SocketConnection where
 
-import Cardano.Kuber.Api (FrameworkError)
+import Cardano.Kuber.Api
 import Control.Concurrent
 import Control.Concurrent.Async (race, race_)
 import Control.Exception (SomeException, try)
@@ -112,10 +113,10 @@ getLatestMessage conn0 expectedTags wait = do
             let decoded = decode (BSL.fromStrict (T.encodeUtf8 msg)) :: Maybe WSMessage
             case decoded of
               Just wsmsg
-                | timestamp wsmsg <= start -> go conn -- Wait for fresh message
-                | tag wsmsg `elem` map fst expectedTags -> lookupTag msg wsmsg expectedTags
-                | tag wsmsg `elem` map fst errorTags -> lookupTag msg wsmsg errorTags
-                | tag wsmsg `elem` map fst skipTags -> go conn
+                | wsmsg.timestamp  <= start -> go conn -- Wait for fresh message
+                | wsmsg.tag `elem` map fst expectedTags -> lookupTag msg wsmsg expectedTags
+                | wsmsg.tag `elem` map fst errorTags -> lookupTag msg wsmsg errorTags
+                | wsmsg.tag `elem` map fst skipTags -> go conn
                 | otherwise -> do
                     let wrapper =
                           object
@@ -126,8 +127,9 @@ getLatestMessage conn0 expectedTags wait = do
               Nothing -> go conn -- Try again if decoding fails
   go conn0
   where
+    lookupTag :: T.Text -> WSMessage -> [(T.Text, Int)] -> IO (Maybe (T.Text, Int))
     lookupTag msg wsmsg tagSet = do
-      let code = maybe 500 fromIntegral (lookup (tag wsmsg) tagSet)
+      let code = maybe 500 fromIntegral (lookup wsmsg.tag tagSet)
       return (Just (msg, code))
 
 forwardCommands :: T.Text -> [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
