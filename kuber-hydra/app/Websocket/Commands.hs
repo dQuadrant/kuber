@@ -169,7 +169,11 @@ getHydraState = do
                       response <- createHydraStateResponseAeson HeadIsClosed
                       pure $ Right response
                     else
-                      pure unexpectedResponseError
+                      if stateTag == T.pack "Contested"
+                        then do
+                          response <- createHydraStateResponseAeson HeadIsContested
+                          pure $ Right response
+                        else pure unexpectedResponseError
         else do
           (initHeadMessage, _) <- initialize False
           let decodedInitHeadMessage = decode $ BSL.fromStrict (T.encodeUtf8 initHeadMessage) :: Maybe InitializedHeadResponse
