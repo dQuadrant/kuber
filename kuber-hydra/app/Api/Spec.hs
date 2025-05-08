@@ -75,23 +75,30 @@ instance ToServantErr FrameworkError where
 instance MimeRender PlainText FrameworkError where
   mimeRender ct = mimeRender ct . show
 
-type API = HydraAPI
+type GetResp = UVerb 'GET '[JSON] UVerbResponseTypes
 
-type HydraAPI =
-  "hydra" :> HydraCommands
+type PostResp = UVerb 'POST '[JSON] UVerbResponseTypes
 
-type HydraCommands =
-  "init" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
-    :<|> "abort" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
-    :<|> "query" :> "utxo" :> QueryParam "address" T.Text :> QueryParam "txin" T.Text :> UVerb 'GET '[JSON] UVerbResponseTypes
-    :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> UVerb 'POST '[JSON] UVerbResponseTypes
-    :<|> "decommit" :> QueryParam "wait" Bool :> ReqBody '[JSON] CommitUTxOs :> UVerb 'POST '[JSON] UVerbResponseTypes
-    :<|> "close" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
-    :<|> "contest" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
-    :<|> "fanout" :> QueryParam "wait" Bool :> UVerb 'GET '[JSON] UVerbResponseTypes
-    :<|> "protocol-parameters" :> UVerb 'GET '[JSON] UVerbResponseTypes
+type WithWait sub = QueryParam "wait" Bool :> sub
+
+type API =
+  "hydra" :> HydraCommandAPI
+    :<|> "hydra" :> "query" :> HydraQueryAPI
+
+type HydraCommandAPI =
+  "init" :> WithWait GetResp
+    :<|> "abort" :> WithWait GetResp
+    :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> PostResp
+    :<|> "decommit" :> WithWait (ReqBody '[JSON] CommitUTxOs :> PostResp)
+    :<|> "close" :> WithWait GetResp
+    :<|> "contest" :> WithWait GetResp
+    :<|> "fanout" :> WithWait GetResp
     :<|> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] TxModal
-    :<|> "submit" :> ReqBody '[JSON] TxModal :> UVerb 'POST '[JSON] UVerbResponseTypes
+    :<|> "submit" :> ReqBody '[JSON] TxModal :> PostResp
+
+type HydraQueryAPI =
+  "utxo" :> QueryParam "address" T.Text :> QueryParam "txin" T.Text :> GetResp
+    :<|> "protocol-parameters" :> GetResp
 
 frameworkErrorHandler valueOrFe = case valueOrFe of
   Left fe -> throwError $ err500 {errBody = BSL.fromStrict $ prettyPrintJSON fe}
@@ -121,17 +128,26 @@ hydraErrorHandler (msg, status) = do
 
 -- Define Handlers
 server =
-  initHandler
-    :<|> abortHandler
-    :<|> queryUtxoHandler
-    :<|> commitHandler
-    :<|> decommitHandler
-    :<|> closeHandler
-    :<|> contestHandler
-    :<|> fanoutHandler
-    :<|> protocolParameterHandler
-    :<|> txHandler
-    :<|> submitHandler
+  commandServer
+    :<|> queryServer
+  where
+    -- Commands: POSTs and state-changing GETs
+    commandServer :: Server HydraCommandAPI
+    commandServer =
+      initHandler
+        :<|> abortHandler
+        :<|> commitHandler
+        :<|> decommitHandler
+        :<|> closeHandler
+        :<|> contestHandler
+        :<|> fanoutHandler
+        :<|> txHandler
+        :<|> submitHandler
+    -- Queries: GET-only, read-only endpoints
+    queryServer :: Server HydraQueryAPI
+    queryServer =
+      queryUtxoHandler
+        :<|> queryProtocolParameterHandler
 
 initHandler :: Maybe Bool -> Handler (Union UVerbResponseTypes)
 initHandler wait = do
@@ -173,8 +189,8 @@ fanoutHandler wait = do
   fanoutResponse <- liftIO $ fanout (fromMaybe False wait)
   hydraErrorHandler fanoutResponse
 
-protocolParameterHandler :: Handler (Union UVerbResponseTypes)
-protocolParameterHandler = do
+queryProtocolParameterHandler :: Handler (Union UVerbResponseTypes)
+queryProtocolParameterHandler = do
   pParamResponse <- liftIO getProtocolParameters
   frameworkErrorHandler pParamResponse
 

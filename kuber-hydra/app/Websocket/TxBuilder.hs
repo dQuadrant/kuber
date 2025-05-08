@@ -347,7 +347,7 @@ getUTxOFromInputs inputs = validateTxInUTxOs $ getTxInsAndAddressFromInputs inpu
         Right txins -> mapM ((queryUTxO Nothing . Just) . (\(TxIn hash (TxIx num)) -> serialiseToRawBytesHexText hash <> "#" <> T.pack (show $ toInteger num))) txins
       let (utxos, errors) = (rights txInsAndErrors, lefts txInsAndErrors)
       if not (null errors)
-        then return $ Left $ FrameworkError NodeQueryError "Error querying Inputs from Hydra"
+        then pure $ Left $ FrameworkError NodeQueryError "Error querying Inputs from Hydra"
         else pure $ Right $ rights $ map (parseUTxO . A.encode) utxos
 
     getTxInsAndAddressFromInputs :: TxInput ConwayEra -> Either [AddressInEra ConwayEra] [TxIn]

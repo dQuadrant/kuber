@@ -1,14 +1,15 @@
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Websocket.Aeson where
 
 import Cardano.Api (ExecutionUnitPrices)
 import Cardano.Api.Shelley (ExecutionUnits)
 import Data.Aeson
+import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as Aeson
 import qualified Data.Map as M
 import qualified Data.Text as T
@@ -16,7 +17,6 @@ import Data.Time
 import Data.Time.Format.ISO8601 (iso8601ParseM)
 import GHC.Generics (Generic)
 import GHC.Natural
-import qualified Data.Aeson as A
 
 newtype HydraGetUTxOResponse = HydraGetUTxOResponse
   { utxo :: M.Map T.Text A.Value
@@ -118,3 +118,13 @@ data ProtocolVersion = ProtocolVersion
   deriving (Show, Generic)
 
 instance FromJSON ProtocolVersion
+
+data HeadState
+  = HeadIsIdle
+  | WaitingCommitments
+  | PartiallyCommitted
+  | Committed
+  | Ready
+  | Closed
+  | Contested
+  | Finalized
