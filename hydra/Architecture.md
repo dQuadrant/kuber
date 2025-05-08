@@ -143,6 +143,9 @@ This architecture supports a fully interactive development and production enviro
 #### Query UTxOs 
 <img alt="Query hydra UTxOs sequence diagram" src="./sequence-diagrams/utxo.jpg" />  
 
+#### Query Protocol Parameters 
+<img alt="Query hydra UTxOs sequence diagram" src="./sequence-diagrams/protocol-parameters.jpg" />  
+
 #### Abort Head
 <img alt="Abort hydra head sequence diagram" src="./sequence-diagrams/abort.jpg" />  
 
