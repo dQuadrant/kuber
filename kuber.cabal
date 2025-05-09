@@ -86,7 +86,6 @@ library
     , cardano-slotting
     , plutus-ledger-api
     , plutus-tx
-    , plutus-tx-plugin
     , ouroboros-consensus
     , ouroboros-network
     , ouroboros-network-protocols
