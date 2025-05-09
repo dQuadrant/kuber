@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - develop
+      - update/hydra-docs # for testing
     tags:
       - "*"
 
@@ -19,19 +20,28 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v2
         with:
-          node-version: 18 # Use Node.js 18 here
+          node-version: 18
 
       - name: Install dependencies
         run: npm install
         working-directory: ./docs
 
-      - name: Build site
+      - name: Build Docusaurus site
         run: npm run build
         working-directory: ./docs
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy Docusaurus to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs/build
           destination_dir: archietecture_docusaurus
+          keep_files: true
+
+      - name: Deploy kuber-haskell-library to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/kuber-haskell-library
+          destination_dir: kuber_haskell_library
+          keep_files: true
