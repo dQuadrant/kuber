@@ -36,11 +36,3 @@ jobs:
           publish_dir: ./docs/build
           destination_dir: hydra_docusaurus
           keep_files: true
-
-      - name: Deploy kuber-haskell-library to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs/kuber-haskell-library
-          destination_dir: haskell_library
-          keep_files: true
