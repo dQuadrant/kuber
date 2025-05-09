@@ -21,6 +21,11 @@ import Data.Time.Format.ISO8601 (iso8601ParseM)
 import GHC.Generics (Generic)
 import GHC.Natural
 
+data Host = Host
+  { ip :: String,
+    port :: Int
+  }
+
 newtype HydraGetUTxOResponse = HydraGetUTxOResponse
   { utxo :: M.Map T.Text A.Value
   }

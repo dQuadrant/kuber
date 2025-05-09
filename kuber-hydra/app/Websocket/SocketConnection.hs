@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Websocket.SocketConnection where
 
@@ -22,7 +23,6 @@ import Network.HTTP.Client.Conduit (parseRequest)
 import Network.HTTP.Simple (getResponseBody, httpLBS, setRequestBodyLBS, setRequestHeader, setRequestMethod)
 import Network.Wai
 import qualified Network.WebSockets as WS
-import System.Environment (getEnv)
 import Websocket.Aeson
 import Websocket.Utils
 
@@ -32,11 +32,8 @@ serverIP = "0.0.0.0"
 serverPort :: Int
 serverPort = 8081
 
-hydraIP :: IO String
-hydraIP = getEnv "HYDRA_IP"
-
-hydraPort :: IO String
-hydraPort = getEnv "HYDRA_PORT"
+hydraBaseUrl :: Host -> [Char]
+hydraBaseUrl hydraHost = "http://" ++ ip hydraHost ++ ":" ++ show (port hydraHost) ++ "/"
 
 errorTags :: [(T.Text, Int)]
 errorTags =
@@ -55,11 +52,11 @@ skipTags :: [(T.Text, Int)]
 skipTags = [("Greetings", 201), ("TxValid", 201)] -- Created
 
 -- WebSocket Proxy Server
-proxyServer :: String -> Int -> WS.ServerApp
-proxyServer ip port pending = do
+proxyServer :: Host -> WS.ServerApp
+proxyServer host pending = do
   conn <- WS.acceptRequest pending
   putStrLn "New client connected, forwarding to Hydra WebSocket..."
-  WS.runClient ip port "/" $ \remote -> do
+  WS.runClient (ip host) (port host) "/" $ \remote -> do
     putStrLn "Connected to Hydra WebSocket server."
     -- Race both directions, end when either one stops
     race_
@@ -76,6 +73,7 @@ forwardMessageWS srcConn dstConn = forever $ do
 
 -- Collect and filter WebSocket messages
 getLatestMessage ::
+  Host ->
   -- | current connection
   WS.Connection ->
   -- | expected tags
@@ -84,7 +82,7 @@ getLatestMessage ::
   Bool ->
   -- | response
   IO (Maybe (T.Text, Int))
-getLatestMessage conn0 expectedTags wait = do
+getLatestMessage hydraHost conn0 expectedTags wait = do
   start <- getCurrentTime
   let timeoutMicroseconds = 15 * 10 ^ 6
       go conn = do
@@ -104,16 +102,14 @@ getLatestMessage conn0 expectedTags wait = do
             return $ Just (T.decodeUtf8 $ BSL.toStrict $ encode response201, 201)
           Right (Left _) -> do
             putStrLn "WebSocket disconnected, attempting to reconnect..."
-            ip <- hydraIP
-            port <- hydraPort
-            WS.runClient ip (read port) "/" $ \newConn -> do
+            WS.runClient (ip hydraHost) (port hydraHost) "/" $ \newConn -> do
               putStrLn "Reconnected"
               go newConn
           Right (Right msg) -> do
             let decoded = decode (BSL.fromStrict (T.encodeUtf8 msg)) :: Maybe WSMessage
             case decoded of
               Just wsmsg
-                | wsmsg.timestamp  <= start -> go conn -- Wait for fresh message
+                | wsmsg.timestamp <= start -> go conn -- Wait for fresh message
                 | wsmsg.tag `elem` map fst expectedTags -> lookupTag msg wsmsg expectedTags
                 | wsmsg.tag `elem` map fst errorTags -> lookupTag msg wsmsg errorTags
                 | wsmsg.tag `elem` map fst skipTags -> go conn
@@ -132,16 +128,16 @@ getLatestMessage conn0 expectedTags wait = do
       let code = maybe 500 fromIntegral (lookup wsmsg.tag tagSet)
       return (Just (msg, code))
 
-forwardCommands :: T.Text -> [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
-forwardCommands command tag wait = do
+forwardCommands :: Host -> T.Text -> [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
+forwardCommands hydraHost command tag wait = do
   WS.runClient serverIP serverPort "/" $ \conn -> do
     WS.sendTextData conn command
-    getLatestMessage conn tag wait >>= \msg -> return (fromMaybe ("No message received", 503) msg)
+    getLatestMessage hydraHost conn tag wait >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
-validateLatestWebsocketTag :: [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
-validateLatestWebsocketTag tag wait = do
+validateLatestWebsocketTag :: Host -> [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
+validateLatestWebsocketTag hydraHost tag wait = do
   WS.runClient serverIP serverPort "/" $ \conn -> do
-    getLatestMessage conn tag wait >>= \msg -> return (fromMaybe ("No message received", 503) msg)
+    getLatestMessage hydraHost conn tag wait >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
 -- Check if Request is a WebSocket Request
 isWebSocketRequest :: Request -> Bool
@@ -150,23 +146,18 @@ isWebSocketRequest req =
     Just "websocket" -> True
     _ -> False
 
-fetch :: IO (T.Text -> IO T.Text)
-fetch = do
-  ip <- hydraIP
-  port <- hydraPort
-  let baseUrl = "http://" ++ ip ++ ":" ++ port ++ "/"
+fetch :: Host -> IO (T.Text -> IO T.Text)
+fetch hydraHost = do
   return $ \endpoint -> do
-    let url = baseUrl ++ T.unpack endpoint
+    let url = hydraBaseUrl hydraHost ++ T.unpack endpoint
     request <- parseRequest url
     response <- httpLBS request
     let responseBody = T.pack $ BS8.unpack $ BSL.toStrict $ getResponseBody response
     return responseBody
 
-post :: (ToJSON p) => [Char] -> p -> IO T.Text
-post path jsonData = do
-  ip <- hydraIP
-  port <- hydraPort
-  let url = "http://" ++ ip ++ ":" ++ port ++ "/" ++ path
+post :: (ToJSON p) => Host -> [Char] -> p -> IO T.Text
+post hydraHost path jsonData = do
+  let url = hydraBaseUrl hydraHost ++ path
   initialRequest <- parseRequest url
   let request =
         setRequestMethod "POST" $
@@ -177,11 +168,11 @@ post path jsonData = do
   let responseBody = T.pack $ BS8.unpack $ BSL.toStrict $ getResponseBody response
   return responseBody
 
-getHydraCommitTx :: T.Text -> IO (Either FrameworkError T.Text)
-getHydraCommitTx utxoSchema = do
+getHydraCommitTx :: Host -> T.Text -> IO (Either FrameworkError T.Text)
+getHydraCommitTx hydraHost utxoSchema = do
   let jsonResponseOrError = textToJSON utxoSchema
   case jsonResponseOrError of
     Left fe -> pure $ Left fe
     Right jsonResponse -> do
-      response <- liftIO $ post "commit" jsonResponse
+      response <- liftIO $ post hydraHost "commit" jsonResponse
       pure $ Right response

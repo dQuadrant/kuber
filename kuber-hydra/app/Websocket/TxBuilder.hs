@@ -18,13 +18,11 @@ import Cardano.Kuber.Data.Parsers
 import Cardano.Kuber.Util
 import qualified Cardano.Ledger.BaseTypes as L
 import qualified Cardano.Ledger.Coin as L
-import Control.Applicative
 import Data.Aeson
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Key as K
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
-import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
 import Data.Either
 import Data.List (foldl')
@@ -36,15 +34,14 @@ import qualified Data.Text as T
 import Data.Text.Encoding
 import qualified Data.Text.Encoding as T
 import qualified Debug.Trace as Debug
-import GHC.Generics
 import Websocket.Aeson
 import Websocket.Forwarder
 import Websocket.SocketConnection (fetch, post, validateLatestWebsocketTag)
 import Websocket.Utils (textToJSON)
 
-submitHydraDecommitTx :: [T.Text] -> SigningKey PaymentKey -> Bool -> IO (Either FrameworkError A.Value)
-submitHydraDecommitTx utxosToDecommit sk wait = do
-  (allUTxOsText, _) <- sendCommandToHydraNodeSocket GetUTxO False
+submitHydraDecommitTx :: Host -> [T.Text] -> SigningKey PaymentKey -> Bool -> IO (Either FrameworkError A.Value)
+submitHydraDecommitTx hydraHost utxosToDecommit sk wait = do
+  (allUTxOsText, _) <- sendCommandToHydraNodeSocket hydraHost GetUTxO False
   let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe HydraGetUTxOResponse
   case allHydraUTxOs of
     Nothing -> return $ Left $ FrameworkError ParserError "buildHydraDecommitTx: Error parsing Hydra UTxOs"
@@ -74,7 +71,7 @@ submitHydraDecommitTx utxosToDecommit sk wait = do
                           $ unUTxO parsedUTxO
                       )
                       <> txSign sk
-              protocolParamText <- hydraProtocolParams
+              protocolParamText <- hydraProtocolParams hydraHost
               case protocolParamText of
                 Left err -> return $ Left err
                 Right (hpp :: HydraProtocolParameters) -> do
@@ -84,10 +81,10 @@ submitHydraDecommitTx utxosToDecommit sk wait = do
                     Right tx -> do
                       let cborHex :: T.Text = T.pack $ toHexString $ serialiseToCBOR tx
                           decommitTxObject = buildWitnessedTx cborHex
-                      decommitPostResponse <- post "decommit" decommitTxObject
+                      decommitPostResponse <- post hydraHost "decommit" decommitTxObject
                       if T.strip (T.filter (/= '"') decommitPostResponse) == "OK"
                         then do
-                          wsResult <- validateLatestWebsocketTag (generateResponseTag DeCommitUTxO) wait
+                          wsResult <- validateLatestWebsocketTag hydraHost (generateResponseTag DeCommitUTxO) wait
                           return $ textToJSON $ fst wsResult
                         else
                           return $
@@ -95,9 +92,9 @@ submitHydraDecommitTx utxosToDecommit sk wait = do
                               FrameworkError TxSubmissionError $
                                 "submitHydraDecommitTx: Error submitting decommit transaction to Hydra: " ++ T.unpack decommitPostResponse
 
-hydraProtocolParams :: IO (Either FrameworkError HydraProtocolParameters)
-hydraProtocolParams = do
-  protocolParamText <- fetch >>= \query -> query (T.pack "protocol-parameters")
+hydraProtocolParams :: Host -> IO (Either FrameworkError HydraProtocolParameters)
+hydraProtocolParams hydraHost = do
+  protocolParamText <- fetch hydraHost >>= \query -> query (T.pack "protocol-parameters")
   case A.eitherDecode (BSL.fromStrict $ encodeUtf8 protocolParamText) of
     Left err -> pure $ Left $ FrameworkError ParserError err
     Right (hpp :: HydraProtocolParameters) -> pure $ Right hpp
@@ -197,9 +194,9 @@ buildWitnessedTx cborHex =
       "description" .= T.pack "Ledger Cddl Format"
     ]
 
-rawBuildHydraTx :: TxBuilder_ ConwayEra -> IO (Either FrameworkError (Tx ConwayEra))
-rawBuildHydraTx txb = do
-  protocolParamText <- hydraProtocolParams
+rawBuildHydraTx :: Host -> TxBuilder_ ConwayEra -> IO (Either FrameworkError (Tx ConwayEra))
+rawBuildHydraTx hydraHost txb = do
+  protocolParamText <- hydraProtocolParams hydraHost
   case protocolParamText of
     Left err -> return $ Left err
     Right (hpp :: HydraProtocolParameters) -> do
@@ -208,9 +205,9 @@ rawBuildHydraTx txb = do
         Left fe -> return $ Left fe
         Right tx -> return $ Right tx
 
-queryUTxO :: Maybe T.Text -> Maybe T.Text -> IO (Either FrameworkError A.Value)
-queryUTxO address txin = do
-  (allUTxOsText, _) <- sendCommandToHydraNodeSocket GetUTxO False
+queryUTxO :: Host -> Maybe T.Text -> Maybe T.Text -> IO (Either FrameworkError A.Value)
+queryUTxO hydraHost address txin = do
+  (allUTxOsText, _) <- sendCommandToHydraNodeSocket hydraHost GetUTxO False
   let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe HydraGetUTxOResponse
   case allHydraUTxOs of
     Nothing -> return $ Left $ FrameworkError ParserError "queryUTxO: Error parsing Hydra UTxOs"
@@ -250,8 +247,8 @@ queryUTxO address txin = do
                 Nothing -> pure $ Left $ FrameworkError ParserError $ "queryUTxO : Unable to parse address: " <> T.unpack addr
             Nothing -> pure $ Right $ A.toJSON $ utxo parsedHydraUTxOs
 
-toValidHydraTxBuilder :: TxBuilder_ ConwayEra -> IO (Either FrameworkError TxModal)
-toValidHydraTxBuilder txb = do
+toValidHydraTxBuilder :: Host -> TxBuilder_ ConwayEra -> IO (Either FrameworkError TxModal)
+toValidHydraTxBuilder hydraHost txb = do
   let selections = txSelections txb
       inputs = txInputs txb
       specifiedChangeAddress = case txDefaultChangeAddr txb of
@@ -261,10 +258,10 @@ toValidHydraTxBuilder txb = do
           case changeAddressFromSelection of
             Just chAddr -> Right chAddr
             Nothing -> Left $ FrameworkError TxValidationError "Missing Change Address"
-  selectionUTxOs <- mapM getUTxOsFromSelection selections
+  selectionUTxOs <- mapM (getUTxOsFromSelection hydraHost) selections
   sKeyFromSelections <- mapM getKeysFromSelections selections
   sKeyFromInputs <- mapM getKeysFromInputs inputs
-  inputUTxOs <- mapM getUTxOFromInputs inputs
+  inputUTxOs <- mapM (getUTxOFromInputs hydraHost) inputs
   let (utxosFromSelections, errorsFromSelections) = (rights selectionUTxOs, lefts selectionUTxOs)
       (utxosFromInputs, errorsFromInputs) = (rights inputUTxOs, lefts inputUTxOs)
   case specifiedChangeAddress of
@@ -292,22 +289,22 @@ toValidHydraTxBuilder txb = do
                   <> skeyTxBuilder
                   <> changeAddressTxBuilder
           -- Debug.traceM (BS8.unpack $ prettyPrintJSON validHydraTxBuilder)
-          txBuilderResponse <- liftIO $ rawBuildHydraTx validHydraTxBuilder
+          txBuilderResponse <- liftIO $ rawBuildHydraTx hydraHost validHydraTxBuilder
           case txBuilderResponse of
             Left fe -> pure $ Left fe
             Right tx -> pure $ Right $ TxModal $ InAnyCardanoEra bCardanoEra tx
 
-getUTxOsFromSelection :: TxInputSelection ConwayEra -> IO (Either FrameworkError [UTxO ConwayEra])
-getUTxOsFromSelection selection = case selection of
+getUTxOsFromSelection :: Host -> TxInputSelection ConwayEra -> IO (Either FrameworkError [UTxO ConwayEra])
+getUTxOsFromSelection hydraHost selection = case selection of
   TxSelectableAddresses addrs -> do
     let capiAddress = map fromLedgerAddress addrs :: [AddressInEra ConwayEra]
         addressTexts = map serialiseAddress capiAddress
-    fetchUTxOsFromQuery (\addr -> queryUTxO (Just addr) Nothing) addressTexts "Error querying  Selections Address from Hydra"
+    fetchUTxOsFromQuery (\addr -> queryUTxO hydraHost (Just addr) Nothing) addressTexts "Error querying  Selections Address from Hydra"
   TxSelectableUtxos utxo -> pure $ Right [utxo]
   TxSelectableTxIn txins -> do
     let txInTexts =
           map (\(TxIn hash (TxIx num)) -> serialiseToRawBytesHexText hash <> "#" <> T.pack (show $ toInteger num)) txins
-    fetchUTxOsFromQuery (queryUTxO Nothing . Just) txInTexts "Error querying Selections TxIn from Hydra"
+    fetchUTxOsFromQuery (queryUTxO hydraHost Nothing . Just) txInTexts "Error querying Selections TxIn from Hydra"
   _ -> pure $ Right []
   where
     fetchUTxOsFromQuery :: (a -> IO (Either FrameworkError A.Value)) -> [a] -> String -> IO (Either FrameworkError [UTxO ConwayEra])
@@ -337,14 +334,14 @@ getChangeAddressFromSelections selections =
         [] -> Nothing
         a : _ -> Just a
 
-getUTxOFromInputs :: TxInput ConwayEra -> IO (Either FrameworkError [UTxO ConwayEra])
-getUTxOFromInputs inputs = validateTxInUTxOs $ getTxInsAndAddressFromInputs inputs
+getUTxOFromInputs :: Host -> TxInput ConwayEra -> IO (Either FrameworkError [UTxO ConwayEra])
+getUTxOFromInputs hydraHost inputs = validateTxInUTxOs $ getTxInsAndAddressFromInputs inputs
   where
     validateTxInUTxOs :: Either [AddressInEra ConwayEra] [TxIn] -> IO (Either FrameworkError [UTxO ConwayEra])
     validateTxInUTxOs inputs = do
       txInsAndErrors <- case inputs of
-        Left addr -> mapM ((\a -> queryUTxO (Just a) Nothing) . serialiseAddress) addr
-        Right txins -> mapM ((queryUTxO Nothing . Just) . (\(TxIn hash (TxIx num)) -> serialiseToRawBytesHexText hash <> "#" <> T.pack (show $ toInteger num))) txins
+        Left addr -> mapM ((\a -> queryUTxO hydraHost (Just a) Nothing) . serialiseAddress) addr
+        Right txins -> mapM ((queryUTxO hydraHost Nothing . Just) . (\(TxIn hash (TxIx num)) -> serialiseToRawBytesHexText hash <> "#" <> T.pack (show $ toInteger num))) txins
       let (utxos, errors) = (rights txInsAndErrors, lefts txInsAndErrors)
       if not (null errors)
         then pure $ Left $ FrameworkError NodeQueryError "Error querying Inputs from Hydra"

@@ -5,7 +5,6 @@
 
 module Websocket.Forwarder where
 
-import Cardano.Api (prettyPrintJSON)
 import Cardano.Kuber.Data.Models
 import Data.Aeson
 import qualified Data.Aeson as A
@@ -13,6 +12,7 @@ import qualified Data.Aeson.Text as AT
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import Websocket.SocketConnection
+import Websocket.Aeson
 
 data Action
   = InitializeHead
@@ -43,19 +43,19 @@ hydraHeadInitialized = T.pack "Hydra Head Initialized"
 hydraHeadAborted :: T.Text
 hydraHeadAborted = T.pack "Hydra Head Aborted"
 
-sendCommandToHydraNodeSocket :: Action -> Bool -> IO (T.Text, Int)
-sendCommandToHydraNodeSocket message wait = do
+sendCommandToHydraNodeSocket :: Host -> Action -> Bool -> IO (T.Text, Int)
+sendCommandToHydraNodeSocket hydraHost message wait = do
   let responseTag = generateResponseTag message
   case message of
-    InitializeHead -> forwardCommands "{\"tag\": \"Init\"}" responseTag wait
-    Abort -> forwardCommands "{\"tag\": \"Abort\"}" responseTag wait
-    GetUTxO -> forwardCommands "{\"tag\": \"GetUTxO\"}" responseTag wait
-    CloseHead -> forwardCommands "{\"tag\": \"Close\"}" responseTag wait
-    ContestHead -> forwardCommands "{\"tag\": \"Contest\"}" responseTag wait
-    FanOut -> forwardCommands "{\"tag\": \"Fanout\"}" responseTag wait
+    InitializeHead -> forwardCommands hydraHost "{\"tag\": \"Init\"}" responseTag wait
+    Abort -> forwardCommands hydraHost "{\"tag\": \"Abort\"}" responseTag wait
+    GetUTxO -> forwardCommands hydraHost "{\"tag\": \"GetUTxO\"}" responseTag wait
+    CloseHead -> forwardCommands hydraHost "{\"tag\": \"Close\"}" responseTag wait
+    ContestHead -> forwardCommands hydraHost "{\"tag\": \"Contest\"}" responseTag wait
+    FanOut -> forwardCommands hydraHost "{\"tag\": \"Fanout\"}" responseTag wait
 
-submitHydraTx :: TxModal -> IO (T.Text, Int)
-submitHydraTx txm = forwardCommands newTxCommand (generateResponseTag NewTx) False
+submitHydraTx :: Host -> TxModal -> IO (T.Text, Int)
+submitHydraTx hydraHost txm = forwardCommands hydraHost newTxCommand (generateResponseTag NewTx) False
   where
     newTxCommand =
       TL.toStrict . AT.encodeToLazyText $

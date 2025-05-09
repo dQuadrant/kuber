@@ -19,15 +19,10 @@ import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Data.Parsers
 import Data.Aeson
 import qualified Data.Aeson as A
-import qualified Data.Aeson.Key as K
-import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Types
 import Data.ByteString.Char8 as BS8 hiding (elem, filter, head, length, map, null)
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import Data.Functor
-import qualified Data.HashMap.Strict as HM
-import Data.Map as M hiding (filter, map, null)
-import qualified Data.Map.Strict as M
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.Text.Conversions
@@ -52,37 +47,37 @@ data HydraCommitTx = HydraCommitTx
 hydraHeadMessageForwardingFailed :: T.Text
 hydraHeadMessageForwardingFailed = T.pack "Failed to forward message to hydra head"
 
-initialize :: Bool -> IO (T.Text, Int)
-initialize wait = do
-  sendCommandToHydraNodeSocket InitializeHead wait
+initialize :: Host -> Bool -> IO (T.Text, Int)
+initialize hydraHost wait = do
+  sendCommandToHydraNodeSocket hydraHost InitializeHead wait
 
-abort :: Bool -> IO (T.Text, Int)
-abort wait = do
-  sendCommandToHydraNodeSocket Abort wait
+abort :: Host -> Bool -> IO (T.Text, Int)
+abort hydraHost wait = do
+  sendCommandToHydraNodeSocket hydraHost Abort wait
 
-close :: Bool -> IO (T.Text, Int)
-close wait = do
-  sendCommandToHydraNodeSocket CloseHead wait
+close :: Host -> Bool -> IO (T.Text, Int)
+close hydraHost wait = do
+  sendCommandToHydraNodeSocket hydraHost CloseHead wait
 
-contest :: Bool -> IO (T.Text, Int)
-contest wait = do
-  sendCommandToHydraNodeSocket ContestHead wait
+contest :: Host -> Bool -> IO (T.Text, Int)
+contest hydraHost wait = do
+  sendCommandToHydraNodeSocket hydraHost ContestHead wait
 
-fanout :: Bool -> IO (T.Text, Int)
-fanout wait = do
-  sendCommandToHydraNodeSocket FanOut wait
+fanout :: Host -> Bool -> IO (T.Text, Int)
+fanout hydraHost wait = do
+  sendCommandToHydraNodeSocket hydraHost FanOut wait
 
-submit :: TxModal -> IO (T.Text, Int)
+submit :: Host -> TxModal -> IO (T.Text, Int)
 submit txm = do
   submitHydraTx txm
 
-commitUTxO :: [T.Text] -> A.Value -> IO (Either FrameworkError A.Value)
-commitUTxO utxos sk = do
+commitUTxO :: Host -> [T.Text] -> A.Value -> IO (Either FrameworkError A.Value)
+commitUTxO hydraHost utxos sk = do
   utxoSchema <- createUTxOSchema utxos
   case parseSignKey (jsonToText sk) of
     Nothing -> pure $ Left $ FrameworkError ParserError "Invalid signing key"
     Just parsedSk -> do
-      unsignedCommitTxOrError <- getHydraCommitTx utxoSchema
+      unsignedCommitTxOrError <- getHydraCommitTx hydraHost utxoSchema
       case unsignedCommitTxOrError of
         Right unsignedCommitTx -> do
           case A.eitherDecode (fromStrict $ T.encodeUtf8 unsignedCommitTx) of
@@ -109,12 +104,12 @@ commitUTxO utxos sk = do
                         Right () -> pure $ Right $ object ["tx" .= getTxId txBody]
         Left fe -> pure $ Left fe
 
-decommitUTxO :: [T.Text] -> Data.Aeson.Types.Value -> Bool -> IO (Either FrameworkError A.Value)
-decommitUTxO utxos sk wait = do
+decommitUTxO :: Host -> [T.Text] -> Data.Aeson.Types.Value -> Bool -> IO (Either FrameworkError A.Value)
+decommitUTxO hydraHost utxos sk wait = do
   signKey <- case parseSignKey (jsonToText sk) of
     Just parsedSk -> pure parsedSk
     Nothing -> error "Failure parsing singing key"
-  submitHydraDecommitTx utxos signKey wait
+  submitHydraDecommitTx hydraHost utxos signKey wait
 
 createUTxOSchema :: [T.Text] -> IO T.Text
 createUTxOSchema utxos = do
@@ -138,14 +133,14 @@ getUtxoDetails utxoList = do
       utxoList
   kQueryUtxoByTxin (Set.fromList parsed)
 
-getProtocolParameters :: IO (Either FrameworkError A.Value)
-getProtocolParameters = do
-  hydraProtocolParameters <- fetch >>= \query -> query (T.pack "protocol-parameters")
+getProtocolParameters :: Host -> IO (Either FrameworkError A.Value)
+getProtocolParameters hydraHost = do
+  hydraProtocolParameters <- fetch hydraHost >>= \query -> query (T.pack "protocol-parameters")
   pure $ textToJSON hydraProtocolParameters
 
-getHydraState :: IO (Either FrameworkError A.Value)
-getHydraState = do
-  (allUTxOsText, _) <- sendCommandToHydraNodeSocket GetUTxO False
+getHydraState :: Host -> IO (Either FrameworkError A.Value)
+getHydraState hydraHost = do
+  (allUTxOsText, _) <- sendCommandToHydraNodeSocket hydraHost GetUTxO False
   let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe WSMessage
       unexpectedResponseError = Left $ FrameworkError ParserError "getHydraState: Unexpected response"
   case allHydraUTxOs of
@@ -175,7 +170,7 @@ getHydraState = do
                           pure $ Right response
                         else pure unexpectedResponseError
         else do
-          (initHeadMessage, _) <- initialize False
+          (initHeadMessage, _) <- initialize hydraHost False
           let decodedInitHeadMessage = decode $ BSL.fromStrict (T.encodeUtf8 initHeadMessage) :: Maybe InitializedHeadResponse
           case decodedInitHeadMessage of
             Nothing -> pure unexpectedResponseError
