@@ -34,7 +34,7 @@ These APIs will be exposed as REST endpoints and integrated with a WebSocket bac
 
 A draft diagram is available [here](https://raw.githubusercontent.com/drep-id/image/main/preview/kuber-hydra_20250417075127614.png).
 
-<img alt="Hydra Architecture Diagram" src="https://raw.githubusercontent.com/dQuadrant/kuber/88c3fe0b1e721e5e4fb8e4bcd9e50f10b570f628/hydra/sequence-diagrams/hydra-architecture.png" />
+![Technical Architecture](../static/img/hydra-architecture.png)
 
 ### 🧭 High-Level Overview
 
