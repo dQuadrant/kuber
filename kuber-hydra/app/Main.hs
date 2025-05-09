@@ -16,6 +16,6 @@ main = do
   putStrLn $ "Starting HTTP and WebSocket server on port " ++ show serverPort
   ip <- getEnv "HYDRA_IP"
   port <- getEnv "HYDRA_PORT"
-  let host = Host ip (read port)
+  let host = AppConfig ip (read port)
       noCacheApp = noCacheMiddleware (hydraApp host)
   run serverPort $ websocketsOr WS.defaultConnectionOptions (proxyServer host) noCacheApp

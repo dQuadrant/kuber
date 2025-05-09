@@ -43,19 +43,19 @@ hydraHeadInitialized = T.pack "Hydra Head Initialized"
 hydraHeadAborted :: T.Text
 hydraHeadAborted = T.pack "Hydra Head Aborted"
 
-sendCommandToHydraNodeSocket :: Host -> Action -> Bool -> IO (T.Text, Int)
-sendCommandToHydraNodeSocket hydraHost message wait = do
+sendCommandToHydraNodeSocket :: AppConfig -> Action -> Bool -> IO (T.Text, Int)
+sendCommandToHydraNodeSocket appConfig message wait = do
   let responseTag = generateResponseTag message
   case message of
-    InitializeHead -> forwardCommands hydraHost "{\"tag\": \"Init\"}" responseTag wait
-    Abort -> forwardCommands hydraHost "{\"tag\": \"Abort\"}" responseTag wait
-    GetUTxO -> forwardCommands hydraHost "{\"tag\": \"GetUTxO\"}" responseTag wait
-    CloseHead -> forwardCommands hydraHost "{\"tag\": \"Close\"}" responseTag wait
-    ContestHead -> forwardCommands hydraHost "{\"tag\": \"Contest\"}" responseTag wait
-    FanOut -> forwardCommands hydraHost "{\"tag\": \"Fanout\"}" responseTag wait
+    InitializeHead -> forwardCommands appConfig "{\"tag\": \"Init\"}" responseTag wait
+    Abort -> forwardCommands appConfig "{\"tag\": \"Abort\"}" responseTag wait
+    GetUTxO -> forwardCommands appConfig "{\"tag\": \"GetUTxO\"}" responseTag wait
+    CloseHead -> forwardCommands appConfig "{\"tag\": \"Close\"}" responseTag wait
+    ContestHead -> forwardCommands appConfig "{\"tag\": \"Contest\"}" responseTag wait
+    FanOut -> forwardCommands appConfig "{\"tag\": \"Fanout\"}" responseTag wait
 
-submitHydraTx :: Host -> TxModal -> IO (T.Text, Int)
-submitHydraTx hydraHost txm = forwardCommands hydraHost newTxCommand (generateResponseTag NewTx) False
+submitHydraTx :: AppConfig -> TxModal -> IO (T.Text, Int)
+submitHydraTx appConfig txm = forwardCommands appConfig newTxCommand (generateResponseTag NewTx) False
   where
     newTxCommand =
       TL.toStrict . AT.encodeToLazyText $

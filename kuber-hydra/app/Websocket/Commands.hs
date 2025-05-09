@@ -47,31 +47,31 @@ data HydraCommitTx = HydraCommitTx
 hydraHeadMessageForwardingFailed :: T.Text
 hydraHeadMessageForwardingFailed = T.pack "Failed to forward message to hydra head"
 
-initialize :: Host -> Bool -> IO (T.Text, Int)
+initialize :: AppConfig -> Bool -> IO (T.Text, Int)
 initialize hydraHost wait = do
   sendCommandToHydraNodeSocket hydraHost InitializeHead wait
 
-abort :: Host -> Bool -> IO (T.Text, Int)
+abort :: AppConfig -> Bool -> IO (T.Text, Int)
 abort hydraHost wait = do
   sendCommandToHydraNodeSocket hydraHost Abort wait
 
-close :: Host -> Bool -> IO (T.Text, Int)
+close :: AppConfig -> Bool -> IO (T.Text, Int)
 close hydraHost wait = do
   sendCommandToHydraNodeSocket hydraHost CloseHead wait
 
-contest :: Host -> Bool -> IO (T.Text, Int)
+contest :: AppConfig -> Bool -> IO (T.Text, Int)
 contest hydraHost wait = do
   sendCommandToHydraNodeSocket hydraHost ContestHead wait
 
-fanout :: Host -> Bool -> IO (T.Text, Int)
+fanout :: AppConfig -> Bool -> IO (T.Text, Int)
 fanout hydraHost wait = do
   sendCommandToHydraNodeSocket hydraHost FanOut wait
 
-submit :: Host -> TxModal -> IO (T.Text, Int)
+submit :: AppConfig -> TxModal -> IO (T.Text, Int)
 submit txm = do
   submitHydraTx txm
 
-commitUTxO :: Host -> [T.Text] -> A.Value -> IO (Either FrameworkError A.Value)
+commitUTxO :: AppConfig -> [T.Text] -> A.Value -> IO (Either FrameworkError A.Value)
 commitUTxO hydraHost utxos sk = do
   utxoSchema <- createUTxOSchema utxos
   case parseSignKey (jsonToText sk) of
@@ -104,7 +104,7 @@ commitUTxO hydraHost utxos sk = do
                         Right () -> pure $ Right $ object ["tx" .= getTxId txBody]
         Left fe -> pure $ Left fe
 
-decommitUTxO :: Host -> [T.Text] -> Data.Aeson.Types.Value -> Bool -> IO (Either FrameworkError A.Value)
+decommitUTxO :: AppConfig -> [T.Text] -> Data.Aeson.Types.Value -> Bool -> IO (Either FrameworkError A.Value)
 decommitUTxO hydraHost utxos sk wait = do
   signKey <- case parseSignKey (jsonToText sk) of
     Just parsedSk -> pure parsedSk
@@ -133,12 +133,12 @@ getUtxoDetails utxoList = do
       utxoList
   kQueryUtxoByTxin (Set.fromList parsed)
 
-getProtocolParameters :: Host -> IO (Either FrameworkError A.Value)
+getProtocolParameters :: AppConfig -> IO (Either FrameworkError A.Value)
 getProtocolParameters hydraHost = do
   hydraProtocolParameters <- fetch hydraHost >>= \query -> query (T.pack "protocol-parameters")
   pure $ textToJSON hydraProtocolParameters
 
-getHydraState :: Host -> IO (Either FrameworkError A.Value)
+getHydraState :: AppConfig -> IO (Either FrameworkError A.Value)
 getHydraState hydraHost = do
   (allUTxOsText, _) <- sendCommandToHydraNodeSocket hydraHost GetUTxO False
   let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe WSMessage

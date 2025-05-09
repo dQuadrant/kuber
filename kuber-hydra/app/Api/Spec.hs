@@ -129,89 +129,89 @@ hydraErrorHandler (msg, status) = do
               }
 
 -- Define Handlers
-server hydraHost =
-  commandServer hydraHost
-    :<|> queryServer hydraHost
+server appConfig =
+  commandServer appConfig
+    :<|> queryServer appConfig
   where
     -- Commands: POSTs and state-changing GETs
-    commandServer :: Host -> Server HydraCommandAPI
-    commandServer hydraHost =
-      initHandler hydraHost
-        :<|> abortHandler hydraHost
-        :<|> commitHandler hydraHost
-        :<|> decommitHandler hydraHost
-        :<|> closeHandler hydraHost
-        :<|> contestHandler hydraHost
-        :<|> fanoutHandler hydraHost
-        :<|> txHandler hydraHost
-        :<|> submitHandler hydraHost
+    commandServer :: AppConfig -> Server HydraCommandAPI
+    commandServer appConfig =
+      initHandler appConfig
+        :<|> abortHandler appConfig
+        :<|> commitHandler appConfig
+        :<|> decommitHandler appConfig
+        :<|> closeHandler appConfig
+        :<|> contestHandler appConfig
+        :<|> fanoutHandler appConfig
+        :<|> txHandler appConfig
+        :<|> submitHandler appConfig
     -- Queries: GET-only, read-only endpoints
-    queryServer :: Host -> Server HydraQueryAPI
-    queryServer hydraHost =
-      queryUtxoHandler hydraHost
-        :<|> queryProtocolParameterHandler hydraHost
-        :<|> queryStateHandler hydraHost
+    queryServer :: AppConfig -> Server HydraQueryAPI
+    queryServer appConfig =
+      queryUtxoHandler appConfig
+        :<|> queryProtocolParameterHandler appConfig
+        :<|> queryStateHandler appConfig
 
-initHandler :: Host -> Maybe Bool -> Handler (Union UVerbResponseTypes)
-initHandler hydraHost wait = do
-  initResponse <- liftIO $ initialize hydraHost (fromMaybe False wait)
+initHandler :: AppConfig -> Maybe Bool -> Handler (Union UVerbResponseTypes)
+initHandler appConfig wait = do
+  initResponse <- liftIO $ initialize appConfig (fromMaybe False wait)
   hydraErrorHandler initResponse
 
-abortHandler :: Host -> Maybe Bool -> Handler (Union UVerbResponseTypes)
-abortHandler hydraHost wait = do
-  abortResponse <- liftIO $ abort hydraHost (fromMaybe False wait)
+abortHandler :: AppConfig -> Maybe Bool -> Handler (Union UVerbResponseTypes)
+abortHandler appConfig wait = do
+  abortResponse <- liftIO $ abort appConfig (fromMaybe False wait)
   hydraErrorHandler abortResponse
 
-queryUtxoHandler :: Host -> Maybe T.Text -> Maybe T.Text -> Handler (Union UVerbResponseTypes)
+queryUtxoHandler :: AppConfig -> Maybe T.Text -> Maybe T.Text -> Handler (Union UVerbResponseTypes)
 queryUtxoHandler abortHandler address txin = do
   queryUtxoResponse <- liftIO $ queryUTxO abortHandler address txin
   frameworkErrorHandler queryUtxoResponse
 
-commitHandler :: Host -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
+commitHandler :: AppConfig -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
 commitHandler abortHandler commits = do
   commitResult <- liftIO $ commitUTxO abortHandler (map T.pack $ commits.utxos) (signKey commits)
   frameworkErrorHandler commitResult
 
-decommitHandler :: Host -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
+decommitHandler :: AppConfig -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
 decommitHandler abortHandler wait decommits = do
   decommitResult <- liftIO $ decommitUTxO abortHandler (map T.pack $ decommits.utxos) (signKey decommits) (fromMaybe False wait)
   frameworkErrorHandler decommitResult
 
-closeHandler :: Host -> Maybe Bool -> Handler (Union UVerbResponseTypes)
-closeHandler hydraHost wait = do
-  closeResponse <- liftIO $ close hydraHost (fromMaybe False wait)
+closeHandler :: AppConfig -> Maybe Bool -> Handler (Union UVerbResponseTypes)
+closeHandler appConfig wait = do
+  closeResponse <- liftIO $ close appConfig (fromMaybe False wait)
   hydraErrorHandler closeResponse
 
-contestHandler :: Host -> Maybe Bool -> Handler (Union UVerbResponseTypes)
-contestHandler hydraHost wait = do
-  closeResponse <- liftIO $ contest hydraHost (fromMaybe False wait)
+contestHandler :: AppConfig -> Maybe Bool -> Handler (Union UVerbResponseTypes)
+contestHandler appConfig wait = do
+  closeResponse <- liftIO $ contest appConfig (fromMaybe False wait)
   hydraErrorHandler closeResponse
 
-fanoutHandler :: Host -> Maybe Bool -> Handler (Union UVerbResponseTypes)
-fanoutHandler hydraHost wait = do
-  fanoutResponse <- liftIO $ fanout hydraHost (fromMaybe False wait)
+fanoutHandler :: AppConfig -> Maybe Bool -> Handler (Union UVerbResponseTypes)
+fanoutHandler appConfig wait = do
+  fanoutResponse <- liftIO $ fanout appConfig (fromMaybe False wait)
   hydraErrorHandler fanoutResponse
 
-queryProtocolParameterHandler :: Host -> Handler (Union UVerbResponseTypes)
-queryProtocolParameterHandler hydraHost = do
-  pParamResponse <- liftIO $ getProtocolParameters hydraHost
+queryProtocolParameterHandler :: AppConfig -> Handler (Union UVerbResponseTypes)
+queryProtocolParameterHandler appConfig = do
+  pParamResponse <- liftIO $ getProtocolParameters appConfig
   frameworkErrorHandler pParamResponse
 
-queryStateHandler :: Host -> Handler (Union UVerbResponseTypes)
-queryStateHandler hydraHost = do
-  stateResponse <- liftIO $ getHydraState hydraHost
+queryStateHandler :: AppConfig -> Handler (Union UVerbResponseTypes)
+queryStateHandler appConfig = do
+  stateResponse <- liftIO $ getHydraState appConfig
   frameworkErrorHandler (stateResponse :: Either FrameworkError A.Value)
 
-txHandler :: Host -> TxBuilder_ ConwayEra -> Handler TxModal
-txHandler hydraHost txb = do
-  hydraTxModal <- liftIO $ toValidHydraTxBuilder hydraHost txb
+txHandler :: AppConfig -> TxBuilder_ ConwayEra -> Handler TxModal
+txHandler appConfig txb = do
+  hydraTxModal <- liftIO $ toValidHydraTxBuilder appConfig txb
   case hydraTxModal of
     Left fe -> toServerError fe
     Right txm -> pure txm
 
-submitHandler :: Host -> TxModal -> Handler (Union UVerbResponseTypes)
-submitHandler hydraHost txm = do
-  submitResponse <- liftIO $ submit hydraHost txm
+submitHandler :: AppConfig -> TxModal -> Handler (Union UVerbResponseTypes)
+submitHandler appConfig txm = do
+  submitResponse <- liftIO $ submit appConfig txm
   hydraErrorHandler submitResponse
 
 -- Create API Proxy
@@ -219,5 +219,5 @@ deployAPI :: Proxy API
 deployAPI = Proxy
 
 -- Define Hydra application
-hydraApp :: Host -> Application
-hydraApp hydraHost = rewriteRoot (T.pack "index.html") $ static $ cors (const $ Just corsMiddlewarePolicy) $ serve deployAPI (server hydraHost)
+hydraApp :: AppConfig -> Application
+hydraApp appConfig = rewriteRoot (T.pack "index.html") $ static $ cors (const $ Just corsMiddlewarePolicy) $ serve deployAPI (server appConfig)
