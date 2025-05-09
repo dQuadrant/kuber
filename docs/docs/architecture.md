@@ -1,49 +1,150 @@
+# Project Technical Details
+
+## APIs / JSON RPC to Implement
+
+### 🔎 Query API
+
+- `queryUtxosByAddress`: Retrieve UTXOs owned by a specific address within a Hydra Head.
+- `queryUtxosByTxIn`: Retrieve UTXO information using a specific transaction hash and / or index.
+- `queryProtocolParameters`: Return hydra protocol parameters used while initializing the hydra node.
+- `queryHydraState`: Retrieve current state of a Hydra Head (phases include: `Idle`, `Initial`, `Open`, `Closed`, `Fanout`).
+
+### 🏗 Transaction Build API
+
+- Accept JSON-based transaction definitions as input.
+- Construct transactions according to Kuber’s transaction specification, modified to work with Hydra protocol parameters.
+- Automatically handle fee balancing and validation.
+- Support submission and reporting of success or error messages (e.g., invalid transaction structure).
+
+### 🔁 Hydra Relay API
+
+- `initializeHead`: Start a new Hydra Head.
+- `commitUtxos`: Add UTXOs to the Hydra Head.
+- `decommitUtxos`: Withdraw UTXOs from the Hydra Head.
+- `closeHead`: Signal intent to close the Hydra Head.
+- `contestHead`: Contest the Hydra Head after closing and before fanout.
+- `abortHead`: Abort the Head in case of failure or deadlock.
+- `fanoutTransaction`: Submit the final fanout transaction after Head closure.
+
+These APIs will be exposed as REST endpoints and integrated with a WebSocket backend to provide real-time feedback to users.
+
 ---
-sidebar_position: 1
----
 
-# Architecture
+## Technical Architecture
 
-### Architecture Diagram
+A draft diagram is available [here](https://raw.githubusercontent.com/drep-id/image/main/preview/kuber-hydra_20250417075127614.png).
 
-![Kuber-Hydra Architecture](/img/kuber-hydra.drawio.png)
+<img alt="Hydra Architecture Diagram" src="https://raw.githubusercontent.com/dQuadrant/kuber/88c3fe0b1e721e5e4fb8e4bcd9e50f10b570f628/hydra/sequence-diagrams/hydra-architecture.png" />
 
-## Services
+### 🧭 High-Level Overview
 
-### Kuber Playground
+The architecture illustrates how the **Kuber backend** interfaces with a **Hydra node** to enable the construction and submission of transactions within a Hydra Head. It also includes developer tooling such as the **Kuber Playground**, and various internal components for formatting, building, and communicating via WebSocket.
 
-Kuber Playground is an intuitive platform designed for users to interact seamlessly with Hydra node. This playground provides a comprehensive interface for managing Hydra heads, simplifying complex operations, and ensuring a smooth user experience for developers and testers alike.
+### 🧱 Components & Flows
 
-In this service, users can:
-- Connect their browser wallet to the Hydra environment effortlessly.
-- Query vital information such as snapshots, protocol parameters, committed UTxOs, and participant verification keys by simply providing the IP address and host port of the running Hydra node.
-- Perform various Hydra head operations through the user-friendly interface, including initializing the Hydra head, committing and de-committing UTxOs, aborting the head, closing it, contesting, and executing a fanout.
-- Write and submit transactions in a simple JSON format to the Hydra node with just a few clicks.
-- Monitor logs and transaction states, check UTxO details, and track their balance in real-time.
-- Validate that the Hydra head closure and fanout process will proceed without issues, ensuring reliability and accuracy.
+#### 1. **Kuber Playground**
 
-The Kuber Playground empowers users by providing a streamlined, accessible way to interact with Hydra nodes, making it ideal for developers and enthusiasts looking to test or deploy solutions in a Hydra-enabled environment.
+- A frontend or client library for experimenting with Kuber APIs.
+- Construct and Send **Transaction JSON** (in a Kuber-native-json format) to the backend for processing.
+- Connects with browser wallet.
 
-### Kuber Server (Backend)
-- The backend establishes and maintains a WebSocket connection with the Hydra node, enabling seamless communication and real-time updates of the Hydra head state to the frontend.  
-- It processes the Hydra head state, including participants' verification keys, commitments, head ID, UTxOs, and balances, and sends this information to the frontend for user visibility.  
-- The backend validates user-created transactions against the current UTxO set and protocol parameters, ensuring that all transactions comply with the Hydra protocol rules before submission.  
-- It receives signed transactions from the frontend and submits them to the Hydra node through the WebSocket connection, facilitating reliable execution.  
-- The backend checks for potential issues during the closure or fan-out process and provides users with feedback on errors or successful completion.  
-- It supports critical operations like initializing the Hydra head, committing/de-committing UTxOs, closing the head, and enabling the fan-out process.  
-- The backend ensures secure processing of sensitive data, such as user transactions, signing keys, and protocol parameters, protecting the integrity of operations.
+#### 2. **Kuber Backend**
 
-### How it works
+The heart of the architecture, composed of several interconnected subcomponents:
 
-**Step 1**: The user starts both a Cardano node and a Hydra node.  
-**Step 2**: The user provides the IP address and host port of the Hydra node to the Kuber Playground.  
-**Step 3**: The backend establishes a connection to the Hydra node using a WebSocket connector and updates the frontend with the current head state.  
-**Step 4**: The user initializes the Hydra head via the UI in the playground. Signing can be performed either using the user's wallet or a signing key.  
-**Step 5**: Once the Hydra head is initialized, the head state becomes visible to the user. This includes details like participants' verification keys, commitments, the head ID, available UTxOs, and the balance within the head.  
-**Step 6**: The user creates a transaction in a simple JSON format using the playground interface.  
-**Step 7**: The backend validates the transaction based on the availability of UTxOs and the protocol parameters used when running the node.  
-**Step 8**: The validated transaction is sent to the frontend, where the user signs it and submits it back to the backend.  
-**Step 9**: The backend submits the signed transaction to the Hydra node via the WebSocket connector.  
-**Step 10**: After all transactions are completed and the user decides to close the head and perform a fan-out, they can do so through the playground's UI.  
-**Step 11**: The backend closes the Hydra head and displays a message indicating whether the transaction can now be fanned out (merged into the main chain) or if there is an error.  
-**Step 12**: Once the fan-out is complete, the user can stop their Hydra node.  
+#### a. **Transaction JSON**
+
+- The input from users (via Playground or API calls).
+- Defines what UTxOs to use, where to send funds, metadata, etc.
+
+#### b. **JSON Formatter / Tx Builder**
+
+- Parses the incoming JSON into a transaction skeleton.
+- Constructs a **valid unsigned transaction** using Hydra’s protocol parameters.
+- Ensures all required data (like fee calculation, input/output balancing) is handled automatically.
+
+#### c. **Hydra Head State / Info**
+
+- Internally tracked by the backend.
+- Includes:
+  - Current phase (e.g., idle, open, closed)
+  - Participants
+  - UTXOs available in the Head
+  - Snapshots (state of UTXO set at different points)
+
+#### d. **Hydra Head State → Transaction Builder**
+
+- The **transaction builder** consumes the current Hydra head state to determine:
+  - Which UTXOs are available
+  - Who the valid participants are
+  - Which constraints apply to the transaction
+
+This ensures that the transaction being built is **valid within the Hydra Head context**, not just on Layer 1.
+
+#### e. **Unsigned Transaction**
+
+- After JSON processing and validation against the Hydra head state, an unsigned transaction is created and passed downstream for signing.
+
+#### f. **Wallet / Signing Key**
+
+- External or embedded component used to **sign** the transaction.
+- May use local signing keys or delegate to an external wallet provider.
+
+#### g. **Signed Transaction**
+
+- The completed transaction ready to be submitted to the Hydra node.
+
+#### 3. **WebSocket Connector**
+
+- A critical module for real-time communication with the **Hydra Node**.
+- Establishes a **WebSocket connection** using the provided **IP and port** (configurable by the user).
+- Allows:
+  - Submitting signed transactions
+  - Receiving real-time Hydra head updates
+  - Listening to participant activity, state changes, and log events
+
+#### 4. **Hydra Node**
+
+- A running instance of the Hydra protocol node.
+- Works in conjunction with a Cardano Layer 1 node for finality and chain interaction.
+- Accepts:
+  - **WebSocket messages** for control commands and transaction submission
+- Provides:
+  - Real-time updates on head state, snapshots, participant actions, and UTXO changes
+
+### 🔄 Key Data Flows
+
+| Source             | Destination         | Description                                                                  |
+| ------------------ | ------------------- | ---------------------------------------------------------------------------- |
+| Playground         | Kuber Backend       | Sends raw transaction request in JSON                                        |
+| JSON Formatter     | Tx Builder          | Converts JSON into internal format for construction                          |
+| Hydra Head State   | Tx Builder          | Feeds contextual info like UTXOs and participants                            |
+| Tx Builder         | Wallet/Signer       | Passes unsigned transaction to be signed                                     |
+| Wallet             | WebSocket Connector | Passes signed transaction for broadcast                                      |
+| Kuber WS Connector | Hydra Node          | Communicates via WebSocket: transaction submission & state queries/responses |
+
+This architecture supports a fully interactive development and production environment where:
+
+- Users define transactions via a JSON interface (API or playground).
+- Kuber formats, validates, and constructs transactions using Hydra context.
+- Transactions are signed and submitted over WebSocket to a Hydra node.
+- The system maintains a mirrored view of Hydra state and simplifies all interactions for the user.
+
+### Components Overview
+
+- **Kuber Server (Haskell, Cabal)**:
+
+  - Handles JSON input for transaction requests.
+  - Builds transactions using Hydra protocol parameters.
+  - Relays transactions and commands to Hydra nodes.
+
+- **Hydra Node**:
+
+  - Managed by the user.
+  - Listens for WebSocket commands and responds with state updates.
+
+- **Kuber WebSocket Proxy**:
+
+  - Connects to the Hydra node WebSocket.
+  - Translates and structures messages into Kuber-native JSON.
+  - Enables clients to subscribe to transaction statuses and state updates.

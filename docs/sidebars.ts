@@ -1,4 +1,4 @@
-import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
+import type { SidebarsConfig } from "@docusaurus/plugin-content-docs";
 
 /**
  * Creating a sidebar enables you to:
@@ -17,6 +17,11 @@ const sidebars: SidebarsConfig = {
       type: "doc",
       id: "architecture", // Document ID
       label: "Architecture",
+    },
+    {
+      type: "doc",
+      id: "sequenceDiagrams", // Document ID
+      label: "Sequence Diagrams",
     },
   ],
   scenarioTests: [

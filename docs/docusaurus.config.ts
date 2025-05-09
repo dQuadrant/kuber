@@ -36,7 +36,7 @@ const config: Config = {
         docs: {
           sidebarPath: "./sidebars.ts",
 
-          editUrl: "https://github.com/cardanoapi/kuber-hydra.git",
+          editUrl: "https://github.com/dQuadrant/kuber/tree/feat/hydra",
         },
       } satisfies Preset.Options,
     ],
@@ -70,7 +70,7 @@ const config: Config = {
           label: "Milestones",
         },
         {
-          href: "https://github.com/cardanoapi/kuber-hydra.git",
+          href: "https://github.com/dQuadrant/kuber/tree/feat/hydra",
           label: "GitHub",
           position: "right",
         },
