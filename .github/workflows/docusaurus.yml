@@ -35,7 +35,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs/build
-          destination_dir: archietecture_docusaurus
+          destination_dir: kuber_hydra_docusaurus
           keep_files: true
 
       - name: Deploy kuber-haskell-library to GitHub Pages

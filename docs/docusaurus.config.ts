@@ -11,12 +11,12 @@ const config: Config = {
   url: "https://cadanoapi.github.io",
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: "/kuber-hydra/archietecture_docusaurus/",
+  baseUrl: "/kuber/kuber_hydra_docusaurus/",
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: "cardanoapi", // Usually your GitHub org/user name.
-  projectName: "kuber-hydra", // Usually your repo name.
+  organizationName: "dQuadrant", // Usually your GitHub org/user name.
+  projectName: "kuber", // Usually your repo name.
 
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
