@@ -38,13 +38,13 @@ A draft diagram is available [here](https://raw.githubusercontent.com/drep-id/im
 
 ### 🧭 High-Level Overview
 
-The architecture illustrates how the **Kuber backend** interfaces with a **Hydra node** to enable the construction and submission of transactions within a Hydra Head. It also includes developer tooling such as the **Kuber Playground**, and various internal components for formatting, building, and communicating via WebSocket.
+The architecture illustrates how the **Kuber backend** interfaces with a **Hydra node** to enable the construction and submission of transactions within a Hydra Head. It also includes developer tooling/ frontend  such as the **Kuber Playground** (Optional), and various internal components for formatting, building, and communicating via WebSocket.
 
 ### 🧱 Components & Flows
 
-#### 1. **Kuber Playground**
+#### 1. **Playground**
 
-- A frontend or client library for experimenting with Kuber APIs.
+- A frontend or client library for experimenting with Kuber APIs. This makes use of kuber-client npm package.
 - Construct and Send **Transaction JSON** (in a Kuber-native-json format) to the backend for processing.
 - Connects with browser wallet.
 
@@ -132,18 +132,18 @@ This architecture supports a fully interactive development and production enviro
 
 ### Components Overview
 
-- **Kuber Server (Haskell, Cabal)**:
+- **Kuber Server ( Haskell )**
 
   - Handles JSON input for transaction requests.
   - Builds transactions using Hydra protocol parameters.
   - Relays transactions and commands to Hydra nodes.
 
-- **Hydra Node**:
+- **Hydra Node**
 
   - Managed by the user.
   - Listens for WebSocket commands and responds with state updates.
 
-- **Kuber WebSocket Proxy**:
+- **Kuber WebSocket Proxy**
 
   - Connects to the Hydra node WebSocket.
   - Translates and structures messages into Kuber-native JSON.

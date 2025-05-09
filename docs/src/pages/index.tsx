@@ -25,7 +25,7 @@ function HomepageHeader() {
           </Link>
           <Link
             className="button button--secondary button--lg"
-            to="/docs/scenarioTests"
+            to="/docs/hydra_feature_analysis"
           >
             Scenario Tests
           </Link>

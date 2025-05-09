@@ -61,13 +61,13 @@ const config: Config = {
           type: "docSidebar",
           sidebarId: "scenarioTests",
           position: "left",
-          label: "Scenario Tests",
+          label: "Hydra Analysis",
         },
         {
           type: "docSidebar",
           sidebarId: "milestones",
           position: "left",
-          label: "Milestones",
+          label: "Planning",
         },
         {
           href: "https://github.com/dQuadrant/kuber/tree/feat/hydra",

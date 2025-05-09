@@ -19,16 +19,63 @@ const sidebars: SidebarsConfig = {
       label: "Architecture",
     },
     {
-      type: "doc",
-      id: "sequenceDiagrams", // Document ID
-      label: "Sequence Diagrams",
-    },
+      type: "category",
+      label: "Detailed Sequence Diagrams", // Category label
+      collapsed: false,  // This makes the category open by default
+
+      items: [
+        {
+          type: "doc",
+          id: "sequenceDiagrams/initialize_head", // Document ID for a sub-doc
+        },
+        {
+          type: "doc",
+          id: "sequenceDiagrams/commit_utxos", // Document ID for a sub-doc
+        },
+        {
+          type: "doc",
+          id: "sequenceDiagrams/decommit_utxos", // Document ID for a sub-doc
+        },
+        {
+          type: "doc",
+          id: "sequenceDiagrams/abort_head", // Document ID for a sub-doc
+        },
+        {
+          type: "doc",
+          id: "sequenceDiagrams/close_head", // Document ID for a sub-doc
+        },
+        {
+          type: "doc",
+          id: "sequenceDiagrams/query_protocol_params", // Document ID for a sub-doc
+        },
+        {
+          type: "doc",
+          id: "sequenceDiagrams/query_utxos", // Document ID for a sub-doc
+        },
+        {
+          type: "doc",
+          id: "sequenceDiagrams/fanout_head", // Document ID for a sub-doc
+        },
+
+
+        // {
+        //   type: "doc",
+        //   id: "sequenceDiagramB", // Document ID for another sub-doc
+        //   label: "Sequence Diagram B",
+        // },
+        // {
+        //   type: "doc",
+        //   id: "sequenceDiagramC", // Document ID for another sub-doc
+        //   label: "Sequence Diagram C",
+        // },
+      ],
+    }
   ],
   scenarioTests: [
     {
       type: "doc",
-      id: "scenarioTests", // Document ID
-      label: "Scenario Tests",
+      id: "hydra_feature_analysis", // Document ID
+      label: "Hydra Analysis"
     },
   ],
   milestones: [

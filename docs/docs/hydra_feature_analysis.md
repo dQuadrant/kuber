@@ -1,8 +1,8 @@
 ---
+title: Hydra Feature Analysis
 sidebar_position: 2
 ---
 
-# Scenario Tests
 
 We have tested the following scenarios in Hydra:
 

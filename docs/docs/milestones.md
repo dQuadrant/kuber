@@ -1,7 +1,7 @@
+---
+title: Hydra Integration for Kuber
+---
 
-# Milestones
-
-## Hydra Integration Project Plan for Kuber
 
 **Repository:** [https://github.com/dquadrant/kuber](https://github.com/dquadrant/kuber)
 
@@ -88,11 +88,11 @@ a
 | **Phase** | **Milestone/Task** | **Estimated Duration** | **Start Date** | **End Date** | **Deliverables** |
 |-----------|---------------------|------------------------|---------------|--------------|------------------|
 | 🔹 M1     | Project Planning & Architecture | 2 weeks | March 1       | March 15     | Architecture document, GitHub setup |
-| 🔹 M2.1   | Hydra WebSocket Integration     | 1.5 weeks | April 6       | April 18     | Hydra WS connection, event parsing |
-|    | Lifecycle Relay API Endpoints    | 1 week  | March 16      | March 22     | API: init, commit, close, abort, fanout |
-|    | Query API Implementation          | 1 week  | March 23      | March 29     | REST APIs for UTXO, state, protocol params |
-|    | Hydra Transaction Build Support  | 3 weeks | April 19      | May 10       | JSON builder, validation, balancing |
-|    | Finalization & Documentation    | 1 week   | May 11        | May 17       | Markdown docs, issue tracking, test/demo |
-| 🔹 M3     | Client-side Hydra Support (npm package) | 3 weeks | May 18        | June 6       | JS package: listen, submit, test, publish |
-|    | npm Package Publication          | 1 week  | June 7        | June 13      | Verified build, published to npm |
+| 🔹 M2.1.1   | Hydra WebSocket Integration     | 1.5 weeks | April 6       | April 18     | Hydra WS connection, event parsing |
+| 🔹 M2.1.2   | Lifecycle Relay API Endpoints    | 1 week  | March 16      | March 22     | API: init, commit, close, abort, fanout |
+| 🔹 M2.1.3   | Query API Implementation          | 1 week  | March 23      | March 29     | REST APIs for UTXO, state, protocol params |
+| 🔹 M2.1.4    | Hydra Transaction Build Support  | 3 weeks | April 19      | May 10       | JSON builder, validation, balancing |
+| 🔹 M2.1.5    | Finalization & Documentation    | 1 week   | May 11        | May 17       | Markdown docs, issue tracking, test/demo |
+| 🔹 M2.2.1     | Client-side Hydra Support (npm package) | 3 weeks | May 18        | June 6       | JS package: listen, submit, test, publish |
+|  🔹 M2.2.2  |  Package Publication          | 1 week  | June 7        | June 13      | Verified build, published to npm |
 | 🔹 M4     | Documentation & Community Engagement | 2 weeks | June 14       | June 27      | Docusaurus deployment, tutorials, examples |
