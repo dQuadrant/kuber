@@ -11,9 +11,11 @@ import System.Environment
 import Websocket.Aeson
 import Websocket.Middleware
 import Websocket.SocketConnection
+import Configuration.Dotenv (loadFile, defaultConfig)
 
 main :: IO ()
 main = do
+  loadFile defaultConfig
   hydraIp <- getEnv "HYDRA_IP"
   hydraPort <- getEnv "HYDRA_PORT"
   serverPort <- getEnv "SERVER_PORT"

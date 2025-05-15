@@ -119,6 +119,7 @@ executable kuber-hydra
                     , case-insensitive
                     , servant-client
                     , unordered-containers
+                    , dotenv
     -- Directories containing source files.
     hs-source-dirs:   app
 
