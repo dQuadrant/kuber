@@ -234,7 +234,7 @@ queryUTxO appConfig address txin = do
         Nothing ->
           case address of
             Just addr ->
-              case parseAddress @BabbageEra addr of
+              case parseAddress @ConwayEra addr of
                 Just _ -> do
                   let hydraUTxOs = utxo parsedHydraUTxOs
                       hydraAddressFilteredUTxOs =
