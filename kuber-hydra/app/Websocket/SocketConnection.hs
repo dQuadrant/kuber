@@ -26,12 +26,6 @@ import qualified Network.WebSockets as WS
 import Websocket.Aeson
 import Websocket.Utils
 
-serverIP :: String
-serverIP = "0.0.0.0"
-
-serverPort :: Int
-serverPort = 8081
-
 hydraBaseUrl :: AppConfig -> [Char]
 hydraBaseUrl appConfig = "http://" ++ hydraIp appConfig ++ ":" ++ show (hydraPort appConfig) ++ "/"
 
@@ -130,13 +124,13 @@ getLatestMessage appConfig conn0 expectedTags wait = do
 
 forwardCommands :: AppConfig -> T.Text -> [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
 forwardCommands appConfig command tag wait = do
-  WS.runClient serverIP serverPort "/" $ \conn -> do
+  WS.runClient (serverIp appConfig) (serverPort appConfig) "/" $ \conn -> do
     WS.sendTextData conn command
     getLatestMessage appConfig conn tag wait >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
 validateLatestWebsocketTag :: AppConfig -> [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
 validateLatestWebsocketTag appConfig tag wait = do
-  WS.runClient serverIP serverPort "/" $ \conn -> do
+  WS.runClient (serverIp appConfig) (serverPort appConfig) "/" $ \conn -> do
     getLatestMessage appConfig conn tag wait >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
 -- Check if Request is a WebSocket Request

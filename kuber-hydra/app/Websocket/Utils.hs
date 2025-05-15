@@ -30,7 +30,7 @@ createHydraStateResponseAeson hs =
   let stateText = T.pack $ case hs of
         HeadIsIdle -> "Head is Idle"
         HeadIsContested -> "Head is Contested"
-        WaitingCommitments -> "Waiting For Commitments"
+        WaitingCommitments -> "Initialized and Waiting For Commitments"
         PartiallyCommitted -> "Partial Commitments Received"
         HeadIsReady -> "Open and Ready for Transactions"
         HeadIsClosed -> "Closed and Ready for Fanout"

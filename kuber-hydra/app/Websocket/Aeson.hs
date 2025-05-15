@@ -23,7 +23,9 @@ import GHC.Natural
 
 data AppConfig = AppConfig
   { hydraIp :: String,
-    hydraPort :: Int
+    hydraPort :: Int,
+    serverIp :: String,
+    serverPort :: Int
   }
 
 newtype HydraGetUTxOResponse = HydraGetUTxOResponse

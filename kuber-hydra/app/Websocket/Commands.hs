@@ -17,6 +17,7 @@ import Cardano.Api.Shelley
 import Cardano.Kuber.Api
 import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Data.Parsers
+import Cardano.Kuber.Util
 import Data.Aeson
 import qualified Data.Aeson as A
 import Data.Aeson.Types
@@ -48,68 +49,67 @@ hydraHeadMessageForwardingFailed :: T.Text
 hydraHeadMessageForwardingFailed = T.pack "Failed to forward message to hydra head"
 
 initialize :: AppConfig -> Bool -> IO (T.Text, Int)
-initialize hydraHost wait = do
-  sendCommandToHydraNodeSocket hydraHost InitializeHead wait
+initialize appConfig wait = do
+  sendCommandToHydraNodeSocket appConfig InitializeHead wait
 
 abort :: AppConfig -> Bool -> IO (T.Text, Int)
-abort hydraHost wait = do
-  sendCommandToHydraNodeSocket hydraHost Abort wait
+abort appConfig wait = do
+  sendCommandToHydraNodeSocket appConfig Abort wait
 
 close :: AppConfig -> Bool -> IO (T.Text, Int)
-close hydraHost wait = do
-  sendCommandToHydraNodeSocket hydraHost CloseHead wait
+close appConfig wait = do
+  sendCommandToHydraNodeSocket appConfig CloseHead wait
 
 contest :: AppConfig -> Bool -> IO (T.Text, Int)
-contest hydraHost wait = do
-  sendCommandToHydraNodeSocket hydraHost ContestHead wait
+contest appConfig wait = do
+  sendCommandToHydraNodeSocket appConfig ContestHead wait
 
 fanout :: AppConfig -> Bool -> IO (T.Text, Int)
-fanout hydraHost wait = do
-  sendCommandToHydraNodeSocket hydraHost FanOut wait
+fanout appConfig wait = do
+  sendCommandToHydraNodeSocket appConfig FanOut wait
 
 submit :: AppConfig -> TxModal -> IO (T.Text, Int)
 submit txm = do
   submitHydraTx txm
 
-commitUTxO :: AppConfig -> [T.Text] -> A.Value -> IO (Either FrameworkError A.Value)
-commitUTxO hydraHost utxos sk = do
+commitUTxO :: AppConfig -> [T.Text] -> Maybe A.Value -> IO (Either FrameworkError A.Value)
+commitUTxO appConfig utxos sk = do
   utxoSchema <- createUTxOSchema utxos
-  case parseSignKey (jsonToText sk) of
-    Nothing -> pure $ Left $ FrameworkError ParserError "Invalid signing key"
-    Just parsedSk -> do
-      unsignedCommitTxOrError <- getHydraCommitTx hydraHost utxoSchema
-      case unsignedCommitTxOrError of
-        Right unsignedCommitTx -> do
-          case A.eitherDecode (fromStrict $ T.encodeUtf8 unsignedCommitTx) of
-            Left err ->
-              pure $
-                Left $
-                  FrameworkError ParserError $
-                    "Received: " <> T.unpack unsignedCommitTx <> ". Error decoding Hydra response: " <> err
-            Right (HydraCommitTx cborHex _ _) ->
-              case convertText (T.pack cborHex) <&> unBase16 of
-                Nothing -> pure $ Left $ FrameworkError ParserError "Invalid CBOR hex in commit transaction"
-                Just bs ->
-                  case deserialiseFromCBOR (AsTx AsConwayEra) bs of
-                    Left dc -> pure $ Left $ FrameworkError ParserError $ "Deserialization failed: " <> show dc
-                    Right tx -> do
+  unsignedCommitTxOrError <- getHydraCommitTx appConfig utxoSchema
+  case unsignedCommitTxOrError of
+    Left fe -> pure $ Left fe
+    Right unsignedCommitTx ->
+      case A.eitherDecode (fromStrict $ T.encodeUtf8 unsignedCommitTx) of
+        Left err ->
+          pure $
+            Left $
+              FrameworkError ParserError $
+                "Received: " <> T.unpack unsignedCommitTx <> ". Error decoding Hydra response: " <> err
+        Right (HydraCommitTx cborHex _ _) ->
+          case convertText (T.pack cborHex) <&> unBase16 of
+            Nothing -> pure $ Left $ FrameworkError ParserError "Invalid CBOR hex in commit transaction"
+            Just bs ->
+              case deserialiseFromCBOR (AsTx AsConwayEra) bs of
+                Left dc -> pure $ Left $ FrameworkError ParserError $ "Deserialization failed: " <> show dc
+                Right tx -> case sk of
+                  Nothing -> do
+                    let cborHex :: T.Text = toHexString $ serialiseToCBOR tx
+                        commitTxObject = buildTxModalObject cborHex (not $ null $ snd $ getTxBodyAndWitnesses tx)
+                    pure $ Right commitTxObject
+                  Just sk' -> case parseSignKey (jsonToText sk') of
+                    Nothing -> pure $ Left $ FrameworkError ParserError "Invalid signing key"
+                    Just parsedSk -> do
                       let (txBody, hydraWitness) = getTxBodyAndWitnesses tx
-                          signedTx =
-                            makeSignedTransaction
-                              (hydraWitness ++ [makeShelleyKeyWitness shelleyBasedEra txBody (WitnessPaymentKey parsedSk)])
-                              txBody
+                          signedTx = makeSignedTransaction (hydraWitness ++ [makeShelleyKeyWitness shelleyBasedEra txBody (WitnessPaymentKey parsedSk)]) txBody
                       submittedTxResult <- submitHandler $ kSubmitTx (InAnyCardanoEra ConwayEra signedTx)
                       case submittedTxResult of
                         Left fe -> pure $ Left fe
-                        Right () -> pure $ Right $ object ["tx" .= getTxId txBody]
-        Left fe -> pure $ Left fe
+                        Right () -> pure $ Right $ buildTxModalObject cborHex (not $ null $ snd $ getTxBodyAndWitnesses tx)
 
-decommitUTxO :: AppConfig -> [T.Text] -> Data.Aeson.Types.Value -> Bool -> IO (Either FrameworkError A.Value)
+decommitUTxO :: AppConfig -> [T.Text] -> Maybe A.Value -> Bool -> IO (Either FrameworkError A.Value)
 decommitUTxO hydraHost utxos sk wait = do
-  signKey <- case parseSignKey (jsonToText sk) of
-    Just parsedSk -> pure parsedSk
-    Nothing -> error "Failure parsing singing key"
-  submitHydraDecommitTx hydraHost utxos signKey wait
+  let parsedSignKey = sk >>= parseSignKey . jsonToText
+  submitHydraDecommitTx hydraHost utxos parsedSignKey wait
 
 createUTxOSchema :: [T.Text] -> IO T.Text
 createUTxOSchema utxos = do

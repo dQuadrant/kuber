@@ -21,7 +21,7 @@ module Api.Spec where
 
 import Cardano.Api
 import Cardano.Kuber.Api
-import Cardano.Kuber.Data.Models 
+import Cardano.Kuber.Data.Models
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BSL
@@ -65,7 +65,7 @@ instance ToJSON ResponseMessage
 
 data CommitUTxOs = CommitUTxOs
   { utxos :: [String],
-    signKey :: A.Value
+    signKey :: Maybe A.Value
   }
   deriving (Show, Generic, FromJSON, ToJSON)
 
@@ -163,18 +163,18 @@ abortHandler appConfig wait = do
   hydraErrorHandler abortResponse
 
 queryUtxoHandler :: AppConfig -> Maybe T.Text -> Maybe T.Text -> Handler (Union UVerbResponseTypes)
-queryUtxoHandler abortHandler address txin = do
-  queryUtxoResponse <- liftIO $ queryUTxO abortHandler address txin
+queryUtxoHandler appConfig address txin = do
+  queryUtxoResponse <- liftIO $ queryUTxO appConfig address txin
   frameworkErrorHandler queryUtxoResponse
 
 commitHandler :: AppConfig -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
-commitHandler abortHandler commits = do
-  commitResult <- liftIO $ commitUTxO abortHandler (map T.pack $ commits.utxos) (signKey commits)
+commitHandler appConfig commits = do
+  commitResult <- liftIO $ commitUTxO appConfig (map T.pack $ commits.utxos) (signKey commits)
   frameworkErrorHandler commitResult
 
 decommitHandler :: AppConfig -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
-decommitHandler abortHandler wait decommits = do
-  decommitResult <- liftIO $ decommitUTxO abortHandler (map T.pack $ decommits.utxos) (signKey decommits) (fromMaybe False wait)
+decommitHandler appConfig wait decommits = do
+  decommitResult <- liftIO $ decommitUTxO appConfig (map T.pack $ decommits.utxos) (signKey decommits) (fromMaybe False wait)
   frameworkErrorHandler decommitResult
 
 closeHandler :: AppConfig -> Maybe Bool -> Handler (Union UVerbResponseTypes)

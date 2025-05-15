@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Main where
 
@@ -13,9 +14,10 @@ import Websocket.SocketConnection
 
 main :: IO ()
 main = do
+  hydraIp <- getEnv "HYDRA_IP"
+  hydraPort <- getEnv "HYDRA_PORT"
+  serverPort <- getEnv "SERVER_PORT"
   putStrLn $ "Starting HTTP and WebSocket server on port " ++ show serverPort
-  ip <- getEnv "HYDRA_IP"
-  port <- getEnv "HYDRA_PORT"
-  let host = AppConfig ip (read port)
+  let host = AppConfig hydraIp (read hydraPort) "0.0.0.0" (read serverPort)
       noCacheApp = noCacheMiddleware (hydraApp host)
-  run serverPort $ websocketsOr WS.defaultConnectionOptions (proxyServer host) noCacheApp
+  run (read serverPort) $ websocketsOr WS.defaultConnectionOptions (proxyServer host) noCacheApp

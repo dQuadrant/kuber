@@ -39,7 +39,7 @@ import Websocket.Forwarder
 import Websocket.SocketConnection (fetch, post, validateLatestWebsocketTag)
 import Websocket.Utils (textToJSON)
 
-submitHydraDecommitTx :: AppConfig -> [T.Text] -> SigningKey PaymentKey -> Bool -> IO (Either FrameworkError A.Value)
+submitHydraDecommitTx :: AppConfig -> [T.Text] -> Maybe (SigningKey PaymentKey) -> Bool -> IO (Either FrameworkError A.Value)
 submitHydraDecommitTx appConfig utxosToDecommit sk wait = do
   (allUTxOsText, _) <- sendCommandToHydraNodeSocket appConfig GetUTxO False
   let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe HydraGetUTxOResponse
@@ -70,7 +70,7 @@ submitHydraDecommitTx appConfig utxosToDecommit sk wait = do
                           $ Map.toList
                           $ unUTxO parsedUTxO
                       )
-                      <> txSign sk
+                      <> maybe mempty txSign sk
               protocolParamText <- hydraProtocolParams appConfig
               case protocolParamText of
                 Left err -> return $ Left err
@@ -80,17 +80,21 @@ submitHydraDecommitTx appConfig utxosToDecommit sk wait = do
                     Left fe -> return $ Left fe
                     Right tx -> do
                       let cborHex :: T.Text = T.pack $ toHexString $ serialiseToCBOR tx
-                          decommitTxObject = buildWitnessedTx cborHex
-                      decommitPostResponse <- post appConfig "decommit" decommitTxObject
-                      if T.strip (T.filter (/= '"') decommitPostResponse) == "OK"
-                        then do
-                          wsResult <- validateLatestWebsocketTag appConfig (generateResponseTag DeCommitUTxO) wait
-                          return $ textToJSON $ fst wsResult
-                        else
-                          return $
-                            Left $
-                              FrameworkError TxSubmissionError $
-                                "submitHydraDecommitTx: Error submitting decommit transaction to Hydra: " ++ T.unpack decommitPostResponse
+                          (_, existingWitness) = getTxBodyAndWitnesses tx
+                          decommitTxObject = buildTxModalObject cborHex (not $ null existingWitness)
+                      case sk of
+                        Nothing -> pure $ Right decommitTxObject
+                        Just _ -> do
+                          decommitPostResponse <- post appConfig "decommit" decommitTxObject
+                          if T.strip (T.filter (/= '"') decommitPostResponse) == "OK"
+                            then do
+                              wsResult <- validateLatestWebsocketTag appConfig (generateResponseTag DeCommitUTxO) wait
+                              return $ textToJSON $ fst wsResult
+                            else
+                              return $
+                                Left $
+                                  FrameworkError TxSubmissionError $
+                                    "submitHydraDecommitTx: Error submitting decommit transaction to Hydra: " ++ T.unpack decommitPostResponse
 
 hydraProtocolParams :: AppConfig -> IO (Either FrameworkError HydraProtocolParameters)
 hydraProtocolParams appConfig = do
@@ -186,13 +190,15 @@ hydraProtocolParamsToLedgerParams hpp = case convertToLedgerProtocolParameters S
           )
           (Map.toList $ costModels hpp)
 
-buildWitnessedTx :: (ToJSON v) => v -> A.Value
-buildWitnessedTx cborHex =
+buildTxModalObject :: (ToJSON v) => v -> Bool -> A.Value
+buildTxModalObject cborHex isWitnessed =
   object
     [ "cborHex" .= cborHex,
-      "type" .= T.pack "Witnessed Tx ConwayEra",
+      "type" .= T.pack (prefix <> " " <> "Tx ConwayEra"),
       "description" .= T.pack "Ledger Cddl Format"
     ]
+  where
+    prefix = if isWitnessed then "Witnessed" else "Unwitnessed"
 
 rawBuildHydraTx :: AppConfig -> TxBuilder_ ConwayEra -> IO (Either FrameworkError (Tx ConwayEra))
 rawBuildHydraTx appConfig txb = do
@@ -228,7 +234,7 @@ queryUTxO appConfig address txin = do
         Nothing ->
           case address of
             Just addr ->
-              case parseAddress @ConwayEra addr of
+              case parseAddress @BabbageEra addr of
                 Just _ -> do
                   let hydraUTxOs = utxo parsedHydraUTxOs
                       hydraAddressFilteredUTxOs =
