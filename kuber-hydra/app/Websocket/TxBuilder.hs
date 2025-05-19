@@ -39,8 +39,8 @@ import Websocket.Forwarder
 import Websocket.SocketConnection (fetch, post, validateLatestWebsocketTag)
 import Websocket.Utils (textToJSON)
 
-submitHydraDecommitTx :: AppConfig -> [T.Text] -> Maybe (SigningKey PaymentKey) -> Bool -> IO (Either FrameworkError A.Value)
-submitHydraDecommitTx appConfig utxosToDecommit sk wait = do
+handleHydraDecommitTx :: AppConfig -> [T.Text] -> Maybe (SigningKey PaymentKey) -> Bool -> Bool -> IO (Either FrameworkError A.Value)
+handleHydraDecommitTx appConfig utxosToDecommit sk wait submit = do
   (allUTxOsText, _) <- sendCommandToHydraNodeSocket appConfig GetUTxO False
   let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe HydraGetUTxOResponse
   case allHydraUTxOs of
@@ -82,9 +82,8 @@ submitHydraDecommitTx appConfig utxosToDecommit sk wait = do
                       let cborHex :: T.Text = T.pack $ toHexString $ serialiseToCBOR tx
                           (_, existingWitness) = getTxBodyAndWitnesses tx
                           decommitTxObject = buildTxModalObject cborHex (not $ null existingWitness)
-                      case sk of
-                        Nothing -> pure $ Right decommitTxObject
-                        Just _ -> do
+                      if submit
+                        then do
                           decommitPostResponse <- post appConfig "decommit" decommitTxObject
                           if T.strip (T.filter (/= '"') decommitPostResponse) == "OK"
                             then do
@@ -95,6 +94,8 @@ submitHydraDecommitTx appConfig utxosToDecommit sk wait = do
                                 Left $
                                   FrameworkError TxSubmissionError $
                                     "submitHydraDecommitTx: Error submitting decommit transaction to Hydra: " ++ T.unpack decommitPostResponse
+                        else
+                          return $ Right decommitTxObject
 
 hydraProtocolParams :: AppConfig -> IO (Either FrameworkError HydraProtocolParameters)
 hydraProtocolParams appConfig = do
@@ -253,8 +254,8 @@ queryUTxO appConfig address txin = do
                 Nothing -> pure $ Left $ FrameworkError ParserError $ "queryUTxO : Unable to parse address: " <> T.unpack addr
             Nothing -> pure $ Right $ A.toJSON $ utxo parsedHydraUTxOs
 
-toValidHydraTxBuilder :: AppConfig -> TxBuilder_ ConwayEra -> IO (Either FrameworkError TxModal)
-toValidHydraTxBuilder appConfig txb = do
+toValidHydraTxBuilder :: AppConfig -> TxBuilder_ ConwayEra -> Bool -> IO (Either FrameworkError TxModal)
+toValidHydraTxBuilder appConfig txb submit = do
   let selections = txSelections txb
       inputs = txInputs txb
       specifiedChangeAddress = case txDefaultChangeAddr txb of
@@ -298,7 +299,15 @@ toValidHydraTxBuilder appConfig txb = do
           txBuilderResponse <- liftIO $ rawBuildHydraTx appConfig validHydraTxBuilder
           case txBuilderResponse of
             Left fe -> pure $ Left fe
-            Right tx -> pure $ Right $ TxModal $ InAnyCardanoEra bCardanoEra tx
+            Right tx ->
+              if submit
+                then do
+                  submittedTxResult <- submitHandler $ kSubmitTx (InAnyCardanoEra ConwayEra tx)
+                  case submittedTxResult of
+                    Left fe -> pure $ Left fe
+                    Right () -> pure $ Right $ TxModal $ InAnyCardanoEra bCardanoEra tx
+                else
+                  pure $ Right $ TxModal $ InAnyCardanoEra bCardanoEra tx
 
 getUTxOsFromSelection :: AppConfig -> TxInputSelection ConwayEra -> IO (Either FrameworkError [UTxO ConwayEra])
 getUTxOsFromSelection appConfig selection = case selection of

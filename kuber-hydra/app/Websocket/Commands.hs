@@ -72,8 +72,8 @@ submit :: AppConfig -> TxModal -> IO (T.Text, Int)
 submit txm = do
   submitHydraTx txm
 
-commitUTxO :: AppConfig -> [T.Text] -> Maybe A.Value -> IO (Either FrameworkError A.Value)
-commitUTxO appConfig utxos sk = do
+commitUTxO :: AppConfig -> [T.Text] -> Maybe A.Value -> Bool -> IO (Either FrameworkError A.Value)
+commitUTxO appConfig utxos sk submit = do
   utxoSchema <- createUTxOSchema utxos
   unsignedCommitTxOrError <- getHydraCommitTx appConfig utxoSchema
   case unsignedCommitTxOrError of
@@ -91,25 +91,33 @@ commitUTxO appConfig utxos sk = do
             Just bs ->
               case deserialiseFromCBOR (AsTx AsConwayEra) bs of
                 Left dc -> pure $ Left $ FrameworkError ParserError $ "Deserialization failed: " <> show dc
-                Right tx -> case sk of
-                  Nothing -> do
-                    let cborHex :: T.Text = toHexString $ serialiseToCBOR tx
-                        commitTxObject = buildTxModalObject cborHex (not $ null $ snd $ getTxBodyAndWitnesses tx)
-                    pure $ Right commitTxObject
-                  Just sk' -> case parseSignKey (jsonToText sk') of
-                    Nothing -> pure $ Left $ FrameworkError ParserError "Invalid signing key"
-                    Just parsedSk -> do
-                      let (txBody, hydraWitness) = getTxBodyAndWitnesses tx
-                          signedTx = makeSignedTransaction (hydraWitness ++ [makeShelleyKeyWitness shelleyBasedEra txBody (WitnessPaymentKey parsedSk)]) txBody
-                      submittedTxResult <- submitHandler $ kSubmitTx (InAnyCardanoEra ConwayEra signedTx)
-                      case submittedTxResult of
-                        Left fe -> pure $ Left fe
-                        Right () -> pure $ Right $ buildTxModalObject cborHex (not $ null $ snd $ getTxBodyAndWitnesses tx)
+                Right tx -> do
+                  let result = case sk of
+                        Nothing -> Right tx
+                        Just sk' -> case parseSignKey (jsonToText sk') of
+                          Nothing -> Left $ FrameworkError ParserError "Invalid signing key"
+                          Just parsedSk -> do
+                            let (txBody, hydraWitness) = getTxBodyAndWitnesses tx
+                                signedTx = makeSignedTransaction (hydraWitness ++ [makeShelleyKeyWitness shelleyBasedEra txBody (WitnessPaymentKey parsedSk)]) txBody
+                            Right signedTx
+                  case result of
+                    Left fe -> pure $ Left fe
+                    Right tx' -> do
+                      let cborHex' :: T.Text = toHexString $ serialiseToCBOR tx'
+                          txObject = buildTxModalObject cborHex' (not $ null $ snd $ getTxBodyAndWitnesses tx')
+                      if submit
+                        then do
+                          submittedTxResult <- submitHandler $ kSubmitTx (InAnyCardanoEra ConwayEra tx')
+                          case submittedTxResult of
+                            Left fe -> pure $ Left fe
+                            Right () -> pure $ Right txObject
+                        else
+                          pure $ Right txObject
 
-decommitUTxO :: AppConfig -> [T.Text] -> Maybe A.Value -> Bool -> IO (Either FrameworkError A.Value)
-decommitUTxO hydraHost utxos sk wait = do
+decommitUTxO :: AppConfig -> [T.Text] -> Maybe A.Value -> Bool -> Bool -> IO (Either FrameworkError A.Value)
+decommitUTxO hydraHost utxos sk wait submit = do
   let parsedSignKey = sk >>= parseSignKey . jsonToText
-  submitHydraDecommitTx hydraHost utxos parsedSignKey wait
+  handleHydraDecommitTx hydraHost utxos parsedSignKey wait submit
 
 createUTxOSchema :: [T.Text] -> IO T.Text
 createUTxOSchema utxos = do

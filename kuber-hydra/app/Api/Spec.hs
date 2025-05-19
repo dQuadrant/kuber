@@ -82,6 +82,8 @@ type PostResp = UVerb 'POST '[JSON] UVerbResponseTypes
 
 type WithWait sub = QueryParam "wait" Bool :> sub
 
+type WithSubmit sub = QueryParam "submit" Bool :> sub
+
 type API =
   "hydra" :> HydraCommandAPI
     :<|> "hydra" :> "query" :> HydraQueryAPI
@@ -89,12 +91,12 @@ type API =
 type HydraCommandAPI =
   "init" :> WithWait GetResp
     :<|> "abort" :> WithWait GetResp
-    :<|> "commit" :> ReqBody '[JSON] CommitUTxOs :> PostResp
-    :<|> "decommit" :> WithWait (ReqBody '[JSON] CommitUTxOs :> PostResp)
+    :<|> "commit" :> WithSubmit (ReqBody '[JSON] CommitUTxOs :> PostResp)
+    :<|> "decommit" :> WithSubmit (WithWait (ReqBody '[JSON] CommitUTxOs :> PostResp))
     :<|> "close" :> WithWait GetResp
     :<|> "contest" :> WithWait GetResp
     :<|> "fanout" :> WithWait GetResp
-    :<|> "tx" :> ReqBody '[JSON] TxBuilder :> Post '[JSON] TxModal
+    :<|> "tx" :> WithSubmit (ReqBody '[JSON] TxBuilder :> Post '[JSON] TxModal)
     :<|> "submit" :> ReqBody '[JSON] TxModal :> PostResp
 
 type HydraQueryAPI =
@@ -167,14 +169,14 @@ queryUtxoHandler appConfig address txin = do
   queryUtxoResponse <- liftIO $ queryUTxO appConfig address txin
   frameworkErrorHandler queryUtxoResponse
 
-commitHandler :: AppConfig -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
-commitHandler appConfig commits = do
-  commitResult <- liftIO $ commitUTxO appConfig (map T.pack $ commits.utxos) (signKey commits)
+commitHandler :: AppConfig -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
+commitHandler appConfig submit commits = do
+  commitResult <- liftIO $ commitUTxO appConfig (map T.pack $ commits.utxos) (signKey commits) (fromMaybe False submit)
   frameworkErrorHandler commitResult
 
-decommitHandler :: AppConfig -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
-decommitHandler appConfig wait decommits = do
-  decommitResult <- liftIO $ decommitUTxO appConfig (map T.pack $ decommits.utxos) (signKey decommits) (fromMaybe False wait)
+decommitHandler :: AppConfig -> Maybe Bool -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
+decommitHandler appConfig wait submit decommits = do
+  decommitResult <- liftIO $ decommitUTxO appConfig (map T.pack $ decommits.utxos) (signKey decommits) (fromMaybe False wait) (fromMaybe False submit)
   frameworkErrorHandler decommitResult
 
 closeHandler :: AppConfig -> Maybe Bool -> Handler (Union UVerbResponseTypes)
@@ -202,9 +204,9 @@ queryStateHandler appConfig = do
   stateResponse <- liftIO $ getHydraState appConfig
   frameworkErrorHandler (stateResponse :: Either FrameworkError A.Value)
 
-txHandler :: AppConfig -> TxBuilder_ ConwayEra -> Handler TxModal
-txHandler appConfig txb = do
-  hydraTxModal <- liftIO $ toValidHydraTxBuilder appConfig txb
+txHandler :: AppConfig -> Maybe Bool -> TxBuilder_ ConwayEra -> Handler TxModal
+txHandler appConfig submit txb = do
+  hydraTxModal <- liftIO $ toValidHydraTxBuilder appConfig txb (fromMaybe False submit)
   case hydraTxModal of
     Left fe -> toServerError fe
     Right txm -> pure txm
