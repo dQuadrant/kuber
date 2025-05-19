@@ -33,5 +33,5 @@ createHydraStateResponseAeson hs =
         WaitingCommitments -> "Initialized and Waiting For Commitments"
         PartiallyCommitted -> "Partial Commitments Received"
         HeadIsReady -> "Open and Ready for Transactions"
-        HeadIsClosed -> "Closed and Ready for Fanout"
+        HeadIsClosed -> "Head is Closed"
    in pure $ A.object ["state" .= stateText]

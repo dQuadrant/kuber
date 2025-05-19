@@ -11,7 +11,7 @@ import System.Environment
 import Websocket.Aeson
 import Websocket.Middleware
 import Websocket.SocketConnection
-import Configuration.Dotenv (loadFile, defaultConfig)
+import Configuration.Dotenv 
 
 main :: IO ()
 main = do
