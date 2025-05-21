@@ -19,7 +19,7 @@ import Cardano.Api hiding (PaymentCredential)
 import Cardano.Api.Ledger (Coin (unCoin), ConwayDelegCert (..), ConwayGovCert (..), ConwayTxCert (..), EraCrypto, PoolCert (..), StandardCrypto, StrictMaybe (..))
 import qualified Cardano.Api.Ledger as L
 import Cardano.Api.Shelley hiding (PaymentCredential)
-import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (..))
+import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (..), HasCardanoQueryApi (..))
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Core.LocalNodeChainApi (HasLocalNodeAPI (..))
 import Cardano.Kuber.Core.TxBuilder
@@ -122,7 +122,7 @@ valueToRequiredEra cera val = case cera of
   ConwayEra -> TxOutValueShelleyBased ShelleyBasedEraConway (toLedgerValue MaryEraOnwardsConway val)
   _ -> error "Unexpected"
 
-executeRawTxBuilder :: (HasChainQueryAPI api, HasLocalNodeAPI api, IsTxBuilderEra era) => TxBuilder_ era -> LedgerProtocolParameters era -> Kontract api w FrameworkError (Cardano.Api.TxBody era, Tx era)
+executeRawTxBuilder :: (HasChainQueryAPI api, HasCardanoQueryApi api, HasLocalNodeAPI api, IsTxBuilderEra era) => TxBuilder_ era -> LedgerProtocolParameters era -> Kontract api w FrameworkError (Cardano.Api.TxBody era, Tx era)
 executeRawTxBuilder builder pParam = do
   network <- kGetNetworkId
   systemStart <- kQuerySystemStart
@@ -199,7 +199,7 @@ executeRawTxBuilder builder pParam = do
       TxSelectableTxIn tis -> (a, Set.union i (Set.fromList tis), u)
       TxSelectableSkey skeys -> (Set.union a (Set.fromList $ map (\s -> toAddressAny $ skeyToAddr s networkId) skeys), i, u)
 
-    applyPrevGovActionIdNDeposit :: (HasChainQueryAPI api) => Maybe (ConwayEraOnwards era) -> Ledger.PParams (ShelleyLedgerEra era) -> [TxProposal era] -> Kontract api w FrameworkError [TxProposal era]
+    applyPrevGovActionIdNDeposit :: (HasChainQueryAPI api, HasCardanoQueryApi api) => Maybe (ConwayEraOnwards era) -> Ledger.PParams (ShelleyLedgerEra era) -> [TxProposal era] -> Kontract api w FrameworkError [TxProposal era]
     applyPrevGovActionIdNDeposit beraOnward pParam props =
       case beraOnward of
         Just v@ConwayEraOnwardsConway -> do
@@ -238,19 +238,19 @@ executeRawTxBuilder builder pParam = do
     updateMaybe' SNothing v = SJust v
     updateMaybe' v _ = v
 
-    updateCertDeposit :: (HasChainQueryAPI api) => Ledger.PParams (ShelleyLedgerEra era) -> Certificate era -> Kontract api w FrameworkError (Certificate era)
+    updateCertDeposit :: (HasChainQueryAPI api, HasCardanoQueryApi api) => Ledger.PParams (ShelleyLedgerEra era) -> Certificate era -> Kontract api w FrameworkError (Certificate era)
     updateCertDeposit pParam cert = case cert of
       ShelleyRelatedCertificate stbe stc -> pure cert
       ConwayCertificate ConwayEraOnwardsConway ctc -> updateCertConwayCertDeposit pParam cert
 
-    updateCertConwayCertDeposit :: (HasChainQueryAPI api) => Ledger.PParams (ShelleyLedgerEra ConwayEra) -> Certificate ConwayEra -> Kontract api w FrameworkError (Certificate ConwayEra)
+    updateCertConwayCertDeposit :: (HasChainQueryAPI api, HasCardanoQueryApi api) => Ledger.PParams (ShelleyLedgerEra ConwayEra) -> Certificate ConwayEra -> Kontract api w FrameworkError (Certificate ConwayEra)
     updateCertConwayCertDeposit pParam cert = case cert of
       ShelleyRelatedCertificate stbe stc -> pure cert
       ConwayCertificate ceo ctc -> do
         val <- updateConwayCert pParam ctc
         pure $ ConwayCertificate ceo val
 
-    updateConwayCert :: (HasChainQueryAPI api, Ledger.ConwayEraPParams ledgerera, EraCrypto ledgerera ~ StandardCrypto) => Ledger.PParams ledgerera -> ConwayTxCert ledgerera -> Kontract api w FrameworkError (ConwayTxCert ledgerera)
+    updateConwayCert :: (HasChainQueryAPI api, HasCardanoQueryApi api, Ledger.ConwayEraPParams ledgerera, EraCrypto ledgerera ~ StandardCrypto) => Ledger.PParams ledgerera -> ConwayTxCert ledgerera -> Kontract api w FrameworkError (ConwayTxCert ledgerera)
     updateConwayCert pParam ctc = case ctc of
       ConwayTxCertDeleg cdc ->
         ( case cdc of
@@ -295,7 +295,7 @@ executeRawTxBuilder builder pParam = do
 -- then updates the deposit amounts and previousGovActionId if required.
 -- finally it calls the pure txBuilderToTxBody function
 
-executeTxBuilder :: (HasChainQueryAPI api, HasLocalNodeAPI api, IsTxBuilderEra era) => TxBuilder_ era -> Kontract api w FrameworkError (Cardano.Api.TxBody era, Tx era)
+executeTxBuilder :: (HasChainQueryAPI api, HasCardanoQueryApi api, HasLocalNodeAPI api, IsTxBuilderEra era) => TxBuilder_ era -> Kontract api w FrameworkError (Cardano.Api.TxBody era, Tx era)
 executeTxBuilder builder = do
   -- first determine the addresses and txins that need to be queried for value and address.
   pParam <- kQueryProtocolParams

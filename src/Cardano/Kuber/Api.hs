@@ -186,6 +186,7 @@ module Cardano.Kuber.Api(
     , evaluateKontract
     , eitherToKontract
     , HasChainQueryAPI(..)
+    , HasCardanoQueryApi(..)
     , HasSubmitApi(..)
     , HasKuberAPI(..)
     , HasLocalNodeAPI(..)

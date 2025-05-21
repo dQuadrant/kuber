@@ -104,7 +104,7 @@ kCalculateMinFee'' txbody shelleyWitnesses byronWitnesses = do
   -- todo: fix this to support reference scripts
   pure $ calculateMinTxFee shelleyBasedEra (unLedgerProtocolParameters protocolParams) utxo txbody shelleyWitnesses 
 
-kBuildAndSubmit' :: (HasChainQueryAPI api, HasLocalNodeAPI api, IsTxBuilderEra era,  HasSubmitApi api) => TxBuilder_ era -> Kontract api w FrameworkError (Tx era)
+kBuildAndSubmit' :: (HasChainQueryAPI api, HasCardanoQueryApi api, HasLocalNodeAPI api, IsTxBuilderEra era,  HasSubmitApi api) => TxBuilder_ era -> Kontract api w FrameworkError (Tx era)
 kBuildAndSubmit' builder = do
   tx <- executeTxBuilder builder <&> snd
   kSubmitTx (InAnyCardanoEra bCardanoEra tx)
