@@ -28,6 +28,7 @@ import qualified Data.ByteString.Lazy as BSL
 import Data.Maybe
 import Data.String
 import qualified Data.Text as T hiding (map)
+import qualified Debug.Trace as Debug
 import GHC.Generics
 import Network.HTTP.Types (status201, status400)
 import Network.Wai
@@ -64,7 +65,7 @@ newtype ResponseMessage = ResponseMessage
 instance ToJSON ResponseMessage
 
 data CommitUTxOs = CommitUTxOs
-  { utxos :: [String],
+  { utxos :: [TxIn],
     signKey :: Maybe A.Value
   }
   deriving (Show, Generic, FromJSON, ToJSON)
@@ -100,7 +101,7 @@ type HydraCommandAPI =
     :<|> "submit" :> ReqBody '[JSON] TxModal :> PostResp
 
 type HydraQueryAPI =
-  "utxo" :> QueryParam "address" T.Text :> QueryParam "txin" T.Text :> GetResp
+  "utxo" :> QueryParams "address" T.Text :> QueryParams "txin" T.Text :> GetResp
     :<|> "protocol-parameters" :> GetResp
     :<|> "state" :> GetResp
 
@@ -164,19 +165,31 @@ abortHandler appConfig wait = do
   abortResponse <- liftIO $ abort appConfig (fromMaybe False wait)
   hydraErrorHandler abortResponse
 
-queryUtxoHandler :: AppConfig -> Maybe T.Text -> Maybe T.Text -> Handler (Union UVerbResponseTypes)
+queryUtxoHandler :: AppConfig -> [T.Text] -> [T.Text] -> Handler (Union UVerbResponseTypes)
 queryUtxoHandler appConfig address txin = do
-  queryUtxoResponse <- liftIO $ queryUTxO appConfig address txin
-  frameworkErrorHandler queryUtxoResponse
+  parsedTxIns <- liftIO $ listOfTextToTxIn txin
+  parsedAddresses <- liftIO $ listOfTextToAddressInEra address
+  case parsedTxIns of
+    Left fe -> frameworkErrorHandler $ Left fe
+    Right txins -> case parsedAddresses of
+      Left fe -> frameworkErrorHandler $ Left fe
+      Right address' -> do
+        queryUtxoResponse <- liftIO $ queryUTxO appConfig (map AddressModal address') txins
+        let queryResponseToValue = case queryUtxoResponse of
+              Left fe -> Left fe
+              Right utxos -> case bytestringToJSON $ serialiseToJSON utxos of
+                Left fe' -> Left fe'
+                Right json -> Right json
+        frameworkErrorHandler queryResponseToValue
 
 commitHandler :: AppConfig -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
 commitHandler appConfig submit commits = do
-  commitResult <- liftIO $ commitUTxO appConfig (map T.pack $ commits.utxos) (signKey commits) (fromMaybe False submit)
+  commitResult <- liftIO $ commitUTxO appConfig commits.utxos (signKey commits) (fromMaybe False submit)
   frameworkErrorHandler commitResult
 
 decommitHandler :: AppConfig -> Maybe Bool -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
-decommitHandler appConfig wait submit decommits = do
-  decommitResult <- liftIO $ decommitUTxO appConfig (map T.pack $ decommits.utxos) (signKey decommits) (fromMaybe False wait) (fromMaybe False submit)
+decommitHandler appConfig submit wait decommits = do
+  decommitResult <- liftIO $ decommitUTxO appConfig decommits.utxos (signKey decommits) (fromMaybe False wait) (fromMaybe False submit)
   frameworkErrorHandler decommitResult
 
 closeHandler :: AppConfig -> Maybe Bool -> Handler (Union UVerbResponseTypes)

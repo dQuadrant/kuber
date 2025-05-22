@@ -70,6 +70,7 @@ executable kuber-hydra
                     Websocket.Aeson
                     Websocket.Middleware
                     Api.Spec
+                    Api.HydraClient
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:

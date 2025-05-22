@@ -34,7 +34,6 @@ newtype ChainConnectInfo = ChainConnectInfo LocalNodeConnectInfo
 
 instance HasChainQueryAPI LocalNodeConnectInfo where
   kQueryProtocolParams = liftLnciQuery queryProtocolParam
-
   kQueryUtxoByAddress = liftLnciQuery2 queryUtxos
   kQueryUtxoByTxin = liftLnciQuery2 queryTxins
   kQueryChainPoint = liftLnciQuery queryChainPoint

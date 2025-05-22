@@ -33,12 +33,6 @@ newtype HydraGetUTxOResponse = HydraGetUTxOResponse
   }
   deriving (Generic, Show, ToJSON, FromJSON)
 
-data GroupedUTXO = GroupedUTXO
-  { address :: T.Text,
-    utxos :: [T.Text]
-  }
-  deriving (Show, Generic, ToJSON, FromJSON)
-
 data WSMessage = WSMessage
   { tag :: T.Text,
     seq :: Maybe Int,

@@ -1,12 +1,14 @@
 {-# LANGUAGE DataKinds #-}
+
 module Websocket.Middleware where
 
+import Cardano.Api (ConwayEra, UTxO)
+import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.CaseInsensitive as CI
 import Network.HTTP.Types
 import Network.Wai
 import Servant
-import qualified Data.Aeson as A
 
 hPragma :: HeaderName
 hPragma = CI.mk (BS8.pack "Pragma")
@@ -63,39 +65,39 @@ errorMiddleware status
   | otherwise = err500
 
 type UVerbResponseTypes =
-  '[ WithStatus 200 A.Value
-   , WithStatus 201 A.Value
-   , WithStatus 300 A.Value
-   , WithStatus 301 A.Value
-   , WithStatus 302 A.Value
-   , WithStatus 303 A.Value
-   , WithStatus 304 A.Value
-   , WithStatus 305 A.Value
-   , WithStatus 307 A.Value
-   , WithStatus 400 A.Value
-   , WithStatus 401 A.Value
-   , WithStatus 402 A.Value
-   , WithStatus 403 A.Value
-   , WithStatus 404 A.Value
-   , WithStatus 405 A.Value
-   , WithStatus 406 A.Value
-   , WithStatus 407 A.Value
-   , WithStatus 409 A.Value
-   , WithStatus 410 A.Value
-   , WithStatus 411 A.Value
-   , WithStatus 412 A.Value
-   , WithStatus 413 A.Value
-   , WithStatus 414 A.Value
-   , WithStatus 415 A.Value
-   , WithStatus 416 A.Value
-   , WithStatus 417 A.Value
-   , WithStatus 418 A.Value
-   , WithStatus 422 A.Value
-   , WithStatus 429 A.Value
-   , WithStatus 500 A.Value
-   , WithStatus 501 A.Value
-   , WithStatus 502 A.Value
-   , WithStatus 503 A.Value
-   , WithStatus 504 A.Value
-   , WithStatus 505 A.Value
+  '[ WithStatus 200 A.Value,
+     WithStatus 201 A.Value,
+     WithStatus 300 A.Value,
+     WithStatus 301 A.Value,
+     WithStatus 302 A.Value,
+     WithStatus 303 A.Value,
+     WithStatus 304 A.Value,
+     WithStatus 305 A.Value,
+     WithStatus 307 A.Value,
+     WithStatus 400 A.Value,
+     WithStatus 401 A.Value,
+     WithStatus 402 A.Value,
+     WithStatus 403 A.Value,
+     WithStatus 404 A.Value,
+     WithStatus 405 A.Value,
+     WithStatus 406 A.Value,
+     WithStatus 407 A.Value,
+     WithStatus 409 A.Value,
+     WithStatus 410 A.Value,
+     WithStatus 411 A.Value,
+     WithStatus 412 A.Value,
+     WithStatus 413 A.Value,
+     WithStatus 414 A.Value,
+     WithStatus 415 A.Value,
+     WithStatus 416 A.Value,
+     WithStatus 417 A.Value,
+     WithStatus 418 A.Value,
+     WithStatus 422 A.Value,
+     WithStatus 429 A.Value,
+     WithStatus 500 A.Value,
+     WithStatus 501 A.Value,
+     WithStatus 502 A.Value,
+     WithStatus 503 A.Value,
+     WithStatus 504 A.Value,
+     WithStatus 505 A.Value
    ]
