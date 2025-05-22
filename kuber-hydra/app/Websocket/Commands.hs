@@ -68,54 +68,52 @@ submit txm = do
 commitUTxO :: AppConfig -> [TxIn] -> Maybe A.Value -> Bool -> IO (Either FrameworkError A.Value)
 commitUTxO appConfig utxos sk submit = do
   utxoSchema <- createUTxOSchema utxos
-  unsignedCommitTxOrError <- getHydraCommitTx appConfig utxoSchema
-  case unsignedCommitTxOrError of
+  case utxoSchema of
     Left fe -> pure $ Left fe
-    Right unsignedCommitTx ->
-      case A.eitherDecode (fromStrict $ T.encodeUtf8 unsignedCommitTx) of
-        Left err ->
-          pure $
-            Left $
-              FrameworkError ParserError $
-                "Received: " <> T.unpack unsignedCommitTx <> ". Error decoding Hydra response: " <> err
-        Right (HydraCommitTx cborHex _ _) ->
-          case convertText (T.pack cborHex) <&> unBase16 of
-            Nothing -> pure $ Left $ FrameworkError ParserError "Invalid CBOR hex in commit transaction"
-            Just bs -> do
-              case parsedTxAnyEra bs of
-                Left fe -> pure $ Left fe
-                Right tx -> do
-                  let result = case sk of
-                        Nothing -> Right tx
-                        Just sk' -> case parseSignKey (jsonToText sk') of
-                          Nothing -> Left $ FrameworkError ParserError "Invalid signing key"
-                          Just parsedSk -> do
-                            let (txBody, hydraWitness) = getTxBodyAndWitnesses tx
-                                signedTx = makeSignedTransaction (hydraWitness ++ [makeShelleyKeyWitness shelleyBasedEra txBody (WitnessPaymentKey parsedSk)]) txBody
-                            Right signedTx
-                  case result of
+    Right utxoJsonSchema -> do
+      unsignedCommitTxOrError <- getHydraCommitTx appConfig utxoJsonSchema
+      case unsignedCommitTxOrError of
+        Left fe -> pure $ Left fe
+        Right unsignedCommitTx ->
+          case A.eitherDecode (fromStrict $ T.encodeUtf8 unsignedCommitTx) of
+            Left err ->
+              pure $
+                Left $
+                  FrameworkError ParserError $
+                    "Received: " <> T.unpack unsignedCommitTx <> ". Error decoding Hydra response: " <> err
+            Right (HydraCommitTx cborHex _ _) ->
+              case convertText (T.pack cborHex) <&> unBase16 of
+                Nothing -> pure $ Left $ FrameworkError ParserError "Invalid CBOR hex in commit transaction"
+                Just bs -> do
+                  case parsedTxAnyEra bs of
                     Left fe -> pure $ Left fe
-                    Right tx' -> do
-                      let cborHex' :: T.Text = toHexString $ serialiseToCBOR tx'
-                          txObject = buildTxModalObject cborHex' (not $ null $ snd $ getTxBodyAndWitnesses tx')
-                      if submit
-                        then do
-                          submittedTxResult <- submitHandler $ kSubmitTx (InAnyCardanoEra ConwayEra tx')
-                          case submittedTxResult of
-                            Left fe -> pure $ Left fe
-                            Right () -> pure $ Right txObject
-                        else
-                          pure $ Right txObject
+                    Right tx -> do
+                      let result = case sk of
+                            Nothing -> Right tx
+                            Just sk' -> case parseSignKey (jsonToText sk') of
+                              Nothing -> Left $ FrameworkError ParserError "Invalid signing key"
+                              Just parsedSk -> do
+                                let (txBody, hydraWitness) = getTxBodyAndWitnesses tx
+                                    signedTx = makeSignedTransaction (hydraWitness ++ [makeShelleyKeyWitness shelleyBasedEra txBody (WitnessPaymentKey parsedSk)]) txBody
+                                Right signedTx
+                      case result of
+                        Left fe -> pure $ Left fe
+                        Right tx' -> do
+                          let cborHex' :: T.Text = toHexString $ serialiseToCBOR tx'
+                              txObject = buildTxModalObject cborHex' (not $ null $ snd $ getTxBodyAndWitnesses tx')
+                          if submit
+                            then do
+                              submittedTxResult <- submitHandler $ kSubmitTx (InAnyCardanoEra ConwayEra tx')
+                              case submittedTxResult of
+                                Left fe -> pure $ Left fe
+                                Right () -> pure $ Right txObject
+                            else
+                              pure $ Right txObject
 
 decommitUTxO :: AppConfig -> [TxIn] -> Maybe A.Value -> Bool -> Bool -> IO (Either FrameworkError A.Value)
 decommitUTxO hydraHost utxos sk wait submit = do
   let parsedSignKey = sk >>= parseSignKey . jsonToText
   handleHydraDecommitTx hydraHost utxos parsedSignKey wait submit
-
-getProtocolParameters :: AppConfig -> IO (Either FrameworkError A.Value)
-getProtocolParameters hydraHost = do
-  hydraProtocolParameters <- fetch hydraHost >>= \query -> query (T.pack "protocol-parameters")
-  pure $ textToJSON hydraProtocolParameters
 
 getHydraState :: AppConfig -> IO (Either FrameworkError A.Value)
 getHydraState hydraHost = do

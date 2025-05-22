@@ -65,13 +65,20 @@ parsedTxAnyEra bs =
     Just (InAnyCardanoEra _ _) -> Left $ FrameworkError ParserError "Unexpected era, expected ConwayEra"
     Nothing -> Left $ FrameworkError ParserError "Error parsing transaction cbor"
 
-createUTxOSchema :: [TxIn] -> IO T.Text
+createUTxOSchema :: [TxIn] -> IO (Either FrameworkError T.Text)
 createUTxOSchema utxos = do
   localChain <- chainInfoFromEnv
   result <- evaluateKontract localChain (getUtxoDetails @ChainConnectInfo @ConwayEra utxos)
   case result of
-    Left err -> error $ "Query failed: " <> show err
-    Right res -> pure $ (T.pack . BS8.unpack . BSL.toStrict . A.encode) res
+    Left err -> pure $ Left err
+    Right res -> case res of
+      UTxO txinMap -> do
+        let allTxInsPresent = utxos `isSubsetOf` M.keys txinMap
+        if allTxInsPresent
+          then
+            pure $ Right $ (T.pack . BS8.unpack . BSL.toStrict . A.encode) res
+          else
+            pure $ Left $ FrameworkError NodeQueryError "Error Querying UTxOs"
 
 getUtxoDetails ::
   (HasChainQueryAPI a, IsTxBuilderEra era) =>
