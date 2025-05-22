@@ -2,7 +2,6 @@
 
 module Websocket.Middleware where
 
-import Cardano.Api (ConwayEra, UTxO)
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.CaseInsensitive as CI

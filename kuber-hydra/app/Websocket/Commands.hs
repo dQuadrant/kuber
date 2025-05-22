@@ -20,16 +20,12 @@ import Cardano.Kuber.Data.Parsers
 import Cardano.Kuber.Util
 import Data.Aeson
 import qualified Data.Aeson as A
-import Data.Aeson.Types
 import Data.ByteString.Char8 as BS8 hiding (elem, filter, head, length, map, null)
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import Data.Functor
-import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.Text.Conversions
 import qualified Data.Text.Encoding as T
-import qualified Debug.Trace as Debug
-import GHC.Generics
 import GHC.List
 import Websocket.Aeson
 import Websocket.Forwarder
@@ -115,7 +111,7 @@ decommitUTxO hydraHost utxos sk wait submit = do
   let parsedSignKey = sk >>= parseSignKey . jsonToText
   handleHydraDecommitTx hydraHost utxos parsedSignKey wait submit
 
-getHydraState :: AppConfig -> IO (Either FrameworkError A.Value)
+getHydraState :: AppConfig -> IO (Either FrameworkError HydraStateResponse)
 getHydraState hydraHost = do
   (allUTxOsText, _) <- sendCommandToHydraNodeSocket hydraHost GetUTxO False
   let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe WSMessage

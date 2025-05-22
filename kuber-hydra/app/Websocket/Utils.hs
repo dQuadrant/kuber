@@ -8,10 +8,8 @@
 module Websocket.Utils where
 
 import Cardano.Api
-import Cardano.Api.Shelley (fromShelleyAddr)
 import Cardano.Kuber.Api
 import Cardano.Kuber.Data.Parsers
-import Data.Aeson
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Key as K
 import qualified Data.Aeson.KeyMap as KM
@@ -26,7 +24,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
-import qualified Debug.Trace as Debug
 import Websocket.Aeson
 
 textToJSON :: T.Text -> Either FrameworkError A.Value
@@ -47,7 +44,7 @@ jsonToText = TL.toStrict . TLE.decodeUtf8 . A.encode
 textToLazyByteString :: T.Text -> BSL.ByteString
 textToLazyByteString = BSL.fromStrict . TE.encodeUtf8
 
-createHydraStateResponseAeson :: HeadState -> IO A.Value
+createHydraStateResponseAeson :: HeadState -> IO HydraStateResponse
 createHydraStateResponseAeson hs =
   let stateText = T.pack $ case hs of
         HeadIsIdle -> "Head is Idle"
@@ -56,7 +53,7 @@ createHydraStateResponseAeson hs =
         PartiallyCommitted -> "Partial Commitments Received"
         HeadIsReady -> "Open and Ready for Transactions"
         HeadIsClosed -> "Head is Closed"
-   in pure $ A.object ["state" .= stateText]
+   in pure $ HydraStateResponse stateText
 
 parsedTxAnyEra :: BS8.ByteString -> Either FrameworkError (Tx ConwayEra)
 parsedTxAnyEra bs =

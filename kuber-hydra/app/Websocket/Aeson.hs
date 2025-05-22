@@ -177,3 +177,8 @@ data HeadState
   | HeadIsReady
   | HeadIsClosed
   | HeadIsContested
+
+newtype HydraStateResponse = HydraStateResponse
+  { state :: T.Text
+  }
+  deriving (Show, Generic, ToJSON)

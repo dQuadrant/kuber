@@ -23,12 +23,12 @@ import Cardano.Api
 import Cardano.Kuber.Api
 import Cardano.Kuber.Data.Models
 import qualified Data.Aeson as A
+import Data.ByteString (toStrict)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BSL
 import Data.Maybe
 import Data.String
 import qualified Data.Text as T hiding (map)
-import qualified Debug.Trace as Debug
 import GHC.Generics
 import Network.HTTP.Types (status201, status400)
 import Network.Wai
@@ -42,7 +42,6 @@ import Websocket.Commands
 import Websocket.Middleware
 import Websocket.TxBuilder (hydraProtocolParams, queryUTxO, rawBuildHydraTx, toValidHydraTxBuilder)
 import Websocket.Utils
-import Data.ByteString (toStrict)
 
 -- Define CORS policy
 corsMiddlewarePolicy :: CorsResourcePolicy
@@ -213,7 +212,7 @@ queryProtocolParameterHandler appConfig = do
   pParamResponse <- liftIO (hydraProtocolParams appConfig :: IO (Either FrameworkError HydraProtocolParameters))
   pParamsToJSON <- case pParamResponse of
     Left fe -> pure $ Left fe
-    Right pparams -> case bytestringToJSON $ toStrict $ A.encode pparams of 
+    Right pparams -> case bytestringToJSON $ toStrict $ A.encode pparams of
       Left fe -> pure $ Left fe
       Right val -> pure $ Right val
   frameworkErrorHandler pParamsToJSON
@@ -221,7 +220,12 @@ queryProtocolParameterHandler appConfig = do
 queryStateHandler :: AppConfig -> Handler (Union UVerbResponseTypes)
 queryStateHandler appConfig = do
   stateResponse <- liftIO $ getHydraState appConfig
-  frameworkErrorHandler (stateResponse :: Either FrameworkError A.Value)
+  stateResponseJSON <- case stateResponse of
+    Left fe -> pure $ Left fe
+    Right stateInfo -> case bytestringToJSON $ toStrict $ A.encode stateInfo of
+      Left fe -> pure $ Left fe
+      Right val -> pure $ Right val
+  frameworkErrorHandler stateResponseJSON
 
 txHandler :: AppConfig -> Maybe Bool -> TxBuilder_ ConwayEra -> Handler TxModal
 txHandler appConfig submit txb = do

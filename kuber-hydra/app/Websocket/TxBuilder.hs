@@ -17,17 +17,11 @@ import Cardano.Kuber.Api
 import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Data.Parsers
 import Cardano.Kuber.Util
-import qualified Cardano.Ledger.BaseTypes as L
-import qualified Cardano.Ledger.Coin as L
-import Cardano.Ledger.TxIn (txInToText)
 import Data.Aeson
 import qualified Data.Aeson as A
-import qualified Data.Aeson.Key as K
-import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString.Lazy as BSL
 import Data.Either
-import Data.List (foldl')
 import qualified Data.Map as Map
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromJust, mapMaybe)
@@ -35,12 +29,10 @@ import qualified Data.Maybe as Maybe
 import qualified Data.Text as T
 import Data.Text.Encoding
 import qualified Data.Text.Encoding as T
-import qualified Debug.Trace as Debug
 import Websocket.Aeson
 import Websocket.Forwarder
 import Websocket.SocketConnection (fetch, post, validateLatestWebsocketTag)
 import Websocket.Utils
-import Websocket.Utils (utxoFromUTxOMap)
 
 handleHydraDecommitTx :: AppConfig -> [TxIn] -> Maybe (SigningKey PaymentKey) -> Bool -> Bool -> IO (Either FrameworkError A.Value)
 handleHydraDecommitTx appConfig utxosToDecommit sk wait submit = do
