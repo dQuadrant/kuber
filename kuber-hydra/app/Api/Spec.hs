@@ -40,8 +40,9 @@ import Servant.Exception
 import Websocket.Aeson
 import Websocket.Commands
 import Websocket.Middleware
-import Websocket.TxBuilder (queryUTxO, rawBuildHydraTx, toValidHydraTxBuilder)
+import Websocket.TxBuilder (hydraProtocolParams, queryUTxO, rawBuildHydraTx, toValidHydraTxBuilder)
 import Websocket.Utils
+import Data.ByteString (toStrict)
 
 -- Define CORS policy
 corsMiddlewarePolicy :: CorsResourcePolicy
@@ -209,8 +210,13 @@ fanoutHandler appConfig wait = do
 
 queryProtocolParameterHandler :: AppConfig -> Handler (Union UVerbResponseTypes)
 queryProtocolParameterHandler appConfig = do
-  pParamResponse <- liftIO $ getProtocolParameters appConfig
-  frameworkErrorHandler pParamResponse
+  pParamResponse <- liftIO (hydraProtocolParams appConfig :: IO (Either FrameworkError HydraProtocolParameters))
+  pParamsToJSON <- case pParamResponse of
+    Left fe -> pure $ Left fe
+    Right pparams -> case bytestringToJSON $ toStrict $ A.encode pparams of 
+      Left fe -> pure $ Left fe
+      Right val -> pure $ Right val
+  frameworkErrorHandler pParamsToJSON
 
 queryStateHandler :: AppConfig -> Handler (Union UVerbResponseTypes)
 queryStateHandler appConfig = do

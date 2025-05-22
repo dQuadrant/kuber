@@ -131,7 +131,7 @@ data HydraProtocolParameters = HydraProtocolParameters
     txFeePerByte :: Int,
     utxoCostPerByte :: Maybe Int
   }
-  deriving (Show, Generic)
+  deriving (Show, Generic, ToJSON)
 
 instance FromJSON HydraProtocolParameters
 
@@ -147,7 +147,7 @@ data DRepVotingThresholds = DRepVotingThresholds
     treasuryWithdrawal :: Maybe Double,
     updateToConstitution :: Maybe Double
   }
-  deriving (Show, Generic)
+  deriving (Show, Generic, ToJSON)
 
 instance FromJSON DRepVotingThresholds
 
@@ -158,7 +158,7 @@ data PoolVotingThresholds = PoolVotingThresholds
     motionNoConfidence :: Maybe Double,
     ppSecurityGroup :: Maybe Double
   }
-  deriving (Show, Generic)
+  deriving (Show, Generic, ToJSON)
 
 instance FromJSON PoolVotingThresholds
 
@@ -166,7 +166,7 @@ data ProtocolVersion = ProtocolVersion
   { major :: Natural,
     minor :: Natural
   }
-  deriving (Show, Generic)
+  deriving (Show, Generic, ToJSON)
 
 instance FromJSON ProtocolVersion
 
