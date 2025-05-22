@@ -20,6 +20,7 @@ import Cardano.Kuber.Util
 import Data.Aeson
 import qualified Data.Aeson as A
 import qualified Data.Aeson.KeyMap as KM
+import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
 import Data.Either
 import qualified Data.Map as Map
@@ -29,6 +30,7 @@ import qualified Data.Maybe as Maybe
 import qualified Data.Text as T
 import Data.Text.Encoding
 import qualified Data.Text.Encoding as T
+import qualified Debug.Trace as Debug
 import Websocket.Aeson
 import Websocket.Forwarder
 import Websocket.SocketConnection (fetch, post, validateLatestWebsocketTag)
@@ -61,7 +63,6 @@ handleHydraDecommitTx appConfig utxosToDecommit sk wait submit = do
                           ( map
                               ( \(tin, tout) ->
                                   txConsumeUtxo tin tout
-                                    <> txSetFee 0
                                     <> txChangeAddress
                                       ( case tout of
                                           TxOut addr _ _ _ -> addr
@@ -289,7 +290,8 @@ toValidHydraTxBuilder appConfig txb submit = do
                 ("toValidHydraTxBuilder: Error building Hydra Tx." <> concatMap ((++ "\n") . show) (errorsFromSelections <> errorsFromInputs))
         else do
           let validHydraTxBuilder =
-                txb
+                -- clearing selections from the original txbuilder becuase the required extration of utxos and signing keys has been done
+                txb {txSelections = []}
                   <> selectionTxBuilder
                   <> inputTxBuilder
                   <> skeyTxBuilder
@@ -298,13 +300,19 @@ toValidHydraTxBuilder appConfig txb submit = do
           txBuilderResponse <- liftIO $ rawBuildHydraTx appConfig validHydraTxBuilder
           case txBuilderResponse of
             Left fe -> pure $ Left fe
-            Right tx ->
+            Right tx -> do
               if submit
                 then do
-                  submittedTxResult <- submitHandler $ kSubmitTx (InAnyCardanoEra ConwayEra tx)
-                  case submittedTxResult of
-                    Left fe -> pure $ Left fe
-                    Right () -> pure $ Right $ TxModal $ InAnyCardanoEra bCardanoEra tx
+                  let txModalToSubmit = TxModal $ InAnyCardanoEra bCardanoEra tx
+                  submittedTxResult <- submitHydraTx appConfig txModalToSubmit
+                  case snd submittedTxResult of
+                    200 -> pure $ Right txModalToSubmit
+                    x ->
+                      pure
+                        $ Left
+                        $ FrameworkError
+                          TxSubmissionError
+                        $ "Hydra responsded with status: " <> show x <> " and message: " <> show (fst submittedTxResult)
                 else
                   pure $ Right $ TxModal $ InAnyCardanoEra bCardanoEra tx
 
