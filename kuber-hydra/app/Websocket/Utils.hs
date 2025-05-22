@@ -70,12 +70,16 @@ createUTxOSchema utxos = do
     Left err -> pure $ Left err
     Right res -> case res of
       UTxO txinMap -> do
-        let allTxInsPresent = utxos `isSubsetOf` M.keys txinMap
+        let txInKeys = M.keys txinMap
+            allTxInsPresent = utxos `isSubsetOf` txInKeys
         if allTxInsPresent
           then
             pure $ Right $ (T.pack . BS8.unpack . BSL.toStrict . A.encode) res
           else
-            pure $ Left $ FrameworkError NodeQueryError "Error Querying UTxOs"
+            pure $ Left $ FrameworkError NodeQueryError $ "Error Querying UTxOs : " <> show (utxos `notPresentIn` txInKeys)
+
+notPresentIn :: (Eq a) => [a] -> [a] -> [a]
+notPresentIn a b = filter (`notElem` b) a
 
 getUtxoDetails ::
   (HasChainQueryAPI a, IsTxBuilderEra era) =>
