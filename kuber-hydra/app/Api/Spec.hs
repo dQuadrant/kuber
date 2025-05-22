@@ -40,7 +40,7 @@ import Servant.Exception
 import Websocket.Aeson
 import Websocket.Commands
 import Websocket.Middleware
-import Websocket.TxBuilder (hydraProtocolParams, queryUTxO, rawBuildHydraTx, toValidHydraTxBuilder)
+import Websocket.TxBuilder (hydraProtocolParams, queryUTxO, toValidHydraTxBuilder)
 import Websocket.Utils
 
 -- Define CORS policy
@@ -90,13 +90,13 @@ type API =
     :<|> "hydra" :> "query" :> HydraQueryAPI
 
 type HydraCommandAPI =
-  "init" :> WithWait GetResp
-    :<|> "abort" :> WithWait GetResp
+  "init" :> WithWait PostResp
+    :<|> "abort" :> WithWait PostResp
     :<|> "commit" :> WithSubmit (ReqBody '[JSON] CommitUTxOs :> PostResp)
     :<|> "decommit" :> WithSubmit (WithWait (ReqBody '[JSON] CommitUTxOs :> PostResp))
-    :<|> "close" :> WithWait GetResp
-    :<|> "contest" :> WithWait GetResp
-    :<|> "fanout" :> WithWait GetResp
+    :<|> "close" :> WithWait PostResp
+    :<|> "contest" :> WithWait PostResp
+    :<|> "fanout" :> WithWait PostResp
     :<|> "tx" :> WithSubmit (ReqBody '[JSON] TxBuilder :> Post '[JSON] TxModal)
     :<|> "submit" :> ReqBody '[JSON] TxModal :> PostResp
 
