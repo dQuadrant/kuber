@@ -69,7 +69,6 @@ createUTxOSchema :: [TxIn] -> IO T.Text
 createUTxOSchema utxos = do
   localChain <- chainInfoFromEnv
   result <- evaluateKontract localChain (getUtxoDetails @ChainConnectInfo @ConwayEra utxos)
-  Debug.traceM (show result)
   case result of
     Left err -> error $ "Query failed: " <> show err
     Right res -> pure $ (T.pack . BS8.unpack . BSL.toStrict . A.encode) res

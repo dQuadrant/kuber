@@ -38,13 +38,6 @@ import Websocket.TxBuilder
 import Websocket.Utils
 import Prelude hiding (elem, length, map, null)
 
-data HydraCommitTx = HydraCommitTx
-  { cborHex :: String,
-    description :: String,
-    txId :: String
-  }
-  deriving (Show, Generic, FromJSON, ToJSON)
-
 hydraHeadMessageForwardingFailed :: T.Text
 hydraHeadMessageForwardingFailed = T.pack "Failed to forward message to hydra head"
 

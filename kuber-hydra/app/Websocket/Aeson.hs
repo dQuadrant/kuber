@@ -33,6 +33,13 @@ newtype HydraGetUTxOResponse = HydraGetUTxOResponse
   }
   deriving (Generic, Show, ToJSON, FromJSON)
 
+data HydraCommitTx = HydraCommitTx
+  { cborHex :: String,
+    description :: String,
+    txId :: String
+  }
+  deriving (Show, Generic, FromJSON, ToJSON)
+
 data WSMessage = WSMessage
   { tag :: T.Text,
     seq :: Maybe Int,
