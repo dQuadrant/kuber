@@ -10,22 +10,12 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: "Intuitive Peer and State Monitoring",
+    title: "Intuitive State Monitoring",
     Svg: require("@site/static/img/undraw_term-sheet_70lo.svg").default,
     description: (
       <>
-        Easily connect to Hydra peers, monitor their status and the head state
-        through an intuitive and user-friendly interface.
-      </>
-    ),
-  },
-  {
-    title: "Simplified Wallet Integration and Transaction Management",
-    Svg: require("@site/static/img/undraw_online-banking_v7ih.svg").default,
-    description: (
-      <>
-        Easily connect your wallet, create and submit valid hydra transactions
-        with simple json architecture.
+        Easily monitor the hydra head state through an intuitive and
+        user-friendly api.
       </>
     ),
   },
@@ -34,9 +24,19 @@ const FeatureList: FeatureItem[] = [
     Svg: require("@site/static/img/undraw_version-control_eiam.svg").default,
     description: (
       <>
-        Effortlessly initialize your Hydra head, commit your UTxOs, abort when
-        necessary, and seamlessly close and fanout transactions to the mainchain
-        with ease.
+        Effortlessly initialize your Hydra head, commit and de-commit your
+        UTxOs, abort when necessary, and seamlessly close and fanout
+        transactions to the mainchain.
+      </>
+    ),
+  },
+  {
+    title: "Simplified Wallet Integration and Transaction Building",
+    Svg: require("@site/static/img/undraw_online-banking_v7ih.svg").default,
+    description: (
+      <>
+        Easily connect your wallet, create and submit valid hydra transactions
+        with simple json architecture.
       </>
     ),
   },

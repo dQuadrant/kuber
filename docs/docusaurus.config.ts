@@ -11,12 +11,12 @@ const config: Config = {
   url: "https://cadanoapi.github.io",
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: "/kuber-hydra/archietecture_docusaurus/",
+  baseUrl: "/kuber/hydra_docusaurus/",
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: "cardanoapi", // Usually your GitHub org/user name.
-  projectName: "kuber-hydra", // Usually your repo name.
+  organizationName: "dQuadrant", // Usually your GitHub org/user name.
+  projectName: "kuber", // Usually your repo name.
 
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
@@ -36,7 +36,7 @@ const config: Config = {
         docs: {
           sidebarPath: "./sidebars.ts",
 
-          editUrl: "https://github.com/cardanoapi/kuber-hydra.git",
+          editUrl: "https://github.com/dQuadrant/kuber/tree/feat/hydra",
         },
       } satisfies Preset.Options,
     ],
@@ -61,16 +61,16 @@ const config: Config = {
           type: "docSidebar",
           sidebarId: "scenarioTests",
           position: "left",
-          label: "Scenario Tests",
+          label: "Hydra Analysis",
         },
         {
           type: "docSidebar",
           sidebarId: "milestones",
           position: "left",
-          label: "Milestones",
+          label: "Planning",
         },
         {
-          href: "https://github.com/cardanoapi/kuber-hydra.git",
+          href: "https://github.com/dQuadrant/kuber/tree/feat/hydra",
           label: "GitHub",
           position: "right",
         },
