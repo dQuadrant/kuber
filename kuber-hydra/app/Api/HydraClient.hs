@@ -15,9 +15,9 @@ import Websocket.Utils
 
 newtype HydraConfig = HydraConfig AppConfig
 
-instance HasChainQueryAPI HydraConfig where
-  kQueryUtxoByAddress :: (IsTxBuilderEra era) => Set AddressAny -> Kontract HydraConfig w FrameworkError (UTxO era)
-  kQueryUtxoByAddress addrs = KLift $ \(HydraConfig c) -> do
-    queryUTxO c (setOfAddressAnyToAddressesInConwayEra addrs) []
+-- instance HasChainQueryAPI HydraConfig where
+--   kQueryUtxoByAddress :: (IsTxBuilderEra era) => Set AddressAny -> Kontract HydraConfig w FrameworkError (UTxO era)
+--   kQueryUtxoByAddress addrs = KLift $ \(HydraConfig c) -> do
+--     queryUTxO c (setOfAddressAnyToAddressesInConwayEra addrs) []
 
 -- pure $ Left  (FrameworkError LibraryError "Reeshav is done working on it (mentally)")

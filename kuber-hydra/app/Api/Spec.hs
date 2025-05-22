@@ -169,18 +169,18 @@ queryUtxoHandler :: AppConfig -> [T.Text] -> [T.Text] -> Handler (Union UVerbRes
 queryUtxoHandler appConfig address txin = do
   parsedTxIns <- liftIO $ listOfTextToTxIn txin
   parsedAddresses <- liftIO $ listOfTextToAddressInEra address
-  case parsedTxIns of
-    Left fe -> frameworkErrorHandler $ Left fe
+  eitherErrorOrUTxOs <- case parsedTxIns of
+    Left fe -> pure $ Left fe
     Right txins -> case parsedAddresses of
-      Left fe -> frameworkErrorHandler $ Left fe
+      Left fe -> pure $ Left fe
       Right address' -> do
-        queryUtxoResponse <- liftIO $ queryUTxO appConfig (map AddressModal address') txins
-        let queryResponseToValue = case queryUtxoResponse of
-              Left fe -> Left fe
-              Right utxos -> case bytestringToJSON $ serialiseToJSON utxos of
-                Left fe' -> Left fe'
-                Right json -> Right json
-        frameworkErrorHandler queryResponseToValue
+        queryUtxoResponse <- liftIO $ queryUTxO appConfig address' txins
+        case queryUtxoResponse of
+          Left fe -> pure $ Left fe
+          Right utxos -> case bytestringToJSON $ serialiseToJSON utxos of
+            Left fe' -> pure $ Left fe'
+            Right json -> pure $ Right json
+  frameworkErrorHandler eitherErrorOrUTxOs
 
 commitHandler :: AppConfig -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
 commitHandler appConfig submit commits = do
