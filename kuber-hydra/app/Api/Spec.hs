@@ -177,7 +177,7 @@ queryUtxoHandler appConfig address txin = do
         queryUtxoResponse <- liftIO $ queryUTxO appConfig address' txins
         case queryUtxoResponse of
           Left fe -> pure $ Left fe
-          Right utxos -> case bytestringToJSON $ serialiseToJSON utxos of
+          Right utxos -> case bytestringToJSON $ BSL.fromStrict $ serialiseToJSON utxos of
             Left fe' -> pure $ Left fe'
             Right json -> pure $ Right json
   frameworkErrorHandler eitherErrorOrUTxOs
@@ -185,7 +185,10 @@ queryUtxoHandler appConfig address txin = do
 commitHandler :: AppConfig -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
 commitHandler appConfig submit commits = do
   commitResult <- liftIO $ commitUTxO appConfig commits.utxos (signKey commits) (fromMaybe False submit)
-  frameworkErrorHandler commitResult
+  commitResultToJSON <- case bytestringToJSON $ A.encode commitResult of
+    Left fe -> pure $ Left fe
+    Right val -> pure $ Right val
+  frameworkErrorHandler commitResultToJSON
 
 decommitHandler :: AppConfig -> Maybe Bool -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
 decommitHandler appConfig submit wait decommits = do
@@ -212,7 +215,7 @@ queryProtocolParameterHandler appConfig = do
   pParamResponse <- liftIO (hydraProtocolParams appConfig :: IO (Either FrameworkError HydraProtocolParameters))
   pParamsToJSON <- case pParamResponse of
     Left fe -> pure $ Left fe
-    Right pparams -> case bytestringToJSON $ toStrict $ A.encode pparams of
+    Right pparams -> case bytestringToJSON $ A.encode pparams of
       Left fe -> pure $ Left fe
       Right val -> pure $ Right val
   frameworkErrorHandler pParamsToJSON
@@ -222,7 +225,7 @@ queryStateHandler appConfig = do
   stateResponse <- liftIO $ getHydraState appConfig
   stateResponseJSON <- case stateResponse of
     Left fe -> pure $ Left fe
-    Right stateInfo -> case bytestringToJSON $ toStrict $ A.encode stateInfo of
+    Right stateInfo -> case bytestringToJSON $ A.encode stateInfo of
       Left fe -> pure $ Left fe
       Right val -> pure $ Right val
   frameworkErrorHandler stateResponseJSON

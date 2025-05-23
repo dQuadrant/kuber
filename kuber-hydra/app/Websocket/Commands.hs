@@ -61,7 +61,7 @@ submit :: AppConfig -> TxModal -> IO (T.Text, Int)
 submit txm = do
   submitHydraTx txm
 
-commitUTxO :: AppConfig -> [TxIn] -> Maybe A.Value -> Bool -> IO (Either FrameworkError A.Value)
+commitUTxO :: AppConfig -> [TxIn] -> Maybe A.Value -> Bool -> IO (Either FrameworkError TxModal)
 commitUTxO appConfig utxos sk submit = do
   utxoSchema <- createUTxOSchema utxos
   case utxoSchema of
@@ -95,16 +95,15 @@ commitUTxO appConfig utxos sk submit = do
                       case result of
                         Left fe -> pure $ Left fe
                         Right tx' -> do
-                          let cborHex' :: T.Text = toHexString $ serialiseToCBOR tx'
-                              txObject = buildTxModalObject cborHex' (not $ null $ snd $ getTxBodyAndWitnesses tx')
+                          let txModalObject = TxModal (InAnyCardanoEra ConwayEra tx')
                           if submit
                             then do
                               submittedTxResult <- submitHandler $ kSubmitTx (InAnyCardanoEra ConwayEra tx')
                               case submittedTxResult of
                                 Left fe -> pure $ Left fe
-                                Right () -> pure $ Right txObject
+                                Right () -> pure $ Right txModalObject
                             else
-                              pure $ Right txObject
+                              pure $ Right txModalObject
 
 decommitUTxO :: AppConfig -> [TxIn] -> Maybe A.Value -> Bool -> Bool -> IO (Either FrameworkError A.Value)
 decommitUTxO hydraHost utxos sk wait submit = do

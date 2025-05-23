@@ -33,10 +33,10 @@ textToJSON jsonText = do
     Right val -> Right val
     Left _ -> Left $ FrameworkError ParserError $ "Could not parse to JSON : " <> T.unpack jsonText
 
-bytestringToJSON :: BS8.ByteString -> Either FrameworkError A.Value
-bytestringToJSON bs = case A.eitherDecode (fromStrict bs) of
+bytestringToJSON :: BSL.ByteString -> Either FrameworkError A.Value
+bytestringToJSON bs = case A.eitherDecode bs of
   Right val -> Right val
-  Left _ -> Left $ FrameworkError ParserError $ "Could not parse to JSON : " <> BS8.unpack bs
+  Left _ -> Left $ FrameworkError ParserError $ "Could not parse to JSON : " <> BS8.unpack (BSL.toStrict bs)
 
 jsonToText :: A.Value -> T.Text
 jsonToText = TL.toStrict . TLE.decodeUtf8 . A.encode

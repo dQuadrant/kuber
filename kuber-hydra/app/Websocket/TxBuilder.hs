@@ -80,12 +80,10 @@ handleHydraDecommitTx appConfig utxosToDecommit sk wait submit = do
                       case cardanoTxBody of
                         Left fe -> return $ Left fe
                         Right tx -> do
-                          let cborHex :: T.Text = T.pack $ toHexString $ serialiseToCBOR tx
-                              (_, existingWitness) = getTxBodyAndWitnesses tx
-                              decommitTxObject = buildTxModalObject cborHex (not $ null existingWitness)
+                          let decommitTxModalObject = TxModal (InAnyCardanoEra ConwayEra tx)
                           if submit
                             then do
-                              decommitPostResponse <- post appConfig "decommit" decommitTxObject
+                              decommitPostResponse <- post appConfig "decommit" decommitTxModalObject
                               if T.strip (T.filter (/= '"') decommitPostResponse) == "OK"
                                 then do
                                   wsResult <- validateLatestWebsocketTag appConfig (generateResponseTag DeCommitUTxO) wait
@@ -96,7 +94,7 @@ handleHydraDecommitTx appConfig utxosToDecommit sk wait submit = do
                                       FrameworkError TxSubmissionError $
                                         "submitHydraDecommitTx: Error submitting decommit transaction to Hydra: " ++ T.unpack decommitPostResponse
                             else
-                              return $ Right decommitTxObject
+                              pure $ bytestringToJSON $ A.encode decommitTxModalObject
 
 hydraProtocolParams :: AppConfig -> IO (Either FrameworkError HydraProtocolParameters)
 hydraProtocolParams appConfig = do
@@ -174,16 +172,6 @@ hydraProtocolParamsToLedgerParams hpp = case convertToLedgerProtocolParameters S
                             else Nothing
           )
           (Map.toList $ costModels hpp)
-
-buildTxModalObject :: (ToJSON v) => v -> Bool -> A.Value
-buildTxModalObject cborHex isWitnessed =
-  object
-    [ "cborHex" .= cborHex,
-      "type" .= T.pack (prefix <> " " <> "Tx ConwayEra"),
-      "description" .= T.pack "Ledger Cddl Format"
-    ]
-  where
-    prefix = if isWitnessed then "Witnessed" else "Unwitnessed"
 
 rawBuildHydraTx :: AppConfig -> TxBuilder_ ConwayEra -> IO (Either FrameworkError (Tx ConwayEra))
 rawBuildHydraTx appConfig txb = do
