@@ -86,7 +86,6 @@ library
     , cardano-slotting
     , plutus-ledger-api
     , plutus-tx
-    , plutus-tx-plugin
     , ouroboros-consensus
     , ouroboros-network
     , ouroboros-network-protocols
@@ -105,6 +104,7 @@ library
     , data-default
     , io-classes-mtl
     , ordered-containers
+    , dotenv
 
 test-suite test
   default-language: Haskell2010

@@ -1,56 +1,167 @@
-module Websocket.Commands where 
-import qualified Data.Text as T
-import Websocket.Connect
-import System.Environment
-import Cardano.Kuber.Data.Models (UtxoModal)
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# HLINT ignore "Use lambda-case" #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+module Websocket.Commands where
+
 import Cardano.Api
-import Data.Map as Map hiding (map)
 import Cardano.Api.Shelley
 import Cardano.Kuber.Api
-import Cardano.Kuber.Util
+import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Data.Parsers
-import Data.Set as Set hiding (map)
+import Cardano.Kuber.Util
+import Data.Aeson
+import qualified Data.Aeson as A
+import Data.ByteString.Char8 as BS8 hiding (elem, filter, head, length, map, null)
+import qualified Data.ByteString.Lazy.Char8 as BSL
+import Data.Functor
+import qualified Data.Text as T
+import Data.Text.Conversions
+import qualified Data.Text.Encoding as T
+import GHC.List
+import Websocket.Aeson
+import Websocket.Forwarder
+import Websocket.SocketConnection
+import Websocket.TxBuilder
+import Websocket.Utils
+import Prelude hiding (elem, length, map, null)
 
-data Action =  InitializeHead
-            | CommitUTxO
-            | Abort
-            | QueryUTxO
-            | CloseHead
-            | FanOut
+hydraHeadMessageForwardingFailed :: T.Text
+hydraHeadMessageForwardingFailed = T.pack "Failed to forward message to hydra head"
 
+initialize :: AppConfig -> Bool -> IO (T.Text, Int)
+initialize appConfig wait = do
+  sendCommandToHydraNodeSocket appConfig InitializeHead wait
 
-sendMessage :: IO (T.Text -> IO ())
-sendMessage = do 
-    hydraIp <- getEnv "HYDRA_IP"
-    hydraPort <- getEnv "HYDRA_PORT"
-    webSocketProxy hydraIp (read hydraPort :: Int)
+abort :: AppConfig -> Bool -> IO (T.Text, Int)
+abort appConfig wait = do
+  sendCommandToHydraNodeSocket appConfig Abort wait
 
+close :: AppConfig -> Bool -> IO (T.Text, Int)
+close appConfig wait = do
+  sendCommandToHydraNodeSocket appConfig CloseHead wait
 
-initialize :: IO ()
-initialize = sendMessage >>= \send -> send (T.pack "{\"tag\": \"Init\"}")
+contest :: AppConfig -> Bool -> IO (T.Text, Int)
+contest appConfig wait = do
+  sendCommandToHydraNodeSocket appConfig ContestHead wait
 
-abort :: IO ()
-abort = sendMessage >>= \send -> send (T.pack "{\"tag\": \"Abort\"}")
+fanout :: AppConfig -> Bool -> IO (T.Text, Int)
+fanout appConfig wait = do
+  sendCommandToHydraNodeSocket appConfig FanOut wait
 
-close :: IO ()
-close = sendMessage >>= \send -> send (T.pack "{\"tag\": \"Close\"}")
+submit :: AppConfig -> TxModal -> IO (T.Text, Int)
+submit txm = do
+  submitHydraTx txm
 
-getUTxO :: IO ()
-getUTxO = sendMessage >>= \send -> send (T.pack "{\"tag\": \"GetUTxO\"}")
+commitUTxO :: AppConfig -> [TxIn] -> Maybe A.Value -> Bool -> IO (Either FrameworkError TxModal)
+commitUTxO appConfig utxos sk submit = do
+  utxoSchema <- createUTxOSchema utxos
+  case utxoSchema of
+    Left fe -> pure $ Left fe
+    Right utxoJsonSchema -> do
+      unsignedCommitTxOrError <- getHydraCommitTx appConfig utxoJsonSchema
+      case unsignedCommitTxOrError of
+        Left fe -> pure $ Left fe
+        Right unsignedCommitTx ->
+          case A.eitherDecode (fromStrict $ T.encodeUtf8 unsignedCommitTx) of
+            Left err ->
+              pure $
+                Left $
+                  FrameworkError ParserError $
+                    "Received: " <> T.unpack unsignedCommitTx <> ". Error decoding Hydra response: " <> err
+            Right (HydraCommitTx cborHex _ _) ->
+              case convertText (T.pack cborHex) <&> unBase16 of
+                Nothing -> pure $ Left $ FrameworkError ParserError "Invalid CBOR hex in commit transaction"
+                Just bs -> do
+                  case parsedTxAnyEra bs of
+                    Left fe -> pure $ Left fe
+                    Right tx -> do
+                      let result = case sk of
+                            Nothing -> Right tx
+                            Just sk' -> case parseSignKey (jsonToText sk') of
+                              Nothing -> Left $ FrameworkError ParserError "Invalid signing key"
+                              Just parsedSk -> do
+                                let (txBody, hydraWitness) = getTxBodyAndWitnesses tx
+                                    signedTx = makeSignedTransaction (hydraWitness ++ [makeShelleyKeyWitness shelleyBasedEra txBody (WitnessPaymentKey parsedSk)]) txBody
+                                Right signedTx
+                      case result of
+                        Left fe -> pure $ Left fe
+                        Right tx' -> do
+                          let txModalObject = TxModal (InAnyCardanoEra ConwayEra tx')
+                          if submit
+                            then do
+                              submittedTxResult <- submitHandler $ kSubmitTx (InAnyCardanoEra ConwayEra tx')
+                              case submittedTxResult of
+                                Left fe -> pure $ Left fe
+                                Right () -> pure $ Right txModalObject
+                            else
+                              pure $ Right txModalObject
 
--- commitUTxO :: UTxO ConwayEra -> IO ()
--- commitUTxO utxos = case utxos of
---     UTxO utxos -> Map.toList utxos
+decommitUTxO :: AppConfig -> [TxIn] -> Maybe A.Value -> Bool -> Bool -> IO (Either FrameworkError A.Value)
+decommitUTxO hydraHost utxos sk wait submit = do
+  let parsedSignKey = sk >>= parseSignKey . jsonToText
+  handleHydraDecommitTx hydraHost utxos parsedSignKey wait submit
 
-uTxOsToHydraJson :: UTxO era -> T.Text
-uTxOsToHydraJson utxos = case utxos of 
-    UTxO utxos -> do 
-        let utxoList = Map.toList utxos
-        let utxoJson = map (\(TxIn txId index, TxOut addrress value datum referenceScript) -> 
-                    ()
-                ) utxoList
-                -- "{\"txId\": \"" <> T.pack (show txId) <> "\", \"index\": " <> T.pack (show index) <> ", \"address\": \"" <> T.pack (show addr) <> "\", \"coin\": " <> T.pack (show coin) <> "}") utxoList
-        T.pack ""
+getHydraState :: AppConfig -> IO (Either FrameworkError HydraStateResponse)
+getHydraState hydraHost = do
+  (allUTxOsText, _) <- sendCommandToHydraNodeSocket hydraHost GetUTxO False
+  let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe WSMessage
+      unexpectedResponseError = Left $ FrameworkError ParserError "getHydraState: Unexpected response"
+  case allHydraUTxOs of
+    Nothing -> pure unexpectedResponseError
+    Just res -> do
+      let isCommandFailed = res.tag == T.pack "CommandFailed"
+      if isCommandFailed
+        then do
+          let getUTxoCommandFailedResponse = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe HydraState
+          case getUTxoCommandFailedResponse of
+            Nothing -> pure unexpectedResponseError
+            Just hs -> do
+              let stateTag = hs.state.tag
+              if stateTag == T.pack "Idle"
+                then do
+                  response <- createHydraStateResponseAeson HeadIsIdle
+                  pure $ Right response
+                else
+                  if stateTag == T.pack "Closed"
+                    then do
+                      response <- createHydraStateResponseAeson HeadIsClosed
+                      pure $ Right response
+                    else
+                      if stateTag == T.pack "Contested"
+                        then do
+                          response <- createHydraStateResponseAeson HeadIsContested
+                          pure $ Right response
+                        else pure unexpectedResponseError
+        else do
+          (initHeadMessage, _) <- initialize hydraHost False
+          let decodedInitHeadMessage = decode $ BSL.fromStrict (T.encodeUtf8 initHeadMessage) :: Maybe InitializedHeadResponse
+          case decodedInitHeadMessage of
+            Nothing -> pure unexpectedResponseError
+            Just initHeadResponse -> do
+              let hydraParties = length initHeadResponse.state.contents.parameters.parties
+                  waitingCommitments = maybe 0 length initHeadResponse.state.contents.pendingCommits
 
--- myUTxos :: (HasChainQueryAPI a) => Kontract a w FrameworkError (UTxO era)
--- myUTxos = kQueryUtxoByAddress (Set.singleton $ addressInEraToAddressAny $ parseAddress $ T.pack "")
+              if hydraParties == waitingCommitments
+                then do
+                  response <- createHydraStateResponseAeson WaitingCommitments
+                  pure $ Right response
+                else
+                  if waitingCommitments == 0
+                    then do
+                      response <- createHydraStateResponseAeson HeadIsReady
+                      pure $ Right response
+                    else
+                      if hydraParties > waitingCommitments
+                        then do
+                          respone <- createHydraStateResponseAeson PartiallyCommitted
+                          pure $ Right respone
+                        else pure $ Left $ FrameworkError LibraryError "getHydraState: Unknown Head State"

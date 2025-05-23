@@ -20,18 +20,22 @@ import Data.Map (Map)
 
 class HasChainQueryAPI a  where
   -- Core query functions
-  kGetNetworkId           :: Kontract  a w FrameworkError NetworkId
   kQueryProtocolParams    :: IsTxBuilderEra era => Kontract  a w FrameworkError (LedgerProtocolParameters era)
-  kQuerySystemStart       :: Kontract a w FrameworkError  SystemStart
-  kQueryGenesisParams     :: Kontract a w FrameworkError (GenesisParameters ShelleyEra)
   kQueryUtxoByAddress     :: IsTxBuilderEra era => Set AddressAny -> Kontract  a w FrameworkError (UTxO era)
   kQueryUtxoByTxin        :: IsTxBuilderEra era => Set TxIn -> Kontract a w FrameworkError (UTxO era)
   kQueryChainPoint        :: Kontract a w FrameworkError ChainPoint
+
+class HasCardanoQueryApi a where
+  kQuerySystemStart       :: Kontract a w FrameworkError  SystemStart  -- for hydra this one is init timestamp.
+  kGetNetworkId           :: Kontract  a w FrameworkError NetworkId
+  kQueryGenesisParams     :: Kontract a w FrameworkError (GenesisParameters ShelleyEra)
   kQueryCurrentEra        :: Kontract a w FrameworkError AnyCardanoEra
   kQueryStakeDeposit      :: Set StakeCredential -> Kontract a w FrameworkError (Map StakeCredential Coin)
   kQueryDrepState         :: Set (Credential 'DRepRole StandardCrypto) -> Kontract a w FrameworkError (Map (Credential 'DRepRole StandardCrypto) (DRepState StandardCrypto))
   kQueryGovState          :: IsTxBuilderEra era => Kontract a w FrameworkError (GovState (ShelleyLedgerEra era))
   kQueryDRepDistribution  :: Set (DRep StandardCrypto) -> Kontract a w FrameworkError (Map   (DRep StandardCrypto)  Coin)
+
+  
 
 class HasSubmitApi a where
   kSubmitTx :: InAnyCardanoEra Tx ->  Kontract  a w FrameworkError ()

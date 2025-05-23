@@ -4,8 +4,12 @@ module Cardano.Kuber.Api(
 
     -- |Transaction Builder Object
          TxBuilder
-    ,   TxBuilder_()
+    ,   TxBuilder_(..)
     ,   IsTxBuilderEra (..)
+    ,   TxInputSelection(..)
+    ,   TxInput(..)
+    ,   TxInputResolved_(..)
+    ,   TxInputUnResolved_(..)
 
     -- *** Transaction Inputs
     -- | Add the txin to  transaction input
@@ -182,6 +186,7 @@ module Cardano.Kuber.Api(
     , evaluateKontract
     , eitherToKontract
     , HasChainQueryAPI(..)
+    , HasCardanoQueryApi(..)
     , HasSubmitApi(..)
     , HasKuberAPI(..)
     , HasLocalNodeAPI(..)

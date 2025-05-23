@@ -40,8 +40,7 @@ import System.FilePath (joinPath)
 import Cardano.Api.Ledger (Coin)
 import Cardano.Slotting.Time (SystemStart (..))
 import Data.Time ( diffUTCTime, getCurrentTime )
-import Servant (ServerError(errBody), Handler, err503 )
-
+import Servant (ServerError(errBody), Handler, err503 ) 
 
 makeHandler a kontract =
   liftIO $
@@ -128,7 +127,7 @@ queryTimeHandler = do
   now <- liftIO getPOSIXTime
   translatePosixTimeHandler (TimeTranslationReq now)
 
-queryHealthStatusKontract :: (HasKuberAPI a, HasChainQueryAPI a) => Kontract a w FrameworkError HealthStatusModal
+queryHealthStatusKontract :: (HasKuberAPI a, HasChainQueryAPI a, HasCardanoQueryApi a) => Kontract a w FrameworkError HealthStatusModal
 queryHealthStatusKontract = do
   now <- liftIO getCurrentTime
   nodePoint <- kQueryChainPoint
@@ -137,7 +136,7 @@ queryHealthStatusKontract = do
         Just nodeSlot -> kSlotToTime nodeSlot <&> posixSecondsToUTCTime
   pure $ HealthStatusModal  nodePoint (round $ diffUTCTime  now nodeTime)
 
-queryHeahtlHandler :: (HasKuberAPI a, HasChainQueryAPI a) => a -> Handler HealthStatusModal
+queryHeahtlHandler :: (HasKuberAPI a, HasChainQueryAPI a, HasCardanoQueryApi a) => a -> Handler HealthStatusModal
 queryHeahtlHandler  a = do
     result <- liftIO $ evaluateKontract a queryHealthStatusKontract
                     >>= ( \case
