@@ -14,7 +14,7 @@ import Cardano.Kuber.Core.ChainAPI
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Core.LocalNodeChainApi (ChainConnectInfo, HasLocalNodeAPI (..), kEvaluateExUnits')
 import Cardano.Kuber.Core.TxBuilder
-import Cardano.Kuber.Core.TxFramework (executeTxBuilder)
+import Cardano.Kuber.Core.TxFramework (executeTxBuilder, executeRawTxBuilder)
 import Cardano.Kuber.Error
 import Cardano.Kuber.Utility.Misc
 import Cardano.Ledger.Api (EraTxBody (inputsTxBodyL))
@@ -33,6 +33,7 @@ type ByronWitCount = Word
 class HasKuberAPI a where
   kTxBuildTxBody :: IsTxBuilderEra era => TxBuilder_ era -> Kontract a w FrameworkError (TxBody era)
   kBuildTx :: IsTxBuilderEra era => TxBuilder_ era -> Kontract a w FrameworkError (Tx era)
+  kBuildRawTx :: IsTxBuilderEra era => TxBuilder_ era -> LedgerProtocolParameters era -> Kontract a w FrameworkError (Tx era) 
   kTimeToSlot :: POSIXTime -> Kontract a w FrameworkError SlotNo
   kSlotToTime :: SlotNo -> Kontract a w FrameworkError POSIXTime
   kEvaluateExUnits :: IsTxBuilderEra era => Tx era -> Kontract a w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
@@ -42,6 +43,7 @@ class HasKuberAPI a where
 instance HasKuberAPI LocalNodeConnectInfo where
   kTxBuildTxBody = kTxBuildTxBody'
   kBuildTx = kBuildTx'
+  kBuildRawTx = kBuildRawTx'
   kTimeToSlot = kTimeToSlot'
   kSlotToTime = kSlotToTime'
   kEvaluateExUnits = kEvaluateExUnits''
@@ -51,6 +53,7 @@ instance HasKuberAPI LocalNodeConnectInfo where
 instance HasKuberAPI ChainConnectInfo where
   kTxBuildTxBody = kTxBuildTxBody'
   kBuildTx = kBuildTx'
+  kBuildRawTx = kBuildRawTx'
   kTimeToSlot = kTimeToSlot'
   kSlotToTime = kSlotToTime'
   kEvaluateExUnits = kEvaluateExUnits''
@@ -60,6 +63,8 @@ instance HasKuberAPI ChainConnectInfo where
 kTxBuildTxBody' builder = executeTxBuilder builder <&> fst
 
 kBuildTx' builder = executeTxBuilder builder <&> snd
+
+kBuildRawTx' builder pparams = executeRawTxBuilder builder pparams <&> snd
 
 kTimeToSlot' time = timestampToSlot <$> kQuerySystemStart <*> kQueryEraHistory <*> pure time
 
@@ -99,7 +104,7 @@ kCalculateMinFee'' txbody shelleyWitnesses byronWitnesses = do
   -- todo: fix this to support reference scripts
   pure $ calculateMinTxFee shelleyBasedEra (unLedgerProtocolParameters protocolParams) utxo txbody shelleyWitnesses 
 
-kBuildAndSubmit' :: (HasChainQueryAPI api, HasLocalNodeAPI api, IsTxBuilderEra era,  HasSubmitApi api) => TxBuilder_ era -> Kontract api w FrameworkError (Tx era)
+kBuildAndSubmit' :: (HasChainQueryAPI api, HasCardanoQueryApi api, HasLocalNodeAPI api, IsTxBuilderEra era,  HasSubmitApi api) => TxBuilder_ era -> Kontract api w FrameworkError (Tx era)
 kBuildAndSubmit' builder = do
   tx <- executeTxBuilder builder <&> snd
   kSubmitTx (InAnyCardanoEra bCardanoEra tx)

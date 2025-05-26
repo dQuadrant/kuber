@@ -4,3 +4,4 @@
 # vscode related
 .vscode
 .history
+.env

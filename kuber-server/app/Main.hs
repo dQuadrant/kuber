@@ -6,7 +6,7 @@ module Main where
 
 import Network.Wai.Handler.Warp (run, setPort, defaultSettings, setHost, runSettings)
 import Kuber.Server.Spec (appWithBackenAndEra)
-import Cardano.Kuber.Api (chainInfoFromEnv, throwFrameworkError, ChainConnectInfo, HasChainQueryAPI (kQueryChainPoint, kQueryCurrentEra), evaluateKontract, FrameworkError (..))
+import Cardano.Kuber.Api (chainInfoFromEnv, throwFrameworkError, ChainConnectInfo, HasChainQueryAPI (kQueryChainPoint), HasCardanoQueryApi(kQueryCurrentEra), evaluateKontract, FrameworkError (..))
 import System.Environment (getArgs, lookupEnv)
 import Cardano.Kuber.Util (timestampToSlot)
 import Data.Text (stripStart)

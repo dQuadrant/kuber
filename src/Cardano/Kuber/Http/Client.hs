@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -6,17 +7,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE FlexibleContexts #-}
 
 module Cardano.Kuber.Http.Client where
 
+import Cardano.Api.Ledger (Coin)
 import Cardano.Api.Shelley
-import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (..), HasSubmitApi (..))
+import Cardano.Kuber.Core.ChainAPI (HasCardanoQueryApi (..), HasChainQueryAPI (..), HasSubmitApi (..))
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Core.KuberAPI (HasKuberAPI (..))
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra (bBabbageOnward, bCardanoEra), TxBuilder_ (TxBuilder_), TxCollateral (TxCollateralTxin, TxCollateralUtxo), TxInput (TxInputResolved, TxInputUnResolved), TxInputReference (TxInputReferenceTxin, TxInputReferenceUtxo), TxInputResolved_ (TxInputReferenceScriptUtxo, TxInputScriptUtxo, TxInputUtxo), TxInputSelection (TxSelectableAddresses, TxSelectableSkey, TxSelectableTxIn, TxSelectableUtxos), TxInputUnResolved_ (TxInputAddr, TxInputReferenceScriptTxin, TxInputScriptTxin, TxInputSkey, TxInputTxin), TxOutput (TxOutput), TxOutputContent (TxOutNative, TxOutPkh, TxOutScript, TxOutScriptInline, TxOutScriptWithData, TxOutScriptWithDataAndReference, TxOutScriptWithDataAndScript, TxOutScriptWithScript), TxSignature (TxSignatureAddr, TxSignaturePkh, TxSignatureSkey))
 import Cardano.Kuber.Data.EraUpdate (updateAddressEra, updatePParamEra, updateTxOutInEra, updateTxOutInEra', updateUtxoEra)
 import Cardano.Kuber.Data.Models
+import Cardano.Kuber.Data.TxBuilderAeson ()
 import Cardano.Kuber.Error
 import Cardano.Kuber.Http.Spec (KuberServerApi)
 import Control.Exception (fromException)
@@ -38,8 +40,6 @@ import Network.URI (URI (uriAuthority, uriPath, uriScheme), URIAuth (uriPort, ur
 import Servant.API.Alternative
 import Servant.Client hiding (baseUrl)
 import Text.Read (readMaybe)
-import Cardano.Api.Ledger (Coin)
-import Cardano.Kuber.Data.TxBuilderAeson ()
 
 cQueryPParams :: ClientM (LedgerProtocolParameters ConwayEra)
 cQueryChainPoint :: ClientM ChainPointModal
@@ -57,12 +57,13 @@ cCalculateFee :: TxModal -> ClientM Coin
 cEvaluateExUnits :: TxModal -> ClientM ExUnitsResponseModal
 ( cQueryPParams
     :<|> cQueryChainPoint
-    :<|> cQueryCurrentEra  
     :<|> cQueryUtxos
-    :<|> cQuerySystemStart
-    :<|> cQueryGenesisParams
-    :<|> cGetHealthStatus
   )
+  :<|> ( cQuerySystemStart
+           :<|> cQueryCurrentEra
+           :<|> cQueryGenesisParams
+           :<|> cGetHealthStatus
+         )
   :<|> ( cBuildTx
            :<|> cSubmitTx
            :<|> cQueryTime
@@ -76,27 +77,28 @@ cEvaluateExUnits :: TxModal -> ClientM ExUnitsResponseModal
 data RemoteKuberConnection = RemoteKuberConnection NetworkId ClientEnv
 
 instance HasChainQueryAPI RemoteKuberConnection where
-  kGetNetworkId = KLift $ \(RemoteKuberConnection net c) -> pure $ pure net
-
-  kQueryProtocolParams = liftHttpReq (cQueryPParams <&> updatePParamEra bCardanoEra)
-  kQuerySystemStart = liftHttpReq cQuerySystemStart <&> unWrap
-  kQueryGenesisParams = liftHttpReq cQueryGenesisParams <&> unWrap
   kQueryUtxoByAddress ::
-    IsTxBuilderEra era =>
+    (IsTxBuilderEra era) =>
     Set.Set AddressAny ->
     Kontract RemoteKuberConnection w FrameworkError (UTxO era)
-  kQueryUtxoByAddress addrs = do 
-    res<-liftHttpReq (cQueryUtxos (map serialiseAddress $ Set.toList addrs) [] )
+  kQueryUtxoByAddress addrs = do
+    res <- liftHttpReq (cQueryUtxos (map serialiseAddress $ Set.toList addrs) [])
     pure res <&> (\(UtxoModal utxo) -> updateUtxoEra utxo)
   kQueryUtxoByTxin txins = liftHttpReq (cQueryUtxos [] (map renderTxIn $ Set.toList txins) <&> (\(UtxoModal utxo) -> updateUtxoEra utxo))
   kQueryChainPoint = liftHttpReq cQueryChainPoint <&> unWrap
+  kQueryProtocolParams = liftHttpReq (cQueryPParams <&> updatePParamEra bCardanoEra)
+
+instance HasCardanoQueryApi RemoteKuberConnection where
+  kGetNetworkId = KLift $ \(RemoteKuberConnection net c) -> pure $ pure net
+  kQuerySystemStart = liftHttpReq cQuerySystemStart <&> unWrap
+  kQueryGenesisParams = liftHttpReq cQueryGenesisParams <&> unWrap
   kQueryCurrentEra = liftHttpReq cQueryCurrentEra <&> unWrap
   kQueryGovState = error "TODO Cardano.Kuber.Http.Client.RemoteKuberConnection.queryGovState"
   kQueryDRepDistribution = error "TODO Cardano.Kuber.Http.Client.RemoteKuberConnection.queryDRepDistribution"
 
-deserialiseTxToEra :: ( IsShelleyBasedEra era) =>InAnyCardanoEra Tx -> AsType era -> Either FrameworkError (Tx era)
+deserialiseTxToEra :: (IsShelleyBasedEra era) => InAnyCardanoEra Tx -> AsType era -> Either FrameworkError (Tx era)
 deserialiseTxToEra (InAnyCardanoEra ce tx) asType = do
-  let serialised =case ce of
+  let serialised = case ce of
         ShelleyEra -> serialiseToCBOR tx
         AllegraEra -> serialiseToCBOR tx
         MaryEra -> serialiseToCBOR tx
@@ -133,7 +135,7 @@ parseToConwayTxBuilder txbBabbage = case txbBabbage of
 -- updateShelleyLedgerEra :: IsTxBuilderEra era => ShelleyLedgerEra era1 -> ShelleyLedgerEra era
 -- updateShelleyLedgerEra shelleyLedger = shelleyLedger
 
-updateMaybeAddressEra :: IsTxBuilderEra era => Maybe (AddressInEra era1) -> Maybe (AddressInEra era)
+updateMaybeAddressEra :: (IsTxBuilderEra era) => Maybe (AddressInEra era1) -> Maybe (AddressInEra era)
 updateMaybeAddressEra maybeAddress = case maybeAddress of
   Nothing -> Nothing
   Just aie -> Just $ updateAddressEra aie
@@ -144,18 +146,18 @@ updateMaybeAddressEra maybeAddress = case maybeAddress of
 -- updateProposalEra :: IsTxBuilderEra era => Proposal era1 -> Proposal era
 -- updateProposalEra proposal = case proposal of { Proposal pp -> Proposal $ (case pp of { ProposalProcedure co ra ga an -> transa }) }
 
-updateTxSignatureEra :: IsTxBuilderEra era => TxSignature era1 -> TxSignature era
+updateTxSignatureEra :: (IsTxBuilderEra era) => TxSignature era1 -> TxSignature era
 updateTxSignatureEra txSignature = case txSignature of
   TxSignatureAddr aie -> TxSignatureAddr (updateAddressEra aie)
   TxSignaturePkh pkh -> TxSignaturePkh pkh
   TxSignatureSkey sk -> TxSignatureSkey sk
 
-updateTxCollateralEra :: IsTxBuilderEra era => TxCollateral era1 -> TxCollateral era
+updateTxCollateralEra :: (IsTxBuilderEra era) => TxCollateral era1 -> TxCollateral era
 updateTxCollateralEra txCollateral = case txCollateral of
   TxCollateralTxin ti -> TxCollateralTxin ti
   TxCollateralUtxo uto -> TxCollateralUtxo (updateUtxoEra uto)
 
-updateTxOutptputContentEra :: IsTxBuilderEra era => TxOutputContent era1 -> TxOutputContent era
+updateTxOutptputContentEra :: (IsTxBuilderEra era) => TxOutputContent era1 -> TxOutputContent era
 updateTxOutptputContentEra txOutputContent = case txOutputContent of
   TxOutPkh pkh va -> TxOutPkh pkh va
   TxOutScript tps va ha -> TxOutScript tps va ha
@@ -166,18 +168,18 @@ updateTxOutptputContentEra txOutputContent = case txOutputContent of
   TxOutScriptWithDataAndReference tps va hsd -> TxOutScriptWithDataAndReference tps va hsd
   TxOutNative to -> TxOutNative (updateTxOutInEra' to)
 
-updateTxOutputEra :: IsTxBuilderEra era => TxOutput (TxOutputContent era1) -> TxOutput (TxOutputContent era)
+updateTxOutputEra :: (IsTxBuilderEra era) => TxOutput (TxOutputContent era1) -> TxOutput (TxOutputContent era)
 updateTxOutputEra txOutput = case txOutput of TxOutput toc b b' iuaa -> TxOutput (updateTxOutptputContentEra toc) b b' iuaa
 
-updateTxInputReferenceEra :: IsTxBuilderEra era => TxInputReference era1 -> TxInputReference era
+updateTxInputReferenceEra :: (IsTxBuilderEra era) => TxInputReference era1 -> TxInputReference era
 updateTxInputReferenceEra txInputReference = case txInputReference of
   TxInputReferenceTxin ti -> TxInputReferenceTxin ti
   TxInputReferenceUtxo uto -> TxInputReferenceUtxo (updateUtxoEra uto)
 
-updateTxOutEra :: IsTxBuilderEra era => (TxIn, TxOut CtxUTxO era1) -> (TxIn, TxOut CtxUTxO era)
+updateTxOutEra :: (IsTxBuilderEra era) => (TxIn, TxOut CtxUTxO era1) -> (TxIn, TxOut CtxUTxO era)
 updateTxOutEra utxo = case utxo of (ti, to) -> (ti, updateTxOutInEra to)
 
-updateTxInputEra :: IsTxBuilderEra era => TxInput era1 -> TxInput era
+updateTxInputEra :: (IsTxBuilderEra era) => TxInput era1 -> TxInput era
 updateTxInputEra txInputs = case txInputs of
   TxInputResolved tir -> TxInputResolved $ case tir of
     TxInputUtxo uto -> TxInputUtxo (updateUtxoEra uto)
@@ -190,7 +192,7 @@ updateTxInputEra txInputs = case txInputs of
     TxInputScriptTxin tps m_hsd hsd m_eu ti -> TxInputScriptTxin tps m_hsd hsd m_eu ti
     TxInputReferenceScriptTxin ti m_hsd hsd m_eu ti' -> TxInputReferenceScriptTxin ti m_hsd hsd m_eu ti'
 
-updateTxInputSelectionEra :: IsTxBuilderEra era => TxInputSelection era1 -> TxInputSelection era
+updateTxInputSelectionEra :: (IsTxBuilderEra era) => TxInputSelection era1 -> TxInputSelection era
 updateTxInputSelectionEra txInputSelections = case txInputSelections of
   TxSelectableAddresses ads -> TxSelectableAddresses ads
   TxSelectableUtxos uto -> TxSelectableUtxos (updateUtxoEra uto)
@@ -198,7 +200,7 @@ updateTxInputSelectionEra txInputSelections = case txInputSelections of
   TxSelectableSkey sks -> TxSelectableSkey sks
 
 instance HasKuberAPI RemoteKuberConnection where
-  kTxBuildTxBody :: IsTxBuilderEra era => TxBuilder_ era -> Kontract RemoteKuberConnection w FrameworkError (TxBody era)
+  kTxBuildTxBody :: (IsTxBuilderEra era) => TxBuilder_ era -> Kontract RemoteKuberConnection w FrameworkError (TxBody era)
   kTxBuildTxBody builder = doBuildTxBody bBabbageOnward builder
     where
       doBuildTxBody :: BabbageEraOnwards era -> TxBuilder_ era -> Kontract RemoteKuberConnection w FrameworkError (TxBody era)
@@ -210,13 +212,13 @@ instance HasKuberAPI RemoteKuberConnection where
           result <- liftHttpReq (cBuildTx (Just False) _builder)
           pure $ parseModalInAnyEraToBodyInConwayEra result AsConwayEra
 
-      parseModalInAnyEraToBodyInConwayEra :: IsShelleyBasedEra era =>TxModal -> AsType era -> TxBody era
+      parseModalInAnyEraToBodyInConwayEra :: (IsShelleyBasedEra era) => TxModal -> AsType era -> TxBody era
       parseModalInAnyEraToBodyInConwayEra modalInAnyEra era = case modalInAnyEra of
         TxModal iace -> case deserialiseTxToEra iace era of
           Left fe -> error $ "Sad Error: " ++ show fe
           Right tx -> getTxBody tx
 
-  kBuildTx :: IsTxBuilderEra era => TxBuilder_ era -> Kontract RemoteKuberConnection w FrameworkError (Tx era)
+  kBuildTx :: (IsTxBuilderEra era) => TxBuilder_ era -> Kontract RemoteKuberConnection w FrameworkError (Tx era)
   kBuildTx builder = doBuildTx bBabbageOnward builder
     where
       doBuildTx :: BabbageEraOnwards era -> TxBuilder_ era -> Kontract RemoteKuberConnection w FrameworkError (Tx era)
@@ -228,7 +230,7 @@ instance HasKuberAPI RemoteKuberConnection where
           result <- liftHttpReq (cBuildTx (Just False) _builder)
           pure $ parseModalInAnyEraToTxInConwayEra result AsConwayEra
 
-      parseModalInAnyEraToTxInConwayEra :: IsShelleyBasedEra era => TxModal -> AsType era -> Tx era
+      parseModalInAnyEraToTxInConwayEra :: (IsShelleyBasedEra era) => TxModal -> AsType era -> Tx era
       parseModalInAnyEraToTxInConwayEra modalInAnyEra era = case modalInAnyEra of
         TxModal iace -> case deserialiseTxToEra iace era of
           Left fe -> error $ "Sad Error: " ++ show fe
@@ -239,20 +241,20 @@ instance HasKuberAPI RemoteKuberConnection where
   kSlotToTime :: SlotNo -> Kontract RemoteKuberConnection w FrameworkError POSIXTime
   kSlotToTime time = liftHttpReq (cTimeFromSlot (SlotTranslationReq time)) <&> tResTimestamp
 
-  kEvaluateExUnits :: IsTxBuilderEra era => Tx era -> Kontract RemoteKuberConnection w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
+  kEvaluateExUnits :: (IsTxBuilderEra era) => Tx era -> Kontract RemoteKuberConnection w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
   kEvaluateExUnits tx = liftHttpReq (cEvaluateExUnits (TxModal $ InAnyCardanoEra bCardanoEra tx)) <&> unWrap
 
   --   kEvaluateExUnits' ::    TxBody ConwayEra -> UTxO ConwayEra -> Kontract a  w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
 
-  kCalculateMinFee :: IsTxBuilderEra era => Tx era -> Kontract RemoteKuberConnection w FrameworkError Coin
+  kCalculateMinFee :: (IsTxBuilderEra era) => Tx era -> Kontract RemoteKuberConnection w FrameworkError Coin
   kCalculateMinFee tx = liftHttpReq (cCalculateFee (TxModal $ InAnyCardanoEra bCardanoEra tx))
 
   --   kCalculateMinFee' :: TxBody ConwayEra ->  ShelleyWitCount ->  ByronWitCount-> Kontract a  w FrameworkError  Lovelace
-  kBuildAndSubmit :: IsTxBuilderEra era => TxBuilder_ era -> Kontract RemoteKuberConnection w FrameworkError (Tx era)
+  kBuildAndSubmit :: (IsTxBuilderEra era) => TxBuilder_ era -> Kontract RemoteKuberConnection w FrameworkError (Tx era)
   kBuildAndSubmit builder = kError FeatureNotSupported "BuildTx Over Http is not supported"
 
 -- TODO FIX THIS
---liftHttpReq (cBuildTx Nothing builder ) <&> unWrap
+-- liftHttpReq (cBuildTx Nothing builder ) <&> unWrap
 
 instance HasSubmitApi RemoteKuberConnection where
   kSubmitTx :: InAnyCardanoEra Tx -> Kontract RemoteKuberConnection w FrameworkError ()
@@ -336,7 +338,7 @@ createRemoteKuberConnection' net baseUrl apiKey = do
           }
     addApiKeyHeader key req = pure $ req {requestHeaders = ("api-key", BS.pack key) : Network.HTTP.Client.requestHeaders req}
 
-baseUrl :: MonadFail m => String -> m BaseUrl
+baseUrl :: (MonadFail m) => String -> m BaseUrl
 baseUrl urlString = do
   -- Parse the URL string to create a URI
   uri <- case parseURI urlString of

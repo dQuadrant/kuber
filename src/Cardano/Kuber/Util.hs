@@ -3,6 +3,7 @@ module Cardano.Kuber.Util
     skeyToAddr,
     skeyToAddrInEra,
     sKeyToPkh,
+    fromLedgerAddress,
     addressInEraToAddressAny,
     pkhToMaybeAddr,
     addrToMaybePkh,
