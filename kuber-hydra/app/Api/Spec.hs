@@ -185,9 +185,12 @@ queryUtxoHandler appConfig address txin = do
 commitHandler :: AppConfig -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
 commitHandler appConfig submit commits = do
   commitResult <- liftIO $ commitUTxO appConfig commits.utxos (signKey commits) (fromMaybe False submit)
-  commitResultToJSON <- case bytestringToJSON $ A.encode commitResult of
+  commitResultToJSON <- case commitResult of
     Left fe -> pure $ Left fe
-    Right val -> pure $ Right val
+    Right res ->
+      case bytestringToJSON $ A.encode res of
+        Left fe -> pure $ Left fe
+        Right val -> pure $ Right val
   frameworkErrorHandler commitResultToJSON
 
 decommitHandler :: AppConfig -> Maybe Bool -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)

@@ -48,9 +48,14 @@ handleHydraDecommitTx appConfig utxosToDecommit sk wait submit = do
       case hydraTxIns of
         Left fe -> pure $ Left fe
         Right hydraTxIns_ -> do
-          let missing = filter (`elem` hydraTxIns_) utxosToDecommit
-          if not (null missing)
-            then return $ Left $ FrameworkError ParserError $ "Missing UTxOs in Hydra: " ++ show missing
+          let notMissing = utxosToDecommit `isSubsetOf` hydraTxIns_
+          if not notMissing
+            then
+              return
+                $ Left
+                $ FrameworkError
+                  NodeQueryError
+                $ "Missing UTxOs in Hydra: " <> show (utxosToDecommit `notPresentIn` hydraTxIns_)
             else do
               let utxosToDecommitTexts = listOfTxInToText utxosToDecommit
                   hydraUTxOsToDecommit = M.filterWithKey (\k _ -> k `elem` utxosToDecommitTexts) hydraUTxOs
