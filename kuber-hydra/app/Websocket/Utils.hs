@@ -38,6 +38,13 @@ bytestringToJSON bs = case A.eitherDecode bs of
   Right val -> Right val
   Left _ -> Left $ FrameworkError ParserError $ "Could not parse to JSON : " <> BS8.unpack (BSL.toStrict bs)
 
+eitherObjectToJSON :: (ToJSON a) => Either FrameworkError a -> IO (Either FrameworkError A.Value)
+eitherObjectToJSON obj = case obj of
+  Left fe -> pure $ Left fe
+  Right obj' -> case bytestringToJSON $ A.encode obj' of
+    Left fe -> pure $ Left fe
+    Right val -> pure $ Right val
+
 jsonToText :: A.Value -> T.Text
 jsonToText = TL.toStrict . TLE.decodeUtf8 . A.encode
 

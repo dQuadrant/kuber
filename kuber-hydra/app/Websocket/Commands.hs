@@ -57,9 +57,9 @@ fanout :: AppConfig -> Bool -> IO (T.Text, Int)
 fanout appConfig wait = do
   sendCommandToHydraNodeSocket appConfig FanOut wait
 
-submit :: AppConfig -> TxModal -> IO (T.Text, Int)
-submit txm = do
-  submitHydraTx txm
+submit :: AppConfig -> TxModal -> Bool -> IO (Either FrameworkError TxModal)
+submit txm wait = do
+  submitHydraTx txm wait 
 
 commitUTxO :: AppConfig -> [TxIn] -> Maybe A.Value -> Bool -> IO (Either FrameworkError TxModal)
 commitUTxO appConfig utxos sk submit = do
