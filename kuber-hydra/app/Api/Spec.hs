@@ -98,7 +98,7 @@ type HydraCommandAPI =
     :<|> "contest" :> WithWait PostResp
     :<|> "fanout" :> WithWait PostResp
     :<|> "tx" :> WithSubmit (ReqBody '[JSON] TxBuilder :> Post '[JSON] TxModal)
-    :<|> "submit" :> ReqBody '[JSON] TxModal :> PostResp
+    :<|> "submit" :> ReqBody '[JSON] TxModal :> WithWait PostResp
 
 type HydraQueryAPI =
   "utxo" :> QueryParams "address" T.Text :> QueryParams "txin" T.Text :> GetResp
@@ -185,12 +185,7 @@ queryUtxoHandler appConfig address txin = do
 commitHandler :: AppConfig -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
 commitHandler appConfig submit commits = do
   commitResult <- liftIO $ commitUTxO appConfig commits.utxos (signKey commits) (fromMaybe False submit)
-  commitResultToJSON <- case commitResult of
-    Left fe -> pure $ Left fe
-    Right res ->
-      case bytestringToJSON $ A.encode res of
-        Left fe -> pure $ Left fe
-        Right val -> pure $ Right val
+  commitResultToJSON <- liftIO $ eitherObjectToJSON commitResult
   frameworkErrorHandler commitResultToJSON
 
 decommitHandler :: AppConfig -> Maybe Bool -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
@@ -216,21 +211,13 @@ fanoutHandler appConfig wait = do
 queryProtocolParameterHandler :: AppConfig -> Handler (Union UVerbResponseTypes)
 queryProtocolParameterHandler appConfig = do
   pParamResponse <- liftIO (hydraProtocolParams appConfig :: IO (Either FrameworkError HydraProtocolParameters))
-  pParamsToJSON <- case pParamResponse of
-    Left fe -> pure $ Left fe
-    Right pparams -> case bytestringToJSON $ A.encode pparams of
-      Left fe -> pure $ Left fe
-      Right val -> pure $ Right val
+  pParamsToJSON <- liftIO $ eitherObjectToJSON pParamResponse
   frameworkErrorHandler pParamsToJSON
 
 queryStateHandler :: AppConfig -> Handler (Union UVerbResponseTypes)
 queryStateHandler appConfig = do
   stateResponse <- liftIO $ getHydraState appConfig
-  stateResponseJSON <- case stateResponse of
-    Left fe -> pure $ Left fe
-    Right stateInfo -> case bytestringToJSON $ A.encode stateInfo of
-      Left fe -> pure $ Left fe
-      Right val -> pure $ Right val
+  stateResponseJSON <- liftIO $ eitherObjectToJSON stateResponse
   frameworkErrorHandler stateResponseJSON
 
 txHandler :: AppConfig -> Maybe Bool -> TxBuilder_ ConwayEra -> Handler TxModal
@@ -240,10 +227,11 @@ txHandler appConfig submit txb = do
     Left fe -> toServerError fe
     Right txm -> pure txm
 
-submitHandler :: AppConfig -> TxModal -> Handler (Union UVerbResponseTypes)
-submitHandler appConfig txm = do
-  submitResponse <- liftIO $ submit appConfig txm
-  hydraErrorHandler submitResponse
+submitHandler :: AppConfig -> TxModal -> Maybe Bool -> Handler (Union UVerbResponseTypes)
+submitHandler appConfig txm wait = do
+  submitResponse <- liftIO $ submit appConfig txm (fromMaybe False wait)
+  submitResponseJSON <- liftIO $ eitherObjectToJSON submitResponse
+  frameworkErrorHandler submitResponseJSON
 
 -- Create API Proxy
 deployAPI :: Proxy API

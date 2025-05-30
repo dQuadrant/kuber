@@ -297,15 +297,7 @@ toValidHydraTxBuilder appConfig txb submit = do
               if submit
                 then do
                   let txModalToSubmit = TxModal $ InAnyCardanoEra bCardanoEra tx
-                  submittedTxResult <- submitHydraTx appConfig txModalToSubmit
-                  case snd submittedTxResult of
-                    200 -> pure $ Right txModalToSubmit
-                    x ->
-                      pure
-                        $ Left
-                        $ FrameworkError
-                          TxSubmissionError
-                        $ "Hydra responsded with status: " <> show x <> " and message: " <> show (fst submittedTxResult)
+                  submitHydraTx appConfig txModalToSubmit True
                 else
                   pure $ Right $ TxModal $ InAnyCardanoEra bCardanoEra tx
 

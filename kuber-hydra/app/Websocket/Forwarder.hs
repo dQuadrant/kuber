@@ -5,14 +5,15 @@
 
 module Websocket.Forwarder where
 
+import Cardano.Kuber.Api (ErrorType (TxSubmissionError), FrameworkError (FrameworkError))
 import Cardano.Kuber.Data.Models
 import Data.Aeson
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Text as AT
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import Websocket.SocketConnection
 import Websocket.Aeson
+import Websocket.SocketConnection
 
 data Action
   = InitializeHead
@@ -54,8 +55,16 @@ sendCommandToHydraNodeSocket appConfig message wait = do
     ContestHead -> forwardCommands appConfig "{\"tag\": \"Contest\"}" responseTag wait
     FanOut -> forwardCommands appConfig "{\"tag\": \"Fanout\"}" responseTag wait
 
-submitHydraTx :: AppConfig -> TxModal -> IO (T.Text, Int)
-submitHydraTx appConfig txm = forwardCommands appConfig newTxCommand (generateResponseTag NewTx) False
+submitHydraTx :: AppConfig -> TxModal -> Bool -> IO (Either FrameworkError TxModal)
+submitHydraTx appConfig txm wait = do
+  hydraResponse <- forwardCommands appConfig newTxCommand (generateResponseTag NewTx) wait
+  case snd hydraResponse of
+    200 -> pure $ Right txm
+    x ->
+      pure $
+        Left $
+          FrameworkError TxSubmissionError $
+            "Hydra responsded with status: " <> show x <> " and message: " <> show (fst hydraResponse)
   where
     newTxCommand =
       TL.toStrict . AT.encodeToLazyText $
