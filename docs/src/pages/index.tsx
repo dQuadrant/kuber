@@ -35,6 +35,12 @@ function HomepageHeader() {
           >
             Milestones
           </Link>
+          <Link
+            className="button button--secondary button--lg"
+            to="/docs/tutorial"
+          >
+            Tutorial
+          </Link>
         </div>
 
       </div>

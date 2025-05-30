@@ -21,7 +21,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Detailed Sequence Diagrams", // Category label
-      collapsed: false,  // This makes the category open by default
+      collapsed: false, // This makes the category open by default
 
       items: [
         {
@@ -57,7 +57,6 @@ const sidebars: SidebarsConfig = {
           id: "sequenceDiagrams/fanout_head", // Document ID for a sub-doc
         },
 
-
         // {
         //   type: "doc",
         //   id: "sequenceDiagramB", // Document ID for another sub-doc
@@ -69,13 +68,65 @@ const sidebars: SidebarsConfig = {
         //   label: "Sequence Diagram C",
         // },
       ],
-    }
+    },
   ],
   scenarioTests: [
     {
       type: "doc",
       id: "hydra_feature_analysis", // Document ID
-      label: "Hydra Analysis"
+      label: "Hydra Analysis",
+    },
+  ],
+  tutorial: [
+    {
+      type: "category",
+      label: "Tutorial",
+      collapsed: false,
+      items: [
+        {
+          type: "doc",
+          id: "tutorial",
+        },
+        {
+          type: "doc",
+          id: "tutorials/initialize_head",
+        },
+        {
+          type: "doc",
+          id: "tutorials/commit_utxos",
+        },
+        {
+          type: "category",
+          label: "Queries",
+          collapsed: false,
+          items: [
+            {
+              type: "doc",
+              id: "tutorials/query/head_state",
+            },
+            {
+              type: "doc",
+              id: "tutorials/query/protocol_params",
+            },
+            {
+              type: "doc",
+              id: "tutorials/query/utxos",
+            },
+          ],
+        },
+        {
+          type: "doc",
+          id: "tutorials/build_tx",
+        },
+        {
+          type: "doc",
+          id: "tutorials/close_head",
+        },
+        {
+          type: "doc",
+          id: "tutorials/fanout",
+        },
+      ],
     },
   ],
   milestones: [

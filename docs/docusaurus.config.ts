@@ -70,6 +70,12 @@ const config: Config = {
           label: "Planning",
         },
         {
+          type: "docSidebar",
+          sidebarId: "tutorial",
+          position: "left",
+          label: "Tutorial",
+        },
+        {
           href: "https://github.com/dQuadrant/kuber/tree/feat/hydra",
           label: "GitHub",
           position: "right",

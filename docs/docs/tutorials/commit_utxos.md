@@ -1,0 +1,31 @@
+
+# Committing UTxOs
+
+Once the Hydra head is initialized, both participating parties must submit their commitments. To do this, define a commit object specifying the UTxOs to be included. If a signing key is provided, the Kuber-Hydra server will generate a signed transaction that can be submitted to the blockchain. The `submit` parameter determines the desired behavior—set it to `true` to submit the transaction immediately, or `false` to receive an unsigned transaction for manual submission later.
+
+```ts
+const commitment: Commit = {
+  utxos: [
+    "4051dd270c1a51da8645b6c91d23053273547f1f853929fbec5519527e18266d#13",
+  ],
+  signKey: {
+    type: "PaymentSigningKeyShelley_ed25519",
+    description: "Payment Signing Key",
+    cborHex:
+      "5820def9b27d28b25a28156e42a57e1a81d5412517ba2f73784bb230c676dd0d9d65",
+  },
+};
+const commitResponse = await hydraService.commit(commitment, true);
+console.log(commitResponse);
+```
+
+On success, you will receive a `Witnessed Tx` in CBOR format.
+
+```json
+{
+  "cborHex": "84a800d90102838258204051dd270c1a51da8645b6c91d23053273547f1f853929fbec5519527e18266d0d8258207a169ef2824514edc468e553a816e52dee9516a071e9ec9bdfeb547a2f30c6a4018258207a169ef2824514edc468e553a816e52dee9516a071e9ec9bdfeb547a2f30c6a4030dd90102818258207a169ef2824514edc468e553a816e52dee9516a071e9ec9bdfeb547a2f30c6a40312d90102818258200fd2468a66a0b1cb944cff9512ecfa25cdd2799cb48b07210c449a5ecace267d000182a300581d702043a9f1a685bcf491413a5f139ee42e335157c8c6bc8d9e4018669d01821a0144e7c8a1581c84673dfc0cfd3cf404251fa730fbbfef8d8229b9e2f283e59bca2236a1581ce696fc821063f9b7311bb350539e67c8fad1bd571605e75b5a353eab01028201d81858b3d8799f5820232844b0ebd1f13b62b19bc9ce0a423a84e3d2cc5efa2ac226a96255420d71379fd8799fd8799fd8799f58204051dd270c1a51da8645b6c91d23053273547f1f853929fbec5519527e18266dff0dff583cd8799fd8799fd8799f581c182aeee511419facd4bf4eab7538187288a55a633f579be0cf36897bffd87a80ffa140a1401a01312d00d87980d87a80ffffff581c84673dfc0cfd3cf404251fa730fbbfef8d8229b9e2f283e59bca2236ff82581d60e696fc821063f9b7311bb350539e67c8fad1bd571605e75b5a353eab1a055dc873021a001b55890ed9010281581ce696fc821063f9b7311bb350539e67c8fad1bd571605e75b5a353eab0b58202331de968aa627625c343ae7800e7388d3508b60fb75c545dff8077985b527a707582012e5af821e4510d6651e57185b4dae19e8bd72bf90a8c1e6cd053606cbc46514a200d9010282825820cc13514aae23bd9da11a9032cf7253a1e8f84bc5d077ae973f40f097fdd51f275840853de227e8ddb7aabb026fb1d8cbf8aaab4c2b29eccd975c870bfb64dd4a5a807b8c3fb415b1a6b8a4515815cdb156f3a8a63a404efac5b60d60c2c77787a70d825820d5888ede6fb8cc020ade5147053a9db6d1e25513ed795715decc26f2d22b77b45840a257d2df3741a7b2268e0ef4d48247c17147485ee1aebde8b82acf06655196d7c150701f3f0b82b83ea9eea2bdd7790d5ef735af5251eaf4279be6af535da30705a182000182d87a9f9fd8799fd8799f58204051dd270c1a51da8645b6c91d23053273547f1f853929fbec5519527e18266dff0dffffff821a00d59f801b00000002540be400f5d90103a100a119d90370487964726156312f436f6d6d69745478",
+  "description": "Ledger Cddl Format",
+  "hash": "efc69a7604a3b9ce43baad7b062b9d9133517c863cd8b2ee51dcef7b96381f84",
+  "type": "Witnessed Tx ConwayEra"
+}
+```
