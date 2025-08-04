@@ -41,6 +41,7 @@ handleHydraDecommitTx appConfig utxosToDecommit sk wait submit = do
   allUTxOsText <- fetch appConfig >>= \query -> query (T.pack "snapshot/utxo")
   putStrLn "Beginning the work"
   let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe (UTxO ConwayEra)
+  putStrLn "utxoText :" <> T.putStrLn allUTxOsText
   case allHydraUTxOs of
     Nothing -> return $ Left $ FrameworkError ParserError "buildHydraDecommitTx: Error parsing Hydra UTxOs"
     Just hydraUTxOs -> do

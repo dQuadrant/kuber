@@ -44,6 +44,7 @@ import Websocket.SocketConnection (fetch, AppConfig (chainInfo))
 import Kuber.Server.Spec
 import Cardano.Kuber.Http.Spec (KuberServerApi)
 import Cardano.Kuber.Data.Parsers (parseAddress)
+import Servant.Exception (Throws)
 
 
 -- Define CORS policy
@@ -81,9 +82,12 @@ type WithWait sub = QueryParam "wait" Bool :> sub
 
 type WithSubmit sub = QueryParam "submit" Bool :> sub
 
+
+type ExceptKuberApi = Throws FrameworkError :> KuberServerApi ConwayEra
+
 type KuberHydraApi =
         HydraServerApi
-  :<|> KuberServerApi ConwayEra 
+  :<|> ExceptKuberApi
 
 type HydraServerApi =
   "hydra" :> HydraCommandAPI
@@ -251,9 +255,9 @@ submitHandler appConfig txm wait = do
   frameworkErrorHandler submitResponseJSON
 
 -- Create API Proxy
-hydraServerApiProxy :: Proxy HydraServerApi
+hydraServerApiProxy :: Proxy KuberHydraApi
 hydraServerApiProxy = Proxy
 
 -- Define Hydra application
 kuberHydraApp :: AppConfig -> Application
-kuberHydraApp appConfig = rewriteRoot (T.pack "index.html") $ static $ cors (const $ Just Kuber.Server.Spec.corsMiddlewarePolicy) $ serve hydraServerApiProxy (hydraServer appConfig)
+kuberHydraApp appConfig = rewriteRoot (T.pack "index.html") $ static $ cors (const $ Just Kuber.Server.Spec.corsMiddlewarePolicy) $ serve hydraServerApiProxy (kuberHydraServer appConfig)
