@@ -76,6 +76,12 @@ const config: Config = {
           label: "Tutorial",
         },
         {
+          type: "docSidebar",
+          sidebarId: "hydraJsClient",
+          position: "left",
+          label: "Hydra JS Client",
+        },
+        {
           href: "https://github.com/dQuadrant/kuber/tree/feat/hydra",
           label: "GitHub",
           position: "right",

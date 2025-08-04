@@ -129,6 +129,53 @@ const sidebars: SidebarsConfig = {
       ],
     },
   ],
+  hydraJsClient: [
+    {
+      type: "doc",
+      id: "hydra-js-client/installation",
+      label: "Installation & Quick Start",
+    },
+    {
+      type: "category",
+      label: "KuberHydraApiProvider",
+      collapsed: false,
+      items: [
+        {
+          type: "category",
+          label: "Query APIs",
+          collapsed: false,
+          items: [
+            "hydra-js-client/queryUtxo",
+            "hydra-js-client/queryProtocolParameters",
+            "hydra-js-client/queryHeadState",
+          ],
+        },
+        {
+          type: "category",
+          label: "Command APIs",
+          collapsed: false,
+          items: [
+            "hydra-js-client/initialize",
+            "hydra-js-client/close",
+            "hydra-js-client/fanout",
+            "hydra-js-client/abort",
+            "hydra-js-client/contest",
+            "hydra-js-client/commit",
+            "hydra-js-client/decommit",
+          ],
+        },
+        {
+          type: "category",
+          label: "Transaction APIs",
+          collapsed: false,
+          items: [
+            "hydra-js-client/buildTx",
+            "hydra-js-client/submitTx",
+          ],
+        },
+      ],
+    },
+  ],
   milestones: [
     {
       type: "doc",
