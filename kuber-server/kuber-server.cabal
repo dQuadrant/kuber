@@ -27,8 +27,8 @@ library
     Kuber.Server.Core
     Kuber.Server.Spec
     Kuber.Server.Model
+    Kuber.Server.Helpers
   other-modules:
-
     -- Plutus.Contract.Wallet.Utils
   hs-source-dirs: src 
 
@@ -48,6 +48,7 @@ library
     , base >= 4.14 && < 5
     , aeson             >= 1.5.6.0
     , cardano-binary
+    , http-conduit
     , http-media
     , wai
     , http-types
@@ -101,6 +102,7 @@ executable kuber-server
     , cborg
     , http-types
     , http-media
+
     , http-conduit
     , wai-cors
     , cardano-binary

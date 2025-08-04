@@ -20,19 +20,16 @@ import Data.Time
 import Data.Time.Format.ISO8601 (iso8601ParseM)
 import GHC.Generics (Generic)
 import GHC.Natural
+import qualified Data.Map as Map
+import Data.Text (Text)
 
-data AppConfig = AppConfig
-  { hydraIp :: String,
-    hydraPort :: Int,
-    serverIp :: String,
-    serverPort :: Int
-  }
-
-newtype HydraGetUTxOResponse = HydraGetUTxOResponse
+newtype HydraGetUTxOResponse' = HydraGetUTxOResponse'
   { utxo :: M.Map T.Text A.Value
   }
   deriving (Generic, Show, ToJSON, FromJSON)
 
+newtype HydraGetUTxOResponse = HydraGetUTxOResponse (M.Map T.Text A.Value)
+  deriving (Generic, Show, ToJSON, FromJSON)
 data HydraCommitTx = HydraCommitTx
   { cborHex :: String,
     description :: String,
@@ -43,7 +40,9 @@ data HydraCommitTx = HydraCommitTx
 data WSMessage = WSMessage
   { tag :: T.Text,
     seq :: Maybe Int,
-    timestamp :: UTCTime
+    timestamp :: Maybe UTCTime,
+    postChainTx:: Maybe A.Value,
+    postTxError:: Maybe A.Value
   }
   deriving (Generic, Show, ToJSON)
 
@@ -89,11 +88,11 @@ data InitializedHeadResponse = InitializedHeadResponse
 
 instance FromJSON WSMessage where
   parseJSON = withObject "WSMessage" $ \v -> do
-    tagVal <- v .: "tag"
-    seqVal <- v Aeson..:? "seq"
-    tsVal <- v .: "timestamp"
-    ts <- iso8601ParseM tsVal
-    return $ WSMessage tagVal seqVal ts
+    WSMessage <$> (v .: "tag")
+    <*>(v Aeson..:? "seq")
+    <*> (v Aeson..:? "timestamp" >>= traverse iso8601ParseM)
+    <*> (v Aeson..:? "postChainTx")
+    <*> (v Aeson..:? "postTxError")
 
 data HydraProtocolParameters = HydraProtocolParameters
   { collateralPercentage :: Maybe Natural,
@@ -178,7 +177,34 @@ data HeadState
   | HeadIsClosed
   | HeadIsContested
 
-newtype HydraStateResponse = HydraStateResponse
-  { state :: T.Text
+data HydraStateResponse = HydraStateResponse
+  { state :: T.Text,
+    message:: T.Text
   }
   deriving (Show, Generic, ToJSON)
+
+
+
+
+-- | The top-level data type representing the entire JSON structure.
+data HydraHead = HydraHead
+  { chainState      :: ChainState
+  , committed       :: Map.Map Text Value  -- A map from Text (string keys) to Value
+  , headId          :: Text
+  , headSeed        :: Text
+  , parameters      :: Value
+  , pendingCommits  :: [Value]  -- A list of JSON values
+  } deriving (Generic, FromJSON, ToJSON)
+
+-- | Represents the "chainState" field of the root.
+data ChainState = ChainState
+  { recordedAt      :: RecordedAt
+  , spendableUTxO   :: Value  -- Not modeled further
+  } deriving (Generic, FromJSON, ToJSON)
+
+-- | Represents the "recordedAt" field of `ChainState`.
+data RecordedAt = RecordedAt
+  { blockHash       :: Text
+  , slot            :: Int
+  , tag             :: Text
+  } deriving (Generic, FromJSON, ToJSON)

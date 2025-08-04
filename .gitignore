@@ -5,3 +5,6 @@
 .vscode
 .history
 .env
+/adaup
+/kuber-client-js
+/kuber-client

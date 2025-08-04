@@ -67,13 +67,6 @@ import Servant.Exception.Server
 
 type KubeServer era = Throws FrameworkError :> KuberServerApi era
 
-type KuberServerApi_ era =
-  -- "api" :>"v3"  :>    QueryApi
-  "api"
-    :> "v1"
-    :> ( KuberApi era
-           :<|> UtilityApi
-       )
 
 kuberApiServer queryEra a =
   ( queryServer queryEra a

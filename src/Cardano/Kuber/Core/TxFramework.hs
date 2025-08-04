@@ -18,7 +18,22 @@ module Cardano.Kuber.Core.TxFramework where
 import Cardano.Api hiding (PaymentCredential)
 import Cardano.Api.Ledger (Coin (unCoin), ConwayDelegCert (..), ConwayGovCert (..), ConwayTxCert (..), EraCrypto, PoolCert (..), StandardCrypto, StrictMaybe (..))
 import qualified Cardano.Api.Ledger as L
-import Cardano.Api.Shelley hiding (PaymentCredential)
+import Cardano.Api.Shelley
+    ( toLedgerEpochInfo,
+      Hash(PaymentKeyHash),
+      TxBodyContent(txCertificates, txFee, txMetadata, txAuxScripts),
+      TxCertificates(TxCertificates),
+      Tx(ShelleyTx),
+      ReferenceScript(ReferenceScriptNone, ReferenceScript),
+      fromShelleyAddr,
+      fromShelleyAddrToAny,
+      fromShelleyStakeCredential,
+      toShelleyAddr,
+      fromShelleyScriptHash,
+      ShelleyLedgerEra,
+      Proposal,
+      LedgerProtocolParameters(..),
+      SimpleScriptOrReferenceInput(SScript) )
 import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (..), HasCardanoQueryApi (..))
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Core.LocalNodeChainApi (HasLocalNodeAPI (..))
@@ -300,6 +315,14 @@ executeTxBuilder builder = do
   -- first determine the addresses and txins that need to be queried for value and address.
   pParam <- kQueryProtocolParams
   executeRawTxBuilder builder pParam
+
+-- Given TxBuilder object, This pure code constructs txBody.
+-- It doesn't perorm any side-effect with means it requires all necessary information to be passed.
+-- Parameters:
+-- - (protocol params, system-start,era-history (in case of plutus contract transaction)) 
+-- - UTxO targetEra -> This must contain all the txin and address utxos used in transaction. 
+-- 
+-- It performs multiple iterations to solve the transaction to have minimum fee possible.
 
 txBuilderToTxBody ::
   (IsTxBuilderEra targetEra) =>

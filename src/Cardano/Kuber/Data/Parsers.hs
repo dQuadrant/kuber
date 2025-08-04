@@ -9,53 +9,39 @@
 module Cardano.Kuber.Data.Parsers where
 
 import           Cardano.Api
-import           Cardano.Binary               (FromCBOR (fromCBOR), decodeFull)
+import           Cardano.Binary               (decodeFull)
 import           Cardano.Kuber.Utility.Text
-import qualified Cardano.Ledger.Alonzo       as Alonzo
-import qualified Cardano.Ledger.Babbage       as Babbage
 
 -- import           Cardano.Ledger.DescribeEras  (StandardCrypto, Witness (Alonzo))
-import qualified Cardano.Ledger.Shelley.API   as Shelley
-import           Control.Exception            (SomeException, catch, throw)
 import           Data.Aeson                   ((.:), (.:?), FromJSON (parseJSON), eitherDecode)
 import qualified Data.Aeson                   as A
 import qualified Data.Aeson.KeyMap            as A
-import qualified Data.Aeson.Key as A
 
-import           Data.Aeson.Types             (parseMaybe, parse)
+import           Data.Aeson.Types             (parse)
 import qualified Data.Aeson.Types             as Aeson
 import           Data.ByteString              (ByteString)
 import           Data.ByteString.Lazy         (fromStrict)
 import qualified Data.ByteString.Lazy         as LBS
 import           Data.Char                    (isDigit, isSeparator)
 import           Data.Functor                 ((<&>))
-import qualified Data.HashMap.Internal.Strict as H
 import qualified Data.Map                     as Map
 import           Data.Text                    (Text)
 import qualified Data.Text                    as T
-import           Data.Text.Conversions        (Base16 (Base16, unBase16),
-                                               FromText (fromText),
-                                               ToText (toText), convertText)
+import           Data.Text.Conversions        (FromText (fromText),
+                                               ToText (toText), convertText, Base16 (unBase16))
 import           Data.Text.Encoding           (encodeUtf8)
-import qualified Data.Text.Encoding           as T
 import qualified Data.Text.Encoding           as TSE
-import           Debug.Trace                  (traceM)
-import           GHC.IO.Exception             (IOErrorType (UserError),
-                                               IOException (IOError))
 import           Text.Read                    (readMaybe)
-import qualified Debug.Trace as Debug
 import qualified Data.Aeson.Types as A
 import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Babbage.TxOut as Babbage
 
-import Cardano.Ledger.Address
 import qualified Cardano.Ledger.Api.Era as Conway
-import Cardano.Api.Shelley (fromShelleyTxOut, ReferenceScript (..), fromShelleyAddr, toShelleyAddr)
+import Cardano.Api.Shelley (fromShelleyTxOut, ReferenceScript (..))
 import qualified Codec.Binary.Bech32 as Bech32
 import qualified Data.Set as Set
-import Control.Monad (guard)
 import Data.List (intercalate)
-import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra (bMaryOnward, bConwayOnward, bBabbageOnward, bAlonzoOnward, bAsEra, bCardanoEra, bShelleyBasedEra))
+import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra (bBabbageOnward, bAlonzoOnward, bAsEra, bCardanoEra, bShelleyBasedEra))
 
 
 type ErrorMessage = String
@@ -237,7 +223,7 @@ parseAddressCbor  cbor = do
 
 parseAddressBech32 ::(IsTxBuilderEra era , MonadFail m)=> Text -> m (AddressInEra era)
 parseAddressBech32 txt = case deserialiseAddress (AsAddressInEra bAsEra) txt of
-  Nothing -> fail "Address is not in bech32 format"
+  Nothing -> fail $ "Address is not in bech32 format: " ++ T.unpack txt
   Just aie -> pure aie
 
 scriptDataParser :: MonadFail m =>  Aeson.Value  -> m HashableScriptData

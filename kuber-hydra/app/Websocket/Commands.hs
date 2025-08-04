@@ -17,7 +17,6 @@ import Cardano.Api.Shelley
 import Cardano.Kuber.Api
 import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Data.Parsers
-import Cardano.Kuber.Util
 import Data.Aeson
 import qualified Data.Aeson as A
 import Data.ByteString.Char8 as BS8 hiding (elem, filter, head, length, map, null)
@@ -33,6 +32,8 @@ import Websocket.SocketConnection
 import Websocket.TxBuilder
 import Websocket.Utils
 import Prelude hiding (elem, length, map, null)
+import qualified Data.Text.IO as T
+import qualified Data.Map as Map
 
 hydraHeadMessageForwardingFailed :: T.Text
 hydraHeadMessageForwardingFailed = T.pack "Failed to forward message to hydra head"
@@ -59,7 +60,7 @@ fanout appConfig wait = do
 
 submit :: AppConfig -> TxModal -> Bool -> IO (Either FrameworkError TxModal)
 submit txm wait = do
-  submitHydraTx txm wait 
+  submitHydraTx txm wait
 
 commitUTxO :: AppConfig -> [TxIn] -> Maybe A.Value -> Bool -> IO (Either FrameworkError TxModal)
 commitUTxO appConfig utxos sk submit = do
@@ -105,63 +106,82 @@ commitUTxO appConfig utxos sk submit = do
                             else
                               pure $ Right txModalObject
 
+
+createHydraStateResponseAeson :: ContentsAndTag -> HydraStateResponse
+createHydraStateResponseAeson cNTag =
+  let tag = cNTag.tag
+      initialContent :: (Maybe HydraHead)= case A.fromJSON cNTag.contents of
+            Success v -> pure v
+            _ -> Nothing
+  in
+    case tag of
+      "Initial" -> case initialContent of
+            Just hydraHead -> if Map.null  hydraHead.committed
+                then  HydraStateResponse tag  "Initialized and Waiting For Commitments"
+                else  HydraStateResponse tag "Partial Commitments Received"
+            Nothing -> HydraStateResponse tag  "Initialized and Waiting For Commitments"
+      "PartiallyCommitted" -> HydraStateResponse tag "Partial Commitments Received"
+      "Idle" -> HydraStateResponse tag "Head is Idle"
+      "Closed" ->  HydraStateResponse tag "Head is Closed"
+      "Contested" -> HydraStateResponse tag "Head is Contested"
+      "Open" ->  HydraStateResponse tag "Open and Ready for Transactions"
+      _ ->  HydraStateResponse tag "Unknown hydra state tag"
+
 decommitUTxO :: AppConfig -> [TxIn] -> Maybe A.Value -> Bool -> Bool -> IO (Either FrameworkError A.Value)
 decommitUTxO hydraHost utxos sk wait submit = do
   let parsedSignKey = sk >>= parseSignKey . jsonToText
   handleHydraDecommitTx hydraHost utxos parsedSignKey wait submit
-
+--  un initialized {"contents":{"chainState":{"recordedAt":null,"spendableUTxO":{}}},"tag":"Idle"}
 getHydraState :: AppConfig -> IO (Either FrameworkError HydraStateResponse)
 getHydraState hydraHost = do
-  (allUTxOsText, _) <- sendCommandToHydraNodeSocket hydraHost GetUTxO False
-  let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe WSMessage
-      unexpectedResponseError = Left $ FrameworkError ParserError "getHydraState: Unexpected response"
-  case allHydraUTxOs of
-    Nothing -> pure unexpectedResponseError
-    Just res -> do
-      let isCommandFailed = res.tag == T.pack "CommandFailed"
-      if isCommandFailed
-        then do
-          let getUTxoCommandFailedResponse = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe HydraState
-          case getUTxoCommandFailedResponse of
-            Nothing -> pure unexpectedResponseError
-            Just hs -> do
-              let stateTag = hs.state.tag
-              if stateTag == T.pack "Idle"
-                then do
-                  response <- createHydraStateResponseAeson HeadIsIdle
-                  pure $ Right response
-                else
-                  if stateTag == T.pack "Closed"
-                    then do
-                      response <- createHydraStateResponseAeson HeadIsClosed
-                      pure $ Right response
-                    else
-                      if stateTag == T.pack "Contested"
-                        then do
-                          response <- createHydraStateResponseAeson HeadIsContested
-                          pure $ Right response
-                        else pure unexpectedResponseError
-        else do
-          (initHeadMessage, _) <- initialize hydraHost False
-          let decodedInitHeadMessage = decode $ BSL.fromStrict (T.encodeUtf8 initHeadMessage) :: Maybe InitializedHeadResponse
-          case decodedInitHeadMessage of
-            Nothing -> pure unexpectedResponseError
-            Just initHeadResponse -> do
-              let hydraParties = length initHeadResponse.state.contents.parameters.parties
-                  waitingCommitments = maybe 0 length initHeadResponse.state.contents.pendingCommits
 
-              if hydraParties == waitingCommitments
-                then do
-                  response <- createHydraStateResponseAeson WaitingCommitments
-                  pure $ Right response
-                else
-                  if waitingCommitments == 0
-                    then do
-                      response <- createHydraStateResponseAeson HeadIsReady
-                      pure $ Right response
-                    else
-                      if hydraParties > waitingCommitments
-                        then do
-                          respone <- createHydraStateResponseAeson PartiallyCommitted
-                          pure $ Right respone
-                        else pure $ Left $ FrameworkError LibraryError "getHydraState: Unknown Head State"
+  allUTxOsText<- fetch hydraHost >>= \query -> query (T.pack "head")
+  let hydraHead = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe ContentsAndTag
+      unexpectedResponseError = Left $ FrameworkError ParserError "getHydraState: Unexpected response"
+  case hydraHead of
+    Nothing -> do
+      Prelude.putStrLn  "Head was not parsed"
+      T.putStrLn  allUTxOsText
+      pure unexpectedResponseError
+    Just hydraHead -> do
+      let isCommandFailed = hydraHead.tag == T.pack "CommandFailed"
+      pure $ Right $ createHydraStateResponseAeson hydraHead
+
+      -- if isCommandFailed
+      --   then do
+      --     let getUTxoCommandFailedResponse = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe HydraState
+      --     pure $ case getUTxoCommandFailedResponse of
+      --       Nothing -> unexpectedResponseError
+      --       Just hs -> do
+      --         if stateTag == T.pack "Idle"
+      --           then do
+
+      --           else
+      --             if stateTag == T.pack "Closed"
+      --               then Right $ 
+      --               else
+      --                 if stateTag == T.pack "Contested"
+      --                   then 
+
+      --                   else  unexpectedResponseError
+      --   else do
+      --     (initHeadMessage, _) <- initialize hydraHost False
+      --     let decodedInitHeadMessage = decode $ BSL.fromStrict (T.encodeUtf8 initHeadMessage) :: Maybe InitializedHeadResponse
+      --     case decodedInitHeadMessage of
+      --       Nothing -> pure unexpectedResponseError
+      --       Just initHeadResponse -> 
+      --         let hydraParties = length initHeadResponse.state.contents.parameters.parties
+      --             waitingCommitments = maybe 0 length initHeadResponse.state.contents.pendingCommits
+      --         in
+      --           pure $ if hydraParties == waitingCommitments
+      --             then do
+      --               pure $ createHydraStateResponseAeson WaitingCommitments
+      --             else
+      --               if waitingCommitments == 0
+      --                 then do
+      --                   pure $ createHydraStateResponseAeson HeadIsReady
+      --                 else
+      --                   if hydraParties > waitingCommitments
+      --                     then do
+      --                       pure $ createHydraStateResponseAeson PartiallyCommitted
+      --                     else  Left $ FrameworkError LibraryError "getHydraState: Unknown Head State"

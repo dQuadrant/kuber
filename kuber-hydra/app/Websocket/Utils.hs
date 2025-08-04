@@ -51,16 +51,16 @@ jsonToText = TL.toStrict . TLE.decodeUtf8 . A.encode
 textToLazyByteString :: T.Text -> BSL.ByteString
 textToLazyByteString = BSL.fromStrict . TE.encodeUtf8
 
-createHydraStateResponseAeson :: HeadState -> IO HydraStateResponse
-createHydraStateResponseAeson hs =
-  let stateText = T.pack $ case hs of
-        HeadIsIdle -> "Head is Idle"
-        HeadIsContested -> "Head is Contested"
-        WaitingCommitments -> "Initialized and Waiting For Commitments"
-        PartiallyCommitted -> "Partial Commitments Received"
-        HeadIsReady -> "Open and Ready for Transactions"
-        HeadIsClosed -> "Head is Closed"
-   in pure $ HydraStateResponse stateText
+-- createHydraStateResponseAeson :: HeadState -> HydraStateResponse
+-- createHydraStateResponseAeson hs =
+--   let stateText = T.pack $ case hs of
+--         HeadIsIdle -> "Head is Idle"
+--         HeadIsContested -> "Head is Contested"
+--         WaitingCommitments -> "Initialized and Waiting For Commitments"
+--         PartiallyCommitted -> "Partial Commitments Received"
+--         HeadIsReady -> "Open and Ready for Transactions"
+--         HeadIsClosed -> "Head is Closed"
+--    in  HydraStateResponse {stateText}
 
 parsedTxAnyEra :: BS8.ByteString -> Either FrameworkError (Tx ConwayEra)
 parsedTxAnyEra bs =

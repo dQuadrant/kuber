@@ -23,25 +23,28 @@ import Cardano.Api
 import Cardano.Kuber.Api
 import Cardano.Kuber.Data.Models
 import qualified Data.Aeson as A
-import Data.ByteString (toStrict)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BSL
 import Data.Maybe
 import Data.String
 import qualified Data.Text as T hiding (map)
 import GHC.Generics
-import Network.HTTP.Types (status201, status400)
 import Network.Wai
 import Network.Wai.Middleware.Cors
 import Network.Wai.Middleware.Rewrite
 import Network.Wai.Middleware.Static
 import Servant
-import Servant.Exception
 import Websocket.Aeson
 import Websocket.Commands
 import Websocket.Middleware
 import Websocket.TxBuilder (hydraProtocolParams, queryUTxO, toValidHydraTxBuilder)
 import Websocket.Utils
+import Websocket.SocketConnection (fetch, AppConfig (chainInfo))
+
+import Kuber.Server.Spec
+import Cardano.Kuber.Http.Spec (KuberServerApi)
+import Cardano.Kuber.Data.Parsers (parseAddress)
+
 
 -- Define CORS policy
 corsMiddlewarePolicy :: CorsResourcePolicy
@@ -70,13 +73,6 @@ data CommitUTxOs = CommitUTxOs
   }
   deriving (Show, Generic, FromJSON, ToJSON)
 
-instance ToServantErr FrameworkError where
-  status (FrameworkError _ _) = status400
-  status (FrameworkErrors _) = status400
-
-instance MimeRender PlainText FrameworkError where
-  mimeRender ct = mimeRender ct . show
-
 type GetResp = UVerb 'GET '[JSON] UVerbResponseTypes
 
 type PostResp = UVerb 'POST '[JSON] UVerbResponseTypes
@@ -85,11 +81,16 @@ type WithWait sub = QueryParam "wait" Bool :> sub
 
 type WithSubmit sub = QueryParam "submit" Bool :> sub
 
-type API =
+type KuberHydraApi =
+        HydraServerApi
+  :<|> KuberServerApi ConwayEra 
+
+type HydraServerApi =
   "hydra" :> HydraCommandAPI
     :<|> "hydra" :> "query" :> HydraQueryAPI
 
 type HydraCommandAPI =
+  
   "init" :> WithWait PostResp
     :<|> "abort" :> WithWait PostResp
     :<|> "commit" :> WithSubmit (ReqBody '[JSON] CommitUTxOs :> PostResp)
@@ -101,7 +102,9 @@ type HydraCommandAPI =
     :<|> "submit" :> ReqBody '[JSON] TxModal :> WithWait PostResp
 
 type HydraQueryAPI =
+
   "utxo" :> QueryParams "address" T.Text :> QueryParams "txin" T.Text :> GetResp
+    :<|> "head" :> GetResp
     :<|> "protocol-parameters" :> GetResp
     :<|> "state" :> GetResp
 
@@ -131,8 +134,15 @@ hydraErrorHandler (msg, status) = do
                 errHeaders = [("Content-Type", "application/json")]
               }
 
+kuberHydraServer :: AppConfig -> Server KuberHydraApi
+kuberHydraServer appConfig = 
+        hydraServer appConfig
+  :<|> kuberApiServer BabbageEraOnwardsConway (chainInfo appConfig)
+
+
 -- Define Handlers
-server appConfig =
+hydraServer :: AppConfig -> Server HydraServerApi
+hydraServer appConfig =
   commandServer appConfig
     :<|> queryServer appConfig
   where
@@ -152,6 +162,7 @@ server appConfig =
     queryServer :: AppConfig -> Server HydraQueryAPI
     queryServer appConfig =
       queryUtxoHandler appConfig
+        :<|> queryHeadlHandler appConfig
         :<|> queryProtocolParameterHandler appConfig
         :<|> queryStateHandler appConfig
 
@@ -165,16 +176,22 @@ abortHandler appConfig wait = do
   abortResponse <- liftIO $ abort appConfig (fromMaybe False wait)
   hydraErrorHandler abortResponse
 
+queryHeadlHandler :: AppConfig -> Handler (Union UVerbResponseTypes)
+queryHeadlHandler appConfig=do
+    response<- liftIO $ do 
+      fetcher <-  fetch appConfig
+      fetcher "head"
+    hydraErrorHandler (response,200)
+
 queryUtxoHandler :: AppConfig -> [T.Text] -> [T.Text] -> Handler (Union UVerbResponseTypes)
 queryUtxoHandler appConfig address txin = do
   parsedTxIns <- liftIO $ listOfTextToTxIn txin
-  parsedAddresses <- liftIO $ listOfTextToAddressInEra address
+  parsedAddresses <- liftIO $ mapM (parseAddress @ConwayEra) address
+
   eitherErrorOrUTxOs <- case parsedTxIns of
     Left fe -> pure $ Left fe
-    Right txins -> case parsedAddresses of
-      Left fe -> pure $ Left fe
-      Right address' -> do
-        queryUtxoResponse <- liftIO $ queryUTxO appConfig address' txins
+    Right txins -> do
+        queryUtxoResponse <- liftIO $ queryUTxO appConfig parsedAddresses txins
         case queryUtxoResponse of
           Left fe -> pure $ Left fe
           Right utxos -> case bytestringToJSON $ BSL.fromStrict $ serialiseToJSON utxos of
@@ -234,9 +251,9 @@ submitHandler appConfig txm wait = do
   frameworkErrorHandler submitResponseJSON
 
 -- Create API Proxy
-deployAPI :: Proxy API
-deployAPI = Proxy
+hydraServerApiProxy :: Proxy HydraServerApi
+hydraServerApiProxy = Proxy
 
 -- Define Hydra application
-hydraApp :: AppConfig -> Application
-hydraApp appConfig = rewriteRoot (T.pack "index.html") $ static $ cors (const $ Just corsMiddlewarePolicy) $ serve deployAPI (server appConfig)
+kuberHydraApp :: AppConfig -> Application
+kuberHydraApp appConfig = rewriteRoot (T.pack "index.html") $ static $ cors (const $ Just Kuber.Server.Spec.corsMiddlewarePolicy) $ serve hydraServerApiProxy (hydraServer appConfig)

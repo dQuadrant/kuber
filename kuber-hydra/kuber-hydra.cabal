@@ -70,12 +70,13 @@ executable kuber-hydra
                     Websocket.Aeson
                     Websocket.Middleware
                     Api.Spec
+                    -- Api.Swagger
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base ^>=4.17.0.0
+    build-depends:    base >=4.17.0.0
                     , websockets
                     , cardano-api
                     , plutus-ledger-api
@@ -96,9 +97,13 @@ executable kuber-hydra
                     , servant
                     , servant-server
                     , servant-exceptions
+                    , servant-client
+                    , servant-exceptions-server
+                    , servant-swagger
+                    , servant-swagger-ui
+                    , swagger2
                     , wai
                     , warp
-                    , servant-exceptions-server
                     , http-types
                     , http-media
                     , cardano-crypto-class
@@ -117,9 +122,10 @@ executable kuber-hydra
                     , containers
                     , text-conversions
                     , case-insensitive
-                    , servant-client
                     , unordered-containers
                     , dotenv
+                    , optparse-applicative
+                    , kuber-server
     -- Directories containing source files.
     hs-source-dirs:   app
 
