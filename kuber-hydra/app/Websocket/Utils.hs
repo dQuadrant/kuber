@@ -1,30 +1,52 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverlappingInstances #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 {-# HLINT ignore "Use lambda-case" #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Websocket.Utils where
 
 import Cardano.Api
+    ( ToJSON,
+      ConwayEra,
+      Tx,
+      InAnyCardanoEra(InAnyCardanoEra),
+      CardanoEra(ConwayEra),
+      TxIn(..),
+      UTxO(UTxO),
+      TxIx(TxIx),
+      AddressInEra,
+      IsShelleyBasedEra(shelleyBasedEra),
+      AddressAny(..),
+      serialiseToRawBytesHexText,
+      shelleyAddressInEra,
+      byronAddressInEra )
 import Cardano.Kuber.Api
+    ( FrameworkError(FrameworkError),
+      ErrorType(ParserError, NodeQueryError),
+      HasChainQueryAPI(kQueryUtxoByTxin),
+      IsTxBuilderEra,
+      Kontract,
+      evaluateKontract )
 import Cardano.Kuber.Data.Parsers
+    ( parseRawTxInAnyEra, parseTxIn, parseAddress )
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Key as K
 import qualified Data.Aeson.KeyMap as KM
-import Data.ByteString (fromStrict)
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
-import Data.Either
-import Data.List
+import Data.Either ( rights, lefts )
+import Data.List ( nub, (\\) )
 import qualified Data.Map as M
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
-import Websocket.Aeson
 
 textToJSON :: T.Text -> Either FrameworkError A.Value
 textToJSON jsonText = do
@@ -69,21 +91,22 @@ parsedTxAnyEra bs =
     Just (InAnyCardanoEra _ _) -> Left $ FrameworkError ParserError "Unexpected era, expected ConwayEra"
     Nothing -> Left $ FrameworkError ParserError "Error parsing transaction cbor"
 
-createUTxOSchema :: [TxIn] -> IO (Either FrameworkError T.Text)
-createUTxOSchema utxos = do
-  localChain <- chainInfoFromEnv
-  result <- evaluateKontract localChain (getUtxoDetails @ChainConnectInfo @ConwayEra utxos)
+createUTxOSchema ::  HasChainQueryAPI api  => api -> [TxIn] -> IO (Either FrameworkError T.Text)
+createUTxOSchema api utxos = do
+  let utxoKontract  :: HasChainQueryAPI api  =>  Kontract api w FrameworkError (UTxO ConwayEra)
+      utxoKontract = getUtxoDetails  utxos
+  result <- evaluateKontract  api  utxoKontract
   case result of
     Left err -> pure $ Left err
     Right res -> case res of
-      UTxO txinMap -> do
+      (UTxO txinMap) -> do
         let txInKeys = M.keys txinMap
             allTxInsPresent = utxos `isSubsetOf` txInKeys
-        if allTxInsPresent
+        pure $ if allTxInsPresent
           then
-            pure $ Right $ (T.pack . BS8.unpack . BSL.toStrict . A.encode) res
+             Right $ (T.pack . BS8.unpack . BSL.toStrict . A.encode) res
           else
-            pure $ Left $ FrameworkError NodeQueryError $ "Error Querying UTxOs : " <> show (utxos `notPresentIn` txInKeys)
+            Left $ FrameworkError NodeQueryError $ "These TxIns were not found on chain : " <> show (utxos `notPresentIn` txInKeys)
 
 notPresentIn :: (Eq a) => [a] -> [a] -> [a]
 notPresentIn a b = filter (`notElem` b) a
@@ -118,7 +141,7 @@ listOfTextToAddressInEra :: [T.Text] -> IO (Either FrameworkError [AddressInEra 
 listOfTextToAddressInEra textAddresses = do
   let parsedList =
         map
-          ( \a -> case parseAddress a of
+          ( \a -> case parseAddress @ConwayEra a of
               Just addr -> Right addr
               Nothing -> Left a
           )

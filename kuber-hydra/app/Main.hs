@@ -17,6 +17,7 @@ import System.Exit (exitFailure, exitSuccess)
 import Control.Exception (try, SomeException)
 import Cardano.Api (prettyPrintJSON)
 import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.Lazy.Char8 as BS8L
 
 data KuberHydraConfig = KuberHydraConfig
   { host     :: Maybe String
@@ -69,14 +70,13 @@ performHealthChecks appConfig = do
         exitFailure
       Right result -> putStrLn $ "Cardano Node : "  ++ BS8.unpack (prettyPrintJSON result)
 
-  hydraFetch <- fetch appConfig
-  hydraHeadStateResult <- try $ hydraFetch "head"
+  hydraHeadStateResult <- try $ getHead appConfig
   case hydraHeadStateResult of
     Left e -> do
       putStrLn $ "Hydra head state check FAILED: " ++ show (e :: SomeException)
       exitFailure
     Right response -> do
-      putStrLn $ "Hydra head state check PASSED."
+      putStrLn  "Successfully connected to Hydra node"
 
 main :: IO ()
 main = do

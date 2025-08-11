@@ -20,7 +20,8 @@ import qualified Data.Text.Encoding as T
 import Data.Time.Clock
 import Network.HTTP.Client.Conduit (parseRequest)
 import Network.HTTP.Simple (getResponseBody, httpLBS, setRequestBodyLBS, setRequestHeader, setRequestMethod)
-import Network.Wai
+import qualified Network.HTTP.Simple as HTTP
+import Network.Wai (Request, requestHeaders)
 import qualified Network.WebSockets as WS
 import Websocket.Aeson
 import Websocket.Utils
@@ -31,6 +32,9 @@ data AppConfig = AppConfig
   , serverPort :: Int
   , chainInfo :: ChainConnectInfo
   }
+
+evaluateL1Kontract :: AppConfig -> Kontract ChainConnectInfo w FrameworkError r -> IO  (Either FrameworkError r)
+evaluateL1Kontract config = evaluateKontract config.chainInfo
 
 getHydraIpAndPort :: String -> (String, Int)
 getHydraIpAndPort hydraUrl = case break (== ':') hydraUrl of
@@ -76,7 +80,6 @@ forwardMessageWS :: WS.Connection -> WS.Connection -> IO ()
 forwardMessageWS srcConn dstConn = forever $ do
   msg <- WS.receiveData srcConn
   WS.sendTextData dstConn (msg :: T.Text)
-  putStrLn $ "Forwarded: " ++ T.unpack msg ++ "\n"
 
 -- Collect and filter WebSocket messages
 getLatestMessage ::
@@ -98,7 +101,7 @@ getLatestMessage appConfig conn0 expectedTags wait = do
         result <-
           if wait
             then Right <$> (try (WS.receiveData conn) :: IO (Either SomeException T.Text))
-            else do 
+            else do
               putStrLn "Waiting for a message from Hydra..."
               race (threadDelay timeoutMicroseconds) (try (WS.receiveData conn) :: IO (Either SomeException T.Text))
         case result of
@@ -117,11 +120,9 @@ getLatestMessage appConfig conn0 expectedTags wait = do
               go newConn
           Right (Right msg) -> do
             let decoded = decode (BSL.fromStrict (T.encodeUtf8 msg)) :: Maybe WSMessage
-            putStrLn $ "Received message: " ++ T.unpack msg
-            
             case decoded of
               Just wsmsg
-                | wsmsg.tag `elem` map fst expectedTags ->do 
+                | wsmsg.tag `elem` map fst expectedTags ->do
                   putStrLn $ "Received expected message: " ++ T.unpack wsmsg.tag
                   lookupTag msg wsmsg expectedTags
                 | wsmsg.tag `elem` map fst errorTags -> lookupTag msg wsmsg errorTags
@@ -133,7 +134,7 @@ getLatestMessage appConfig conn0 expectedTags wait = do
                               "wsMessage" .= msg
                             ]
                     return (Just (T.decodeUtf8 $ BSL.toStrict $ encode wrapper, 500))
-              Nothing -> do 
+              Nothing -> do
                 go conn -- Try again if decoding fails
   go conn0
   where
@@ -146,9 +147,7 @@ forwardCommands :: AppConfig -> T.Text -> [(T.Text, Int)] -> Bool -> IO (T.Text,
 forwardCommands appConfig command tag wait = do
   let serverIpStr = fromMaybe "0.0.0.0" (serverIp appConfig)
   WS.runClient serverIpStr (serverPort appConfig) "/" $ \conn -> do
-    putStrLn $ "Forwarding command to Hydra WebSocket: " ++ T.unpack command
     WS.sendTextData conn command
-    putStrLn $ "Sent command to Hydra WebSocket: " ++ T.unpack command
     getLatestMessage appConfig conn tag wait >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
 validateLatestWebsocketTag :: AppConfig -> [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
@@ -164,8 +163,8 @@ isWebSocketRequest req =
     Just "websocket" -> True
     _ -> False
 
-fetch :: AppConfig -> IO (T.Text -> IO T.Text)
-fetch appConfig = do
+fetcher :: AppConfig -> IO (T.Text -> IO T.Text)
+fetcher appConfig = do
   return $ \endpoint -> do
     let url = hydraBaseUrl appConfig ++ T.unpack endpoint
     request <- parseRequest url
@@ -173,24 +172,115 @@ fetch appConfig = do
     let responseBody = T.pack $ BS8.unpack $ BSL.toStrict $ getResponseBody response
     return responseBody
 
-post :: (ToJSON p) => AppConfig -> [Char] -> p -> IO T.Text
-post appConfig path jsonData = do
-  let url = hydraBaseUrl appConfig ++ path
+fetcher' :: AppConfig -> IO (T.Text -> IO (HTTP.Response BSL.ByteString))
+fetcher' appConfig = do
+  return $ \endpoint -> do
+    let url = hydraBaseUrl appConfig ++ T.unpack endpoint
+    request <- parseRequest url
+    httpLBS request
+
+fetchRaw :: (ToJSON p) => AppConfig -> T.Text -> T.Text -> Maybe p -> IO (HTTP.Response BSL.ByteString)
+fetchRaw appConfig method endpoint body = do
+  let url = hydraBaseUrl appConfig ++ T.unpack endpoint
   initialRequest <- parseRequest url
   let request =
-        setRequestMethod "POST" $
+        (if method == "POST" then setRequestMethod "POST" else id) $
+          (case body of
+            Just d -> setRequestBodyLBS (A.encode d)
+            Nothing -> id) $
           setRequestHeader "Content-Type" ["application/json"] $
-            setRequestBodyLBS (A.encode jsonData) $
-              initialRequest
-  response <- httpLBS request
-  let responseBody = T.pack $ BS8.unpack $ BSL.toStrict $ getResponseBody response
+          initialRequest
+  httpLBS request
+
+fetch :: (ToJSON p) => AppConfig -> T.Text -> T.Text -> Maybe p -> IO BSL.ByteString
+fetch appConfig method endpoint body = do
+  response <- fetchRaw appConfig method endpoint body
+  let responseBody =  HTTP.getResponseBody response
   return responseBody
 
-getHydraCommitTx :: AppConfig -> T.Text -> IO (Either FrameworkError T.Text)
+getHydra :: AppConfig -> T.Text -> IO BSL.ByteString
+getHydra appConfig endpoint = fetch appConfig "GET" endpoint (Nothing :: Maybe A.Value)
+
+postHydra :: (ToJSON p) => AppConfig -> T.Text -> p -> IO BSL.ByteString
+postHydra appConfig endpoint jsonData = fetch appConfig "POST" endpoint (Just jsonData)
+
+getHydra' :: AppConfig -> T.Text -> IO (HTTP.Response BSL.ByteString)
+getHydra' appConfig endpoint = fetchRaw appConfig "GET" endpoint (Nothing :: Maybe A.Value)
+
+postHydra' :: (ToJSON p) => AppConfig -> T.Text -> p -> IO (HTTP.Response BSL.ByteString)
+postHydra' appConfig endpoint jsonData = fetchRaw appConfig "POST" endpoint (Just jsonData)
+
+getHydraCommitTx :: AppConfig -> T.Text -> IO (Either FrameworkError BSL.ByteString)
 getHydraCommitTx appConfig utxoSchema = do
   let jsonResponseOrError = textToJSON utxoSchema
   case jsonResponseOrError of
     Left fe -> pure $ Left fe
     Right jsonResponse -> do
-      response <- liftIO $ post appConfig "commit" jsonResponse
+      response <- liftIO $ postHydra appConfig "commit" jsonResponse
       pure $ Right response
+
+getHead :: AppConfig -> IO BSL.ByteString
+getHead appConfig = getHydra appConfig "head"
+
+getHead' :: AppConfig -> IO (HTTP.Response BSL.ByteString)
+getHead' appConfig = getHydra' appConfig "head"
+
+postCommit :: (ToJSON p) => AppConfig -> p -> IO BSL.ByteString
+postCommit appConfig = postHydra appConfig "commit"
+
+postCommit' :: (ToJSON p) => AppConfig -> p -> IO (HTTP.Response BSL.ByteString)
+postCommit' appConfig = postHydra' appConfig "commit"
+
+getCommits :: AppConfig -> IO BSL.ByteString
+getCommits appConfig = getHydra appConfig "commits"
+
+getCommits' :: AppConfig -> IO (HTTP.Response BSL.ByteString)
+getCommits' appConfig = getHydra' appConfig "commits"
+
+getCommitsByTxId :: AppConfig -> T.Text -> IO BSL.ByteString
+getCommitsByTxId appConfig txId = getHydra appConfig ("commits/" <> txId)
+
+getCommitsByTxId' :: AppConfig -> T.Text -> IO (HTTP.Response BSL.ByteString)
+getCommitsByTxId' appConfig txId = getHydra' appConfig ("commits/" <> txId)
+
+getSnapshotsLastSeen :: AppConfig -> IO BSL.ByteString
+getSnapshotsLastSeen appConfig = getHydra appConfig "snapshots/last-seen"
+
+getSnapshotsLastSeen' :: AppConfig -> IO (HTTP.Response BSL.ByteString)
+getSnapshotsLastSeen' appConfig = getHydra' appConfig "snapshots/last-seen"
+
+getSnapshotUtxo :: AppConfig -> IO BSL.ByteString
+getSnapshotUtxo appConfig = getHydra appConfig "snapshot/utxo"
+
+getSnapshotUtxo' :: AppConfig -> IO (HTTP.Response BSL.ByteString)
+getSnapshotUtxo' appConfig = getHydra' appConfig "snapshot/utxo"
+
+postSnapshot :: (ToJSON p) => AppConfig -> p -> IO BSL.ByteString
+postSnapshot appConfig = postHydra appConfig "snapshot"
+
+postSnapshot' :: (ToJSON p) => AppConfig -> p -> IO (HTTP.Response BSL.ByteString)
+postSnapshot' appConfig = postHydra' appConfig "snapshot"
+
+getSnapshot :: AppConfig -> IO BSL.ByteString
+getSnapshot appConfig = getHydra appConfig "snapshot"
+
+getSnapshot' :: AppConfig -> IO (HTTP.Response BSL.ByteString)
+getSnapshot' appConfig = getHydra' appConfig "snapshot"
+
+postDecommit :: (ToJSON p) => AppConfig -> p -> IO BSL.ByteString
+postDecommit appConfig = postHydra appConfig "decommit"
+
+postDecommit' :: (ToJSON p) => AppConfig -> p -> IO (HTTP.Response BSL.ByteString)
+postDecommit' appConfig = postHydra' appConfig "decommit"
+
+getProtocolParameters :: AppConfig -> IO BSL.ByteString
+getProtocolParameters appConfig = getHydra appConfig "protocol-parameters"
+
+getProtocolParameters' :: AppConfig -> IO (HTTP.Response BSL.ByteString)
+getProtocolParameters' appConfig = getHydra' appConfig "protocol-parameters"
+
+postCardanoTransaction :: (ToJSON p) => AppConfig -> p -> IO BSL.ByteString
+postCardanoTransaction appConfig = postHydra appConfig "cardano-transaction"
+
+postCardanoTransaction' :: (ToJSON p) => AppConfig -> p -> IO (HTTP.Response BSL.ByteString)
+postCardanoTransaction' appConfig = postHydra' appConfig "cardano-transaction"

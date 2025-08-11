@@ -1,12 +1,12 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
+
 {-# LANGUAGE FlexibleContexts #-}
 {-# HLINT ignore "Use lambda-case" #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE OverlappingInstances #-}
+
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
@@ -34,6 +34,10 @@ import Websocket.Utils
 import Prelude hiding (elem, length, map, null)
 import qualified Data.Text.IO as T
 import qualified Data.Map as Map
+import Network.HTTP.Conduit (Response(responseStatus, responseBody))
+import Network.HTTP.Types.Status (Status(statusCode))
+import qualified Data.ByteString.Lazy.Char8 as BS8L
+import qualified Data.Set as Set
 
 hydraHeadMessageForwardingFailed :: T.Text
 hydraHeadMessageForwardingFailed = T.pack "Failed to forward message to hydra head"
@@ -63,22 +67,25 @@ submit txm wait = do
   submitHydraTx txm wait
 
 commitUTxO :: AppConfig -> [TxIn] -> Maybe A.Value -> Bool -> IO (Either FrameworkError TxModal)
-commitUTxO appConfig utxos sk submit = do
-  utxoSchema <- createUTxOSchema utxos
-  case utxoSchema of
+commitUTxO appConfig txins sk submit = do
+
+  validUtxos ::Either FrameworkError (UTxO ConwayEra) <- evaluateL1Kontract appConfig (kQueryUtxoByTxin $ Set.fromList txins)
+  case validUtxos of
     Left fe -> pure $ Left fe
     Right utxoJsonSchema -> do
-      unsignedCommitTxOrError <- getHydraCommitTx appConfig utxoJsonSchema
-      case unsignedCommitTxOrError of
-        Left fe -> pure $ Left fe
-        Right unsignedCommitTx ->
-          case A.eitherDecode (fromStrict $ T.encodeUtf8 unsignedCommitTx) of
-            Left err ->
+      unsignedTxResponse <- postCommit'  appConfig utxoJsonSchema
+      let responseBs=responseBody unsignedTxResponse
+      case statusCode$responseStatus unsignedTxResponse of
+        200 ->
+          case A.eitherDecode responseBs  of
+            Left err ->do
+              Prelude.putStrLn $ "err: commitUTxO (" ++ show (map renderTxIn txins) ++") ="++ show err
               pure $
                 Left $
                   FrameworkError ParserError $
-                    "Received: " <> T.unpack unsignedCommitTx <> ". Error decoding Hydra response: " <> err
-            Right (HydraCommitTx cborHex _ _) ->
+                    "Received: " <> BS8L.unpack responseBs
+            Right (HydraCommitTx cborHex _ _) ->do
+              Prelude.putStrLn "Got tx"
               case convertText (T.pack cborHex) <&> unBase16 of
                 Nothing -> pure $ Left $ FrameworkError ParserError "Invalid CBOR hex in commit transaction"
                 Just bs -> do
@@ -99,12 +106,16 @@ commitUTxO appConfig utxos sk submit = do
                           let txModalObject = TxModal (InAnyCardanoEra ConwayEra tx')
                           if submit
                             then do
-                              submittedTxResult <- submitHandler $ kSubmitTx (InAnyCardanoEra ConwayEra tx')
+                              submittedTxResult <- evaluateL1Kontract appConfig  (kSubmitTx (InAnyCardanoEra ConwayEra tx'))
                               case submittedTxResult of
                                 Left fe -> pure $ Left fe
                                 Right () -> pure $ Right txModalObject
                             else
                               pure $ Right txModalObject
+        _ -> do
+          Prelude.putStrLn $ "err: commitUTxO (" ++ show (map renderTxIn txins) ++") ="++ BS8L.unpack (responseBody unsignedTxResponse)
+          Prelude.putStrLn $ "     utxos : " ++  BS8L.unpack (A.encode  utxoJsonSchema)
+          pure $ Left $ FrameworkError {feType= TxValidationError, feMessage=BS8L.unpack (responseBody unsignedTxResponse)}
 
 
 createHydraStateResponseAeson :: ContentsAndTag -> HydraStateResponse
@@ -135,13 +146,12 @@ decommitUTxO hydraHost utxos sk wait submit = do
 getHydraState :: AppConfig -> IO (Either FrameworkError HydraStateResponse)
 getHydraState hydraHost = do
 
-  allUTxOsText<- fetch hydraHost >>= \query -> query (T.pack "head")
-  let hydraHead = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe ContentsAndTag
+  getHeadResult<- getHead  hydraHost
+  let hydraHead = decode $ getHeadResult :: Maybe ContentsAndTag
       unexpectedResponseError = Left $ FrameworkError ParserError "getHydraState: Unexpected response"
   case hydraHead of
     Nothing -> do
       Prelude.putStrLn  "Head was not parsed"
-      T.putStrLn  allUTxOsText
       pure unexpectedResponseError
     Just hydraHead -> do
       let isCommandFailed = hydraHead.tag == T.pack "CommandFailed"

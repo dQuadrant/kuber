@@ -39,12 +39,14 @@ import Websocket.Commands
 import Websocket.Middleware
 import Websocket.TxBuilder (hydraProtocolParams, queryUTxO, toValidHydraTxBuilder)
 import Websocket.Utils
-import Websocket.SocketConnection (fetch, AppConfig (chainInfo))
+import Websocket.SocketConnection (fetch, AppConfig (chainInfo), getHead, getCommits)
 
 import Kuber.Server.Spec
 import Cardano.Kuber.Http.Spec (KuberServerApi)
 import Cardano.Kuber.Data.Parsers (parseAddress)
 import Servant.Exception (Throws)
+import qualified Data.Text.Encoding as T
+import qualified  Data.ByteString.Lazy.Char8 as BS8L
 
 
 -- Define CORS policy
@@ -111,6 +113,7 @@ type HydraQueryAPI =
     :<|> "head" :> GetResp
     :<|> "protocol-parameters" :> GetResp
     :<|> "state" :> GetResp
+    :<|> "commits" :> GetResp
 
 frameworkErrorHandler valueOrFe = case valueOrFe of
   Left fe -> throwError $ err500 {errBody = BSL.fromStrict $ prettyPrintJSON fe}
@@ -169,6 +172,7 @@ hydraServer appConfig =
         :<|> queryHeadlHandler appConfig
         :<|> queryProtocolParameterHandler appConfig
         :<|> queryStateHandler appConfig
+        :<|> getCommitsHandler appConfig
 
 initHandler :: AppConfig -> Maybe Bool -> Handler (Union UVerbResponseTypes)
 initHandler appConfig wait = do
@@ -182,10 +186,8 @@ abortHandler appConfig wait = do
 
 queryHeadlHandler :: AppConfig -> Handler (Union UVerbResponseTypes)
 queryHeadlHandler appConfig=do
-    response<- liftIO $ do 
-      fetcher <-  fetch appConfig
-      fetcher "head"
-    hydraErrorHandler (response,200)
+    response <- liftIO $ getHead appConfig
+    hydraErrorHandler ( T.decodeUtf8 ( BSL.toStrict response),200)
 
 queryUtxoHandler :: AppConfig -> [T.Text] -> [T.Text] -> Handler (Union UVerbResponseTypes)
 queryUtxoHandler appConfig address txin = do
@@ -208,6 +210,15 @@ commitHandler appConfig submit commits = do
   commitResult <- liftIO $ commitUTxO appConfig commits.utxos (signKey commits) (fromMaybe False submit)
   commitResultToJSON <- liftIO $ eitherObjectToJSON commitResult
   frameworkErrorHandler commitResultToJSON
+
+
+getCommitsHandler :: AppConfig ->  Handler (Union UVerbResponseTypes)
+getCommitsHandler appConfig  = do
+  commitsResult <- liftIO $ getCommits appConfig
+  let result = case A.eitherDecode commitsResult of
+                  Left err ->  Left $ FrameworkError ParserError ( BS8L.unpack commitsResult)
+                  Right (v ::  A.Value) -> Right v
+  frameworkErrorHandler result
 
 decommitHandler :: AppConfig -> Maybe Bool -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
 decommitHandler appConfig submit wait decommits = do

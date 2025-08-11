@@ -30,22 +30,23 @@ import Data.Text.Encoding
 import qualified Data.Text.Encoding as T
 import qualified Debug.Trace as Debug
 import Websocket.Forwarder
-import Websocket.SocketConnection (AppConfig, fetch, post, validateLatestWebsocketTag)
+import Websocket.SocketConnection (AppConfig, fetch, validateLatestWebsocketTag, getSnapshotUtxo, getProtocolParameters, getSnapshotUtxo', postDecommit')
 import Websocket.Utils
 import qualified Data.Text.IO as T
 import Websocket.Aeson (HydraProtocolParameters(..), ProtocolVersion(..))
+import Network.HTTP.Client.Conduit (Response(responseStatus, responseBody))
+import Network.HTTP.Types (Status(statusCode))
+import qualified Data.ByteString.Lazy.Char8 as BSL8
 
 
 handleHydraDecommitTx :: AppConfig -> [TxIn] -> Maybe (SigningKey PaymentKey) -> Bool -> Bool -> IO (Either FrameworkError A.Value)
 handleHydraDecommitTx appConfig utxosToDecommit sk wait submit = do
-  allUTxOsText <- fetch appConfig >>= \query -> query (T.pack "snapshot/utxo")
-  putStrLn "Beginning the work"
-  let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe (UTxO ConwayEra)
-  putStrLn "utxoText :" <> T.putStrLn allUTxOsText
+  allUTxOsText <-  getSnapshotUtxo appConfig
+  let allHydraUTxOs = decode allUTxOsText :: Maybe (UTxO ConwayEra)
   case allHydraUTxOs of
     Nothing -> return $ Left $ FrameworkError ParserError "buildHydraDecommitTx: Error parsing Hydra UTxOs"
     Just hydraUTxOs -> do
-          let hydraTxIns = (M.keys ( unUTxO hydraUTxOs))
+          let hydraTxIns = M.keys ( unUTxO hydraUTxOs)
           let notMissing = utxosToDecommit `isSubsetOf` hydraTxIns
           if not notMissing
             then
@@ -84,10 +85,8 @@ handleHydraDecommitTx appConfig utxosToDecommit sk wait submit = do
                       if submit
                         then do
                           putStrLn "Starting to decommit"
-                          decommitPostResponse <- post appConfig "decommit" decommitTxModalObject
-                          putStrLn "Decommit reponse"
-                          T.putStrLn decommitPostResponse
-                          if T.strip (T.filter (/= '"') decommitPostResponse) == "OK"
+                          decommitResponse <- postDecommit' appConfig (Just decommitTxModalObject)
+                          if statusCode ( responseStatus decommitResponse) `elem` [200,20]
                             then do
                               putStrLn "Validating websocket tag"
                               wsResult <- validateLatestWebsocketTag appConfig (generateResponseTag DeCommitUTxO) wait
@@ -96,14 +95,14 @@ handleHydraDecommitTx appConfig utxosToDecommit sk wait submit = do
                               return $
                                 Left $
                                   FrameworkError TxSubmissionError $
-                                    "submitHydraDecommitTx: Error submitting decommit transaction to Hydra: " ++ T.unpack decommitPostResponse
+                                    "submitHydraDecommitTx: Error submitting decommit transaction to Hydra: " ++ BSL8.unpack (responseBody decommitResponse)
                         else
                           pure $ bytestringToJSON $ A.encode decommitTxModalObject
 
 hydraProtocolParams :: AppConfig -> IO (Either FrameworkError HydraProtocolParameters)
 hydraProtocolParams appConfig = do
-  protocolParamText <- fetch appConfig >>= \query -> query (T.pack "protocol-parameters")
-  case A.eitherDecode (BSL.fromStrict $ encodeUtf8 protocolParamText) of
+  protocoalParams <- getProtocolParameters appConfig
+  case A.eitherDecode protocoalParams of
     Left err -> pure $ Left $ FrameworkError ParserError err
     Right (hpp :: HydraProtocolParameters) -> pure $ Right hpp
 
@@ -190,38 +189,40 @@ rawBuildHydraTx appConfig txb = do
 
 queryUTxO :: AppConfig -> [AddressInEra ConwayEra] -> [TxIn] -> IO (Either FrameworkError (UTxO ConwayEra))
 queryUTxO appConfig address txin = do
-  allUTxOsText <- fetch appConfig >>= \query -> query (T.pack "snapshot/utxo")
-  T.putStrLn $  allUTxOsText
-  let allHydraUTxOs = decode $ BSL.fromStrict (T.encodeUtf8 allUTxOsText) :: Maybe (UTxO ConwayEra)
-  case allHydraUTxOs of
-    Nothing -> return $ Left $ FrameworkError ParserError "queryUTxO: Error parsing Hydra UTxOs"
-    Just  (UTxO hydraUTxOs) -> do
-      let allHydraTxins = M.keys  hydraUTxOs
-      if not (null txin)
-      then do
-          let notMissing = txin `isSubsetOf` allHydraTxins
-          if notMissing
+  utxoResponse <- getSnapshotUtxo' appConfig
+  if 404 == statusCode (responseStatus utxoResponse)
+    then pure $ Right $ UTxO mempty
+    else do
+    let allHydraUTxOs = decode (responseBody utxoResponse) :: Maybe (UTxO ConwayEra)
+    case allHydraUTxOs of
+      Nothing -> return $ Left $ FrameworkError ParserError "queryUTxO: Error parsing Hydra UTxOs"
+      Just  (UTxO hydraUTxOs) -> do
+        let allHydraTxins = M.keys  hydraUTxOs
+        if not (null txin)
+        then do
+            let notMissing = txin `isSubsetOf` allHydraTxins
+            if notMissing
+              then
+                (
+                    let hydraTxInFilteredUTxOs = Map.filterWithKey (\k _ -> k `elem` txin) hydraUTxOs
+                        converted = UTxO hydraTxInFilteredUTxOs
+                    in
+                    pure $ pure converted
+                )
+              else return  $ Right $ UTxO mempty
+          -- Case: Addresses are provided
+          else if not (null address)
             then
-              ( 
-                  let hydraTxInFilteredUTxOs = Map.filterWithKey (\k _ -> k `elem` txin) hydraUTxOs
-                      converted = UTxO hydraTxInFilteredUTxOs
-                  in 
-                  pure $ pure converted
-              )
-            else return $ Left $ FrameworkError NodeQueryError "Some TxIns are missing in Hydra"
-        -- Case: Addresses are provided
-        else if not (null address)
-          then 
-            let hydraAddressFilteredUTxOs =
-                  M.filter
-                    ( \(TxOut addr _ _ _ ) -> addr `elem` address )
-                    hydraUTxOs
-                converted = UTxO hydraAddressFilteredUTxOs
-            in 
-              pure $  pure  converted
+              let hydraAddressFilteredUTxOs =
+                    M.filter
+                      ( \(TxOut addr _ _ _ ) -> addr `elem` address )
+                      hydraUTxOs
+                  converted = UTxO hydraAddressFilteredUTxOs
+              in
+                pure $  pure  converted
 
-          -- Fallback: Return all UTxOs parsed from Hydra response
-        else return $ pure $ UTxO hydraUTxOs
+            -- Fallback: Return all UTxOs parsed from Hydra response
+          else return $ pure $ UTxO hydraUTxOs
 
 toValidHydraTxBuilder :: AppConfig -> TxBuilder_ ConwayEra -> Bool -> IO (Either FrameworkError TxModal)
 toValidHydraTxBuilder appConfig txb submit = do
