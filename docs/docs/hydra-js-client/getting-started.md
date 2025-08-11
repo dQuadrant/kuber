@@ -71,13 +71,15 @@ For a quick setup, you can use the provided `docker-compose.yml` to run `kuber-h
 
 ## **3. Kuber Client**
 
-Example repository: [kuber-client-example](https://github.com/cardanoapi/kuber-client-example)
+Example repository: [kuber-client-example](https://github.com/sireto/kuber-client-js/tree/master/hydra-example)
+
+Test file: [hydra.test.ts](https://github.com/sireto/kuber-client-js/blob/master/__tests__/hydra.test.ts)
 
 ### Hydra Service Initialization
 
 Assuming that the hydra node is running and kuber-hdra server is started on localhost:8081, we can pass the host url to this class constructor to create the service:
 
 ```ts
-import { KuberHydraService } from "kuber-client/service/kuberHydraService";
+import { KuberHydraService } from "kuber-client";
 
 const hydraService = new KuberHydraService("http://localhost:8081");
