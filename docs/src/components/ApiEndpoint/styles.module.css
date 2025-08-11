@@ -1,0 +1,97 @@
+.apiEndpoint {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  background-color: #f7f7f7;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.header:hover {
+  background-color: #f0f0f0;
+}
+
+.method {
+  font-weight: bold;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 5px;
+  margin-right: 15px;
+  min-width: 70px;
+  text-align: center;
+}
+
+.methodGet {
+  background-color: #4CAF50; /* Green */
+}
+
+.methodPost {
+  background-color: #2196F3; /* Blue */
+}
+
+.methodPut {
+  background-color: #FFC107; /* Amber */
+}
+
+.methodDelete {
+  background-color: #F44336; /* Red */
+}
+
+.path {
+  font-family: 'Courier New', Courier, monospace;
+  color: #333;
+  flex-grow: 1; /* Allow path to take available space */
+  font-size: 1.1em;
+}
+
+.title {
+  font-weight: bold;
+  color: #555;
+  margin-left: 15px; /* Space between path and title */
+}
+
+.arrow {
+  margin-left: auto; /* Push arrow to the far right */
+  transition: transform 0.3s ease;
+}
+
+.arrowOpen {
+  transform: rotate(90deg);
+}
+
+.content {
+  padding: 20px;
+  border-top: 1px solid #eee;
+  background-color: #fff;
+}
+
+.content h4 {
+  margin-top: 15px;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.content ul {
+  list-style-type: none;
+  padding-left: 0;
+}
+
+.content li {
+  margin-bottom: 5px;
+  line-height: 1.5;
+}
+
+.content code {
+  background-color: #f0f0f0;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-family: 'Courier New', Courier, monospace;
+}

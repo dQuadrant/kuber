@@ -15,12 +15,22 @@ const sidebars: SidebarsConfig = {
   architecture: [
     {
       type: "doc",
+      id: "hydra_feature_analysis", // Document ID
+      label: "🔍 Hydra Analysis",
+    },
+    {
+      type: "doc",
+      id: "milestones", // Document ID
+      label: "🗓️ Planning",
+    },
+    {
+      type: "doc",
       id: "architecture", // Document ID
-      label: "Architecture",
+      label: "🏗️ Architecture",
     },
     {
       type: "category",
-      label: "Detailed Sequence Diagrams", // Category label
+      label: "📊 Detailed Sequence Diagrams", // Category label
       collapsed: false, // This makes the category open by default
 
       items: [
@@ -56,76 +66,6 @@ const sidebars: SidebarsConfig = {
           type: "doc",
           id: "sequenceDiagrams/fanout_head", // Document ID for a sub-doc
         },
-
-        // {
-        //   type: "doc",
-        //   id: "sequenceDiagramB", // Document ID for another sub-doc
-        //   label: "Sequence Diagram B",
-        // },
-        // {
-        //   type: "doc",
-        //   id: "sequenceDiagramC", // Document ID for another sub-doc
-        //   label: "Sequence Diagram C",
-        // },
-      ],
-    },
-  ],
-  scenarioTests: [
-    {
-      type: "doc",
-      id: "hydra_feature_analysis", // Document ID
-      label: "Hydra Analysis",
-    },
-  ],
-  tutorial: [
-    {
-      type: "category",
-      label: "Tutorial",
-      collapsed: false,
-      items: [
-        {
-          type: "doc",
-          id: "tutorial",
-        },
-        {
-          type: "doc",
-          id: "tutorials/initialize_head",
-        },
-        {
-          type: "doc",
-          id: "tutorials/commit_utxos",
-        },
-        {
-          type: "category",
-          label: "Queries",
-          collapsed: false,
-          items: [
-            {
-              type: "doc",
-              id: "tutorials/query/head_state",
-            },
-            {
-              type: "doc",
-              id: "tutorials/query/protocol_params",
-            },
-            {
-              type: "doc",
-              id: "tutorials/query/utxos",
-            },
-          ],
-        },
-        {
-          type: "doc",
-          id: "tutorials/build_tx",
-        },
-        {
-          type: "doc",
-          id: "tutorials/close_head",
-        },
-        {
-          type: "doc",
-          id: "tutorials/fanout",
-        },
       ],
     },
   ],
@@ -133,11 +73,21 @@ const sidebars: SidebarsConfig = {
     {
       type: "doc",
       id: "hydra-js-client/installation",
-      label: "Installation & Quick Start",
+      label: "🚀 Installation & Quick Start",
     },
     {
       type: "category",
-      label: "KuberHydraApiProvider",
+      label: "📚 Full Examples",
+      collapsed: false,
+      items: [
+        "hydra-js-client/examples/working-with-wallets",
+        "hydra-js-client/examples/commiting-utxos-to-hydra",
+        "hydra-js-client/examples/submitting-hydra-transactions",
+      ],
+    },
+    {
+      type: "category",
+      label: "🛠️ Hydra Provider Reference",
       collapsed: false,
       items: [
         {
@@ -175,12 +125,15 @@ const sidebars: SidebarsConfig = {
         },
       ],
     },
-  ],
-  milestones: [
     {
       type: "doc",
-      id: "milestones", // Document ID
-      label: "Milestones",
+      id: "kuber-hydra-api-reference",
+      label: "⚙️🐲 Kuber-Hydra API Reference",
+    },
+    {
+      type: "doc",
+      id: "kuber-api-reference",
+      label: "⚙️🐭 Kuber API Reference",
     },
   ],
 };

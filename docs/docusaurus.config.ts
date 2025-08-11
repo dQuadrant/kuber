@@ -59,24 +59,6 @@ const config: Config = {
         },
         {
           type: "docSidebar",
-          sidebarId: "scenarioTests",
-          position: "left",
-          label: "Hydra Analysis",
-        },
-        {
-          type: "docSidebar",
-          sidebarId: "milestones",
-          position: "left",
-          label: "Planning",
-        },
-        {
-          type: "docSidebar",
-          sidebarId: "tutorial",
-          position: "left",
-          label: "Tutorial",
-        },
-        {
-          type: "docSidebar",
           sidebarId: "hydraJsClient",
           position: "left",
           label: "Hydra JS Client",
