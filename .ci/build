@@ -70,7 +70,7 @@ if [[ "$1" == cabal* ]] ; then
     execute-isolated "$@" # execute the cabal command
 else
     ## default build
-    execute-isolated 'cabal build exe:kuber-server && bash -e ./.ci/copy-libraries.sh'
+    execute-isolated 'cabal build exe:kuber-server exe:kuber-hydra  && bash -e ./.ci/copy-libraries.sh'
 
     ## build  final docker image. by determining the git revision or passing the arguments to docker command.
 

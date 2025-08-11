@@ -1,3 +1,42 @@
+## v4.0.0-rc1 : Hydra Integration
+This release introduces **kuber-hydra**, a dedicated module that adds full Hydra head
+support to Kuber.  The new module exposes a set of **command** and **query** APIs for
+**committing**, **decommitting**, **closing**, **fan‑out**, **contesting**, and **querying** the state of a
+Hydra head, along with a **transaction‑builder** helper and APIs.
+
+**Note :** `kuber-hydra` executable additionally exposes all layer1 endpoints making it versatile for both hydra and l1 interaction.
+
+##### DependsOn
+- cardano-api:10.1
+
+##### Tested with
+- hydra-node:0.22.0-65b4c1201e7533d4269d42e2ca1c8b53f999454f
+
+### Changes: kuber-hydra
+- Added new module `kuber-hydra` with:
+  - **Command endpoints** under `/api/hydra`:
+    - **POST** /hydra/init
+    - **POST** /hydra/abort
+    - **POST** /hydra/commit
+    - **POST** /hydra/decommit
+    - **POST** /hydra/close
+    - **POST** /hydra/contest
+    - **POST** /hydra/fanout
+    - **POST** /hydra/tx
+    - **POST** /hydra/submit
+  - **Query endpoints** under `/api/hydra/query`:
+    - **GET** /hydra/query/utxo
+    - **GET** /hydra/query/head
+    - **GET** /hydra/query/protocol-parameters
+    - **GET** /hydra/query/state
+    - **GET** /hydra/query/commits
+- Implemented a Hydra transaction‑builder that:
+  - Selects inputs/outputs
+  - Handles optional signing keys
+  - Filters UTxOs by txin and address
+- Updated Hydra‑specific documentation and added sequence diagrams illustrating
+  typical Hydra head interactions.
+
 ## v3.1.2 : Upgrade cardano-api to 10.x
 
 ### Changes
@@ -86,4 +125,3 @@ This stable release supports adds full support for new conway governance feature
 - `TxBuilder`  is now parametrized on `era` suppporting `Babbage` and `Conway` eras, with `IsTxBuilderEra` constraint.
 - Kuber Offchain code required Local Node Socket. **WIP** support running kuber code by connecting to kuber server
 - Remove `ChainConnectInfo`and related classes.  Instead, use `LocalNodeConnectInfo CardanoMode` directly.
-
