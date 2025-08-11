@@ -19,7 +19,7 @@ This example demonstrates how to set up a `Cip30ShelleyWallet` and use it to sig
 import { readFileSync } from "fs";
 import { loadCrypto, Ed25519Key, Value } from "libcardano";
 import { ShelleyWallet, Cip30ShelleyWallet } from "libcardano-wallet";
-import { KuberHydraApiProvider } from "../../../src/service/KuberHydraApiProvider"; // Adjust path as needed
+import { KuberHydraApiProvider } from "kuber-client"; // Adjust path as needed
 import { UTxO } from "libcardano/cardano/serialization";
 
 async function runCip30CommitExample() {

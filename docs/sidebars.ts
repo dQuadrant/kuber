@@ -72,8 +72,13 @@ const sidebars: SidebarsConfig = {
   hydraJsClient: [
     {
       type: "doc",
+      id: "hydra-js-client/getting-started",
+      label: "🚀 Setting Up",
+    },
+    {
+      type: "doc",
       id: "hydra-js-client/installation",
-      label: "🚀 Installation & Quick Start",
+      label: "📦 Start Developing",
     },
     {
       type: "category",

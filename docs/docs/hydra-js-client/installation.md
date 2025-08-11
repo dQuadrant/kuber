@@ -1,4 +1,4 @@
-# Installation and Quick Start
+# Start developing
 
 ## Installation
 
