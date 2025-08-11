@@ -1,3 +1,4 @@
+import React from "react";
 import clsx from "clsx";
 import Link from "@docusaurus/Link";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
@@ -19,15 +20,15 @@ function HomepageHeader() {
         <div className={styles.buttons} style={{ display: 'flex', gap: '16px' }}>
           <Link
             className="button button--secondary button--lg"
-            to="/docs/architecture"
-          >
-            Architecture
-          </Link>
-          <Link
-            className="button button--secondary button--lg"
             to="/docs/hydra_feature_analysis"
           >
             Scenario Tests
+          </Link>
+          <Link
+            className="button button--secondary button--lg"
+            to="/docs/architecture"
+          >
+            Architecture
           </Link>
           <Link
             className="button button--secondary button--lg"
@@ -37,9 +38,9 @@ function HomepageHeader() {
           </Link>
           <Link
             className="button button--secondary button--lg"
-            to="/docs/tutorial"
+            to="/docs/hydra-js-client/getting-started"
           >
-            Tutorial
+            Getting Started
           </Link>
         </div>
 
