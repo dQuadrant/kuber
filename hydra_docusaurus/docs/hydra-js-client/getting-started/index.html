@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="generator" content="Docusaurus v3.8.0">
 <title data-rh="true">Setting Up | Kuber-Hydra</title><meta data-rh="true" name="viewport" content="width=device-width,initial-scale=1"><meta data-rh="true" name="twitter:card" content="summary_large_image"><meta data-rh="true" property="og:image" content="https://cadanoapi.github.io/kuber/hydra_docusaurus/img/docusaurus-social-card.jpg"><meta data-rh="true" name="twitter:image" content="https://cadanoapi.github.io/kuber/hydra_docusaurus/img/docusaurus-social-card.jpg"><meta data-rh="true" property="og:url" content="https://cadanoapi.github.io/kuber/hydra_docusaurus/docs/hydra-js-client/getting-started"><meta data-rh="true" property="og:locale" content="en"><meta data-rh="true" name="docusaurus_locale" content="en"><meta data-rh="true" name="docsearch:language" content="en"><meta data-rh="true" name="docusaurus_version" content="current"><meta data-rh="true" name="docusaurus_tag" content="docs-default-current"><meta data-rh="true" name="docsearch:version" content="current"><meta data-rh="true" name="docsearch:docusaurus_tag" content="docs-default-current"><meta data-rh="true" property="og:title" content="Setting Up | Kuber-Hydra"><meta data-rh="true" name="description" content="This guide walks through the steps to set up and run a Hydra Head using the kuber-hydra relay server. We’ll demonstrate the process using two Hydra nodes—Alice and Bob—on the Cardano testnet."><meta data-rh="true" property="og:description" content="This guide walks through the steps to set up and run a Hydra Head using the kuber-hydra relay server. We’ll demonstrate the process using two Hydra nodes—Alice and Bob—on the Cardano testnet."><link data-rh="true" rel="icon" href="/kuber/hydra_docusaurus/img/favicon.ico"><link data-rh="true" rel="canonical" href="https://cadanoapi.github.io/kuber/hydra_docusaurus/docs/hydra-js-client/getting-started"><link data-rh="true" rel="alternate" href="https://cadanoapi.github.io/kuber/hydra_docusaurus/docs/hydra-js-client/getting-started" hreflang="en"><link data-rh="true" rel="alternate" href="https://cadanoapi.github.io/kuber/hydra_docusaurus/docs/hydra-js-client/getting-started" hreflang="x-default"><script data-rh="true" type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"🚀 Setting Up","item":"https://cadanoapi.github.io/kuber/hydra_docusaurus/docs/hydra-js-client/getting-started"}]}</script><link rel="stylesheet" href="/kuber/hydra_docusaurus/assets/css/styles.db6454c9.css">
-<script src="/kuber/hydra_docusaurus/assets/js/runtime~main.548b833a.js" defer="defer"></script>
+<script src="/kuber/hydra_docusaurus/assets/js/runtime~main.0108984a.js" defer="defer"></script>
 <script src="/kuber/hydra_docusaurus/assets/js/main.473a7dbf.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -28,32 +28,19 @@
 </ul>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="configuration"><strong>Configuration</strong><a href="#configuration" class="hash-link" aria-label="Direct link to configuration" title="Direct link to configuration">​</a></h3>
 <p>You can run <code>kuber-hydra</code> either directly or using Docker.</p>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="option-1-running-natively"><strong>Option 1: Running Natively</strong><a href="#option-1-running-natively" class="hash-link" aria-label="Direct link to option-1-running-natively" title="Direct link to option-1-running-natively">​</a></h4>
-<p>To run <code>kuber-hydra</code> natively, you need to set the required environment variables and then run the application using <code>cabal</code>.</p>
-<ol>
-<li>
-<p><strong>Set Environment Variables (Required):</strong>
-Before running, you must set the following environment variables:</p>
-<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#393A34"><span class="token plain">export CARDANO_NODE_SOCKET_PATH=/path/to/cardano-node/preview/node.socket</span><br></span><span class="token-line" style="color:#393A34"><span class="token plain">export NETWORK=2</span><br></span></code></pre></div></div>
+<h4 class="anchor anchorWithStickyNavbar_LWe7" id="with-cabal"><strong>With cabal</strong><a href="#with-cabal" class="hash-link" aria-label="Direct link to with-cabal" title="Direct link to with-cabal">​</a></h4>
+<p>To run <code>kuber-hydra</code> with cabal, you need to set the required environment variables and then run the application.</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#393A34"><span class="token plain">export CARDANO_NODE_SOCKET_PATH=/path/to/cardano-node/preview/node.socket</span><br></span><span class="token-line" style="color:#393A34"><span class="token plain">export NETWORK=preview</span><br></span><span class="token-line" style="color:#393A34"><span class="token plain">cd kuber-hydra</span><br></span><span class="token-line" style="color:#393A34"><span class="token plain">cabal run kuber-hydra -- --hydra-url ws://172.16.238.10:4001 --port 8081</span><br></span></code></pre></div></div>
 <ul>
 <li><code>CARDANO_NODE_SOCKET_PATH</code>: The path to your Cardano node socket.</li>
-<li><code>NETWORK</code>: The Cardano network ID (e.g., <code>2</code> for Preview testnet). This is a <strong>required</strong> environment variable.</li>
-</ul>
-</li>
-<li>
-<p><strong>Run <code>kuber-hydra</code>:</strong>
-Navigate to the <code>kuber-hydra</code> directory and run the application using <code>cabal</code>:</p>
-<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#393A34"><span class="token plain">cd kuber-hydra</span><br></span><span class="token-line" style="color:#393A34"><span class="token plain">cabal run kuber-hydra -- --hydra-url ws://172.16.238.10:4001 --port 8081</span><br></span></code></pre></div></div>
-<ul>
+<li><code>NETWORK</code>: The Cardano network ID (e.g., <code>mainnet</code>, <code>preview</code>, <code>preprod</code>, or a <code>network_magic</code> number). This is a <strong>required</strong> environment variable.</li>
 <li><code>--hydra-url</code>: The WebSocket URL of your Hydra node. This is a <strong>required</strong> command-line argument.</li>
 <li><code>--port</code>: The port for the Kuber-Hydra relay server. If not specified, it defaults to <code>8081</code>.</li>
 </ul>
-</li>
-</ol>
 <blockquote>
 <p>The Kuber-Hydra relay API will be accessible at <code>http://localhost:8081</code>.</p>
 </blockquote>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="option-2-running-with-docker-recommended-for-quick-setup"><strong>Option 2: Running with Docker (Recommended for quick setup)</strong><a href="#option-2-running-with-docker-recommended-for-quick-setup" class="hash-link" aria-label="Direct link to option-2-running-with-docker-recommended-for-quick-setup" title="Direct link to option-2-running-with-docker-recommended-for-quick-setup">​</a></h4>
+<h4 class="anchor anchorWithStickyNavbar_LWe7" id="with-docker"><strong>With Docker</strong><a href="#with-docker" class="hash-link" aria-label="Direct link to with-docker" title="Direct link to with-docker">​</a></h4>
 <p>For a quick setup, you can use the provided <code>docker-compose.yml</code> to run <code>kuber-hydra</code> along with a Cardano node and Hydra node.</p>
 <ol>
 <li>
