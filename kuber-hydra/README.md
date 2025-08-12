@@ -6,27 +6,20 @@
 
 ## Running Kuber-Hydra
 
-### Natively
+### With cabal
 
-To run `kuber-hydra` natively, you need to set the required environment variables and then run the application using `cabal`.
+To run `kuber-hydra` with cabal, you need to set the required environment variables and then run the application.
 
-1.  **Set Environment Variables (Required):**
-    Before running, you must set the following environment variables:
-    ```bash
-    export CARDANO_NODE_SOCKET_PATH=/path/to/cardano-node/preview/node.socket
-    export NETWORK=2
-    ```
-    -   `CARDANO_NODE_SOCKET_PATH`: The path to your Cardano node socket.
-    -   `NETWORK`: The Cardano network ID (e.g., `2` for Preview testnet). This is a **required** environment variable.
-
-2.  **Run `kuber-hydra`:**
-    Navigate to the `kuber-hydra` directory and run the application using `cabal`:
-    ```bash
-    cd kuber-hydra
-    cabal run kuber-hydra -- --hydra-url ws://172.16.238.10:4001 --port 8081
-    ```
-    -   `--hydra-url`: The WebSocket URL of your Hydra node. This is a **required** command-line argument.
-    -   `--port`: The port for the Kuber-Hydra relay server. If not specified, it defaults to `8081`.
+```bash
+export CARDANO_NODE_SOCKET_PATH=/path/to/cardano-node/preview/node.socket
+export NETWORK=preview
+cd kuber-hydra
+cabal run kuber-hydra -- --hydra-url ws://172.16.238.10:4001 --port 8081
+```
+-   `CARDANO_NODE_SOCKET_PATH`: The path to your Cardano node socket.
+-   `NETWORK`: The Cardano network ID (e.g., `mainnet`, `preview`, `preprod`, or a `network_magic` number). This is a **required** environment variable.
+-   `--hydra-url`: The WebSocket URL of your Hydra node. This is a **required** command-line argument.
+-   `--port`: The port for the Kuber-Hydra relay server. If not specified, it defaults to `8081`.
 
 ### With Docker
 
