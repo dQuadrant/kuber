@@ -4,6 +4,10 @@
 - [Architecture](https://dquadrant.github.io/kuber/hydra_docusaurus/docs/architecture)
 - [Getting Started with Kuber-Hydra](https://dquadrant.github.io/kuber/hydra_docusaurus/docs/hydra-js-client/getting-started)
 
+
+### Tests:
+ - [✅ Passing](https://dquadrant.github.io/kuber/test-reports/hydra/) on v4.0.0
+
 ## Running Kuber-Hydra
 
 ### With cabal

@@ -34,7 +34,8 @@ async function main() {
   try {
     console.log("Submitting transaction...");
     const result = await hydra.submitTx(signedCborTx);
-    console.log("Transaction submitted:", result);
+    console.log("Transaction submitted. Hash:", result.hash);
+    console.log("CBOR Hex:", result.cborHex);
   } catch (error) {
     console.error("Error submitting transaction:", error);
   }

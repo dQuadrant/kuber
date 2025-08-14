@@ -1,11 +1,11 @@
 ---
-sidebar_position: 3
-sidebar_label: Building and Submitting TXs
+sidebar_position: 4
+sidebar_label: Minting Native Tokens
 ---
 
-#  Building and Submitting TXs
+# Minting Native Tokens
 
-This guide demonstrates how to build and submit transactions within an open Hydra Head using the cip30 interface and `KuberHydraApiProvider`.
+This guide demonstrates how to mint native tokens within an open Hydra Head using the cip30 interface and `KuberHydraApiProvider`.
 
 ## Prerequisites
 
@@ -13,23 +13,21 @@ This guide demonstrates how to build and submit transactions within an open Hydr
 - `libcardano` and `libcardano-wallet` installed.
 - An active Hydra Head (in "Open" state).
 - A configured `KuberHydraApiProvider` instance.
+- A minting policy script and its corresponding key hash.
 
-##### Transaction builder
-R efer to the [KuberIDE TxBuilder Object Reference](https://kuberide.com/kuber/docs/tx-builder-reference) for details of all transaction builder properties.
-
-This example demonstrates how to build and submit a simple transaction (sending Lovelace to an address) within an open Hydra Head using the `KuberHydraApiProvider` and a CIP-30 compatible wallet.
+This example demonstrates how to build and submit a transaction that mints native tokens within an open Hydra Head.
 
 ```typescript
-import { KuberHydraApiProvider } from "kuber-client"; // Adjust path as needed
-import { Value,Ed25519Key ,loadCrypto } from "libcardano";
+import { KuberHydraApiProvider } from "kuber-client";
+import { Value, Ed25519Key, loadCrypto } from "libcardano";
 import { ShelleyWallet, Cip30ShelleyWallet } from "libcardano-wallet";
 import { readFileSync } from "fs";
 
-async function runBuildAndSubmitTransactionExample() {
+async function runMintNativeTokensExample() {
   // Initialize Hydra API Provider (replace with your Hydra node URL)
   const hydra = new KuberHydraApiProvider("http://172.31.6.1:8082");
 
-  // Load test wallet signing key
+  // Load test wallet signing key (used for signing the transaction)
   const testWalletSigningKey = await Ed25519Key.fromCardanoCliJson(
     JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
   );
@@ -48,30 +46,38 @@ async function runBuildAndSubmitTransactionExample() {
     console.log("Head is not in 'Open' state. Please ensure it's in 'Open' state before running this example.");
     return;
   }
-  console.log("Hydra Head is Open. Proceeding with transaction.");
+  console.log("Hydra Head is Open. Proceeding with minting transaction.");
 
-  // Define the transaction outputs
+  // Define the minting transaction
   // For a comprehensive reference on transaction builder fields, refer to:
   // https://kuberide.com/kuber/docs/tx-builder-reference
-  const txBuilder = {
-    outputs: [{ address: walletAddress, value: "3_000_000" } }], // Sending 3 ADA
+  const mintingTransaction = {
+    mint: [
+      {
+        script: {
+          type: "sig",
+          keyHash: shelleyWallet.paymentKey.pkh.toString('hex'), 
+        },
+        amount: {
+          Token1: 2,
+        },
+      },
+    ],
     changeAddress: walletAddress,
   };
 
   try {
-    // Use the buildAndSubmitWithWallet function from KuberProvider
-    const submitResult = await hydra.buildAndSubmitWithWallet(cip30Wallet, txBuilder);
-    console.log("Transaction submitted to Hydra Head. Hash:", submitResult.hash);
-    console.log("CBOR Hex:", submitResult.cborHex);
-
+    // Use the buildAndSubmitWithWallet function from KuberProvider to mint tokens
+    const mintResult = await hydra.buildAndSubmitWithWallet(cip30Wallet, mintingTransaction);
+    console.log("Minting transaction submitted to Hydra Head. Hash:", mintResult.hash);
+    console.log("CBOR Hex:", mintResult.cborHex);
   } catch (error: unknown) {
     if (error instanceof Error) {
-      console.error("Error building or submitting transaction:", error.message);
+      console.error("Error building or submitting minting transaction:", error.message);
     } else {
       console.error("An unknown error occurred:", error);
     }
   }
 }
 
-runBuildAndSubmitTransactionExample();
-```
+runMintNativeTokensExample();

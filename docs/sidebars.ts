@@ -88,6 +88,7 @@ const sidebars: SidebarsConfig = {
         "hydra-js-client/examples/working-with-wallets",
         "hydra-js-client/examples/commiting-utxos-to-hydra",
         "hydra-js-client/examples/submitting-hydra-transactions",
+        "hydra-js-client/examples/minting-native-tokens",
       ],
     },
     {
