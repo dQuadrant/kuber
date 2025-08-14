@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hydra Test Reports</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: #222;
+        }
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            background-color: #f0fff0; /* Lighter green container */
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #006400; /* Dark green for title */
+            margin-bottom: 40px;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+        }
+        li {
+            width: 80%;
+        }
+        .report-box {
+            display: flex; /* Use flexbox for alignment */
+            justify-content: space-between; /* Space between text and icon */
+            align-items: center; /* Vertically align items */
+            padding: 20px;
+            border: 1px solid #a3d9a3; /* Greenish border */
+            border-radius: 5px;
+            text-decoration: none;
+            color: #008000; /* Green text */
+            font-size: 1.2em;
+            font-weight: bold;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            background-color: #d4edda; /* Light green box background */
+        }
+        .report-box:hover {
+            background-color: #c3e6cb; /* Darker green on hover */
+            transform: translateY(-3px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        .report-icon {
+            font-size: 1.5em;
+            color: #28a745; /* Green color for the icon */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Hydra Test Reports</h1>
+        <ul>
+            <li><a href="reports-initial/index.html" class="report-box"><span>Initial Head</span> <span class="report-icon">✓</span></a></li>
+            <li><a href="reports-open/index.html" class="report-box"><span>Open Head</span> <span class="report-icon">✓</span></a></li>
+            <li><a href="reports-closed/index.html" class="report-box"><span>Closed Head</span> <span class="report-icon">✓</span></a></li>
+        </ul>
+    </div>
+</body>
+</html>
