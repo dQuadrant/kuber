@@ -10,7 +10,7 @@ async buildTx(tx: any, submit: boolean = false): Promise<CommonTxObject>
 
 ## Parameters
 
-- `tx`: An object representing the transaction to be built. This object should conform to the expected transaction structure for Hydra.
+- `tx`: An object representing the transaction to be built. This object should conform to the expected transaction structure for Hydra. For a comprehensive reference on transaction builder fields and their usage, please refer to the [KuberIDE TxBuilder Object Reference](https://kuberide.com/kuber/docs/tx-builder-reference).
 - `submit`: An optional `boolean` indicating whether to submit the transaction to the head. Defaults to `false`.
 
 ## Returns
