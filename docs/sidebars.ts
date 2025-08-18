@@ -99,7 +99,7 @@ const sidebars: SidebarsConfig = {
         {
           type: "category",
           label: "Query APIs",
-          collapsed: false,
+          collapsed: true,
           items: [
             "hydra-js-client/queryUtxo",
             "hydra-js-client/queryProtocolParameters",
@@ -109,7 +109,7 @@ const sidebars: SidebarsConfig = {
         {
           type: "category",
           label: "Command APIs",
-          collapsed: false,
+          collapsed: true,
           items: [
             "hydra-js-client/initialize",
             "hydra-js-client/close",
@@ -123,10 +123,22 @@ const sidebars: SidebarsConfig = {
         {
           type: "category",
           label: "Transaction APIs",
-          collapsed: false,
+          collapsed: true,
           items: [
             "hydra-js-client/buildTx",
             "hydra-js-client/submitTx",
+          ],
+        },
+        {
+          type: "category",
+          label: "Common Kuber functions",
+          collapsed: true,
+          items: [
+            "hydra-js-client/kuber-provider/buildWithWallet",
+            "hydra-js-client/kuber-provider/buildAndSignWithWallet",
+            "hydra-js-client/kuber-provider/buildAndSubmitWithWallet",
+            "hydra-js-client/kuber-provider/waitForUtxoConsumption",
+            "hydra-js-client/kuber-provider/waitForTxConfirmation",
           ],
         },
       ],
