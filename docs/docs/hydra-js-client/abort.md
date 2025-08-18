@@ -5,7 +5,7 @@
 ## Function Signature
 
 ```typescript
-async abort(wait: boolean = false): Promise<any>
+async abort(wait: boolean = false): Promise<any>;
 ```
 
 ## Parameters

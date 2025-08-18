@@ -20,6 +20,8 @@ This example demonstrates how to build and submit a transaction that mints nativ
 ```typescript
 import { KuberHydraApiProvider } from "kuber-client";
 import { Value, Ed25519Key, loadCrypto } from "libcardano";
+import { parseTransaction } from 'libcardano/cardano/serialization';
+
 import { ShelleyWallet, Cip30ShelleyWallet } from "libcardano-wallet";
 import { readFileSync } from "fs";
 
