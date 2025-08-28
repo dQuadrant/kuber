@@ -1,6 +1,33 @@
+## v4.0.0 : Revamp Docs, Hydra features
+This release includes all changes from `v4.0.0-rc1` and the following updates:
+### Fixes
+- Refactors and fixes decommit API endpints 
+
+### Changes 
+- Revamp docs section
+- Update docs for decommit
+- Add yarn doc:validate command
+- Add common kuber functions
+- Add tx-builder reference to buildTx reference
+- Fix kube-hydra link in Readme
+- Improve getting started section
+- Fix kuber-client link in docs
+- Fix navigation in docs
+- Update Readme, Refactor docs
+
+
+##### Libraries
+- cardano-api:10.1
+- [kuber-client:v3.3.5](https://www.npmjs.com/package/kuber-client/v/3.3.5)
+
+
+##### Tested with
+- hydra-node:0.22.4-d505ff119c4bc62f008b6fcff3416cffc3d6df5b
+
+
 ## v4.0.0-rc1 : Hydra Integration
 This release introduces **kuber-hydra**, a dedicated module that adds full Hydra head
-support to Kuber.  The new module exposes a set of **command** and **query** APIs for
+support to Kuber. The new module exposes a set of **command** and **query** APIs for
 **committing**, **decommitting**, **closing**, **fan‑out**, **contesting**, and **querying** the state of a
 Hydra head, along with a **transaction‑builder** helper and APIs.
 
@@ -65,7 +92,7 @@ This stable release supports adds full support for new conway governance feature
   - `proposal.executionUnits`
   - `certificates.deposit`
 
-### Fixes 
+### Fixes
 - Fix catchError function on Unhandled error
 - Add exception handler on txSubmission
 - Use FrameworkError explicitly to improve error handling
@@ -76,14 +103,14 @@ This stable release supports adds full support for new conway governance feature
 - fix utxoModal parsing problem
 
 #### Known Issues:
--  **(lib:kuber)**  : `Kontract` will omit following fields when using `RemoteKuberConnection` :  **\$.proposal[s]**, **\$.votes[s]** or **\$.certificate[s]**
+-  **(lib:kuber)**  : `Kontract` will omit following fields when using `RemoteKuberConnection` :  **$.proposal[s]**, **$.votes[s]** or **$.certificate[s]**
 
 #### Litmiations:
  - voting with script key is not supported
 
 
 ## v3.0.0-rc2 : Tx build bug fix , Add tests
-- Fix Bug : Server got irresponsive after requesting `/api/v1/tx` with plutus included transaction 
+- Fix Bug : Server got irresponsive after requesting `/api/v1/tx` with plutus included transaction
 - Add tests to validate that the kuber apis are working via LocalNode Socket connection.
 
 #### Known Issues:

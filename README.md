@@ -14,6 +14,11 @@ OpenSource Kuber playground is [here](https://github.com/dquadrant/kuber-playgro
  - [Kuber Haskel Library](https://dquadrant.github.io/kuber/haskell_library/)
  - [Kuber-Hydra](https://dquadrant.github.io/kuber/hydra_docusaurus/docs/hydra-js-client/getting-started)
 
+
+ ## Client library
+ - [kuber-client:v3.3.5](https://www.npmjs.com/package/kuber-client/v/3.3.5)
+
+
 ## IDE
  Official IDE with Plutus compilation support is available at [kuberide.com/ide](https://kuberide.com/kuber/login/?state=\%2fide)
 
