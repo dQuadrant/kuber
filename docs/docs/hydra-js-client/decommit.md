@@ -5,18 +5,17 @@
 ## Function Signature
 
 ```typescript
-async decommit(utxos: Commit, wait: boolean = false, submit: boolean = false): Promise<any>
+async decommit(tx: HexString, wait: boolean = false): Promise<DecommitResult>
 ```
 
 ## Parameters
 
-- `utxos`: A `Commit` object specifying the UTxOs to be decommitted.
+- `tx`: A `HexString` representing the CBOR-encoded transaction to be decommitted.
 - `wait`: An optional `boolean` indicating whether to wait for the decommit to complete. Defaults to `false`.
-- `submit`: An optional `boolean` indicating whether to submit the transaction to the chain. Defaults to `false`.
 
 ## Returns
 
-A `Promise` that resolves to an object containing information about the decommit process.
+A `Promise` that resolves to a `DecommitResult` object containing information about the decommit process.
 
 ## Example
 
@@ -29,21 +28,19 @@ async function main() {
 
   const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
 
-  const utxosToDecommit = {
-    utxos: [
-      {
-        txIn: "yourTxHash#0", // Replace with a valid UTxO from the head
-        value: {
-          lovelace: "500000", // 0.5 ADA
-        },
-      },
-    ],
-  };
+  // First, create the decommit transaction
+  const utxoToDecommit = "yourTxHash#0"; // Replace with a valid UTxO from the head
+  const decommitTx = await hydra.createDecommitTx(utxoToDecommit);
+
+  // Then, sign the transaction (assuming you have a wallet setup)
+  // const signedTx = await wallet.signTx(decommitTx.cborHex); // Replace 'wallet' with your actual wallet instance
+  const signedTxCbor = decommitTx.cborHex; // For demonstration, using unsigned CBOR
 
   try {
     console.log("Decommitting UTxOs...");
-    const result = await hydra.decommit(utxosToDecommit, true, true); // Wait and submit
+    const result = await hydra.decommit(signedTxCbor, true); // Pass the signed transaction CBOR and wait
     console.log("Decommit result:", result);
+    console.log("Decommit transaction hash:", result.decommitTx.txHash);
   } catch (error) {
     console.error("Error decommitting UTxOs:", error);
   }

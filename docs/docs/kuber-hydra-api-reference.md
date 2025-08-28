@@ -59,24 +59,37 @@ This section provides detailed documentation for the Kuber-Hydra backend API end
 />
 
 <ApiEndpoint
+  method="GET"
+  path="/hydra/decommit"
+  title="Build Decommit Transaction"
+  description="Builds a decommit transaction."
+  queryParams={[
+    { name: "txin", type: "Array of T.Text", description: "List of transaction inputs to decommit." },
+  ]}
+  responses={[
+    { code: "200 OK", description: "Returns TxModal (transaction details)." },
+  ]}
+/>
+
+<ApiEndpoint
   method="POST"
   path="/hydra/decommit"
-  title="Decommit UTxOs from Hydra Head"
-  description="Decommits UTxOs from the Hydra Head."
+  title="Submit Decommit Transaction"
+  description="Submits a decommit transaction."
   queryParams={[
-    { name: "submit", type: "Boolean", description: "If true, the transaction will be submitted to the chain.", optional: true },
     { name: "wait", type: "Boolean", description: "If true, the request will wait for the transaction to be confirmed.", optional: true },
   ]}
   requestBody={{
-    type: "CommitUTxOs",
-    description: "Payload containing UTxOs to decommit and an optional signing key.",
+    type: "TxModal",
+    description: "Signed transaction details.",
     fields: [
-      { name: "utxos", type: "Array of TxIn (string)", description: "List of transaction inputs to decommit." },
-      { name: "signKey", type: "A.Value", description: "The signing key for the transaction.", optional: true },
+      { name: "cborHex", type: "string", description: "The CBOR-encoded transaction in hexadecimal format." },
+      { name: "type", type: "string", description: "The type of transaction (e.g., 'Witnessed Tx ConwayEra')." },
+      { name: "description", type: "string", description: "An optional description for the transaction." },
     ],
   }}
   responses={[
-    { code: "200 OK", description: "Success message." },
+    { code: "200 OK", description: "Returns DecommitResult (decommit transaction details)." },
   ]}
 />
 
@@ -154,9 +167,9 @@ This section provides detailed documentation for the Kuber-Hydra backend API end
     type: "TxModal",
     description: "Signed transaction details.",
     fields: [
-      { name: "signedTx", type: "string", description: "The signed transaction." },
-      { name: "witnesses", type: "Array", description: "Transaction witnesses." },
-      // Add more TxModal fields as needed based on its actual structure
+      { name: "cborHex", type: "string", description: "The CBOR-encoded transaction in hexadecimal format." },
+      { name: "type", type: "string", description: "The type of transaction (e.g., 'Witnessed Tx ConwayEra')." },
+      { name: "description", type: "string", description: "An optional description for the transaction." },
     ],
   }}
   responses={[
@@ -206,7 +219,7 @@ This section provides detailed documentation for the Kuber-Hydra backend API end
   title="Retrieve Hydra State"
   description="Retrieves the current state of the Hydra."
   responses={[
-    { code: "200 OK", description: "Returns the Hydra state." },
+    { code: "200 OK", description: "Returns an object containing the current HydraHeadState (e.g., { state: 'Open' })." },
   ]}
 />
 

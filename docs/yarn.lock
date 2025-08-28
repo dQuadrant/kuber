@@ -7839,10 +7839,10 @@ kolorist@^1.8.0:
   resolved "https://registry.npmjs.org/kolorist/-/kolorist-1.8.0.tgz"
   integrity sha512-Y+60/zizpJ3HRH8DCss+q95yr6145JXZo46OTpFvDZWLfRCE4qChOyk1b26nMaNpfHHgxagk9dXT5OP0Tfe+dQ==
 
-kuber-client@3.3.2:
-  version "3.3.2"
-  resolved "https://registry.yarnpkg.com/kuber-client/-/kuber-client-3.3.2.tgz#29c233074b915c8a5af4b60bc0219b8d269a4d16"
-  integrity sha512-I4QHnnRaK4gBnsCjDv5EJzU/svd8WLQLG8dTERBPPWBSU53F4ncYAA1P9Vl9yoDoOgVCdWjZEBShKsNv3yxuFg==
+kuber-client@3.3.4:
+  version "3.3.4"
+  resolved "https://registry.yarnpkg.com/kuber-client/-/kuber-client-3.3.4.tgz#bdba16593def3e2f6c3cbe60ae8b18ba02c1cf93"
+  integrity sha512-NAOdZTVDN/gwnvkGCPvDiBU7UCPHqHM05HcbJuyFMqrB1yT2foPX8eD9Dr71p8onAeNxHGRKRb/pncRw4PJ1Kg==
   dependencies:
     axios "^1.9.0"
     buffer "^6.0.3"

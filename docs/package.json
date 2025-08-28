@@ -21,7 +21,7 @@
     "@docusaurus/theme-mermaid": "^3.8.0",
     "@mdx-js/react": "^3.0.0",
     "clsx": "^2.0.0",
-    "kuber-client": "3.3.2",
+    "kuber-client": "3.3.4",
     "libcardano": "2.2.8",
     "libcardano-wallet": "2.2.14",
     "prism-react-renderer": "^2.3.0",
