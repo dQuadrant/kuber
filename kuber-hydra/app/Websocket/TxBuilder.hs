@@ -14,7 +14,7 @@ import Cardano.Api
 import qualified Cardano.Api.Ledger as L
 import Cardano.Api.Shelley
 import Cardano.Kuber.Api
-import Cardano.Kuber.Data.Models
+import Cardano.Kuber.Data.Models (TxModal(..))
 import Cardano.Kuber.Util
 import Data.Aeson
 import qualified Data.Aeson as A
@@ -23,81 +23,92 @@ import qualified Data.ByteString.Lazy as BSL
 import Data.Either
 import qualified Data.Map as Map
 import qualified Data.Map.Strict as M
-import Data.Maybe (fromJust, mapMaybe)
+import Data.Maybe (fromJust, mapMaybe, fromMaybe)
 import qualified Data.Maybe as Maybe
 import qualified Data.Text as T
+import Control.Concurrent.Async (async, wait, cancel)
 import Data.Text.Encoding
 import qualified Data.Text.Encoding as T
 import qualified Debug.Trace as Debug
 import Websocket.Forwarder
-import Websocket.SocketConnection (AppConfig, fetch, validateLatestWebsocketTag, getSnapshotUtxo, getProtocolParameters, getSnapshotUtxo', postDecommit')
+import Websocket.SocketConnection (AppConfig (hydraUrl), fetch, getLatestMessage, getSnapshotUtxo, getProtocolParameters, getSnapshotUtxo', postDecommit', getHydraIpAndPort, hydraBaseUrl)
 import Websocket.Utils
 import qualified Data.Text.IO as T
 import Websocket.Aeson (HydraProtocolParameters(..), ProtocolVersion(..))
 import Network.HTTP.Client.Conduit (Response(responseStatus, responseBody))
 import Network.HTTP.Types (Status(statusCode))
 import qualified Data.ByteString.Lazy.Char8 as BSL8
+import qualified Network.WebSockets as WS
 
-
-handleHydraDecommitTx :: AppConfig -> [TxIn] -> Maybe (SigningKey PaymentKey) -> Bool -> Bool -> IO (Either FrameworkError A.Value)
-handleHydraDecommitTx appConfig utxosToDecommit sk wait submit = do
-  allUTxOsText <-  getSnapshotUtxo appConfig
+buildDecommitTx :: AppConfig -> [TxIn] -> IO (Either FrameworkError TxModal)
+buildDecommitTx appConfig utxosToDecommit = do
+  allUTxOsText <- getSnapshotUtxo appConfig
   let allHydraUTxOs = decode allUTxOsText :: Maybe (UTxO ConwayEra)
   case allHydraUTxOs of
-    Nothing -> return $ Left $ FrameworkError ParserError "buildHydraDecommitTx: Error parsing Hydra UTxOs"
+    Nothing -> return $ Left $ FrameworkError ParserError "buildDecommitTx: Error parsing Hydra UTxOs"
     Just hydraUTxOs -> do
-          let hydraTxIns = M.keys ( unUTxO hydraUTxOs)
-          let notMissing = utxosToDecommit `isSubsetOf` hydraTxIns
-          if not notMissing
-            then
-              return
-                $ Left
-                $ FrameworkError
-                  NodeQueryError
-                $ "Missing UTxOs in Hydra: " <> show (utxosToDecommit `notPresentIn` hydraTxIns)
-            else do
-              let utxosToDecommitTexts =  utxosToDecommit
-                  hydraUTxOsToDecommit = M.filterWithKey (\k _ -> k `elem` utxosToDecommitTexts) (unUTxO hydraUTxOs)
-                  encodedUTxOs = A.encode hydraUTxOsToDecommit
-              let txb =
-                    mconcat
-                      ( map
-                          ( \(tin, tout) ->
-                              txConsumeUtxo tin tout
-                                <> txChangeAddress
-                                  ( case tout of
-                                      TxOut addr _ _ _ -> addr
-                                  )
-                          )
-                          $ Map.toList
-                          $ hydraUTxOsToDecommit
+      let hydraTxIns = M.keys (unUTxO hydraUTxOs)
+      let notMissing = utxosToDecommit `isSubsetOf` hydraTxIns
+      if not notMissing
+        then
+          return
+            $ Left
+            $ FrameworkError
+                NodeQueryError
+            $ "Missing UTxOs in Hydra: " <> show (utxosToDecommit `notPresentIn` hydraTxIns)
+        else do
+          let hydraUTxOsToDecommit = M.filterWithKey (\k _ -> k `elem` utxosToDecommit) (unUTxO hydraUTxOs)
+          let txb =
+                mconcat
+                  ( map
+                      ( \(tin, tout) ->
+                          txConsumeUtxo tin tout
+                            <> txChangeAddress
+                              ( case tout of
+                                  TxOut addr _ _ _ -> addr
+                              )
                       )
-                      <> maybe mempty txSign sk
-              protocolParamText <- hydraProtocolParams appConfig
-              case protocolParamText of
-                Left err -> return $ Left err
-                Right (hpp :: HydraProtocolParameters) -> do
-                  cardanoTxBody <- toCardanoTxBody txb hpp
-                  case cardanoTxBody of
-                    Left fe -> return $ Left fe
-                    Right tx -> do
-                      let decommitTxModalObject = TxModal (InAnyCardanoEra ConwayEra tx)
-                      if submit
-                        then do
-                          putStrLn "Starting to decommit"
-                          decommitResponse <- postDecommit' appConfig (Just decommitTxModalObject)
-                          if statusCode ( responseStatus decommitResponse) `elem` [200,20]
-                            then do
-                              putStrLn "Validating websocket tag"
-                              wsResult <- validateLatestWebsocketTag appConfig (generateResponseTag DeCommitUTxO) wait
-                              return $ textToJSON $ fst wsResult
-                            else
-                              return $
-                                Left $
-                                  FrameworkError TxSubmissionError $
-                                    "submitHydraDecommitTx: Error submitting decommit transaction to Hydra: " ++ BSL8.unpack (responseBody decommitResponse)
-                        else
-                          pure $ bytestringToJSON $ A.encode decommitTxModalObject
+                      $ Map.toList
+                      $ hydraUTxOsToDecommit
+                  )
+          protocolParamText <- hydraProtocolParams appConfig
+          case protocolParamText of
+            Left err -> return $ Left err
+            Right (hpp :: HydraProtocolParameters) -> do
+              cardanoTxBody <- toCardanoTxBody txb hpp
+              case cardanoTxBody of
+                Left fe -> return $ Left fe
+                Right tx -> pure $ Right $ TxModal (InAnyCardanoEra ConwayEra tx)
+
+
+submitDecommitTx :: AppConfig -> TxModal -> Bool -> IO (T.Text, Int)
+submitDecommitTx appConfig decommitTxModalObject shouldWait = do
+  putStrLn "Starting to decommit"
+  let (hydraIp, hydraPort) = getHydraIpAndPort (hydraUrl appConfig)
+  WS.runClient hydraIp hydraPort "/" $ \conn -> do
+    putStrLn "Connected to Hydra WebSocket server."
+    -- Flush greetings on the established connection
+    _ <- getLatestMessage appConfig conn [("Greetings", 200)] shouldWait
+
+    -- Send the HTTP POST request
+    decommitResponse <- postDecommit' appConfig (Just decommitTxModalObject)
+    putStrLn $ "DecommitResponse" ++ BSL8.unpack (responseBody decommitResponse)
+
+    if statusCode (responseStatus decommitResponse) `elem` [200, 20]
+      then do
+        putStrLn "HTTP POST succeeded, waiting for WebSocket message..."
+        -- Start an async listener on the *same* connection
+        wsAsync <- async $ getLatestMessage appConfig conn (generateResponseTag DeCommitUTxO) shouldWait
+        -- Wait for the WebSocket message from the async thread
+        wsResult <- wait wsAsync
+        WS.sendClose conn ("Decommit transaction submitted" :: T.Text)
+        
+        return $ fromMaybe ("No message received", 503) wsResult
+      else do
+        -- If HTTP POST failed, no need to wait for WebSocket message
+        WS.sendClose conn ("Decommit transaction submission failed" :: T.Text)
+        let errorMessage = "submitHydraDecommitTx: Error submitting decommit transaction to Hydra: " ++ BSL8.unpack (responseBody decommitResponse)
+        return (T.pack errorMessage, 500)
 
 hydraProtocolParams :: AppConfig -> IO (Either FrameworkError HydraProtocolParameters)
 hydraProtocolParams appConfig = do

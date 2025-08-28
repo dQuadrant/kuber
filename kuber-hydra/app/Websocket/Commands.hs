@@ -138,11 +138,6 @@ createHydraStateResponseAeson cNTag =
       "Open" ->  HydraStateResponse tag "Open and Ready for Transactions"
       _ ->  HydraStateResponse tag "Unknown hydra state tag"
 
-decommitUTxO :: AppConfig -> [TxIn] -> Maybe A.Value -> Bool -> Bool -> IO (Either FrameworkError A.Value)
-decommitUTxO hydraHost utxos sk wait submit = do
-  let parsedSignKey = sk >>= parseSignKey . jsonToText
-  handleHydraDecommitTx hydraHost utxos parsedSignKey wait submit
---  un initialized {"contents":{"chainState":{"recordedAt":null,"spendableUTxO":{}}},"tag":"Idle"}
 getHydraState :: AppConfig -> IO (Either FrameworkError HydraStateResponse)
 getHydraState hydraHost = do
 

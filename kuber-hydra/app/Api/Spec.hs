@@ -9,6 +9,7 @@
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -17,11 +18,11 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
+
 module Api.Spec where
 
 import Cardano.Api
 import Cardano.Kuber.Api
-import Cardano.Kuber.Data.Models
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BSL
@@ -37,16 +38,17 @@ import Servant
 import Websocket.Aeson
 import Websocket.Commands
 import Websocket.Middleware
-import Websocket.TxBuilder (hydraProtocolParams, queryUTxO, toValidHydraTxBuilder)
+import Websocket.TxBuilder (hydraProtocolParams, queryUTxO, toValidHydraTxBuilder, buildDecommitTx, submitDecommitTx)
 import Websocket.Utils
 import Websocket.SocketConnection (fetch, AppConfig (chainInfo), getHead, getCommits)
-
-import Kuber.Server.Spec
-import Cardano.Kuber.Http.Spec (KuberServerApi)
-import Cardano.Kuber.Data.Parsers (parseAddress)
 import Servant.Exception (Throws)
 import qualified Data.Text.Encoding as T
 import qualified  Data.ByteString.Lazy.Char8 as BS8L
+import Data.Functor ((<&>))
+import Cardano.Kuber.Data.Models (TxModal)
+import Cardano.Kuber.Http.Spec (KuberServerApi)
+import Kuber.Server.Spec ( corsMiddlewarePolicy, kuberApiServer )
+import Cardano.Kuber.Data.Parsers (parseAddress)
 
 
 -- Define CORS policy
@@ -96,12 +98,13 @@ type HydraServerApi =
     :<|> "hydra" :> "query" :> HydraQueryAPI
 
 type HydraCommandAPI =
-  
+
   "init" :> WithWait PostResp
     :<|> "abort" :> WithWait PostResp
     :<|> "commit" :> WithSubmit (ReqBody '[JSON] CommitUTxOs :> PostResp)
-    :<|> "decommit" :> WithSubmit (WithWait (ReqBody '[JSON] CommitUTxOs :> PostResp))
     :<|> "close" :> WithWait PostResp
+    :<|> "decommit" :> QueryParams "txin" T.Text :> GetResp -- New GET decommit
+    :<|> "decommit" :> ReqBody '[JSON] TxModal :> WithWait PostResp -- New POST decommit
     :<|> "contest" :> WithWait PostResp
     :<|> "fanout" :> WithWait PostResp
     :<|> "tx" :> WithSubmit (ReqBody '[JSON] TxBuilder :> Post '[JSON] TxModal)
@@ -142,7 +145,7 @@ hydraErrorHandler (msg, status) = do
               }
 
 kuberHydraServer :: AppConfig -> Server KuberHydraApi
-kuberHydraServer appConfig = 
+kuberHydraServer appConfig =
         hydraServer appConfig
   :<|> kuberApiServer BabbageEraOnwardsConway (chainInfo appConfig)
 
@@ -159,8 +162,9 @@ hydraServer appConfig =
       initHandler appConfig
         :<|> abortHandler appConfig
         :<|> commitHandler appConfig
-        :<|> decommitHandler appConfig
         :<|> closeHandler appConfig
+        :<|> decommitQueryTxHandler appConfig
+        :<|> decommitSubmitTxModalHandler appConfig
         :<|> contestHandler appConfig
         :<|> fanoutHandler appConfig
         :<|> txHandler appConfig
@@ -220,10 +224,22 @@ getCommitsHandler appConfig  = do
                   Right (v ::  A.Value) -> Right v
   frameworkErrorHandler result
 
-decommitHandler :: AppConfig -> Maybe Bool -> Maybe Bool -> CommitUTxOs -> Handler (Union UVerbResponseTypes)
-decommitHandler appConfig submit wait decommits = do
-  decommitResult <- liftIO $ decommitUTxO appConfig decommits.utxos (signKey decommits) (fromMaybe False wait) (fromMaybe False submit)
-  frameworkErrorHandler decommitResult
+decommitSubmitTxModalHandler :: AppConfig -> TxModal -> Maybe Bool -> Handler (Union UVerbResponseTypes)
+decommitSubmitTxModalHandler appConfig txm wait = do
+  result <- liftIO (submitDecommitTx appConfig txm (fromMaybe False wait ))
+  hydraErrorHandler result
+
+
+decommitQueryTxHandler :: AppConfig -> [T.Text] -> Handler (Union UVerbResponseTypes)
+decommitQueryTxHandler appConfig txin = do
+  parsedTxIns <- liftIO $ listOfTextToTxIn txin
+  eitherErrorOrTxModal <- case parsedTxIns of
+    Left fe -> pure $ Left fe
+    Right txins -> liftIO (buildDecommitTx appConfig txins) <&> fmap A.toJSON
+  frameworkErrorHandler eitherErrorOrTxModal
+  -- case eitherErrorOrTxModal of
+  --   Left fe -> frameworkErrorHandler (Left fe)
+  --   Right txModal -> frameworkErrorHandler (Right $ A.toJSON txModal)
 
 closeHandler :: AppConfig -> Maybe Bool -> Handler (Union UVerbResponseTypes)
 closeHandler appConfig wait = do

@@ -94,7 +94,6 @@ getLatestMessage ::
   IO (Maybe (T.Text, Int))
 getLatestMessage appConfig conn0 expectedTags wait = do
   putStrLn "Trying to get latest message from Hydra WebSocket..."
-  start <- getCurrentTime
   let timeoutMicroseconds = 8 * 10 ^ 6
       go conn = do
         -- wait for 8 seconds. If no message received, return 201
@@ -148,12 +147,6 @@ forwardCommands appConfig command tag wait = do
   let serverIpStr = fromMaybe "0.0.0.0" (serverIp appConfig)
   WS.runClient serverIpStr (serverPort appConfig) "/" $ \conn -> do
     WS.sendTextData conn command
-    getLatestMessage appConfig conn tag wait >>= \msg -> return (fromMaybe ("No message received", 503) msg)
-
-validateLatestWebsocketTag :: AppConfig -> [(T.Text, Int)] -> Bool -> IO (T.Text, Int)
-validateLatestWebsocketTag appConfig tag wait = do
-  let serverIpStr = fromMaybe "0.0.0.0" (serverIp appConfig)
-  WS.runClient serverIpStr (serverPort appConfig) "/" $ \conn -> do
     getLatestMessage appConfig conn tag wait >>= \msg -> return (fromMaybe ("No message received", 503) msg)
 
 -- Check if Request is a WebSocket Request
