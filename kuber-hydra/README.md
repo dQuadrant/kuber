@@ -9,9 +9,21 @@
  - [✅ Passing](https://dquadrant.github.io/kuber/test-reports/hydra/) on v4.0.0
 
 
+
 ### Setting up the devnet
 
 Here we prepare the devnet configuration for bootstrapping a local cardano node.This is the simplified variant of cardano node that dont require any stake pools.
+
+### All bash commands(Quickstaart)
+```bash
+ bash setup-devnet.sh
+ docker compose up -d cardano-node
+ bash generate-credentials.sh
+ bash seed-devnet.sh 
+ docker compose up -d
+ docker ps
+```
+
 
 **Navigate to the `kuber-hydra` directory:**
     ```bash
@@ -22,6 +34,7 @@ After you are in /kuber-hydra/demo
 ```bash
  bash setup-devnet.sh
 ```
+setup-devnet.sh cleans the runtime directory and puts the current time in genesis-shelly and genesis-byron.
 
 Next getting up the cardano node running.
 ```bash 
@@ -32,6 +45,13 @@ To verify the cardano node is running
 ```bash 
 docker compose logs cardano-node -f
 ```
+
+After that we need to generate the credentials for each participant.This contains hydras signing key , verification keys and cardano verification and signing keys.
+
+```bash
+bash generate-credentials.sh
+```
+
 
 Next we need to fund alice,bob,carol some utxos for committing and for paying fees.
 ```bash 
@@ -83,3 +103,5 @@ After hydra-nodes and cardano node are up and runnig next step is to start kuber
 
   **Access the Kuber-Hydra Relay API:**
     The API will be accessible at `http://localhost:8081`.
+    Test : `http://localhost:8082/hydra/query/head` .
+

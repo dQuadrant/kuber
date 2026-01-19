@@ -2,7 +2,6 @@
 
 # Distributing ada to hydra nodes in a single transaction
 set -eo pipefail
-set -vx
 # See: https://github.com/cardano-scaling/hydra/pull/1682
 #Tests if jq can handle 64-bit integers without corruption
 [[ $(jq -n '9223372036854775807') == "9223372036854775807" ]] \
@@ -67,17 +66,38 @@ function hnode() {
 
 # Seed all participants in a single transaction
 function seedAllParticipants() {
-    echo >&2 "Seeding all participants."
-    echo >&2 "----------------------------------"
+    echo >&2 "Seeding all participants in ONE transaction"
+    echo >&2 "-----------------------------------"
     
     # Create runtime directory if it doesn't exist (for local mode)
     if [[ -x ${CCLI_CMD} ]]; then
         mkdir -p ${DEVNET_DIR}/runtime
     fi
 
-    # faucet address
+    # Determine faucet address
     FAUCET_ADDR=$(ccli_ conway address build --payment-verification-key-file ${DEVNET_DIR}/cardano-node/faucet.vk --testnet-magic ${NETWORK_ID})
     echo >&2 "Faucet address: ${FAUCET_ADDR}"
+
+    # Query available UTXOs
+    echo >&2 "Querying faucet UTXOs..."
+    UTXO_JSON=$(ccli conway query utxo --address ${FAUCET_ADDR} --out-file /dev/stdout)
+    
+    # Check UTXOs
+    UTXO_COUNT=$(echo "$UTXO_JSON" | jq 'length')
+    if [[ "$UTXO_COUNT" == "0" ]]; then
+        echo >&2 "ERROR: No UTXOs found at faucet address!"
+        return 1
+    fi
+    
+    echo >&2 "Found ${UTXO_COUNT} UTXO(s) at faucet address"
+    
+    # first available UTXO
+    FAUCET_TXIN=$(echo "$UTXO_JSON" | jq -r 'keys[0]')
+    UTXO_VALUE=$(echo "$UTXO_JSON" | jq -r ".\"${FAUCET_TXIN}\".value.lovelace")
+    
+    echo >&2 "Selected UTXO: ${FAUCET_TXIN}"
+    echo >&2 "UTXO Value: ${UTXO_VALUE} lovelace ($(echo "scale=2; ${UTXO_VALUE}/1000000" | bc) Ada)"
+
     # Get all participant addresses
     echo >&2 ""
     echo >&2 "Building addresses for all participants..."
@@ -98,7 +118,7 @@ function seedAllParticipants() {
     echo >&2 ""
     echo >&2 "Building transaction with all 6 outputs..."
     
-    #  Build transaction 
+    # # Build transaction with all outputs in one go
     ccli conway transaction build --cardano-mode \
         --change-address ${FAUCET_ADDR} \
         --tx-in ${FAUCET_TXIN} \
@@ -135,8 +155,8 @@ function seedAllParticipants() {
     
     echo >&2 " Done!"
     echo >&2 ""
-    echo >&2 "Transaction successful!"
-    echo >&2 "-----------------------------------"
+    echo >&2 "✓ Transaction successful!"
+    echo >&2 "--------------------------------"
     echo >&2 "Transaction ID: ${SEED_TXID}"
     echo >&2 ""
     echo >&2 "Outputs created:"
@@ -158,7 +178,6 @@ function publishReferenceScripts() {
     --cardano-signing-key ${DEVNET_DIR}/cardano-node/faucet.sk
 }
 
-# for proper file permissions
 ${DOCKER_COMPOSE_CMD} exec cardano-node chown -R $(id -u):$(id -g) /devnet/runtime
 function queryPParams() {
   echo >&2 "Query Protocol parameters"
@@ -172,7 +191,7 @@ function queryPParams() {
   echo >&2 "Saved in protocol-parameters.json"
 }
 
-
+# Main execution
 echo >&2 "Fueling up all Hydra participants..."
 seedAllParticipants
 
