@@ -39,22 +39,16 @@ ${DOCKER_COMPOSE_CMD} exec cardano-node mkdir -p /devnet/credentials
 
 # Invoke cardano-cli in running cardano-node container or via provided cardano-cli
 function ccli() {
-  ccli_ "${@}"
-}
-
-
-function ccli_() {
   if [[ -x ${CCLI_CMD} ]]; then
       ${CCLI_CMD} ${@}
   else
-  docker run -it --rm \
-        --pull always \
-        -v ${SCRIPT_DIR}:/devnet \
-        ghcr.io/cardano-scaling/cardano-cli:10.5.3 cardano-cli ${@}
       ${DOCKER_COMPOSE_CMD} exec cardano-node cardano-cli ${@}
   fi
 }
 
+function ccli_() {
+  ccli ${@} --testnet-magic ${NETWORK_ID}
+}
 # Invoke hydra-node in a container or via provided executable
 function hnode() {
   if [[ -n ${HYDRA_NODE_CMD} ]]; then
@@ -111,6 +105,8 @@ for ACTOR in "${PARTICIPANTS[@]}"; do
   ${DOCKER_COMPOSE_CMD} exec cardano-node cat /devnet/credentials/${ACTOR}-funds.addr
 done
 
+docker cp $(docker compose ps -q cardano-node):/devnet/credentials/ ./
+${DOCKER_COMPOSE_CMD} exec cardano-node chown -R $(id -u):$(id -g) /devnet/credentials
 echo ""
 echo "All credentials generated successfully."
 echo ""
