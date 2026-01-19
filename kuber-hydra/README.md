@@ -14,7 +14,7 @@
 
 Here we prepare the devnet configuration for bootstrapping a local cardano node.This is the simplified variant of cardano node that dont require any stake pools.
 
-### All bash commands(Quickstaart)
+### All bash commands(Quickstart)
 ```bash
  bash setup-devnet.sh
  docker compose up -d cardano-node
@@ -26,10 +26,11 @@ Here we prepare the devnet configuration for bootstrapping a local cardano node.
 
 
 **Navigate to the `kuber-hydra` directory:**
-    ```bash
-    cd kuber-hydra/demo
-    ```
-After you are in /kuber-hydra/demo
+
+```bash
+    cd kuber-hydra/devnet
+```
+After you are in /kuber-hydra/devnet
 
 ```bash
  bash setup-devnet.sh
