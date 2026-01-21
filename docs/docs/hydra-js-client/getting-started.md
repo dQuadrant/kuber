@@ -1,4 +1,4 @@
-# local devnet
+# Local devnet
 
 This guide walks through the steps to set up a devnet and run a Hydra Head using the `kuber` relay server. We’ll demonstrate the process using three Hydra nodes—**Alice**,**Bob** and **Carol**—on the Cardano devnet.
 
@@ -12,6 +12,7 @@ If you dont want to use a devnet and setup a testnet/mainnet follow this link �
 :::
 ### All bash commands(Quickstart)
 ```bash
+ cd kuber-hydra/devnet
  bash setup-devnet.sh
  docker compose up -d cardano-node
  bash generate-credentials.sh
