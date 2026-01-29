@@ -35,6 +35,9 @@ if [[ ! -x ${CCLI_CMD} ]]; then
   fi
 fi
 
+# Detect OS
+OS_TYPE="$(uname)"
+
 # Invoke cardano-cli in running cardano-node container or via provided cardano-cli
 function ccli() {
   if [[ -x ${CCLI_CMD} ]]; then
@@ -64,28 +67,73 @@ function hnode() {
   fi
 }
 
+
+function waitForTx() {
+    local TXID=$1
+    local TIMEOUT=${2:-60} 
+    local ELAPSED=0
+    
+    echo >&2 "Waiting for transaction ${TXID} to be confirmed..."
+    
+    while [[ $ELAPSED -lt $TIMEOUT ]]; do
+        TX_CHECK=$(ccli conway query utxo --tx-in "${TXID}#0" --out-file /dev/stdout 2>/dev/null || echo "{}")
+        
+        if [[ $(echo "$TX_CHECK" | jq 'length') -gt 0 ]]; then
+            echo >&2 ""
+            echo >&2 "Transaction confirmed after ${ELAPSED} seconds"
+            return 0
+        fi
+        
+        echo >&2 -n "."
+        sleep 2
+        ELAPSED=$((ELAPSED + 2))
+    done
+    
+    echo >&2 ""
+    echo >&2 "WARNING: Transaction not confirmed after ${TIMEOUT} seconds"
+    return 1
+}
+
+
+function verifyUTXO() {
+    local ADDR=$1
+    local NAME=$2
+    local EXPECTED_AMOUNT=$3
+    
+    echo >&2 ""
+    echo >&2 "Verifying ${NAME} (${ADDR})..."
+    
+    UTXO_RESULT=$(ccli conway query utxo --address ${ADDR} --out-file /dev/stdout 2>&1)
+    UTXO_COUNT=$(echo "$UTXO_RESULT" | jq 'length' 2>/dev/null || echo "0")
+    
+    if [[ "$UTXO_COUNT" == "0" ]]; then
+        echo >&2 "  NO UTXOs found for ${NAME}"
+        echo >&2 "  Query result: ${UTXO_RESULT}"
+        return 1
+    else
+        TOTAL_LOVELACE=$(echo "$UTXO_RESULT" | jq '[.[] | .value.lovelace] | add' 2>/dev/null || echo "0")
+        TOTAL_ADA=$(echo "scale=6; ${TOTAL_LOVELACE}/1000000" | bc)
+        echo >&2 "  ✓ Found ${UTXO_COUNT} UTXO(s) with total: ${TOTAL_ADA} Ada (${TOTAL_LOVELACE} lovelace)"
+        return 0
+    fi
+}
+
 # Seed all participants in a single transaction
 function seedAllParticipants() {
-    echo >&2 "Seeding all participants in ONE transaction"
-    echo >&2 "-----------------------------------"
-    
-    # Create runtime directory if it doesn't exist (for local mode)
-    if [[ -x ${CCLI_CMD} ]]; then
-        mkdir -p ${DEVNET_DIR}/runtime
-    fi
+    echo >&2 "Seeding....."
 
-    # Determine faucet address
+  
     FAUCET_ADDR=$(ccli_ conway address build --payment-verification-key-file ${DEVNET_DIR}/cardano-node/faucet.vk --testnet-magic ${NETWORK_ID})
     echo >&2 "Faucet address: ${FAUCET_ADDR}"
 
-    # Query available UTXOs
     echo >&2 "Querying faucet UTXOs..."
     UTXO_JSON=$(ccli conway query utxo --address ${FAUCET_ADDR} --out-file /dev/stdout)
     
-    # Check UTXOs
+
     UTXO_COUNT=$(echo "$UTXO_JSON" | jq 'length')
     if [[ "$UTXO_COUNT" == "0" ]]; then
         echo >&2 "ERROR: No UTXOs found at faucet address!"
+        echo >&2 "Make sure the devnet is running and synced."
         return 1
     fi
     
@@ -116,9 +164,9 @@ function seedAllParticipants() {
     echo >&2 "  - carol-funds: ${CAROL_FUNDS_ADDR}"
     
     echo >&2 ""
-    echo >&2 "Building transaction with all 6 outputs..."
+    echo >&2 "Building transaction...."
     
-    # # Build transaction with all outputs in one go
+    # Build transaction
     ccli conway transaction build --cardano-mode \
         --change-address ${FAUCET_ADDR} \
         --tx-in ${FAUCET_TXIN} \
@@ -130,33 +178,46 @@ function seedAllParticipants() {
         --tx-out ${CAROL_FUNDS_ADDR}+25000000 \
         --out-file ${DEVNET_DIR}/runtime/seed-all-participants.draft >&2
     
+    echo >&2 "Transaction built successfully"
+    
+    echo >&2 ""
     echo >&2 "Signing transaction..."
     ccli_ conway transaction sign \
         --tx-body-file ${DEVNET_DIR}/runtime/seed-all-participants.draft \
         --signing-key-file ${DEVNET_DIR}/cardano-node/faucet.sk \
         --out-file ${DEVNET_DIR}/runtime/seed-all-participants.signed >&2
     
-    echo >&2 "Submitting transaction..."
-    echo >&2 "Pre-submission check: verifying UTXO still exists..."
-    UTXO_CHECK=$(ccli conway query utxo --tx-in ${FAUCET_TXIN} --out-file /dev/stdout)
-    echo >&2 "UTXO check result: ${UTXO_CHECK}"
-
-    SEED_TXID=$(ccli_ conway transaction txid --tx-file ${DEVNET_DIR}/runtime/seed-all-participants.signed | jq -r '.txhash' | tr -d '\r')
-    ccli conway transaction submit --tx-file ${DEVNET_DIR}/runtime/seed-all-participants.signed >&2
-
-    # Wait for the transaction to be confirmed
-    # SEED_TXIN="${SEED_TXID}"
-    # echo -n >&2 "Waiting for transaction confirmation.."
+    echo >&2 "Transaction signed successfully"
     
-    # while [[ "$(ccli query utxo --tx-in "${SEED_TXIN}" --out-file /dev/stdout | jq ".\"${SEED_TXIN}\"")" = "null" ]]; do
-    #     sleep 1
-    #     echo -n >&2 "."
-    # done
-    
-    echo >&2 " Done!"
     echo >&2 ""
-    echo >&2 "✓ Transaction successful!"
-    echo >&2 "--------------------------------"
+    SEED_TXID=$(ccli_ conway transaction txid --tx-file ${DEVNET_DIR}/runtime/seed-all-participants.signed | jq -r '.txhash' | tr -d '\r\n')
+    
+    echo >&2 ""
+    echo >&2 "Submitting transaction..."
+    ccli conway transaction submit --tx-file ${DEVNET_DIR}/runtime/seed-all-participants.signed >&2
+    
+    echo >&2 "Transaction submitted successfully"
+    
+   
+    echo >&2 ""
+    waitForTx "${SEED_TXID}" 120
+    
+    echo >&2 "Waiting 5 seconds for blockchain to sync..."
+    sleep 5
+    
+    echo >&2 ""
+    echo >&2 "Verifying funded addresses..."
+    
+    # Verify all addresses
+    verifyUTXO "${ALICE_ADDR}" "alice" "30000000"
+    verifyUTXO "${BOB_ADDR}" "bob" "30000000"
+    verifyUTXO "${CAROL_ADDR}" "carol" "30000000"
+    verifyUTXO "${ALICE_FUNDS_ADDR}" "alice-funds" "100000000"
+    verifyUTXO "${BOB_FUNDS_ADDR}" "bob-funds" "50000000"
+    verifyUTXO "${CAROL_FUNDS_ADDR}" "carol-funds" "25000000"
+    
+    echo >&2 ""
+    echo >&2 ".......Seeding Complete!........"
     echo >&2 "Transaction ID: ${SEED_TXID}"
     echo >&2 ""
     echo >&2 "Outputs created:"
@@ -178,9 +239,14 @@ function publishReferenceScripts() {
     --cardano-signing-key ${DEVNET_DIR}/cardano-node/faucet.sk
 }
 
-${DOCKER_COMPOSE_CMD} exec cardano-node chown -R $(id -u):$(id -g) /devnet/runtime
+#for macOS compatibility
+if [[ "${OS_TYPE}" == "Linux" ]]; then
+    ${DOCKER_COMPOSE_CMD} exec cardano-node chown -R $(id -u):$(id -g) /devnet/runtime 2>/dev/null || true
+fi
+
 function queryPParams() {
-  echo >&2 "Query Protocol parameters"
+  echo >&2 ""
+  echo >&2 "Querying Protocol parameters..."
   if [[ -x ${CCLI_CMD} ]]; then
      ccli query protocol-parameters --socket-path ${DEVNET_DIR}/runtime/node.socket  --out-file /dev/stdout \
       | jq ".txFeeFixed = 0 | .txFeePerByte = 0 | .executionUnitPrices.priceMemory = 0 | .executionUnitPrices.priceSteps = 0" > ${SCRIPT_DIR}/runtime/protocol-parameters.json
@@ -188,16 +254,22 @@ function queryPParams() {
      ${DOCKER_COMPOSE_CMD} exec -T cardano-node cardano-cli query protocol-parameters --testnet-magic ${NETWORK_ID} --socket-path ${DEVNET_DIR}/runtime/node.socket --out-file /dev/stdout \
       | jq ".txFeeFixed = 0 | .txFeePerByte = 0 | .executionUnitPrices.priceMemory = 0 | .executionUnitPrices.priceSteps = 0" > ${SCRIPT_DIR}/runtime/protocol-parameters.json
   fi
-  echo >&2 "Saved in protocol-parameters.json"
+  echo >&2 "✓ Protocol parameters saved in runtime/protocol-parameters.json"
 }
 
 # Main execution
-echo >&2 "Fueling up all Hydra participants..."
+echo >&2 ""
+echo >&2 "Seeding up all Hydra participants..."
+echo >&2 ""
+
 seedAllParticipants
 
+echo >&2 ""
 queryPParams
+
+echo >&2 ""
 echo "HYDRA_SCRIPTS_TX_ID=$(publishReferenceScripts)" > .env
-echo >&2 "Environment variable stored in '.env'"
+echo >&2 "✓ Environment variable stored in '.env'"
 echo >&2 -e "\n\t$(cat .env)\n"
-
-
+echo >&2 ""
+echo >&2 "All done!"
