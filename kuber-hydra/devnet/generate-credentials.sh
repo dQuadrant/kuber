@@ -3,12 +3,16 @@ set -euo pipefail
 
 # Configuration
 NETWORK_ID=42
-BASE_DIR="$HOME/Documents/kuber/kuber-hydra/devnet"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+BASE_DIR="${SCRIPT_DIR}"
 CREDENTIALS_DIR="${BASE_DIR}/credentials"
 PARTICIPANTS=("alice" "bob" "carol")
+
+# Create credentials directory
 mkdir -p "${CREDENTIALS_DIR}"
 
-SCRIPT_DIR=$(realpath $(dirname "$0"))
 
 CCLI_CMD=
 DEVNET_DIR=/devnet
