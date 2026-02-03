@@ -8,3 +8,7 @@
 /adaup
 /kuber-client-js
 /kuber-client
+/kuber-hydra/devnet/runtime
+/kuber-hydra/devnet/credentials
+/kuber-hydra/devnet/env
+/kuber-hydra/devnet/env.bak

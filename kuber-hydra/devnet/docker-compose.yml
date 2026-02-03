@@ -1,0 +1,209 @@
+services:
+  cardano-node:
+    image: ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.5.3}
+    volumes:
+      - ./cardano-node:/devnet/cardano-node
+      - ./runtime:/devnet/runtime
+    environment:
+      - CARDANO_BLOCK_PRODUCER=true
+      - CARDANO_SOCKET_PATH=/devnet/runtime/node.socket
+      - CARDANO_NODE_SOCKET_PATH=/devnet/runtime/node.socket  
+    command:
+      [ "run"
+      , "--config", "/devnet/cardano-node/cardano-node.json"
+      , "--topology", "/devnet/cardano-node/topology.json"
+      , "--database-path", "/devnet/runtime/db"
+      , "--shelley-kes-key", "/devnet/cardano-node/kes.skey"
+      , "--shelley-vrf-key", "/devnet/cardano-node/vrf.skey"
+      , "--shelley-operational-certificate", "/devnet/cardano-node/opcert.cert"
+      , "--byron-delegation-certificate", "/devnet/cardano-node/byron-delegation.cert"
+      , "--byron-signing-key", "/devnet/cardano-node/byron-delegate.key"
+      ]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "2M"
+        max-file: "10"
+  
+  hydra-node-1:
+    image: ghcr.io/cardano-scaling/hydra-node:1.2.0
+    build:
+      context: ../
+      target: hydra-node
+    
+    volumes:
+      - ./credentials:/devnet/credentials
+      - ./runtime:/devnet/runtime
+    ports:
+      - "4001:4001"
+      - "5001:5001"
+    command:
+      [ "--node-id", "1"
+      , "--api-host", "0.0.0.0"
+      , "--listen", "172.16.238.10:5001"
+      , "--monitoring-port", "6001"
+      , "--peer", "hydra-node-bob:5001"
+      , "--peer", "hydra-node-carol:5001"
+      , "--hydra-scripts-tx-id", "${HYDRA_SCRIPTS_TX_ID}"
+      , "--hydra-signing-key", "/devnet/credentials/alice-hydra.sk"
+      , "--hydra-verification-key", "/devnet/credentials/bob-hydra.vk"
+      , "--hydra-verification-key", "/devnet/credentials/carol-hydra.vk"
+      , "--cardano-signing-key", "/devnet/credentials/alice.sk"
+      , "--cardano-verification-key", "/devnet/credentials/bob.vk"
+      , "--cardano-verification-key", "/devnet/credentials/carol.vk"
+      , "--ledger-protocol-parameters", "/devnet/runtime/protocol-parameters.json"
+      , "--testnet-magic", "42"
+      , "--node-socket", "/devnet/runtime/node.socket"
+      , "--persistence-dir", "/devnet/runtime/persistence/alice"
+      , "--contestation-period", "3s"
+      ]
+    networks:
+      hydra_net:
+        ipv4_address: 172.16.238.10
+    restart: always
+    
+  hydra-node-2:
+    image: ghcr.io/cardano-scaling/hydra-node:1.2.0
+    
+    build:
+      context: ../
+      target: hydra-node
+    volumes:
+      - ./credentials:/devnet/credentials
+      - ./runtime:/devnet/runtime
+    ports:
+      - "4002:4001"
+      - "5002:5001"
+    command:
+      [ "--node-id", "2"
+      , "--api-host", "0.0.0.0"
+      , "--listen", "172.16.238.20:5001"
+      , "--monitoring-port", "6001"
+      , "--peer", "172.16.238.10:5001"
+      , "--peer", "172.16.238.30:5001"
+      , "--hydra-scripts-tx-id", "${HYDRA_SCRIPTS_TX_ID}"
+      , "--hydra-signing-key", "/devnet/credentials/bob-hydra.sk"
+      , "--hydra-verification-key", "/devnet/credentials/alice-hydra.vk"
+      , "--hydra-verification-key", "/devnet/credentials/carol-hydra.vk"
+      , "--cardano-signing-key", "/devnet/credentials/bob.sk"
+      , "--cardano-verification-key", "/devnet/credentials/alice.vk"
+      , "--cardano-verification-key", "/devnet/credentials/carol.vk"
+      , "--ledger-protocol-parameters", "/devnet/runtime/protocol-parameters.json"
+      , "--testnet-magic", "42"
+      , "--node-socket", "/devnet/runtime/node.socket"
+      , "--persistence-dir", "/devnet/runtime/persistence/bob"
+      , "--contestation-period", "3s"
+      ]
+    networks:
+      hydra_net:
+        ipv4_address: 172.16.238.20
+    restart: always
+
+  hydra-node-3:
+    image: ghcr.io/cardano-scaling/hydra-node:1.2.0
+   
+    build:
+      context: ../
+      target: hydra-node
+    volumes:
+      - ./credentials:/devnet/credentials
+      - ./runtime:/devnet/runtime
+    ports:
+      - "4003:4001"
+      - "5003:5001"
+    command:
+      [ "--node-id", "3"
+      , "--api-host", "0.0.0.0"
+      , "--listen", "0.0.0.0:5001"
+      , "--monitoring-port", "6001"
+      , "--peer", "hydra-node-alice:5001"
+      , "--peer", "hydra-node-bob:5001"
+      , "--hydra-scripts-tx-id", "${HYDRA_SCRIPTS_TX_ID}"
+      , "--hydra-signing-key", "/devnet/credentials/carol-hydra.sk"
+      , "--hydra-verification-key", "/devnet/credentials/alice-hydra.vk"
+      , "--hydra-verification-key", "/devnet/credentials/bob-hydra.vk"
+      , "--cardano-signing-key", "/devnet/credentials/carol.sk"
+      , "--cardano-verification-key", "/devnet/credentials/alice.vk"
+      , "--cardano-verification-key", "/devnet/credentials/bob.vk"
+      , "--ledger-protocol-parameters", "/devnet/runtime/protocol-parameters.json"
+      , "--testnet-magic", "42"
+      , "--node-socket", "/devnet/runtime/node.socket"
+      , "--persistence-dir", "/devnet/runtime/persistence/carol"
+      , "--contestation-period", "3s"
+      ]
+    networks:
+      hydra_net:
+        ipv4_address: 172.16.238.30
+    restart: always
+
+  kuber-hydra-1:
+    image: dquadrant/kuber-hydra:latest
+   
+    platform: linux/amd64
+    ports:
+      - "8082:8081"
+    volumes:
+      - ./runtime:/devnet
+    networks:
+      hydra_net:
+        ipv4_address: 172.16.238.40
+    depends_on:
+      - cardano-node
+      - hydra-node-1  
+    environment: 
+      - HYDRA_URL=hydra-node-1:4001
+      - CARDANO_NODE_SOCKET_PATH=/devnet/node.socket
+      - NETWORK=42
+    restart: no
+
+  kuber-hydra-2:
+    image: dquadrant/kuber-hydra:latest
+   
+    platform: linux/amd64
+    ports: 
+      - "8083:8081"
+    volumes:
+      - ./runtime:/devnet
+    environment:
+      - HYDRA_URL=hydra-node-2:4001
+      - CARDANO_NODE_SOCKET_PATH=/devnet/node.socket
+      - NETWORK=42
+    networks:
+      hydra_net:
+        ipv4_address: 172.16.238.41
+    depends_on:
+      - cardano-node
+      - hydra-node-2  
+    restart: unless-stopped
+
+  kuber-hydra-3:
+    image: dquadrant/kuber-hydra:latest
+   
+    platform: linux/amd64
+    ports:
+      - "8084:8081"
+    volumes:
+      - ./runtime:/devnet
+    environment: 
+      - HYDRA_URL=hydra-node-3:4001
+      - CARDANO_NODE_SOCKET_PATH=/devnet/node.socket
+      - NETWORK=42
+    networks:
+      hydra_net:
+        ipv4_address: 172.16.238.42
+    depends_on:
+      - cardano-node
+      - hydra-node-3  
+    restart: unless-stopped  
+
+networks:
+  hydra_net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.238.0/24
+          gateway: 172.16.238.1
+
+
+

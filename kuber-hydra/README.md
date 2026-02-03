@@ -8,6 +8,69 @@
 ### Tests:
  - [✅ Passing](https://dquadrant.github.io/kuber/test-reports/hydra/) on v4.0.0
 
+
+
+### Setting up the devnet
+
+Here we prepare the devnet configuration for bootstrapping a local cardano node.This is the simplified variant of cardano node that dont require any stake pools.
+
+### All bash commands(Quickstart)
+```bash
+ bash setup-devnet.sh
+ docker compose up -d cardano-node
+ bash generate-credentials.sh
+ bash seed-devnet.sh 
+ docker compose up -d
+ docker ps
+```
+
+
+**Navigate to the `kuber-hydra` directory:**
+
+```bash
+    cd kuber-hydra/devnet
+```
+After you are in /kuber-hydra/devnet
+
+```bash
+ bash setup-devnet.sh
+```
+setup-devnet.sh cleans the runtime directory and puts the current time in genesis-shelly and genesis-byron.
+
+Next getting up the cardano node running.
+```bash 
+docker compose up -d cardano-node
+```
+
+To verify the cardano node is running 
+```bash 
+docker compose logs cardano-node -f
+```
+
+After that we need to generate the credentials for each participant.This contains hydras signing key , verification keys and cardano verification and signing keys.
+
+```bash
+bash generate-credentials.sh
+```
+
+
+Next we need to fund alice,bob,carol some utxos for committing and for paying fees.
+```bash 
+bash seed-devnet.sh
+```
+It used the cardano-cli that is within the already running cardano-node container.
+
+### Start Hydra Nodes
+
+```bash
+docker compose up -d hydra-node-{1,2,3}
+```
+See logs or docker ps for seeing if their ports are active and listening.
+```bash
+docker ps
+docker compose logs hydra-node-1
+```
+
 ## Running Kuber-Hydra
 
 ### With cabal
@@ -27,24 +90,19 @@ cabal run kuber-hydra -- --hydra-url ws://172.16.238.10:4001 --port 8081
 
 ### With Docker
 
-For a quick setup, you can use the provided `docker-compose.yml` to run `kuber-hydra` along with a Cardano node and Hydra node.
+After hydra-nodes and cardano node are up and runnig next step is to start kuber-hydra.
 
-1.  **Navigate to the `kuber-hydra` directory:**
+  **Start the services:**
     ```bash
-    cd kuber-hydra
+    docker-compose up -d kuber-hydra-{1,2,3}
     ```
-2.  **Start the services:**
-    Update the hydra-node configuration in docker-compose.yml and run the stack.
-    ```bash
-    docker-compose up -d
-    ```
-    This will start `cardano-node`, `hydra-node`, and `kuber-hydra` in detached mode.
-
-3.  **Verify services are running:**
+  **Verify services are running:**
     ```bash
     docker-compose ps
     ```
     Ensure all services are up and healthy.
 
-4.  **Access the Kuber-Hydra Relay API:**
+  **Access the Kuber-Hydra Relay API:**
     The API will be accessible at `http://localhost:8081`.
+    Test : `http://localhost:8082/hydra/query/head` .
+
