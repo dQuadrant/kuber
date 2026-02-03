@@ -1,4 +1,4 @@
-# testnet/mainnet
+# Testnet/Mainnet
 
 This guide walks through the steps to set up cardano node and run a Hydra Head using the `kuber` relay server. 
 
