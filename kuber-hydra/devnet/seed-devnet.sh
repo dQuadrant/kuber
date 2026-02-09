@@ -35,6 +35,8 @@ if [[ ! -x ${CCLI_CMD} ]]; then
   fi
 fi
 
+CREDENTIALS_DIR_PATH="${DEVNET_DIR}/credentials"
+
 # Detect OS
 OS_TYPE="$(uname)"
 
@@ -123,7 +125,7 @@ function seedAllParticipants() {
     echo >&2 "Seeding....."
 
   
-    FAUCET_ADDR=$(ccli_ conway address build --payment-verification-key-file ${DEVNET_DIR}/cardano-node/faucet.vk --testnet-magic ${NETWORK_ID})
+    FAUCET_ADDR=$(ccli_ conway address build --payment-verification-key-file ${DEVNET_DIR}/runtime/cardano-node/faucet.vk --testnet-magic ${NETWORK_ID})
     echo >&2 "Faucet address: ${FAUCET_ADDR}"
 
     echo >&2 "Querying faucet UTXOs..."
@@ -149,12 +151,12 @@ function seedAllParticipants() {
     # Get all participant addresses
     echo >&2 ""
     echo >&2 "Building addresses for all participants..."
-    ALICE_ADDR=$(ccli_ conway address build --payment-verification-key-file ${DEVNET_DIR}/credentials/alice.vk --testnet-magic ${NETWORK_ID})
-    BOB_ADDR=$(ccli_ conway address build --payment-verification-key-file ${DEVNET_DIR}/credentials/bob.vk --testnet-magic ${NETWORK_ID})
-    CAROL_ADDR=$(ccli_ conway address build --payment-verification-key-file ${DEVNET_DIR}/credentials/carol.vk --testnet-magic ${NETWORK_ID})
-    ALICE_FUNDS_ADDR=$(ccli_ conway address build --payment-verification-key-file ${DEVNET_DIR}/credentials/alice-funds.vk --testnet-magic ${NETWORK_ID})
-    BOB_FUNDS_ADDR=$(ccli_ conway address build --payment-verification-key-file ${DEVNET_DIR}/credentials/bob-funds.vk --testnet-magic ${NETWORK_ID})
-    CAROL_FUNDS_ADDR=$(ccli_ conway address build --payment-verification-key-file ${DEVNET_DIR}/credentials/carol-funds.vk --testnet-magic ${NETWORK_ID})
+    ALICE_ADDR=$(ccli_ conway address build --payment-verification-key-file ${CREDENTIALS_DIR_PATH}/alice.vk --testnet-magic ${NETWORK_ID})
+    BOB_ADDR=$(ccli_ conway address build --payment-verification-key-file ${CREDENTIALS_DIR_PATH}/bob.vk --testnet-magic ${NETWORK_ID})
+    CAROL_ADDR=$(ccli_ conway address build --payment-verification-key-file ${CREDENTIALS_DIR_PATH}/carol.vk --testnet-magic ${NETWORK_ID})
+    ALICE_FUNDS_ADDR=$(ccli_ conway address build --payment-verification-key-file ${CREDENTIALS_DIR_PATH}/alice-funds.vk --testnet-magic ${NETWORK_ID})
+    BOB_FUNDS_ADDR=$(ccli_ conway address build --payment-verification-key-file ${CREDENTIALS_DIR_PATH}/bob-funds.vk --testnet-magic ${NETWORK_ID})
+    CAROL_FUNDS_ADDR=$(ccli_ conway address build --payment-verification-key-file ${CREDENTIALS_DIR_PATH}/carol-funds.vk --testnet-magic ${NETWORK_ID})
 
     echo >&2 "  - alice: ${ALICE_ADDR}"
     echo >&2 "  - bob: ${BOB_ADDR}"
@@ -184,7 +186,7 @@ function seedAllParticipants() {
     echo >&2 "Signing transaction..."
     ccli_ conway transaction sign \
         --tx-body-file ${DEVNET_DIR}/runtime/seed-all-participants.draft \
-        --signing-key-file ${DEVNET_DIR}/cardano-node/faucet.sk \
+        --signing-key-file ${DEVNET_DIR}/runtime/cardano-node/faucet.sk \
         --out-file ${DEVNET_DIR}/runtime/seed-all-participants.signed >&2
     
     echo >&2 "Transaction signed successfully"
@@ -236,7 +238,7 @@ function publishReferenceScripts() {
   hnode publish-scripts \
     --testnet-magic ${NETWORK_ID} \
     --node-socket ${DEVNET_DIR}/runtime/node.socket \
-    --cardano-signing-key ${DEVNET_DIR}/cardano-node/faucet.sk
+    --cardano-signing-key ${DEVNET_DIR}/runtime/cardano-node/faucet.sk
 }
 
 #for macOS compatibility

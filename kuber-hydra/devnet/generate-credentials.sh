@@ -32,13 +32,8 @@ fi
 
 DOCKER_COMPOSE_CMD=
 if [[ ! -x ${CCLI_CMD} ]]; then
-    if docker compose --version >/dev/null 2>&1; then
-        DOCKER_COMPOSE_CMD="docker compose"
-    else
-        DOCKER_COMPOSE_CMD="docker-compose"
-    fi
+    :
 fi
-${DOCKER_COMPOSE_CMD} exec cardano-node mkdir -p /devnet/credentials
 
 
 # Invoke cardano-cli in running cardano-node container or via provided cardano-cli
@@ -46,8 +41,14 @@ function ccli() {
   if [[ -x ${CCLI_CMD} ]]; then
       ${CCLI_CMD} ${@}
   else
-      ${DOCKER_COMPOSE_CMD} exec cardano-node cardano-cli ${@}
-  fi
+      docker run --rm -it \
+          --user "$(id -u):$(id -g)" \
+          --workdir /devnet \
+          -v ${SCRIPT_DIR}:/devnet \
+          --entrypoint="sh" \
+          ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.5.4} \
+          -c 'cardano-cli "$@"' sh "$@"
+    fi
 }
 
 function ccli_() {
@@ -59,29 +60,54 @@ function hnode() {
       ${HYDRA_NODE_CMD} ${@}
   else
       docker run --rm -it \
-        --pull always \
-        -v ${SCRIPT_DIR}:/devnet \
-        ghcr.io/cardano-scaling/hydra-node:1.2.0 -- ${@}
+                --user "$(id -u):$(id -g)" \
+        --workdir /devnet \
+        -v ${SCRIPT_DIR}/:/devnet/ \
+      ghcr.io/cardano-scaling/hydra-node:1.2.0 \
+      ${@}
   fi
 }
 
 generate_cardano_keys() {
     local PREFIX=$1
-    echo "Generating Cardano keys: ${PREFIX}"
-    ccli address key-gen \
-        --verification-key-file ${DEVNET_DIR}/credentials/${PREFIX}.vk \
-        --signing-key-file ${DEVNET_DIR}/credentials/${PREFIX}.sk
+    local vk_path="${DEVNET_DIR}/credentials/${PREFIX}.vk"
+    local sk_path="${DEVNET_DIR}/credentials/${PREFIX}.sk"
+    local addr_path="${DEVNET_DIR}/credentials/${PREFIX}.addr"
+    local host_vk_path="${CREDENTIALS_DIR}/${PREFIX}.vk"
+    local host_sk_path="${CREDENTIALS_DIR}/${PREFIX}.sk"
+    local host_addr_path="${CREDENTIALS_DIR}/${PREFIX}.addr"
 
-    ccli address build \
-        --payment-verification-key-file ${DEVNET_DIR}/credentials/${PREFIX}.vk \
-        --testnet-magic ${NETWORK_ID} \
-        --out-file ${DEVNET_DIR}/credentials/${PREFIX}.addr
+    echo "Generating Cardano keys: ${PREFIX}"
+
+    if [[ -f "${host_vk_path}" || -f "${host_sk_path}" ]]; then
+        echo "  Skipping key generation; keys already exist."
+    else
+        ccli address key-gen \
+            --verification-key-file "${vk_path}" \
+            --signing-key-file "${sk_path}"
+    fi
+
+    if [[ -f "${host_addr_path}" ]]; then
+        echo "  Skipping address build; address already exists."
+    else
+        ccli address build \
+            --payment-verification-key-file "${vk_path}" \
+            --testnet-magic "${NETWORK_ID}" \
+            --out-file "${addr_path}"
+    fi
 }
 
 generate_hydra_keys() {
     local PREFIX=$1
+    local host_vk_path="${CREDENTIALS_DIR}/${PREFIX}-hydra.vk"
+    local host_sk_path="${CREDENTIALS_DIR}/${PREFIX}-hydra.sk"
+
     echo "Generating Hydra keys: ${PREFIX}"
-    hnode gen-hydra-key --output-file /devnet/credentials/${PREFIX}-hydra
+    if [[ -f "${host_vk_path}" || -f "${host_sk_path}" ]]; then
+        echo "  Skipping Hydra key generation; keys already exist."
+    else
+        hnode gen-hydra-key --output-file /devnet/credentials/${PREFIX}-hydra
+    fi
 }
 
 # Main
@@ -103,14 +129,11 @@ for ACTOR in "${PARTICIPANTS[@]}"; do
   generate_cardano_keys "${ACTOR}-funds"
 
   echo "Address (${ACTOR}):"
-  ${DOCKER_COMPOSE_CMD} exec cardano-node cat /devnet/credentials/${ACTOR}.addr
+    cat "${CREDENTIALS_DIR}/${ACTOR}.addr"
 
   echo "Funds Address (${ACTOR}-funds):"
-  ${DOCKER_COMPOSE_CMD} exec cardano-node cat /devnet/credentials/${ACTOR}-funds.addr
+    cat "${CREDENTIALS_DIR}/${ACTOR}-funds.addr"
 done
-
-docker cp $(docker compose ps -q cardano-node):/devnet/credentials/ ./
-${DOCKER_COMPOSE_CMD} exec cardano-node chown -R $(id -u):$(id -g) /devnet/credentials
 echo ""
 echo "All credentials generated successfully."
 echo ""

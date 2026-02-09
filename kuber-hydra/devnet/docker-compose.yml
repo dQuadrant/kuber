@@ -1,8 +1,8 @@
 services:
   cardano-node:
-    image: ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.5.3}
+    image: ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.5.4}
     volumes:
-      - ./cardano-node:/devnet/cardano-node
+      - ./credentials:/devnet/credentials
       - ./runtime:/devnet/runtime
     environment:
       - CARDANO_BLOCK_PRODUCER=true
@@ -10,14 +10,14 @@ services:
       - CARDANO_NODE_SOCKET_PATH=/devnet/runtime/node.socket  
     command:
       [ "run"
-      , "--config", "/devnet/cardano-node/cardano-node.json"
-      , "--topology", "/devnet/cardano-node/topology.json"
+      , "--config", "/devnet/runtime/cardano-node/cardano-node.json"
+      , "--topology", "/devnet/runtime/cardano-node/topology.json"
       , "--database-path", "/devnet/runtime/db"
-      , "--shelley-kes-key", "/devnet/cardano-node/kes.skey"
-      , "--shelley-vrf-key", "/devnet/cardano-node/vrf.skey"
-      , "--shelley-operational-certificate", "/devnet/cardano-node/opcert.cert"
-      , "--byron-delegation-certificate", "/devnet/cardano-node/byron-delegation.cert"
-      , "--byron-signing-key", "/devnet/cardano-node/byron-delegate.key"
+      , "--shelley-kes-key", "/devnet/runtime/cardano-node/kes.skey"
+      , "--shelley-vrf-key", "/devnet/runtime/cardano-node/vrf.skey"
+      , "--shelley-operational-certificate", "/devnet/runtime/cardano-node/opcert.cert"
+      , "--byron-delegation-certificate", "/devnet/runtime/cardano-node/byron-delegation.cert"
+      , "--byron-signing-key", "/devnet/runtime/cardano-node/byron-delegate.key"
       ]
     logging:
       driver: "json-file"
