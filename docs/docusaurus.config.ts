@@ -64,6 +64,12 @@ const config: Config = {
           label: "Hydra JS Client",
         },
         {
+          type: "docSidebar",
+          sidebarId: "apiReference",
+          position: "left",
+          label: "Api Reference",
+        },
+        {
           href: "https://github.com/dQuadrant/kuber/tree/feat/hydra",
           label: "GitHub",
           position: "right",

@@ -9,6 +9,19 @@ import ApiEndpoint from '@site/src/components/ApiEndpoint';
 
 This section provides detailed documentation for the Kuber backend API endpoints.
 
+## Health
+
+<ApiEndpoint
+  method="GET"
+  path="/api/v3/health"
+  title="Cardano Health Check"
+  description="Performs a health check to verify the connection and sync-status of the Cardano node."
+  responses={[
+    { code: "200 OK", description: "Cardano node is healthy." },
+    { code: "503 Service unavailable", description: "Cardano node is out of sync or down" },
+  ]}
+/>
+
 ## Query API
 
 <ApiEndpoint
@@ -88,7 +101,15 @@ This section provides detailed documentation for the Kuber backend API endpoints
   ]}
   requestBody={{
     type: "TxBuilder",
-    description: "Details for building the transaction.",
+    description: (
+      <span>
+        Details for building the transaction. See{" "}
+        <a href="https://kuberide.com/kuber/docs/tx-builder-reference" target="_blank" rel="noreferrer">
+          TxBuilder object reference
+        </a>
+        .
+      </span>
+    ),
     fields: [
       { name: "inputs", type: "Array", description: "List of transaction inputs." },
       { name: "outputs", type: "Array", description: "List of transaction outputs." },
@@ -124,7 +145,7 @@ This section provides detailed documentation for the Kuber backend API endpoints
   method="GET"
   path="/api/v1/time"
   title="Retrieve Current Time"
-  description="Retrieves the current time from the Cardano network."
+  description="Retrieves the current time and slotNo from the Cardano network."
   responses={[
     { code: "200 OK", description: "Returns the current time." },
   ]}
@@ -134,7 +155,7 @@ This section provides detailed documentation for the Kuber backend API endpoints
   method="POST"
   path="/api/v1/time/toslot"
   title="Translate POSIX Time to Slot"
-  description="Translates a given POSIX time to a Cardano slot number."
+  description="Translates a given POSIX time to a Cardano networks' slot number."
   requestBody={{
     type: "TimeTranslationReq",
     description: "Request body for POSIX time to slot translation.",
@@ -151,7 +172,7 @@ This section provides detailed documentation for the Kuber backend API endpoints
   method="POST"
   path="/api/v1/time/fromSlot"
   title="Translate Slot to POSIX Time"
-  description="Translates a given Cardano slot number to POSIX time."
+  description="Translates a given Cardano network's slot number to POSIX time."
   requestBody={{
     type: "SlotTranslationReq",
     description: "Request body for slot to POSIX time translation.",
@@ -197,18 +218,5 @@ This section provides detailed documentation for the Kuber backend API endpoints
   }}
   responses={[
     { code: "200 OK", description: "Returns the execution units (ExUnitsResponseModal)." },
-  ]}
-/>
-
-## Health
-
-<ApiEndpoint
-  method="GET"
-  path="/api/v3/health"
-  title="Cardano Health Check"
-  description="Performs a health check to verify the connection and sync-status of the Cardano node."
-  responses={[
-    { code: "200 OK", description: "Cardano node is healthy." },
-    { code: "500 Internal Server Error", description: "Cardano node is not available or an error occurred." },
   ]}
 />

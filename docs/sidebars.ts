@@ -76,6 +76,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         "hydra-js-client/getting-started",
+        "hydra-js-client/local-devnet",
         "hydra-js-client/testnet_or_mainnet",
       ],
       
@@ -148,16 +149,18 @@ const sidebars: SidebarsConfig = {
         },
       ],
     },
-    {
-      type: "doc",
-      id: "kuber-hydra-api-reference",
-      label: "⚙️🐲 Kuber-Hydra API Reference",
-    },
-    {
+  ],
+  apiReference: [
+        {
       type: "doc",
       id: "kuber-api-reference",
       label: "⚙️🐭 Kuber API Reference",
     },
+    {
+      type: "doc",
+      id: "kuber-hydra-api-reference",
+      label: "⚙️🐲 Kuber-Hydra API Reference",
+    }
   ],
 };
 

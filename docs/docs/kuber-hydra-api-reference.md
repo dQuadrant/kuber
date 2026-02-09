@@ -7,7 +7,8 @@ import ApiEndpoint from '@site/src/components/ApiEndpoint';
 
 # Kuber-Hydra API Reference
 
-This section provides detailed documentation for the Kuber-Hydra backend API endpoints.
+Kuber-Hydra provides following endpoints in addition to the layer1 kuber endpoints.
+When running hydra server, all of the endpoints in this doc and in kuber doc will be available
 
 ## Hydra Command API
 
@@ -142,7 +143,15 @@ This section provides detailed documentation for the Kuber-Hydra backend API end
   ]}
   requestBody={{
     type: "TxBuilder",
-    description: "Details for building the transaction.",
+    description: (
+      <span>
+        Details for building the transaction. See{" "}
+        <a href="https://kuberide.com/kuber/docs/tx-builder-reference" target="_blank" rel="noreferrer">
+          TxBuilder object reference
+        </a>
+        .
+      </span>
+    ),
     fields: [
       { name: "inputs", type: "Array", description: "List of transaction inputs." },
       { name: "outputs", type: "Array", description: "List of transaction outputs." },

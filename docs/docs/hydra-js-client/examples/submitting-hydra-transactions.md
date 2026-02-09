@@ -21,8 +21,7 @@ This example demonstrates how to build and submit a simple transaction (sending 
 
 ```typescript
 import { KuberHydraApiProvider } from "kuber-client"; // Adjust path as needed
-import { Value,Ed25519Key ,loadCrypto } from "libcardano";
-import {parseTransaction} from "libcardano/cardano/serialization";
+import { Ed25519Key ,loadCrypto } from "libcardano";
 import { ShelleyWallet, Cip30ShelleyWallet } from "libcardano-wallet";
 import { readFileSync } from "fs";
 
@@ -61,10 +60,8 @@ async function runBuildAndSubmitTransactionExample() {
 
   try {
     // Use the buildAndSubmitWithWallet function from KuberProvider
-    const submitResult = await hydra.buildAndSubmitWithWallet(cip30Wallet, txBuilder);
-    const parsedTx = parseTransaction(submitResult.updatedTx)
-    console.log("Transaction submitted to Hydra Head. Hash:",parsedTx.hash);
-    console.log("CBOR Hex:", submitResult.updatedTxBytes.toString('hex'));
+    const txHash = await hydra.buildAndSubmitWithWallet(cip30Wallet, txBuilder);
+    console.log("Transaction submitted to Hydra Head. Hash:", txHash);
 
   } catch (error: unknown) {
     if (error instanceof Error) {
