@@ -1,30 +1,29 @@
 # Kuber Hydra
 
-- [Project Scope and Planning](https://dquadrant.github.io/kuber/hydra_docusaurus/docs/milestones)
-- [Architecture](https://dquadrant.github.io/kuber/hydra_docusaurus/docs/architecture)
+Kuber greatly simplifis interaction with hydra. Transaction building Apis share same interface for both layer1 and layer2
+
 - [Getting Started with Kuber-Hydra](https://dquadrant.github.io/kuber/hydra_docusaurus/docs/hydra-js-client/getting-started)
 
-
-### Tests:
+## Tests:
  - [✅ Passing](https://dquadrant.github.io/kuber/test-reports/hydra/) on v4.0.0
 
 
+## Quickstart with devnet
 
-### Setting up the devnet
+Here we prepare the devnet configuration for bootstrapping a local cardano node.
+Devnet runs as a single node cluster and greatly simplifies local testing
 
-Here we prepare the devnet configuration for bootstrapping a local cardano node.This is the simplified variant of cardano node that dont require any stake pools.
-
-### All bash commands(Quickstart)
-```bash
- bash setup-devnet.sh
- docker compose up -d cardano-node
- bash generate-credentials.sh
- bash seed-devnet.sh 
- docker compose up -d
- docker ps
+### Use cluster setup script
+```bash 
+ cd devnet
+ ./reset-cluster.sh   # creates new cluster, resets cluster to fresh state if already running
+ docker compose ps
 ```
+ You can now [start developing](https://dquadrant.github.io/kuber/hydra_docusaurus/docs/hydra-js-client/installation)
 
 
+### Explaination
+#### 1. Prepare cluster and start node
 **Navigate to the `kuber-hydra` directory:**
 
 ```bash
@@ -60,7 +59,7 @@ bash seed-devnet.sh
 ```
 It used the cardano-cli that is within the already running cardano-node container.
 
-### Start Hydra Nodes
+### 2. Start Hydra Nodes
 
 ```bash
 docker compose up -d hydra-node-{1,2,3}
@@ -71,24 +70,9 @@ docker ps
 docker compose logs hydra-node-1
 ```
 
-## Running Kuber-Hydra
+### 3.Start Kuber-Hydra
 
-### With cabal
-
-To run `kuber-hydra` with cabal, you need to set the required environment variables and then run the application.
-
-```bash
-export CARDANO_NODE_SOCKET_PATH=/path/to/cardano-node/preview/node.socket
-export NETWORK=preview
-cd kuber-hydra
-cabal run kuber-hydra -- --hydra-url ws://172.16.238.10:4001 --port 8081
-```
--   `CARDANO_NODE_SOCKET_PATH`: The path to your Cardano node socket.
--   `NETWORK`: The Cardano network ID (e.g., `mainnet`, `preview`, `preprod`, or a `network_magic` number). This is a **required** environment variable.
--   `--hydra-url`: The WebSocket URL of your Hydra node. This is a **required** command-line argument.
--   `--port`: The port for the Kuber-Hydra relay server. If not specified, it defaults to `8081`.
-
-### With Docker
+### 3.1 With Docker
 
 After hydra-nodes and cardano node are up and runnig next step is to start kuber-hydra.
 
@@ -105,4 +89,20 @@ After hydra-nodes and cardano node are up and runnig next step is to start kuber
   **Access the Kuber-Hydra Relay API:**
     The API will be accessible at `http://localhost:8081`.
     Test : `http://localhost:8082/hydra/query/head` .
+
+
+### 3.2 With cabal
+
+To run `kuber-hydra` with cabal, you need to set the required environment variables and then run the application.
+
+```bash
+export CARDANO_NODE_SOCKET_PATH=/path/to/cardano-node/preview/node.socket
+export NETWORK=preview
+cd kuber-hydra
+cabal run kuber-hydra -- --hydra-url ws://172.16.238.10:4001 --port 8081
+```
+-   `CARDANO_NODE_SOCKET_PATH`: The path to your Cardano node socket.
+-   `NETWORK`: The Cardano network ID (e.g., `mainnet`, `preview`, `preprod`, or a `network_magic` number). This is a **required** environment variable.
+-   `--hydra-url`: The WebSocket URL of your Hydra node. This is a **required** command-line argument.
+-   `--port`: The port for the Kuber-Hydra relay server. If not specified, it defaults to `8081`.
 

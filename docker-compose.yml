@@ -4,7 +4,7 @@ volumes:
   node-db:
 services:
   cardano-node:
-    image: ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.5.1}
+    image: ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.5.4}
     environment:
       NETWORK: ${NETWORK:-preprod}
     volumes:
@@ -16,7 +16,7 @@ services:
         max-size: "2M"
         max-file: "10"
   kuber:
-    image: dquadrant/kuber:${KUBER_VERSION:-3.1.1}
+    image: dquadrant/kuber:${KUBER_VERSION:-v4.0.0}
     environment:
       NETWORK: ${NETWORK:- preprod}
     volumes:
@@ -24,7 +24,6 @@ services:
 #      -node-ipc:/root/.cardano/mainnet/ for NETWORK=mainnet   or set CARDANO_NODE_SOCKET_PATH explicitly
 #      -node-ipc:/root/.cardano/preview/ for NETWORK=preview   or set CARDANO_NODE_SOCKET_PATH explicitly
 #      -node-ipc:/root/.cardano/sancho/ for NETWORK=sancho   or set CARDANO_NODE_SOCKET_PATH explicitly
-
     ports:
       - 8081:8081
     logging:

@@ -1,23 +1,23 @@
 Kuber
 ===========
 
-Haskell library and API server for composing balanced Cardano transactions.
+Haskell library and API server for composing balanced Cardano and Hydra transactions
 
-[KuberIDE.com](https://kuberide.com) is Oficial IDE and plutus development and trying out kuber-server features.
-
-OpenSource Kuber playground is [here](https://github.com/dquadrant/kuber-playground)
-
-
+[KuberIDE.com](https://kuberide.com) is Oficial IDE for plutus development and trying out kuber-server features.
 
 ## Docs
- - [JSON API](https://kuberide.com/kuber/docs/intro)
  - [Kuber Haskel Library](https://dquadrant.github.io/kuber/haskell_library/)
- - [Kuber-Hydra](https://dquadrant.github.io/kuber/hydra_docusaurus/docs/hydra-js-client/getting-started)
+ - [Transaction Bulder and Ide reference](https://kuberide.com/kuber/docs/intro)
 
 
  ## Client library
- - [kuber-client:v3.3.5](https://www.npmjs.com/package/kuber-client/v/3.3.5)
+ Kuber client provides same interface for cardano network and layer2 hydra network.
+ - [kuber-client:v3.3.5](https://www.npmjs.com/package/kuber-client/v/3.3.6)
 
+## Hydra
+Kuber fully supports hydra transaction building and lifecycle. With `kuber-hydra`, you can interact simultaneously with the layer1 in addition to hydra.
+-  Source code: [kuber-hydra](./kuber-hydra)
+ - [Hydra docs](https://dquadrant.github.io/kuber/hydra_docusaurus/docs/hydra-js-client/getting-started)
 
 ## IDE
  Official IDE with Plutus compilation support is available at [kuberide.com/ide](https://kuberide.com/kuber/login/?state=\%2fide)
@@ -32,7 +32,7 @@ Kuber can be stared easily with [docker-compose.yml](./docker-compose.yml) file.
 
 ```bash
 git clone https://github.com/dquadrant/kuber.git
-git checkout 3.1.2
+git checkout v4.0.0
 docker-compose up -d
 ```
 
