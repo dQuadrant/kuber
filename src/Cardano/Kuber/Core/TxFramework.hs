@@ -472,7 +472,7 @@ txBuilderToTxBody
           fixedInputSum = utxoMapSum builderInputUtxo <> totalMintVal <> negateValue (cDeposits <> pDeposits)
 
           startingFee = case explicitFee of
-            Nothing -> Coin 400_000
+            Nothing -> Coin 0 -- Start fee must be 0 for a already balanced transaction in hydra, otherwise, we will receive insufficient-Input error
             Just n -> Coin n
           availableInputs = sortUtxos $ UTxO $ Map.filterWithKey (\tin _ -> Map.notMember tin builderInputUtxo) spendableUtxos
           calculator exunitResult onMissing =
