@@ -36,7 +36,7 @@ const config: Config = {
         docs: {
           sidebarPath: "./sidebars.ts",
 
-          editUrl: "https://github.com/dQuadrant/kuber/tree/feat/hydra",
+          editUrl: "https://github.com/dQuadrant/kuber",
         },
       } satisfies Preset.Options,
     ],
@@ -70,7 +70,7 @@ const config: Config = {
           label: "Api Reference",
         },
         {
-          href: "https://github.com/dQuadrant/kuber/tree/feat/hydra",
+          href: "https://github.com/dQuadrant/kuber",
           label: "GitHub",
           position: "right",
         },
