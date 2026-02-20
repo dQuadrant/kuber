@@ -30,12 +30,11 @@ async function runMintNativeTokensExample() {
   const hydra = new KuberHydraApiProvider("http://172.31.6.1:8082");
 
   // Load test wallet signing key (used for signing the transaction)
+  // Setup libcardano crypto and Shelley wallet
+  await loadCrypto();
   const testWalletSigningKey = await Ed25519Key.fromCardanoCliJson(
     JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
   );
-
-  // Setup libcardano crypto and Shelley wallet
-  await loadCrypto();
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);
   const cip30Wallet = new Cip30ShelleyWallet(hydra, hydra, shelleyWallet, 0);
   const walletAddress = (await cip30Wallet.getChangeAddress()).toBech32();
