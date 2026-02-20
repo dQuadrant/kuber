@@ -29,12 +29,11 @@ async function runWalletQueryExample() {
   const hydra = new KuberHydraApiProvider("http://172.31.6.1:8082"); // Replace with your Hydra node URL
 
   // Load test wallet signing key
+  // Setup libcardano crypto and Shelley wallet
+  await loadCrypto();
   const testWalletSigningKey = await Ed25519Key.fromCardanoCliJson(
     JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
   );
-
-  // Setup libcardano crypto and Shelley wallet
-  await loadCrypto();
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);
   console.log("Base Shelley Wallet:", shelleyWallet.toJSON());
 
