@@ -42,8 +42,8 @@ services:
       , "--api-host", "0.0.0.0"
       , "--listen", "172.16.238.10:5001"
       , "--monitoring-port", "6001"
-      , "--peer", "hydra-node-bob:5001"
-      , "--peer", "hydra-node-carol:5001"
+      , "--peer", "172.16.238.20:5001"
+      , "--peer", "172.16.238.30:5001"
       , "--hydra-scripts-tx-id", "${HYDRA_SCRIPTS_TX_ID}"
       , "--hydra-signing-key", "/devnet/credentials/alice-hydra.sk"
       , "--hydra-verification-key", "/devnet/credentials/bob-hydra.vk"
@@ -55,7 +55,7 @@ services:
       , "--testnet-magic", "42"
       , "--node-socket", "/devnet/runtime/node.socket"
       , "--persistence-dir", "/devnet/runtime/persistence/alice"
-      , "--contestation-period", "3s"
+      , "--contestation-period", "10s"
       ]
     networks:
       hydra_net:
@@ -92,7 +92,7 @@ services:
       , "--testnet-magic", "42"
       , "--node-socket", "/devnet/runtime/node.socket"
       , "--persistence-dir", "/devnet/runtime/persistence/bob"
-      , "--contestation-period", "3s"
+      , "--contestation-period", "10s"
       ]
     networks:
       hydra_net:
@@ -114,10 +114,10 @@ services:
     command:
       [ "--node-id", "3"
       , "--api-host", "0.0.0.0"
-      , "--listen", "0.0.0.0:5001"
+      , "--listen", "172.16.238.30:5001"
       , "--monitoring-port", "6001"
-      , "--peer", "hydra-node-alice:5001"
-      , "--peer", "hydra-node-bob:5001"
+      , "--peer", "172.16.238.10:5001"
+      , "--peer", "172.16.238.20:5001"
       , "--hydra-scripts-tx-id", "${HYDRA_SCRIPTS_TX_ID}"
       , "--hydra-signing-key", "/devnet/credentials/carol-hydra.sk"
       , "--hydra-verification-key", "/devnet/credentials/alice-hydra.vk"
@@ -129,7 +129,7 @@ services:
       , "--testnet-magic", "42"
       , "--node-socket", "/devnet/runtime/node.socket"
       , "--persistence-dir", "/devnet/runtime/persistence/carol"
-      , "--contestation-period", "3s"
+      , "--contestation-period", "10s"
       ]
     networks:
       hydra_net:
@@ -146,7 +146,6 @@ services:
       - ./runtime:/devnet
     networks:
       hydra_net:
-        ipv4_address: 172.16.238.40
     depends_on:
       - cardano-node
       - hydra-node-1  
@@ -154,7 +153,7 @@ services:
       - HYDRA_URL=hydra-node-1:4001
       - CARDANO_NODE_SOCKET_PATH=/devnet/node.socket
       - NETWORK=42
-    restart: no
+    restart: unless-stopped
 
   kuber-hydra-2:
     image: dquadrant/kuber-hydra:latest
@@ -170,7 +169,6 @@ services:
       - NETWORK=42
     networks:
       hydra_net:
-        ipv4_address: 172.16.238.41
     depends_on:
       - cardano-node
       - hydra-node-2  
@@ -190,7 +188,6 @@ services:
       - NETWORK=42
     networks:
       hydra_net:
-        ipv4_address: 172.16.238.42
     depends_on:
       - cardano-node
       - hydra-node-3  
