@@ -2,7 +2,7 @@
 set -euo pipefail
 
 docker compose pull                     # pull all images
-docker compose down                     # stop and remove any existing containers
+docker compose down --volumes                     # stop and remove any existing containers
 
 if [[ -d runtime ]]; then
 	echo "Cleaning up runtime directory"
