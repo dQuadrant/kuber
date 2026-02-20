@@ -29,12 +29,13 @@ async function runCip30CommitExample() {
   // Load node address and test wallet signing key
   const node_addr_path = process.env.HOME + "/.cardano/preview/hydra-0/credentials/node.addr";
   const nodeAddr = readFileSync(node_addr_path).toString("utf-8").trim();
-  const testWalletSigningKey = await Ed25519Key.fromCardanoCliJson(
-    JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
-  );
 
   // Setup libcardano crypto and Shelley wallet
   await loadCrypto();
+
+  const testWalletSigningKey = await Ed25519Key.fromCardanoCliJson(
+    JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
+  );
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);
   console.log("Wallet", shelleyWallet.toJSON());
 
