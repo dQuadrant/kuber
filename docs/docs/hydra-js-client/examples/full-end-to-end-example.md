@@ -79,20 +79,34 @@ Behind the scenes it:
 - Publishes Hydra scripts
 - Starts all services (`cardano-node`, `hydra-node-1..3`, `kuber-hydra-1..3`)
 
-### 2) Install example dependencies
+### 2) Create a local example folder
 
+From the repository root (`kuber`):
 
 ```bash
-pnpm init
+mkdir -p kuber-hydra/hydra-example
+cd kuber-hydra/hydra-example
 ```
 
-Copy package.json from the end of this example.
-Then create a `hydra-e2e.ts` file and copy the content also given at the end of this example.
+### 3) Add `package.json` and install dependencies
 
-### 3) Run the full E2E flow
+1. Create a `package.json` in `kuber-hydra/hydra-example` using [Example package.json](#example-package-json).
+2. Install dependencies:
 
 ```bash
-npx tsx hydra-e2e.ts
+pnpm install
+```
+
+### 4) Add the script file
+
+Create `hydra-e2e.ts` in `kuber-hydra/hydra-example` and paste [Full E2E example code](#full-e2e-example-code).
+
+### 5) Run the full E2E flow
+
+From `kuber-hydra/hydra-example`:
+
+```bash
+pnpm run e2e
 ```
 
 ## What you should expect
@@ -188,7 +202,17 @@ A practical approach is to keep your domain logic separate, and call `kuber-hydr
 - If a previous head is stuck in `Closed`, the script tries automatic recovery/fanout; if recovery fails, run `./reset-cluster.sh` and retry.
 
 
+## Jump to code sections
+
+- [Full E2E example code](#full-e2e-example-code)
+- [Example package.json](#example-package-json)
+
+<a id="full-e2e-example-code"></a>
+
 ## Full E2E example code
+
+[Back to Quick start](#quick-start-easy-path)
+
 ```ts
 import { readFileSync } from "fs";
 import { execSync } from "child_process";
@@ -608,30 +632,31 @@ runHydraE2EFlow();
 
 ```
 
-### Example Package.json
+<a id="example-package-json"></a>
 
+### Example package.json
 
-```ts
+[Back to Quick start](#quick-start-easy-path)
+
+```json
 {
+  "name": "hydra-example",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
   "dependencies": {
-    "@types/node": "^25.2.3",
+    "libcardano": "2.2.8",
+    "libcardano-wallet": "2.2.8",
     "kuber-client": "3.3.1"
   },
   "devDependencies": {
+    "@types/node": "^25.2.3",
     "tsx": "^4.20.3",
-    "typescript": "^5.8.3",
-    "libcardano": "2.2.8",
-    "libcardano-wallet": "2.2.8"
+    "typescript": "^5.8.3"
   },
   "scripts": {
-    "start": "node example.cjs",
-    "start:esm": "node example.mjs"
-  },
-  "name": "hydra-example",
-  "version": "1.0.0",
-  "main": "example.cjs",
-  "license": "MIT",
-  "type": "commonjs"
+    "e2e": "tsx hydra-e2e.ts"
+  }
 }
 
 ```
