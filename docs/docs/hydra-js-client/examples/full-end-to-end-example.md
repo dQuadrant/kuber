@@ -81,18 +81,17 @@ Behind the scenes it:
 
 ### 2) Install example dependencies
 
-From `kuber-hydra/hydra-example`:
 
 ```bash
-pnpm install
+pnpm init
 ```
 
-The example uses `tsx` and `kuber-client` from `hydra-example/package.json`.
+Copy package.json from the end of this example.
+Then create a `hydra-e2e.ts` file and copy the content also given at the end of this example.
 
 ### 3) Run the full E2E flow
 
 ```bash
-cd kuber-hydra/hydra-example
 npx tsx hydra-e2e.ts
 ```
 
