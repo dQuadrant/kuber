@@ -1,25 +1,33 @@
-## v4.0.0 : Revamp Docs, Hydra features
-This release includes all changes from `v4.0.0-rc1` and the following updates:
+## v4.0.1 : Devnet Tooling and Hydra Docs
+This release includes all changes after `v4.0.0`.
+
 ### Fixes
-- Refactors and fixes decommit API endpints 
+- Prevent insufficient input errors in Hydra by starting tx fee at 0 for already balanced transactions.
 
-### Changes 
-- Revamp docs section
-- Update docs for decommit
-- Add yarn doc:validate command
-- Add common kuber functions
-- Add tx-builder reference to buildTx reference
-- Fix kube-hydra link in Readme
-- Improve getting started section
-- Fix kuber-client link in docs
-- Fix navigation in docs
-- Update Readme, Refactor docs
+### Devnet tooling
+- Added a local devnet reset script and setup helpers for Hydra clusters.
+- Added Cardano node configs and genesis files for the devnet cluster.
+- Improved credential generation and UTxO seeding scripts.
 
+## v4.0.0 : Docs Revamp and Hydra Polish
+This release includes all changes from `v4.0.0-rc1` and the following updates.
+
+### Highlights
+- Reorganized and refreshed the docs, especially the Hydra and tx builder references.
+- Added common Kuber functions to the Hydra JS client docs.
+
+### Fixes
+- Refactored and fixed decommit API endpoints in `kuber-hydra`.
+
+### Docs and tooling
+- Added `yarn doc:validate`.
+- Improved getting started content and navigation.
+- Fixed broken links for `kuber-hydra` and `kuber-client`.
+- Updated the README and cleaned up docs organization.
 
 ##### Libraries
 - cardano-api:10.1
 - [kuber-client:v3.3.5](https://www.npmjs.com/package/kuber-client/v/3.3.5)
-
 
 ##### Tested with
 - hydra-node:0.22.4-d505ff119c4bc62f008b6fcff3416cffc3d6df5b
