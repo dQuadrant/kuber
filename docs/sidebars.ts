@@ -163,6 +163,17 @@ const sidebars: SidebarsConfig = {
       label: "⚙️🐲 Kuber-Hydra API Reference",
     }
   ],
+  releaseNotes: [
+    {
+      type: "category",
+      label: "📣 Release Notes",
+      collapsed: false,
+      items: [
+        "release-notes/4.0.1",
+        "release-notes/4.0.0",
+      ],
+    },
+  ],
 };
 
 export default sidebars;
