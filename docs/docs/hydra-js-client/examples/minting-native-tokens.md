@@ -70,8 +70,9 @@ async function runMintNativeTokensExample() {
   try {
     // Use the buildAndSubmitWithWallet function from KuberProvider to mint tokens
     const mintResult = await hydra.buildAndSubmitWithWallet(cip30Wallet, mintingTransaction);
-    console.log("Minting transaction submitted to Hydra Head. Hash:", mintResult.hash);
-    console.log("CBOR Hex:", mintResult.cborHex);
+    const tx = parseTransaction(mintResult.updatedTx); 
+    console.log("Minting transaction submitted to Hydra Head. Hash:", tx.hash.toString('hex'));
+    console.log("CBOR Hex:", mintResult.updatedTxBytes.toString('hex'));
   } catch (error: unknown) {
     if (error instanceof Error) {
       console.error("Error building or submitting minting transaction:", error.message);
