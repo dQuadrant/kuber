@@ -53,7 +53,7 @@ async function runBuildAndSubmitTransactionExample() {
   // For a comprehensive reference on transaction builder fields, refer to:
   // https://kuberide.com/kuber/docs/tx-builder-reference
   const txBuilder = {
-    outputs: [{ address: walletAddress, value: "3_000_000" }], // Sending 3 ADA
+    outputs: [{ address: walletAddress, value: "3000000" }], // Sending 3 ADA
     changeAddress: walletAddress,
   };
 
