@@ -65,5 +65,7 @@ copyExecutable /bin/ls
 copyExecutable /bin/sh
 copyExecutable /bin/cat
 copyExecutable /usr/bin/printenv
+cp -u --preserve=timestamps,mode .ci/entrypoint.sh "$WORKDIR/bin/entrypoint.sh"
+chmod +x "$WORKDIR/bin/entrypoint.sh"
 
 echo "Done"
