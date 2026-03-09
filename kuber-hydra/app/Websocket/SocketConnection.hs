@@ -42,7 +42,8 @@ createAppConfig rawUrl serverIp serverPort chainInfo =
   let (host, port) = getHydraIpAndPort rawUrl
       scheme
         | any (`isPrefixOf` rawUrl) ["https://", "wss://"] = "https://"
-        | otherwise = "http://"
+        | any (`isPrefixOf` rawUrl) ["http://", "ws://"] = "http://"
+        | otherwise = error $ "Invalid scheme in kuber-url: " ++ rawUrl ++ ". Expected one of ws://, wss://, http://, or https://"
       baseUrl = scheme ++ host ++ ":" ++ show port ++ "/"
   in AppConfig host port baseUrl serverIp serverPort chainInfo
 
@@ -53,24 +54,27 @@ getHydraIpAndPort :: String -> (String, Int)
 getHydraIpAndPort url =
   let
     removeProtocol u
-      | Just rest <- stripPrefix "ws://" u    = rest
-      | Just rest <- stripPrefix "wss://" u   = rest
-      | Just rest <- stripPrefix "http://" u  = rest
-      | Just rest <- stripPrefix "https://" u = rest
-      | otherwise = u
+      | Just rest <- stripPrefix "ws://" u    = Just rest
+      | Just rest <- stripPrefix "wss://" u   = Just rest
+      | Just rest <- stripPrefix "http://" u  = Just rest
+      | Just rest <- stripPrefix "https://" u = Just rest
+      | otherwise = Nothing
 
-    stripped = removeProtocol url
-    (host, rest) = break (\c -> c == ':' || c == '/') stripped
+    mStripped = removeProtocol url
   in
-    case rest of
-      (':':portPart) ->
-          let portStr = takeWhile (/= '/') portPart
-          in case readMaybe portStr of
-            Just p -> (host, p)
-            Nothing -> error $ "Invalid port in URL: " ++ url
-      ('/':_) -> (host, 8080)
-      "" -> (host, 8080)
-      _ -> error $ "Invalid URL format: " ++ url
+    case mStripped of
+      Nothing -> error $ "Invalid URL: " ++ url ++ ". URL must start with ws://, wss://, http://, or https://"
+      Just stripped ->
+        let (host, rest) = break (\c -> c == ':' || c == '/') stripped
+        in case rest of
+            (':':portPart) ->
+                let portStr = takeWhile (/= '/') portPart
+                in case readMaybe portStr of
+                  Just p -> (host, p)
+                  Nothing -> error $ "Invalid port in URL: " ++ url
+            ('/':_) -> (host, 8080)
+            "" -> (host, 8080)
+            _ -> error $ "Invalid URL format: " ++ url
 
 hydraBaseUrl :: AppConfig -> String
 hydraBaseUrl = hydraApiBaseUrl
