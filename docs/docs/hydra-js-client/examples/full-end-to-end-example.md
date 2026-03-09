@@ -7,11 +7,6 @@ sidebar_label: Full End-to-End Example
 
 This guide is for developers who want to try Cardano Hydra Layer 2 quickly, without spending days wiring node APIs, keys, and transaction flow manually.
 
-It is based on:
-
-- `kuber-hydra/hydra-example/hydra-e2e.ts`
-- `kuber-hydra/devnet/reset-cluster.sh`
-
 ## Why use Hydra L2?
 
 Hydra gives you a fast off-chain execution environment (a Hydra Head) while still settling final results back to Cardano L1.
