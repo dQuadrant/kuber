@@ -14,10 +14,12 @@ import Data.Aeson
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
+import Data.List (stripPrefix, isPrefixOf)
 import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.Time.Clock
+import Text.Read (readMaybe)
 import Network.HTTP.Client.Conduit (parseRequest)
 import Network.HTTP.Simple (getResponseBody, httpLBS, setRequestBodyLBS, setRequestHeader, setRequestMethod)
 import qualified Network.HTTP.Simple as HTTP
@@ -27,23 +29,51 @@ import Websocket.Aeson
 import Websocket.Utils
 
 data AppConfig = AppConfig
-  { hydraUrl :: String
+  { hydraHost :: String
+  , hydraPort :: Int
+  , hydraApiBaseUrl :: String
   , serverIp :: Maybe String
   , serverPort :: Int
   , chainInfo :: ChainConnectInfo
   }
 
+createAppConfig :: String -> Maybe String -> Int -> ChainConnectInfo -> AppConfig
+createAppConfig rawUrl serverIp serverPort chainInfo =
+  let (host, port) = getHydraIpAndPort rawUrl
+      scheme
+        | any (`isPrefixOf` rawUrl) ["https://", "wss://"] = "https://"
+        | otherwise = "http://"
+      baseUrl = scheme ++ host ++ ":" ++ show port ++ "/"
+  in AppConfig host port baseUrl serverIp serverPort chainInfo
+
 evaluateL1Kontract :: AppConfig -> Kontract ChainConnectInfo w FrameworkError r -> IO  (Either FrameworkError r)
 evaluateL1Kontract config = evaluateKontract config.chainInfo
 
 getHydraIpAndPort :: String -> (String, Int)
-getHydraIpAndPort hydraUrl = case break (== ':') hydraUrl of
-                               (ip, ':' : p) -> (ip, read p)
-                               (ip, _)       -> (ip, 8080) -- Default Hydra port if not specified
+getHydraIpAndPort url =
+  let
+    removeProtocol u
+      | Just rest <- stripPrefix "ws://" u    = rest
+      | Just rest <- stripPrefix "wss://" u   = rest
+      | Just rest <- stripPrefix "http://" u  = rest
+      | Just rest <- stripPrefix "https://" u = rest
+      | otherwise = u
 
-hydraBaseUrl :: AppConfig -> [Char]
-hydraBaseUrl appConfig = "http://" ++ ip ++ ":" ++ show port ++ "/"
-  where (ip, port) = getHydraIpAndPort (hydraUrl appConfig)
+    stripped = removeProtocol url
+    (host, rest) = break (\c -> c == ':' || c == '/') stripped
+  in
+    case rest of
+      (':':portPart) ->
+          let portStr = takeWhile (/= '/') portPart
+          in case readMaybe portStr of
+            Just p -> (host, p)
+            Nothing -> error $ "Invalid port in URL: " ++ url
+      ('/':_) -> (host, 8080)
+      "" -> (host, 8080)
+      _ -> error $ "Invalid URL format: " ++ url
+
+hydraBaseUrl :: AppConfig -> String
+hydraBaseUrl = hydraApiBaseUrl
 
 errorTags :: [(T.Text, Int)]
 errorTags =
@@ -63,11 +93,10 @@ skipTags = [("Greetings", 201), ("TxValid", 201)] -- Created
 
 -- WebSocket Proxy Server
 proxyServer :: AppConfig -> WS.ServerApp
-proxyServer host pending = do
+proxyServer config pending = do
   conn <- WS.acceptRequest pending
   putStrLn "New client connected, forwarding to Hydra WebSocket..."
-  let (hydraIp, hydraPort) = getHydraIpAndPort (hydraUrl host)
-  WS.runClient hydraIp hydraPort "/" $ \remote -> do
+  WS.runClient config.hydraHost config.hydraPort "/" $ \remote -> do
     putStrLn "Connected to Hydra WebSocket server."
     -- Race both directions, end when either one stops
     race_
@@ -113,8 +142,7 @@ getLatestMessage appConfig conn0 expectedTags wait = do
             return $ Just (T.decodeUtf8 $ BSL.toStrict $ encode response201, 201)
           Right (Left _) -> do
             putStrLn "WebSocket disconnected, attempting to reconnect..."
-            let (hydraIp, hydraPort) = getHydraIpAndPort (hydraUrl appConfig)
-            WS.runClient hydraIp hydraPort "/" $ \newConn -> do
+            WS.runClient appConfig.hydraHost appConfig.hydraPort "/" $ \newConn -> do
               putStrLn "Reconnected"
               go newConn
           Right (Right msg) -> do

@@ -31,7 +31,7 @@ import Data.Text.Encoding
 import qualified Data.Text.Encoding as T
 import qualified Debug.Trace as Debug
 import Websocket.Forwarder
-import Websocket.SocketConnection (AppConfig (hydraUrl), fetch, getLatestMessage, getSnapshotUtxo, getProtocolParameters, getSnapshotUtxo', postDecommit', getHydraIpAndPort, hydraBaseUrl)
+import Websocket.SocketConnection (AppConfig (..), fetch, getLatestMessage, getSnapshotUtxo, getProtocolParameters, getSnapshotUtxo', postDecommit', getHydraIpAndPort, hydraBaseUrl)
 import Websocket.Utils
 import qualified Data.Text.IO as T
 import Websocket.Aeson (HydraProtocolParameters(..), ProtocolVersion(..))
@@ -84,8 +84,7 @@ buildDecommitTx appConfig utxosToDecommit = do
 submitDecommitTx :: AppConfig -> TxModal -> Bool -> IO (T.Text, Int)
 submitDecommitTx appConfig decommitTxModalObject shouldWait = do
   putStrLn "Starting to decommit"
-  let (hydraIp, hydraPort) = getHydraIpAndPort (hydraUrl appConfig)
-  WS.runClient hydraIp hydraPort "/" $ \conn -> do
+  WS.runClient (hydraHost appConfig) (hydraPort appConfig) "/" $ \conn -> do
     putStrLn "Connected to Hydra WebSocket server."
     -- Flush greetings on the established connection
     _ <- getLatestMessage appConfig conn [("Greetings", 200)] shouldWait
