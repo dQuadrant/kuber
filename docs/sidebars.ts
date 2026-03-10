@@ -135,7 +135,6 @@ const sidebars: SidebarsConfig = {
             "hydra-js-client/close",
             "hydra-js-client/fanout",
             "hydra-js-client/abort",
-            "hydra-js-client/contest",
             "hydra-js-client/commit",
             "hydra-js-client/decommit",
           ],

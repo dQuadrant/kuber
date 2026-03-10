@@ -105,7 +105,6 @@ type HydraCommandAPI =
     :<|> "close" :> WithWait PostResp
     :<|> "decommit" :> QueryParams "txin" T.Text :> GetResp -- New GET decommit
     :<|> "decommit" :> ReqBody '[JSON] TxModal :> WithWait PostResp -- New POST decommit
-    :<|> "contest" :> WithWait PostResp
     :<|> "fanout" :> WithWait PostResp
     :<|> "tx" :> WithSubmit (ReqBody '[JSON] TxBuilder :> Post '[JSON] TxModal)
     :<|> "submit" :> ReqBody '[JSON] TxModal :> WithWait PostResp
@@ -165,7 +164,6 @@ hydraServer appConfig =
         :<|> closeHandler appConfig
         :<|> decommitQueryTxHandler appConfig
         :<|> decommitSubmitTxModalHandler appConfig
-        :<|> contestHandler appConfig
         :<|> fanoutHandler appConfig
         :<|> txHandler appConfig
         :<|> submitHandler appConfig
@@ -244,11 +242,6 @@ decommitQueryTxHandler appConfig txin = do
 closeHandler :: AppConfig -> Maybe Bool -> Handler (Union UVerbResponseTypes)
 closeHandler appConfig wait = do
   closeResponse <- liftIO $ close appConfig (fromMaybe False wait)
-  hydraErrorHandler closeResponse
-
-contestHandler :: AppConfig -> Maybe Bool -> Handler (Union UVerbResponseTypes)
-contestHandler appConfig wait = do
-  closeResponse <- liftIO $ contest appConfig (fromMaybe False wait)
   hydraErrorHandler closeResponse
 
 fanoutHandler :: AppConfig -> Maybe Bool -> Handler (Union UVerbResponseTypes)
