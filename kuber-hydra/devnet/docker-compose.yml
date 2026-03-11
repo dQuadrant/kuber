@@ -1,6 +1,6 @@
 services:
   cardano-node:
-    image: ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.5.4}
+    image: ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.6.2}
     volumes:
       - ./credentials:/devnet/credentials
       - ./runtime:/devnet/runtime
