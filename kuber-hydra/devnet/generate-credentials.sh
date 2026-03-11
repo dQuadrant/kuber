@@ -46,7 +46,7 @@ function ccli() {
           --workdir /devnet \
           -v ${SCRIPT_DIR}:/devnet \
           --entrypoint="sh" \
-          ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.5.4} \
+          ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.6.2} \
           -c 'cardano-cli "$@"' sh "$@"
     fi
 }
@@ -63,7 +63,7 @@ function hnode() {
                 --user "$(id -u):$(id -g)" \
         --workdir /devnet \
         -v ${SCRIPT_DIR}/:/devnet/ \
-      ghcr.io/cardano-scaling/hydra-node:1.2.0 \
+      ghcr.io/cardano-scaling/hydra-node:1.3.0 \
       ${@}
   fi
 }

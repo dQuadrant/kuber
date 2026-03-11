@@ -23,12 +23,9 @@ A `Promise` that resolves to an array of `UTxO` objects. Each `UTxO` object cont
 ### Example
 
 ```javascript
-const { loadCrypto } = require("libcardano");
 const { KuberHydraApiProvider } = require("kuber-client");
 
 async function main() {
-  await loadCrypto();
-
   const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
   const walletAddress = "addr_test1qr..."; // Replace with your wallet address
 
@@ -66,12 +63,9 @@ A `Promise` that resolves to an array of `UTxO` objects. Each `UTxO` object cont
 ### Example
 
 ```javascript
-const { loadCrypto } = require("libcardano");
 const { KuberHydraApiProvider } = require("kuber-client");
 
 async function main() {
-  await loadCrypto();
-
   const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
   const transactionInput = "yourTxHash#0"; // Replace with a valid transaction input
 

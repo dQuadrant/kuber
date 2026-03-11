@@ -6,7 +6,7 @@ docker compose down --volumes                     # stop and remove any existing
 
 if [[ -d runtime ]]; then
 	echo "Cleaning up runtime directory"
-	docker run --rm -v "$(pwd)/runtime:/target" --entrypoint /bin/bash ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.5.4} -c 'rm -rf /target/*'
+	docker run --rm -v "$(pwd)/runtime:/target" --entrypoint /bin/bash ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.6.2} -c 'rm -rf /target/*'
 fi
 
 bash setup-devnet.sh                    # setup the devnet

@@ -22,12 +22,9 @@ yarn add kuber-client
 Here's a quick example of how to use `KuberHydraApiProvider` to interact with a Hydra head:
 
 ```javascript
-const { loadCrypto } = require("libcardano");
 const { KuberHydraApiProvider } = require("kuber-client");
 
 async function main() {
-  await loadCrypto();
-
   const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
 
   console.log("Head state:", await hydra.queryHeadState());

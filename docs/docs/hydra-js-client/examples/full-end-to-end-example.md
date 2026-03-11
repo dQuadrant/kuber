@@ -211,10 +211,10 @@ A practical approach is to keep your domain logic separate, and call `kuber-hydr
 ```ts
 import { readFileSync } from "fs";
 import { execSync } from "child_process";
-import { loadCrypto, Ed25519Key, Value } from "libcardano";
-import { ShelleyWallet, Cip30ShelleyWallet } from "libcardano-wallet";
+import { CardanoKeyAsync, Value } from "libcardano";
+import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
 import { KuberHydraApiProvider } from "kuber-client"; // Adjust path as needed
-import { UTxO } from "libcardano/cardano/serialization";
+import { UTxO } from "libcardano/serialization";
 
 // Set your work directory and paths according to your local setup. 
 // This example assumes a specific structure for the devnet, so adjust as necessary for your environment. 
@@ -231,7 +231,7 @@ type PartyConfig = {
 };
 
 type PartyRuntime = PartyConfig & {
-  wallet: Cip30ShelleyWallet;
+  wallet: SimpleCip30Wallet;
   address: string;
   pubKeyHex?: string;
 };
@@ -300,13 +300,13 @@ async function getTotalAdaBalanceByAddress(address: string): Promise<number> {
   return totalBalance / 1_000_000;
 }
 
-async function getCip30WalletFromSkFile(skFilePath: string, hydra: KuberHydraApiProvider): Promise<Cip30ShelleyWallet> {
+async function getCip30WalletFromSkFile(skFilePath: string, hydra: KuberHydraApiProvider): Promise<SimpleCip30Wallet> {
   const skFile = readFileSync(skFilePath, "utf-8");
-  const signingKey = await Ed25519Key.fromCardanoCliJson(
+  const signingKey = await CardanoKeyAsync.fromCardanoCliJson(
     JSON.parse(skFile),
   );
   const shelleyWallet = new ShelleyWallet(signingKey);
-  return new Cip30ShelleyWallet(hydra, hydra, shelleyWallet, 0);
+  return new SimpleCip30Wallet(hydra, hydra, shelleyWallet, 0);
 }
 
 async function waitForBalance(address: string, minimumBalance: number, timeout: number = 120000): Promise<void> {
@@ -348,7 +348,7 @@ async function fundWalletWithFaucet(walletAddress: string, minimumBalanceAda: nu
   };
   const buildResult = await hydraAlice.l1Api.buildTx(txBuilder);
   const signResult = await faucetCip30Wallet.signTx(buildResult.cborHex);
-  await hydraAlice.l1Api.submitTx(signResult.updatedTxBytes.toString("hex"));
+  await hydraAlice.l1Api.submitTx(signResult.transaction.toBytes().toString("hex"));
   console.log("Submitted funding transaction hash:", buildResult.hash);
 
   // // // Wait for the transaction to be confirmed
@@ -389,7 +389,7 @@ async function ensureCloseCollateral(parties: PartyRuntime[]): Promise<void> {
   }
 }
 
-async function commitToHydraHead(cip30Wallet: Cip30ShelleyWallet, hydra: KuberHydraApiProvider, partyName: string) {
+async function commitToHydraHead(cip30Wallet: SimpleCip30Wallet, hydra: KuberHydraApiProvider, partyName: string) {
   // Select UTxOs to commit (e.g., the first one with a value greater than 4 ADA)
   const walletAddress = (await cip30Wallet.getChangeAddress()).toBech32();
   const l1Utxos = await queryUtxosByAddress(walletAddress);
@@ -415,7 +415,7 @@ async function commitToHydraHead(cip30Wallet: Cip30ShelleyWallet, hydra: KuberHy
   const signResult = await cip30Wallet.signTx(commitResult.cborHex);
 
   // Submit the signed transaction to the L1 chain
-  await hydra.l1Api.submitTx(signResult.updatedTxBytes.toString("hex"));
+  await hydra.l1Api.submitTx(signResult.transaction.toBytes().toString("hex"));
   console.log(`Submitted Commit transaction hash (${partyName}):`, commitResult.hash);
 
   // // Wait for the transaction to be confirmed and head state to change
@@ -482,7 +482,7 @@ async function submitHydraTransactions(parties: PartyRuntime[]): Promise<void> {
         const signedTx = await sender.wallet.signTx(builtTx.cborHex, true);
 
         try {
-          await hydraAlice.submitTx(signedTx.updatedTxBytes.toString("hex"));
+            await hydraAlice.submitTx(signedTx.transaction.toBytes().toString("hex"));
         } catch (error: any) {
           const type = error?.data?.type;
           const message = String(error?.data?.message ?? error?.message ?? "");
@@ -609,7 +609,6 @@ async function verifyL1Settlement(parties: PartyRuntime[]): Promise<void> {
 }
 
 async function runHydraE2EFlow() {
-  await loadCrypto();
   await ensureFreshDevnetHead();
 
   const parties = await buildPartyRuntime();

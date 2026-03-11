@@ -119,3 +119,9 @@ cabal run kuber-hydra -- --hydra-url ws://172.16.238.10:4001 --port 8081
 - `NETWORK`: The Cardano network ID (for devnet, `42` or a `network_magic` number). This is required.
 - `--hydra-url`: WebSocket URL of your Hydra node. This is required.
 - `--port`: Port for the Kuber-Hydra relay server (defaults to `8081`).
+
+## Next tutorial: Devnet cluster
+
+To manually add multiple participants and run cluster commands (open/close/fanout flows), continue with:
+
+- [Devnet cluster](./examples/devnet-cluster.md)

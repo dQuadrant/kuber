@@ -1,6 +1,6 @@
 services:
   cardano-node:
-    image: ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.5.4}
+    image: ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.6.2}
     volumes:
       - ./credentials:/devnet/credentials
       - ./runtime:/devnet/runtime
@@ -26,7 +26,7 @@ services:
         max-file: "10"
   
   hydra-node-1:
-    image: ghcr.io/cardano-scaling/hydra-node:1.2.0
+    image: ghcr.io/cardano-scaling/hydra-node:1.3.0
     build:
       context: ../
       target: hydra-node
@@ -63,7 +63,7 @@ services:
     restart: always
     
   hydra-node-2:
-    image: ghcr.io/cardano-scaling/hydra-node:1.2.0
+    image: ghcr.io/cardano-scaling/hydra-node:1.3.0
     
     build:
       context: ../
@@ -100,7 +100,7 @@ services:
     restart: always
 
   hydra-node-3:
-    image: ghcr.io/cardano-scaling/hydra-node:1.2.0
+    image: ghcr.io/cardano-scaling/hydra-node:1.3.0
    
     build:
       context: ../

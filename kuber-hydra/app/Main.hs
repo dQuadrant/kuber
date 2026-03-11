@@ -96,7 +96,7 @@ main = do
     else return hydraUrlFromCli
 
   chainInfo <- chainInfoFromEnv
-  let appConfig = AppConfig hydraUrlFinal hostStr serverPort chainInfo
+  let appConfig = createAppConfig hydraUrlFinal hostStr serverPort chainInfo
 
   -- Always perform health checks before starting the server
   performHealthChecks appConfig

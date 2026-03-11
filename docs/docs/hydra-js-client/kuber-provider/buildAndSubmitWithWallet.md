@@ -11,7 +11,7 @@ sidebar_label: buildAndSubmitWithWallet
 
 ```typescript
 async buildAndSubmitWithWallet(
-  cip30OrProvider: Cip30 | Cip30Provider,
+  cip30OrProvider: Cip30,
   buildRequest: Record<string, any>,
   autoAddCollateral = false,
   estimatedSpending?: number | bigint,
@@ -33,23 +33,21 @@ A `Promise` that resolves to a `HexString` representing the submitted transactio
 
 ```typescript
 import { KuberHydraApiProvider } from "kuber-client";
-import { loadCrypto, Ed25519Key } from "libcardano";
-import { ShelleyWallet, Cip30ShelleyWallet } from "libcardano-wallet";
+import { CardanoKeyAsync } from "libcardano";
+import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
 import { readFileSync } from "fs";
 
 async function main() {
-  await loadCrypto();
-
   const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
 
   // Load test wallet signing key
-  const testWalletSigningKey = await Ed25519Key.fromCardanoCliJson(
+  const testWalletSigningKey = await CardanoKeyAsync.fromCardanoCliJson(
     JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
   );
 
   // Setup libcardano crypto and Shelley wallet
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);
-  const cip30Wallet = new Cip30ShelleyWallet(hydra, hydra, shelleyWallet, 0);
+  const cip30Wallet = new SimpleCip30Wallet(hydra, hydra, shelleyWallet, 0);
   const walletAddress = (await cip30Wallet.getChangeAddress()).toBech32();
 
   const transaction = {

@@ -27,13 +27,10 @@ const createSampleOutputTx = (
 **2. Generate Address from Key**
 
 ```ts
-import { setup } from "libcardano/lib/cardano/crypto";
-import { Ed25519Key } from "libcardano/cardano/primitives/keys";
-import { ShelleyWallet } from "libcardano/cardano/primitives/address";
+import { CardanoKeyAsync } from "libcardano";
+import { ShelleyWallet } from "libcardano-wallet";
 
-await setup(); //this is necessary to run Ed25519Key funcitons
-
-const testWalletSigningKey = await Ed25519Key.fromCardanoCliFile(
+const testWalletSigningKey = await CardanoKeyAsync.fromCardanoCliFile(
   path.join("src", "example.sk")
 );
 const testWalletAddress = new ShelleyWallet(testWalletSigningKey).addressBech32(
@@ -46,11 +43,11 @@ const testWalletAddress = new ShelleyWallet(testWalletSigningKey).addressBech32(
 ```ts
 async function createHydraWallet(
   service: KuberHydraService,
-  ed25519Key: Ed25519Key,
+  cardanoKey: CardanoKeyAsync,
   network: 0 | 1
 ): Promise<HydraWallet> {
   try {
-    const shelleyWallet = new ShelleyWallet(ed25519Key);
+    const shelleyWallet = new ShelleyWallet(cardanoKey);
     const hydraWallet = new HydraWallet(service, shelleyWallet, network);
     return hydraWallet;
   } catch (error: any) {

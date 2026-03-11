@@ -21,8 +21,8 @@ This example demonstrates how to build and submit a simple transaction (sending 
 
 ```typescript
 import { KuberHydraApiProvider } from "kuber-client"; // Adjust path as needed
-import { Ed25519Key ,loadCrypto } from "libcardano";
-import { ShelleyWallet, Cip30ShelleyWallet } from "libcardano-wallet";
+import { CardanoKeyAsync } from "libcardano";
+import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
 import { readFileSync } from "fs";
 
 async function runBuildAndSubmitTransactionExample() {
@@ -30,13 +30,12 @@ async function runBuildAndSubmitTransactionExample() {
   const hydra = new KuberHydraApiProvider("http://172.31.6.1:8082");
 
   // Load test wallet signing key
-  // Setup libcardano crypto and Shelley wallet
-  await loadCrypto();
-  const testWalletSigningKey = await Ed25519Key.fromCardanoCliJson(
+  // Setup Shelley wallet
+  const testWalletSigningKey = await CardanoKeyAsync.fromCardanoCliJson(
     JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
   );
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);
-  const cip30Wallet = new Cip30ShelleyWallet(hydra, hydra, shelleyWallet, 0);
+  const cip30Wallet = new SimpleCip30Wallet(hydra, hydra, shelleyWallet, 0);
   const walletAddress = (await cip30Wallet.getChangeAddress()).toBech32();
 
   console.log("Wallet Address:", walletAddress);

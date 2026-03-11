@@ -96,6 +96,7 @@ const sidebars: SidebarsConfig = {
         "hydra-js-client/examples/submitting-hydra-transactions",
         "hydra-js-client/examples/minting-native-tokens",
         "hydra-js-client/examples/full-end-to-end-example",
+        "hydra-js-client/examples/devnet-cluster",
       ],
     },
     {
@@ -103,6 +104,18 @@ const sidebars: SidebarsConfig = {
       label: "🛠️ Hydra Provider Reference",
       collapsed: false,
       items: [
+        {
+          type: "category",
+          label: "Common Kuber functions",
+          collapsed: true,
+          items: [
+            "hydra-js-client/kuber-provider/buildWithWallet",
+            "hydra-js-client/kuber-provider/buildAndSignWithWallet",
+            "hydra-js-client/kuber-provider/buildAndSubmitWithWallet",
+            "hydra-js-client/kuber-provider/waitForUtxoConsumption",
+            "hydra-js-client/kuber-provider/waitForTxConfirmation",
+          ],
+        },
         {
           type: "category",
           label: "Query APIs",
@@ -134,18 +147,6 @@ const sidebars: SidebarsConfig = {
           items: [
             "hydra-js-client/buildTx",
             "hydra-js-client/submitTx",
-          ],
-        },
-        {
-          type: "category",
-          label: "Common Kuber functions",
-          collapsed: true,
-          items: [
-            "hydra-js-client/kuber-provider/buildWithWallet",
-            "hydra-js-client/kuber-provider/buildAndSignWithWallet",
-            "hydra-js-client/kuber-provider/buildAndSubmitWithWallet",
-            "hydra-js-client/kuber-provider/waitForUtxoConsumption",
-            "hydra-js-client/kuber-provider/waitForTxConfirmation",
           ],
         },
       ],

@@ -38,24 +38,22 @@ A `Promise` that resolves with the total time spent waiting in milliseconds when
 
 ```typescript
 import { KuberHydraApiProvider } from "kuber-client";
-import { loadCrypto, Ed25519Key, Value } from "libcardano";
+import { CardanoKeyAsync, Value } from "libcardano";
 import { ShelleyWallet, Cip30ShelleyWallet } from "libcardano-wallet";
 import { readFileSync } from "fs";
-import { TxInput } from "libcardano/cardano/serialization/txinout";
+import { TxInput } from "libcardano/serialization/txinout";
 
 async function main() {
-  await loadCrypto();
-
   const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
 
   // Load test wallet signing key
-  const testWalletSigningKey = await Ed25519Key.fromCardanoCliJson(
+  const testWalletSigningKey = await CardanoKeyAsync.fromCardanoCliJson(
     JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
   );
 
   // Setup libcardano crypto and Shelley wallet
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);
-  const cip30Wallet = new Cip30ShelleyWallet(hydra, hydra, shelleyWallet, 0);
+  const cip30Wallet = new SimpleCip30Wallet(hydra, hydra, shelleyWallet, 0);
   const walletAddress = (await cip30Wallet.getChangeAddress()).toBech32();
 
   console.log("Wallet Address:", walletAddress);

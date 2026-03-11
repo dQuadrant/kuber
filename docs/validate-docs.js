@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const { parseTransaction } = require('libcardano/cardano/serialization');
+const { parseTransaction } = require('libcardano/serialization');
 
 const projectRoot = path.resolve(__dirname, './'); // Path to the directory containing package.json
 const docsDir = path.join(__dirname, 'docs'); // Corrected path to point to docs/docs
@@ -22,14 +22,17 @@ function createTsConfig(dir) {
       esModuleInterop: true,
       forceConsistentCasingInFileNames: true,
       strict: true,
-      // skipLibCheck: true, // Removed to ensure module resolution is strict
-      lib: ["es2020", "dom", "esnext.asynciterable"], // Added 'esnext.asynciterable'
+      noImplicitAny: false,
+      skipLibCheck: true, // Skip type checking for libraries without .d.ts files (like libcardano-wallet)
+      lib: ["es2022", "dom", "esnext.asynciterable"], // Added 'esnext.asynciterable'
       module: "commonjs", // Ensure CommonJS modules are understood
-      target: "es2020",
+      target: "es2022",
       baseUrl: "..", // Set baseUrl to parent directory to resolve modules from project root node_modules
       paths: {
         "libcardano": ["./node_modules/libcardano"],
-        "kuber-client": ["./node_modules/kuber-client"]
+        "libcardano-wallet": ["./node_modules/libcardano-wallet/src"],
+        "libcardano-wallet/*": ["./node_modules/libcardano-wallet/src/*"],
+        "kuber-client": ["./node_modules/kuber-client/index.js"]
       }
     },
     include: ["./**/*"]

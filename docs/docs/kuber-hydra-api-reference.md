@@ -10,6 +10,62 @@ import ApiEndpoint from '@site/src/components/ApiEndpoint';
 Kuber-Hydra provides following endpoints in addition to the layer1 kuber endpoints.
 When running hydra server, all of the endpoints in this doc and in kuber doc will be available
 
+## Hydra Query API
+
+<ApiEndpoint
+  method="GET"
+  path="/hydra/query/utxo"
+  title="Query UTxOs"
+  description="Queries UTxOs."
+  queryParams={[
+    { name: "address", type: "Array of T.Text", description: "Filter UTxOs by address.", optional: true },
+    { name: "txin", type: "Array of T.Text", description: "Filter UTxOs by transaction input.", optional: true },
+  ]}
+  responses={[
+    { code: "200 OK", description: "Returns a list of UTxOs." },
+  ]}
+/>
+
+<ApiEndpoint
+  method="GET"
+  path="/hydra/query/head"
+  title="Retrieve Hydra Head State"
+  description="Retrieves the current state of the Hydra Head."
+  responses={[
+    { code: "200 OK", description: "Returns the Hydra Head state." },
+  ]}
+/>
+
+<ApiEndpoint
+  method="GET"
+  path="/hydra/query/protocol-parameters"
+  title="Retrieve Hydra Protocol Parameters"
+  description="Retrieves the Hydra protocol parameters."
+  responses={[
+    { code: "200 OK", description: "Returns the protocol parameters." },
+  ]}
+/>
+
+<ApiEndpoint
+  method="GET"
+  path="/hydra/query/state"
+  title="Retrieve Hydra State"
+  description="Retrieves the current state of the Hydra."
+  responses={[
+    { code: "200 OK", description: "Returns an object containing the current HydraHeadState (e.g., { state: 'Open' })." },
+  ]}
+/>
+
+<ApiEndpoint
+  method="GET"
+  path="/hydra/query/commits"
+  title="Retrieve Committed UTxOs"
+  description="Retrieves the committed UTxOs in the Hydra Head."
+  responses={[
+    { code: "200 OK", description: "Returns a list of committed UTxOs." },
+  ]}
+/>
+
 ## Hydra Command API
 
 <ApiEndpoint
@@ -109,19 +165,6 @@ When running hydra server, all of the endpoints in this doc and in kuber doc wil
 
 <ApiEndpoint
   method="POST"
-  path="/hydra/contest"
-  title="Contest Hydra Head"
-  description="Contests the Hydra Head."
-  queryParams={[
-    { name: "wait", type: "Boolean", description: "If true, the request will wait for the transaction to be confirmed.", optional: true },
-  ]}
-  responses={[
-    { code: "200 OK", description: "Success message." },
-  ]}
-/>
-
-<ApiEndpoint
-  method="POST"
   path="/hydra/fanout"
   title="Fanout Hydra Head"
   description="Fans out the remaining UTxOs from the Hydra Head."
@@ -183,61 +226,5 @@ When running hydra server, all of the endpoints in this doc and in kuber doc wil
   }}
   responses={[
     { code: "200 OK", description: "Success message." },
-  ]}
-/>
-
-## Hydra Query API
-
-<ApiEndpoint
-  method="GET"
-  path="/hydra/query/utxo"
-  title="Query UTxOs"
-  description="Queries UTxOs."
-  queryParams={[
-    { name: "address", type: "Array of T.Text", description: "Filter UTxOs by address.", optional: true },
-    { name: "txin", type: "Array of T.Text", description: "Filter UTxOs by transaction input.", optional: true },
-  ]}
-  responses={[
-    { code: "200 OK", description: "Returns a list of UTxOs." },
-  ]}
-/>
-
-<ApiEndpoint
-  method="GET"
-  path="/hydra/query/head"
-  title="Retrieve Hydra Head State"
-  description="Retrieves the current state of the Hydra Head."
-  responses={[
-    { code: "200 OK", description: "Returns the Hydra Head state." },
-  ]}
-/>
-
-<ApiEndpoint
-  method="GET"
-  path="/hydra/query/protocol-parameters"
-  title="Retrieve Hydra Protocol Parameters"
-  description="Retrieves the Hydra protocol parameters."
-  responses={[
-    { code: "200 OK", description: "Returns the protocol parameters." },
-  ]}
-/>
-
-<ApiEndpoint
-  method="GET"
-  path="/hydra/query/state"
-  title="Retrieve Hydra State"
-  description="Retrieves the current state of the Hydra."
-  responses={[
-    { code: "200 OK", description: "Returns an object containing the current HydraHeadState (e.g., { state: 'Open' })." },
-  ]}
-/>
-
-<ApiEndpoint
-  method="GET"
-  path="/hydra/query/commits"
-  title="Retrieve Committed UTxOs"
-  description="Retrieves the committed UTxOs in the Hydra Head."
-  responses={[
-    { code: "200 OK", description: "Returns a list of committed UTxOs." },
   ]}
 />
