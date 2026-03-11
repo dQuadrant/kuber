@@ -33,12 +33,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Cache cabal store
+        uses: actions/cache@v4
+        with:
+          path: dist-newstyle/build/docker/cabal-cache
+          key: cabal-${{ matrix.arch }}-${{ hashFiles('kuber.cabal', 'kuber-hydra/kuber-hydra.cabal') }}
+          restore-keys: |
+            cabal-${{ matrix.arch }}-
+
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cabal update
+        run: ./.ci/build cabal update
 
       - name: Build image
         run: |
