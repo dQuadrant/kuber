@@ -9,12 +9,26 @@ CABAL_CACHE_DIR="${WORKDIR}/dist-newstyle/build/docker/cabal-cache/"
 CHROOT_DIR="${WORKDIR}/dist-newstyle/build/docker/chroot-env/"
 
 mkdir -p $DIST_NEWSTYLE_DIR; mkdir -p $CABAL_CACHE_DIR ; mkdir -p $CHROOT_DIR
+
+# Variables for multiarch support
+PLATFORMS="linux/amd64,linux/arm64"
+USE_BUILDX=false
+PUSH_IMAGE=false
+
 function echo-usage() {
-  echo "  Usage $EXECUTABLE [-t tagname]*"
+  echo "  Usage $EXECUTABLE [options]"
+  echo "    Options:"
+  echo "      -h, --help               -->  Show this help message"
+  echo "      --multiarch              -->  Build for multiple architectures (amd64, arm64)"
+  echo "      --push                   -->  Push image to registry (requires --multiarch)"
+  echo "      --platforms PLATFORMS    -->  Specify platforms (default: linux/amd64,linux/arm64)"
+  echo ""
   echo "    Examples:"
   echo "      Set up                   -->  $EXECUTABLE cabal update"
   echo "      Build an image           -->  $EXECUTABLE"
-  echo "      Build with specific tag  -->  $EXECUTABLE -t inputoutput/cardano-db-sync:local"
+  echo "      Build with specific tag  -->  $EXECUTABLE -t dquadrant/kuber:local"
+  echo "      Build multiarch (local)  -->  $EXECUTABLE --multiarch -t dquadrant/kuber:local"
+  echo "      Build multiarch (push)   -->  $EXECUTABLE --multiarch --push -t dquadrant/kuber:latest"
   echo "      Clean up caches          -->  $EXECUTABLE clean"
 }
 
@@ -25,6 +39,39 @@ then
   echo;echo-usage
   exit 1
 fi
+
+## Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -h|--help)
+      echo-usage
+      exit 0
+      ;;
+    --multiarch)
+      USE_BUILDX=true
+      shift
+      ;;
+    --push)
+      PUSH_IMAGE=true
+      shift
+      ;;
+    --platforms)
+      PLATFORMS="$2"
+      shift 2
+      ;;
+    clean)
+      for dir in "$HOME/.cabal-docker" "./dist-newstyle-docker"  "./chroot-env"
+      do
+        echo "  Removing  $dir";
+        rm -rf $dir;
+      done;
+      exit;
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
 ## print help
 if  grep -qE '^--h'  <<< "$*"  ||   grep -qE "^-h" -  <<< "$*"
@@ -72,15 +119,37 @@ else
     ## default build
     execute-isolated 'cabal build exe:kuber-server exe:kuber-hydra  && bash -e ./.ci/copy-libraries.sh'
 
-    ## build  final docker image. by determining the git revision or passing the arguments to docker command.
-
-    if [ $# -gt 0 ]
-    then
-      showCommand docker build --build-arg  OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/ -f ./.ci/Dockerfile  "$@" .
-    elif git describe --tags | grep  -qE '^[0-9]+(\.[0-9]+)*$'
-    then
-      showCommand docker build --build-arg  OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/  -f ./.ci/Dockerfile  -t "dquadrant/kuber:$(git describe --tags)" .
+    ## build final docker image using docker buildx for multiarch support
+    if [ "$USE_BUILDX" = true ]; then
+      echo "Building multiarch image with docker buildx for platforms: $PLATFORMS"
+      
+      # Determine build flags
+      BUILD_FLAGS="--build-arg OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/ -f ./.ci/Dockerfile"
+      
+      if [ "$PUSH_IMAGE" = true ]; then
+        BUILD_FLAGS="$BUILD_FLAGS --push"
+      else
+        BUILD_FLAGS="$BUILD_FLAGS --load"
+      fi
+      
+      BUILD_FLAGS="$BUILD_FLAGS --platform $PLATFORMS"
+      
+      # Add user-provided arguments (like -t tag)
+      if [ $# -gt 0 ]; then
+        showCommand docker buildx build $BUILD_FLAGS "$@" .
+      elif git describe --tags | grep -qE '^[0-9]+(\.[0-9]+)*$'; then
+        showCommand docker buildx build $BUILD_FLAGS -t "dquadrant/kuber:$(git describe --tags)" .
+      else
+        showCommand docker buildx build $BUILD_FLAGS -t "dquadrant/kuber:$(git rev-parse HEAD)" .
+      fi
     else
-      showCommand docker build --build-arg  OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/  -f ./.ci/Dockerfile -t "dquadrant/kuber:$(git rev-parse HEAD)" .
+      ## Standard single-arch build with docker build
+      if [ $# -gt 0 ]; then
+        showCommand docker build --build-arg OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/ -f ./.ci/Dockerfile "$@" .
+      elif git describe --tags | grep -qE '^[0-9]+(\.[0-9]+)*$'; then
+        showCommand docker build --build-arg OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/ -f ./.ci/Dockerfile -t "dquadrant/kuber:$(git describe --tags)" .
+      else
+        showCommand docker build --build-arg OVERRIDE_CHROOT_DIR=./dist-newstyle/build/docker/chroot-env/ -f ./.ci/Dockerfile -t "dquadrant/kuber:$(git rev-parse HEAD)" .
+      fi
     fi
 fi
