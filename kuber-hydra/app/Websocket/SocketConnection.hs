@@ -20,8 +20,8 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.Time.Clock
 import Text.Read (readMaybe)
-import Network.HTTP.Client.Conduit (parseRequest)
-import Network.HTTP.Simple (getResponseBody, httpLBS, setRequestBodyLBS, setRequestHeader, setRequestMethod)
+import Network.HTTP.Client.Conduit (parseRequest, responseTimeoutMicro)
+import Network.HTTP.Simple (getResponseBody, httpLBS, setRequestBodyLBS, setRequestHeader, setRequestMethod, setRequestResponseTimeout)
 import qualified Network.HTTP.Simple as HTTP
 import Network.Wai (Request, requestHeaders)
 import qualified Network.WebSockets as WS
@@ -193,7 +193,8 @@ fetcher appConfig = do
   return $ \endpoint -> do
     let url = hydraBaseUrl appConfig ++ T.unpack endpoint
     request <- parseRequest url
-    response <- httpLBS request
+    let requestWithTimeout = setRequestResponseTimeout (responseTimeoutMicro (8 * 10 ^ 6)) request
+    response <- httpLBS requestWithTimeout
     let responseBody = T.pack $ BS8.unpack $ BSL.toStrict $ getResponseBody response
     return responseBody
 
@@ -202,13 +203,15 @@ fetcher' appConfig = do
   return $ \endpoint -> do
     let url = hydraBaseUrl appConfig ++ T.unpack endpoint
     request <- parseRequest url
-    httpLBS request
+    let requestWithTimeout = setRequestResponseTimeout (responseTimeoutMicro (8 * 10 ^ 6)) request
+    httpLBS requestWithTimeout
 
 fetchRaw :: (ToJSON p) => AppConfig -> T.Text -> T.Text -> Maybe p -> IO (HTTP.Response BSL.ByteString)
 fetchRaw appConfig method endpoint body = do
   let url = hydraBaseUrl appConfig ++ T.unpack endpoint
   initialRequest <- parseRequest url
   let request =
+        setRequestResponseTimeout (responseTimeoutMicro (8 * 10 ^ 6)) $
         (if method == "POST" then setRequestMethod "POST" else id) $
           (case body of
             Just d -> setRequestBodyLBS (A.encode d)
