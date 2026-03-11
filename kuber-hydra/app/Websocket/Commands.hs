@@ -44,7 +44,19 @@ hydraHeadMessageForwardingFailed = T.pack "Failed to forward message to hydra he
 
 initialize :: AppConfig -> Bool -> IO (T.Text, Int)
 initialize appConfig wait = do
-  sendCommandToHydraNodeSocket appConfig InitializeHead wait
+  currentState <- getHydraState appConfig
+  case currentState of
+    Right hydraState
+      | hydraState.state `elem` ["Initial", "Open"] ->
+          pure
+            ( jsonToText $
+                object
+                  [ "state" .= hydraState.state,
+                    "message" .= ("Head already initialized" :: T.Text)
+                  ],
+              409
+            )
+    _ -> sendCommandToHydraNodeSocket appConfig InitializeHead wait
 
 abort :: AppConfig -> Bool -> IO (T.Text, Int)
 abort appConfig wait = do
