@@ -20,12 +20,9 @@ A `Promise` that resolves to a `DecommitResult` object containing information ab
 ## Example
 
 ```javascript
-const { loadCrypto } = require("libcardano");
 const { KuberHydraApiProvider } = require("kuber-client");
 
 async function main() {
-  await loadCrypto();
-
   const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
 
   // First, create the decommit transaction

@@ -20,8 +20,8 @@ This example sets up a wallet and then queries its UTxOs on both the L1 chain an
 
 ```typescript
 import { readFileSync } from "fs";
-import { loadCrypto, Ed25519Key } from "libcardano";
-import { ShelleyWallet, Cip30ShelleyWallet } from "libcardano-wallet";
+import { CardanoKeyAsync } from "libcardano";
+import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
 import { KuberHydraApiProvider } from "kuber-client"; // Adjust path as needed
 
 async function runWalletQueryExample() {
@@ -29,23 +29,22 @@ async function runWalletQueryExample() {
   const hydra = new KuberHydraApiProvider("http://172.31.6.1:8082"); // Replace with your Hydra node URL
 
   // Load test wallet signing key
-  // Setup libcardano crypto and Shelley wallet
-  await loadCrypto();
-  const testWalletSigningKey = await Ed25519Key.fromCardanoCliJson(
+  // Setup Shelley wallet
+  const testWalletSigningKey = await CardanoKeyAsync.fromCardanoCliJson(
     JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
   );
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);
   console.log("Base Shelley Wallet:", shelleyWallet.toJSON());
 
   // Create a wallet instance for Hydra operations
-  const hydraWallet = new Cip30ShelleyWallet(hydra, hydra, shelleyWallet, 0);
+  const hydraWallet = new SimpleCip30Wallet(hydra, hydra, shelleyWallet, 0);
   const hydraWalletAddress = (await hydraWallet.getChangeAddress()).toBech32();
   console.log("Hydra Wallet Address:", hydraWalletAddress);
 
   // Create a wallet instance for Layer 1 (L1) operations
   // Pass hydra.l1Api as both L1 and Hydra API provider for this wallet,
   // as it only interacts with L1.
-  const layer1Wallet = new Cip30ShelleyWallet(hydra.l1Api, hydra.l1Api, shelleyWallet, 0);
+  const layer1Wallet = new SimpleCip30Wallet(hydra.l1Api, hydra.l1Api, shelleyWallet, 0);
   const layer1WalletAddress = (await layer1Wallet.getChangeAddress()).toBech32();
   console.log("Layer 1 Wallet Address:", layer1WalletAddress);
 

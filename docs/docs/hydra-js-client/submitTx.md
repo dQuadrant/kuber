@@ -19,12 +19,9 @@ A `Promise` that resolves to a `CommonTxObject` representing the submitted trans
 ## Example
 
 ```javascript
-const { loadCrypto } = require("libcardano");
 const { KuberHydraApiProvider } = require("kuber-client");
 
 async function main() {
-  await loadCrypto();
-
   const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
 
   // This is a placeholder. In a real application, you would build and sign a transaction

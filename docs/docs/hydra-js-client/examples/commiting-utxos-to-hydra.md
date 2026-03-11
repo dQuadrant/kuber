@@ -5,7 +5,7 @@ sidebar_label: Commiting - Using cip-30
 
 # Using CIP-30 Interface
 
-The Kuber Hydra Client can be integrated with a CIP-30 compatible wallet to sign transactions. This guide demonstrates how to set up and use a `Cip30ShelleyWallet` with the `KuberHydraApiProvider`.
+The Kuber Hydra Client can be integrated with a CIP-30 compatible wallet to sign transactions. This guide demonstrates how to set up and use a `SimpleCip30Wallet` with the `KuberHydraApiProvider`.
 
 ## Prerequisites
 
@@ -13,14 +13,14 @@ The Kuber Hydra Client can be integrated with a CIP-30 compatible wallet to sign
 - `libcardano` and `libcardano-wallet` installed.
 - Access to a running Hydra node and its credentials (e.g., `node.addr`, `funds.sk`).
 
-This example demonstrates how to set up a `Cip30ShelleyWallet` and use it to sign and submit a transaction to a Hydra Head.
+This example demonstrates how to set up a `SimpleCip30Wallet` and use it to sign and submit a transaction to a Hydra Head.
 
 ```typescript
 import { readFileSync } from "fs";
-import { loadCrypto, Ed25519Key, Value } from "libcardano";
-import { ShelleyWallet, Cip30ShelleyWallet } from "libcardano-wallet";
+import { CardanoKeyAsync, Value } from "libcardano";
+import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
 import { KuberHydraApiProvider } from "kuber-client"; // Adjust path as needed
-import { UTxO } from "libcardano/cardano/serialization";
+import { UTxO } from "libcardano/serialization";
 
 async function runCip30CommitExample() {
   // Initialize Hydra API Provider
@@ -30,19 +30,17 @@ async function runCip30CommitExample() {
   const node_addr_path = process.env.HOME + "/.cardano/preview/hydra-0/credentials/node.addr";
   const nodeAddr = readFileSync(node_addr_path).toString("utf-8").trim();
 
-  // Setup libcardano crypto and Shelley wallet
-  await loadCrypto();
-
-  const testWalletSigningKey = await Ed25519Key.fromCardanoCliJson(
+  // Setup Shelley wallet
+  const testWalletSigningKey = await CardanoKeyAsync.fromCardanoCliJson(
     JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
   );
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);
   console.log("Wallet", shelleyWallet.toJSON());
 
-  // Create Cip30ShelleyWallet instance
+  // Create SimpleCip30Wallet instance
   // The first two arguments are for the L1 API provider and the Hydra API provider, respectively.
   // In this case, KuberHydraApiProvider implements both interfaces.
-  const cip30Wallet = new Cip30ShelleyWallet(hydra, hydra, shelleyWallet, 0);
+  const cip30Wallet = new SimpleCip30Wallet(hydra, hydra, shelleyWallet, 0);
   const walletAddress = (await cip30Wallet.getChangeAddress()).toBech32();
 
   console.log("Wallet Address:", walletAddress);
@@ -77,7 +75,7 @@ async function runCip30CommitExample() {
   const signResult = await cip30Wallet.signTx(commitResult.cborHex);
 
   // Submit the signed transaction to the L1 chain
-  await hydra.l1Api.submitTx(signResult.updatedTxBytes.toString("hex"));
+  await hydra.l1Api.submitTx(signResult.transaction.toBytes().toString("hex"));
   console.log("Submitted Commit transaction hash:", commitResult.hash);
 
   // Wait for the transaction to be confirmed and head state to change

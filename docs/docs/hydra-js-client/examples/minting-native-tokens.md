@@ -19,10 +19,10 @@ This example demonstrates how to build and submit a transaction that mints nativ
 
 ```typescript
 import { KuberHydraApiProvider } from "kuber-client";
-import { Value, Ed25519Key, loadCrypto } from "libcardano";
-import { parseTransaction } from 'libcardano/cardano/serialization';
+import { Value, CardanoKeyAsync } from "libcardano";
+import { parseTransaction } from 'libcardano/serialization';
 
-import { ShelleyWallet, Cip30ShelleyWallet } from "libcardano-wallet";
+import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
 import { readFileSync } from "fs";
 
 async function runMintNativeTokensExample() {
@@ -30,13 +30,12 @@ async function runMintNativeTokensExample() {
   const hydra = new KuberHydraApiProvider("http://172.31.6.1:8082");
 
   // Load test wallet signing key (used for signing the transaction)
-  // Setup libcardano crypto and Shelley wallet
-  await loadCrypto();
-  const testWalletSigningKey = await Ed25519Key.fromCardanoCliJson(
+  // Setup Shelley wallet
+  const testWalletSigningKey = await CardanoKeyAsync.fromCardanoCliJson(
     JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
   );
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);
-  const cip30Wallet = new Cip30ShelleyWallet(hydra, hydra, shelleyWallet, 0);
+  const cip30Wallet = new SimpleCip30Wallet(hydra, hydra, shelleyWallet, 0);
   const walletAddress = (await cip30Wallet.getChangeAddress()).toBech32();
 
   console.log("Wallet Address:", walletAddress);
@@ -70,9 +69,8 @@ async function runMintNativeTokensExample() {
   try {
     // Use the buildAndSubmitWithWallet function from KuberProvider to mint tokens
     const mintResult = await hydra.buildAndSubmitWithWallet(cip30Wallet, mintingTransaction);
-    const tx = parseTransaction(mintResult.updatedTx); 
-    console.log("Minting transaction submitted to Hydra Head. Hash:", tx.hash.toString('hex'));
-    console.log("CBOR Hex:", mintResult.updatedTxBytes.toString('hex'));
+    console.log("Minting transaction submitted to Hydra Head");
+    console.log("CBOR Hex:", mintResult.transaction.toBytes().toString('hex'));
   } catch (error: unknown) {
     if (error instanceof Error) {
       console.error("Error building or submitting minting transaction:", error.message);
