@@ -1,4 +1,4 @@
-name: Build Multiarch Docker Images
+name: Build docker images
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
       - develop
       - dev
     tags:
-      - "*"
+      - "v*"
 
 env:
   IMAGE: ghcr.io/dquadrant/kuber
@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -101,10 +101,11 @@ jobs:
             docker buildx imagetools create -t "${BASE}:latest" "${BASE}:${COMMIT_SHA}"
           fi
 
-          # Tag with the version name if it's a tag
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          # Tag with the version name and major alias if it's a v*.*.* tag
+          if [[ "${{ github.ref }}" == refs/tags/v*.*.* ]]; then
             TAG_NAME="${GITHUB_REF#refs/tags/}"
-            docker buildx imagetools create -t "${BASE}:${TAG_NAME}" "${BASE}:${COMMIT_SHA}"
+            MAJOR_TAG="${TAG_NAME%%.*}"
+            docker buildx imagetools create -t "${BASE}:${TAG_NAME}" -t "${BASE}:${MAJOR_TAG}" "${BASE}:${COMMIT_SHA}"
           fi
 
       - name: Cleanup temporary architecture images
@@ -128,7 +129,7 @@ jobs:
           done
 
   build-hydra:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: manifest
     strategy:
       matrix:
@@ -146,7 +147,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -172,7 +173,7 @@ jobs:
             .
 
   manifest-hydra:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: build-hydra
     runs-on: ubuntu-latest
 
@@ -181,7 +182,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -199,9 +200,11 @@ jobs:
         run: |
           COMMIT_SHA="$(git rev-parse HEAD)"
           TAG="${{ github.ref_name }}"
+          MAJOR_TAG="${TAG%%.*}"
           BASE="ghcr.io/dquadrant/kuber-hydra"
           docker buildx imagetools create \
             -t "${BASE}:${COMMIT_SHA}" \
             -t "${BASE}:${TAG}" \
+            -t "${BASE}:${MAJOR_TAG}" \
             "${BASE}:${COMMIT_SHA}-amd64" \
             "${BASE}:${COMMIT_SHA}-arm64"
