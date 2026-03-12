@@ -8,7 +8,7 @@ RUN bash -e /merge-root /layer1 \
 
 FROM ubuntu:20.04
 LABEL "maintainer"="Sudip Bhattarai"
-LABEL org.opencontainers.image.description="Cardano Transaction balancer and Hydra relay server"
+LABEL org.opencontainers.image.description="Cardano Query, submit, Tx balancing and Hydra relay server"
 LABEL org.opencontainers.image.source=https://github.com/dquadrant/kuber
 LABEL org.opencontainers.image.licenses=MIT
 COPY --from=layer1  / /

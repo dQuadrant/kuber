@@ -7,7 +7,7 @@ on:
       - develop
       - dev
     tags:
-      - 'v*'
+      - "*"
 
 env:
   IMAGE: ghcr.io/dquadrant/kuber
@@ -126,3 +126,82 @@ jobs:
               echo "No version found for tag ${TAG}, skipping."
             fi
           done
+
+  build-hydra:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: manifest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+
+    runs-on: ${{ matrix.runner }}
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push kuber-hydra image
+        run: |
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          docker buildx build \
+            --platform linux/${{ matrix.arch }} \
+            --build-arg BASE_TAG="${COMMIT_SHA}-${{ matrix.arch }}" \
+            -f ./.ci/Dockerfile.hydra \
+            -t "ghcr.io/dquadrant/kuber-hydra:${COMMIT_SHA}-${{ matrix.arch }}" \
+            --push \
+            .
+
+  manifest-hydra:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build-hydra
+    runs-on: ubuntu-latest
+
+    permissions:
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push kuber-hydra manifest
+        run: |
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          TAG="${{ github.ref_name }}"
+          BASE="ghcr.io/dquadrant/kuber-hydra"
+          docker buildx imagetools create \
+            -t "${BASE}:${COMMIT_SHA}" \
+            -t "${BASE}:${TAG}" \
+            "${BASE}:${COMMIT_SHA}-amd64" \
+            "${BASE}:${COMMIT_SHA}-arm64"
