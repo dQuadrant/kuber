@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - master
-      - develop
-      - update/hydra-docs
     tags:
       - "*"
 

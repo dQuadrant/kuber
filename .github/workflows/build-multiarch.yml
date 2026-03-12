@@ -8,8 +8,7 @@ on:
       - dev
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE: ghcr.io/dquadrant/kuber
 
 jobs:
   build:
@@ -44,7 +43,7 @@ jobs:
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -53,12 +52,12 @@ jobs:
 
       - name: Build image
         run: |
-          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$(git rev-parse HEAD)-${{ matrix.arch }}"
+          IMAGE_TAG="${{ env.IMAGE }}:$(git rev-parse HEAD)-${{ matrix.arch }}"
           ./.ci/build -t "$IMAGE_TAG"
 
       - name: Push image
         run: |
-          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$(git rev-parse HEAD)-${{ matrix.arch }}"
+          IMAGE_TAG="${{ env.IMAGE }}:$(git rev-parse HEAD)-${{ matrix.arch }}"
           docker push "$IMAGE_TAG"
 
   manifest:
@@ -77,14 +76,14 @@ jobs:
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create and push manifest
         run: |
           COMMIT_SHA="$(git rev-parse HEAD)"
-          BASE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          BASE="${{ env.IMAGE }}"
           docker buildx imagetools create \
             -t "${BASE}:${COMMIT_SHA}" \
             "${BASE}:${COMMIT_SHA}-amd64" \
