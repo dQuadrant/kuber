@@ -28,7 +28,7 @@ data Action
 
 generateResponseTag :: Action -> [(T.Text, Int)]
 generateResponseTag action = case action of
-  InitializeHead -> [("HeadIsInitializing", 200),("PostTxOnChainFailed",400)]
+  InitializeHead -> [("HeadIsInitializing", 200),("IgnoredHeadInitializing", 409),("PostTxOnChainFailed",400)]
   CommitUTxO -> [("", 00)]
   DeCommitUTxO -> [("DecommitInvalid",400),("DecommitRequested", 201), ("DecommitApproved", 201), ("DecommitFinalized", 200)]
   Abort -> [("HeadIsAborted", 200)]
