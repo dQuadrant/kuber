@@ -4,13 +4,12 @@ on:
   push:
     branches:
       - master
-      - develop
-      - dev
     tags:
       - "v*"
 
 env:
   IMAGE: ghcr.io/dquadrant/kuber
+  HYDRA_IMAGE: ghcr.io/dquadrant/kuber-hydra
 
 jobs:
   build:
@@ -35,6 +34,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Cache cabal store
         uses: actions/cache@v5
         with:
@@ -53,103 +55,24 @@ jobs:
       - name: Cabal update
         run: ./.ci/build cabal update
 
-      - name: Build image
+      - name: Build and Push Architecture Image
         run: |
           IMAGE_TAG="${{ env.IMAGE }}:$(git rev-parse HEAD)-${{ matrix.arch }}"
           ./.ci/build -t "$IMAGE_TAG"
-
-      - name: Push image
-        run: |
-          IMAGE_TAG="${{ env.IMAGE }}:$(git rev-parse HEAD)-${{ matrix.arch }}"
           docker push "$IMAGE_TAG"
 
   manifest:
     if: ${{ !github.event.repository.fork }}
     needs: build
     runs-on: ubuntu-latest
-
     permissions:
       packages: write
-
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create and push manifest
-        run: |
-          COMMIT_SHA="$(git rev-parse HEAD)"
-          BASE="${{ env.IMAGE }}"
-          docker buildx imagetools create \
-            -t "${BASE}:${COMMIT_SHA}" \
-            "${BASE}:${COMMIT_SHA}-amd64" \
-            "${BASE}:${COMMIT_SHA}-arm64"
-          
-          # Tag as latest if on master or if it's a version tag
-          if [[ "${{ github.ref }}" == "refs/heads/master" ]] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            docker buildx imagetools create -t "${BASE}:latest" "${BASE}:${COMMIT_SHA}"
-          fi
-
-          # Tag with the version name and major alias if it's a v*.*.* tag
-          if [[ "${{ github.ref }}" == refs/tags/v*.*.* ]]; then
-            TAG_NAME="${GITHUB_REF#refs/tags/}"
-            MAJOR_TAG="${TAG_NAME%%.*}"
-            docker buildx imagetools create -t "${BASE}:${TAG_NAME}" -t "${BASE}:${MAJOR_TAG}" "${BASE}:${COMMIT_SHA}"
-          fi
-
-      - name: Cleanup temporary architecture images
-        run: |
-          COMMIT_SHA="$(git rev-parse HEAD)"
-          OWNER="${{ github.repository_owner }}"
-          PACKAGE_NAME="kuber"
-
-          for ARCH in amd64 arm64; do
-            TAG="${COMMIT_SHA}-${ARCH}"
-            echo "Looking up version ID for tag: ${TAG}"
-            VERSION_ID=$(gh api "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions" \
-              --paginate \
-              --jq ".[] | select(.metadata.container.tags[] == \"${TAG}\") | .id")
-            if [ -n "$VERSION_ID" ]; then
-              echo "Deleting ${TAG} (version ID: ${VERSION_ID})"
-              gh api --method DELETE "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions/${VERSION_ID}"
-            else
-              echo "No version found for tag ${TAG}, skipping."
-            fi
-          done
-
-  build-hydra:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: manifest
-    strategy:
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-
-    runs-on: ${{ matrix.runner }}
-
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -161,31 +84,82 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push kuber-hydra image
+      - name: Create and push multi-arch manifest
         run: |
           COMMIT_SHA="$(git rev-parse HEAD)"
-          docker buildx build \
-            --platform linux/${{ matrix.arch }} \
-            --build-arg BASE_TAG="${COMMIT_SHA}-${{ matrix.arch }}" \
-            -f ./.ci/Dockerfile.hydra \
-            -t "ghcr.io/dquadrant/kuber-hydra:${COMMIT_SHA}-${{ matrix.arch }}" \
-            --push \
-            .
+          BASE="${{ env.IMAGE }}"
+          
+          # 1. Create the primary manifest tied to the commit SHA
+          docker buildx imagetools create \
+            -t "${BASE}:${COMMIT_SHA}" \
+            "${BASE}:${COMMIT_SHA}-amd64" \
+            "${BASE}:${COMMIT_SHA}-arm64"
+          
+          # 2. Add 'latest' tag for master branch or version tags
+          if [[ "${{ github.ref }}" == "refs/heads/master" ]] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            docker buildx imagetools create -t "${BASE}:latest" "${BASE}:${COMMIT_SHA}"
+          fi
 
-  manifest-hydra:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build-hydra
-    runs-on: ubuntu-latest
+          # 3. Add Version and Major tags (e.g., v1.2.3 and v1)
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            docker buildx imagetools create -t "${BASE}:${TAG_NAME}" "${BASE}:${COMMIT_SHA}"
+            
+            if [[ "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              MAJOR_TAG="${TAG_NAME%%.*}"
+              docker buildx imagetools create -t "${BASE}:${MAJOR_TAG}" "${BASE}:${COMMIT_SHA}"
+            fi
+          fi
 
+  build-hydra:
+    if: ${{ !github.event.repository.fork }}
+    needs: manifest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     permissions:
+      contents: read
       packages: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push kuber-hydra arch image
+        run: |
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          docker buildx build \
+            --platform linux/${{ matrix.arch }} \
+            --build-arg BASE_TAG="${COMMIT_SHA}" \
+            -f ./.ci/Dockerfile.hydra \
+            -t "${{ env.HYDRA_IMAGE }}:${COMMIT_SHA}-${{ matrix.arch }}" \
+            --push .
+
+  manifest-hydra:
+    if: ${{ !github.event.repository.fork }}
+    needs: build-hydra
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -199,12 +173,80 @@ jobs:
       - name: Create and push kuber-hydra manifest
         run: |
           COMMIT_SHA="$(git rev-parse HEAD)"
-          TAG="${{ github.ref_name }}"
-          MAJOR_TAG="${TAG%%.*}"
-          BASE="ghcr.io/dquadrant/kuber-hydra"
+          BASE="${{ env.HYDRA_IMAGE }}"
+          
+          # 1. Create the primary manifest tied to the commit SHA
           docker buildx imagetools create \
             -t "${BASE}:${COMMIT_SHA}" \
-            -t "${BASE}:${TAG}" \
-            -t "${BASE}:${MAJOR_TAG}" \
             "${BASE}:${COMMIT_SHA}-amd64" \
             "${BASE}:${COMMIT_SHA}-arm64"
+          
+          # 2. Add 'latest' tag for master branch or version tags
+          if [[ "${{ github.ref }}" == "refs/heads/master" ]] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            docker buildx imagetools create -t "${BASE}:latest" "${BASE}:${COMMIT_SHA}"
+          fi
+
+          # 3. Add Version and Major tags (e.g., v1.2.3 and v1)
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            docker buildx imagetools create -t "${BASE}:${TAG_NAME}" "${BASE}:${COMMIT_SHA}"
+            
+            if [[ "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              MAJOR_TAG="${TAG_NAME%%.*}"
+              docker buildx imagetools create -t "${BASE}:${MAJOR_TAG}" "${BASE}:${COMMIT_SHA}"
+            fi
+          fi
+
+      - name: Cleanup temporary hydra arch images
+        run: |
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          OWNER="dquadrant"
+          PACKAGE_NAME="kuber-hydra"
+
+          for ARCH in amd64 arm64; do
+            TAG="${COMMIT_SHA}-${ARCH}"
+            VERSION_ID=$(gh api "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions" \
+              --paginate \
+              --jq ".[] | select(.metadata.container.tags[] == \"${TAG}\") | .id")
+            
+            if [ -n "$VERSION_ID" ]; then
+              gh api --method DELETE "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions/${VERSION_ID}"
+            fi
+          done
+
+  cleanup:
+    # Run after both manifest and manifest-hydra complete.
+    # This ensures the arch-specific base images are not deleted before build-hydra uses them.
+    if: ${{ !github.event.repository.fork }}
+    needs: [manifest, manifest-hydra]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Cleanup temporary kuber architecture images
+        run: |
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          OWNER="dquadrant"
+          PACKAGE_NAME="kuber"
+
+          for ARCH in amd64 arm64; do
+            TAG="${COMMIT_SHA}-${ARCH}"
+            echo "Searching for version ID for tag: ${TAG}"
+
+            VERSION_ID=$(gh api "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions" \
+              --paginate \
+              --jq ".[] | select(.metadata.container.tags[] == \"${TAG}\") | .id")
+
+            if [ -n "$VERSION_ID" ]; then
+              echo "Deleting temporary arch tag ${TAG} (ID: ${VERSION_ID})"
+              gh api --method DELETE "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions/${VERSION_ID}"
+            else
+              echo "Tag ${TAG} not found, skipping."
+            fi
+          done
