@@ -71,8 +71,11 @@ type KubeServer era = Throws FrameworkError :> KuberServerApi era
 kuberApiServer queryEra a =
   ( queryServer queryEra a
       :<|> cardanoServer queryEra a
-      :<|> kuberServer a
-      :<|> utilityServer a
+      :<|> ( ( kuberServer a
+                 :<|> utilityServer a
+             )
+               :<|> makeHandler1 a standardSubmitTxHandler
+           )
   )
 
 queryServer queryEra a =
