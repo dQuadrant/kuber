@@ -175,3 +175,10 @@ submitTxHandler (SubmitTxModal inanyEra@(InAnyCardanoEra era tx) mWitness) = do
       -- let signedTx= InAnyCardanoEra era (makeSignedTransaction (kw : getTxWitnesses tx) txbody)
       kSubmitTx inanyEra
       pure $ TxModal inanyEra
+
+-- | Standard Cardano node-compatible submit endpoint: POST /api/submit/tx
+-- Accepts raw CBOR transaction bytes and returns the transaction hash as a JSON string.
+standardSubmitTxHandler :: HasSubmitApi a => TxModal -> Kontract a w FrameworkError T.Text
+standardSubmitTxHandler (TxModal inanyEra@(InAnyCardanoEra _ tx)) = do
+  kSubmitTx inanyEra
+  pure $ T.pack $ BS8.unpack $ serialiseToRawBytesHex (getTxId (getTxBody tx))

@@ -20,7 +20,7 @@ This example sets up a wallet and then queries its UTxOs on both the L1 chain an
 
 ```typescript
 import { readFileSync } from "fs";
-import { CardanoKeyAsync } from "libcardano";
+import { loadCrypto, Ed25519Key } from "libcardano";
 import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
 import { KuberHydraApiProvider } from "kuber-client"; // Adjust path as needed
 
@@ -29,8 +29,9 @@ async function runWalletQueryExample() {
   const hydra = new KuberHydraApiProvider("http://172.31.6.1:8082"); // Replace with your Hydra node URL
 
   // Load test wallet signing key
-  // Setup Shelley wallet
-  const testWalletSigningKey = await CardanoKeyAsync.fromCardanoCliJson(
+  // Setup libcardano crypto and Shelley wallet
+  await loadCrypto();
+  const testWalletSigningKey = await Ed25519Key.fromCardanoCliJson(
     JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
   );
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);

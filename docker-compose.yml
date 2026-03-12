@@ -16,7 +16,7 @@ services:
         max-size: "2M"
         max-file: "10"
   kuber:
-    image: dquadrant/kuber:${KUBER_VERSION:-v4.0.0}
+    image: ghcr.io/dquadrant/kuber:${KUBER_VERSION:-v4.0.0}
     environment:
       NETWORK: ${NETWORK:- preprod}
     volumes:

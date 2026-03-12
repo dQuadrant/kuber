@@ -31,6 +31,7 @@ type KuberServerApi era =
       :> ( KuberApi era
              :<|> UtilityApi
          )
+    :<|> "api" :> "submit" :> "tx" :> ReqBody '[CBORBinary] TxModal :> Verb 'POST 202 '[JSON] Text
 
 type QueryApi era =
   "protocol-params" :> Get '[JSON] (LedgerProtocolParameters era)

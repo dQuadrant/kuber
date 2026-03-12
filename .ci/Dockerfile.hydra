@@ -1,0 +1,8 @@
+ARG BASE_TAG
+FROM ghcr.io/dquadrant/kuber:${BASE_TAG}
+LABEL "maintainer"="Sudip Bhattarai"
+LABEL org.opencontainers.image.description="Kuber Hydra relay server"
+LABEL org.opencontainers.image.source=https://github.com/dquadrant/kuber
+LABEL org.opencontainers.image.licenses=MIT
+EXPOSE 8081
+ENTRYPOINT ["/bin/kuber-hydra"]

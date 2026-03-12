@@ -64,15 +64,17 @@ cEvaluateExUnits :: TxModal -> ClientM ExUnitsResponseModal
            :<|> cQueryGenesisParams
            :<|> cGetHealthStatus
          )
-  :<|> ( cBuildTx
-           :<|> cSubmitTx
-           :<|> cQueryTime
-           :<|> cTimeToSlot
-           :<|> cTimeFromSlot
+  :<|> ( ( cBuildTx
+             :<|> cSubmitTx
+             :<|> cQueryTime
+             :<|> cTimeToSlot
+             :<|> cTimeFromSlot
+           )
+           :<|> ( cCalculateFee
+                    :<|> cEvaluateExUnits
+                )
          )
-  :<|> ( cCalculateFee
-           :<|> cEvaluateExUnits
-         ) = client (Proxy :: Proxy (KuberServerApi era))
+  :<|> cStandardSubmitTx = client (Proxy :: Proxy (KuberServerApi era))
 
 data RemoteKuberConnection = RemoteKuberConnection NetworkId ClientEnv
 
