@@ -1,13 +1,39 @@
-## v4.0.1 : Devnet Tooling and Hydra Docs
-This release includes all changes after `v4.0.0`.
+## v4.1.0 : Docker, Hydra WebSocket, and Devnet Upgrades
+This release builds on `v4.0.0` with new features, bug fixes, devnet tooling improvements, and Docker/CI enhancements.
+
+### New Features
+- Added a standard `cardano-submit-api` compatible endpoint to `kuber-server`.
+- Docker entrypoint now auto-switches between `kuber-server` and `kuber-hydra` based on the `HYDRA_URL` environment variable.
+- Added WebSocket connect timeout for the Hydra node connection.
+- Added Docker image CI pipeline to build and publish images for both `kuber` and `kuber-hydra` on tag push.
 
 ### Fixes
 - Prevent insufficient input errors in Hydra by starting tx fee at 0 for already balanced transactions.
+- Docs: Fixed `mintResult` response missing `hash` and `cborHex` fields in native token minting.
+- Docs: Fixed native token asset name with underscores causing a minting error.
 
-### Devnet tooling
-- Added a local devnet reset script and setup helpers for Hydra clusters.
+### Hydra WebSocket Improvements
+- Hydra connection URL is now parsed and validated at startup.
+- Strengthened URL verification to surface misconfiguration errors earlier.
+
+### Devnet Tooling
+- Upgraded devnet to **Hydra 1.3.0**.
+- Added a `reset-cluster.sh` script for resetting the local devnet cluster.
 - Added Cardano node configs and genesis files for the devnet cluster.
+- Updated devnet docker-compose peer addresses and contestation period.
 - Improved credential generation and UTxO seeding scripts.
+
+### Docs
+- Added a full end-to-end example guide.
+- Updated docs to support **kuber-client v4.0.1**.
+- Added Hydra JS client guides for local devnet and testnet/mainnet.
+
+##### Libraries
+- cardano-api:10.1
+- [kuber-client:v4.0.1](https://www.npmjs.com/package/kuber-client/v/4.0.1)
+
+##### Tested with
+- hydra-node:1.3.0
 
 ## v4.0.0 : Docs Revamp and Hydra Polish
 This release includes all changes from `v4.0.0-rc1` and the following updates.

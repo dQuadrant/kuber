@@ -137,7 +137,7 @@ services:
     restart: always
 
   kuber-hydra-1:
-    image: dquadrant/kuber-hydra:latest
+    image: ghcr.io/dquadrant/kuber-hydra:v4
    
     platform: linux/amd64
     ports:
@@ -156,7 +156,7 @@ services:
     restart: unless-stopped
 
   kuber-hydra-2:
-    image: dquadrant/kuber-hydra:latest
+    image: ghcr.io/dquadrant/kuber-hydra:v4
    
     platform: linux/amd64
     ports: 
@@ -175,7 +175,7 @@ services:
     restart: unless-stopped
 
   kuber-hydra-3:
-    image: dquadrant/kuber-hydra:latest
+    image: ghcr.io/dquadrant/kuber-hydra:v4
    
     platform: linux/amd64
     ports:

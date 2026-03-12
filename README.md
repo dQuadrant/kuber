@@ -5,31 +5,11 @@ Haskell library and API server to query Crdano Node, Transaction balancing with 
 
 ## Key Features
 
-- **Chain Queries**
-  - UTXO queries and filtering by address, TxId.
-  - Protocol, generis parameter, current epoch etc. 
-  - Time/Slot query and conversion Apis
-
-- **Transaction Composition**
-  - JSON-driven transaction builder with automatic fee balancing
-  - Support for complex transaction scenarios including multi-input, multi-output, and multi-signature transactions
-  - Plutus script integration with collateral management
-  - Support for native tokens and NFTs
-
-- **Transaction Submit Api**
-  - Standard Cardano Submit API compatible endpoint: `POST /api/submit/tx` with `Content-Type: application/cbor`
-
-- **Layer 2 Integration**
-  - Full Hydra transaction building and lifecycle support
-  - Simultaneous L1 and L2 operations through unified interface
-  - Head initialization, commits, decommits, and state close operations
-  - Contest and fanout mechanisms for security
-
-- **Developer Experience**
-  - Unified API for both Layer 1 (Cardano) and Layer 2 (Hydra) via [kuber-client](https://www.npmjs.com/package/kuber-client/v/3.4.0) library
-  - REST and WebSocket endpoints for flexibility
-  - Type-safe Haskell library for complex applications
-  - Interactive IDE with Plutus compilation support
+- **Chain Queries** — UTxO filtering by address/TxId, protocol & genesis parameters, time/slot conversion
+- **Transaction Composition** — JSON-driven builder with automatic fee balancing, multi-sig, Plutus scripts, collateral management, native tokens & NFTs
+- **Transaction Submit** — Cardano submit api compatible endpoint `POST /api/submit/tx` 
+- **Layer 2 Integration** — Full Hydra lifecycle (init, commit, decommit, close, contest, fanout) with simultaneous L1/L2 operations
+- **Developer Experience** — Unified REST & WebSocket API via [kuber-client](https://www.npmjs.com/package/kuber-client/v/3.4.0), type-safe Haskell library, interactive IDE with Plutus compilation
 
 ## Getting Started
  Kuber client provides same interface for cardano network and layer2 hydra network.

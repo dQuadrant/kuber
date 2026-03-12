@@ -169,7 +169,7 @@ const sidebars: SidebarsConfig = {
       label: "📣 Release Notes",
       collapsed: false,
       items: [
-        "release-notes/4.0.1",
+        "release-notes/4.1.0",
         "release-notes/4.0.0",
       ],
     },

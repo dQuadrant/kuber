@@ -32,7 +32,7 @@ Here with docker we run `kuber server` along with a Cardano node and Hydra node.
         -e CARDANO_NODE_SOCKET_PATH=<node socket path> \
         -e NETWORK=1 \
         --restart no \
-        dquadrant/kuber-hydra:latest
+        ghcr.io/dquadrant/kuber-hydra:v4
         ```
         Follow the similar format for other hydra nodes.
 
