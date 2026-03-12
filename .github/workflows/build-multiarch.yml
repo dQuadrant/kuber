@@ -6,12 +6,15 @@ on:
       - master
       - develop
       - dev
+    tags:
+      - 'v*'
 
 env:
   IMAGE: ghcr.io/dquadrant/kuber
 
 jobs:
   build:
+    if: ${{ !github.event.repository.fork }}
     strategy:
       matrix:
         include:
@@ -28,12 +31,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v
         with:
           fetch-depth: 0
 
       - name: Cache cabal store
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: dist-newstyle/build/docker/cabal-cache
           key: cabal-${{ matrix.arch }}-${{ hashFiles('kuber.cabal', 'kuber-hydra/kuber-hydra.cabal') }}
@@ -61,20 +64,24 @@ jobs:
           docker push "$IMAGE_TAG"
 
   manifest:
+    if: ${{ !github.event.repository.fork }}
     needs: build
     runs-on: ubuntu-latest
 
     permissions:
       packages: write
 
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -88,3 +95,34 @@ jobs:
             -t "${BASE}:${COMMIT_SHA}" \
             "${BASE}:${COMMIT_SHA}-amd64" \
             "${BASE}:${COMMIT_SHA}-arm64"
+          
+          # Tag as latest if on master or if it's a version tag
+          if [[ "${{ github.ref }}" == "refs/heads/master" ]] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            docker buildx imagetools create -t "${BASE}:latest" "${BASE}:${COMMIT_SHA}"
+          fi
+
+          # Tag with the version name if it's a tag
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            docker buildx imagetools create -t "${BASE}:${TAG_NAME}" "${BASE}:${COMMIT_SHA}"
+          fi
+
+      - name: Cleanup temporary architecture images
+        run: |
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          OWNER="${{ github.repository_owner }}"
+          PACKAGE_NAME="kuber"
+
+          for ARCH in amd64 arm64; do
+            TAG="${COMMIT_SHA}-${ARCH}"
+            echo "Looking up version ID for tag: ${TAG}"
+            VERSION_ID=$(gh api "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions" \
+              --paginate \
+              --jq ".[] | select(.metadata.container.tags[] == \"${TAG}\") | .id")
+            if [ -n "$VERSION_ID" ]; then
+              echo "Deleting ${TAG} (version ID: ${VERSION_ID})"
+              gh api --method DELETE "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions/${VERSION_ID}"
+            else
+              echo "No version found for tag ${TAG}, skipping."
+            fi
+          done
