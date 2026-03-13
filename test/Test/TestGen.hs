@@ -47,7 +47,7 @@ genSomeWalelt netid = do
   collateralUtxo <- genAdaUtxo genCollateralVal
   pure $ txWalletUtxos (UTxO . Map.fromList $ collateralUtxo : utxos <> adaUtxos)
 
-chainApiNetworkIdTest :: (HasChainQueryAPI api) => Kontract api w FrameworkError NetworkId
+chainApiNetworkIdTest :: (HasChainQueryAPI api, HasCardanoQueryApi api) => Kontract api w FrameworkError NetworkId
 chainApiNetworkIdTest = kGetNetworkId
 
 genPubkeyAddressShelley :: Gen (Address ShelleyAddr)

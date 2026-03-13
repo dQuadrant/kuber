@@ -15,16 +15,16 @@ import qualified Data.Text as T
 import Debug.Trace as Debug
 import Test.TestGen
 
-test_kGetNetworkId :: (HasChainQueryAPI api) => Kontract api w FrameworkError NetworkId
+test_kGetNetworkId :: (HasChainQueryAPI api, HasCardanoQueryApi api) => Kontract api w FrameworkError NetworkId
 test_kGetNetworkId = kGetNetworkId
 
 test_kQueryProtocolParams :: (HasChainQueryAPI api) => Kontract api w FrameworkError (LedgerProtocolParameters BabbageEra)
 test_kQueryProtocolParams = kQueryProtocolParams
 
-test_kQuerySystemStart :: (HasChainQueryAPI api) => Kontract api w FrameworkError SystemStart
+test_kQuerySystemStart :: (HasChainQueryAPI api, HasCardanoQueryApi api) => Kontract api w FrameworkError SystemStart
 test_kQuerySystemStart = kQuerySystemStart
 
-test_kQueryGenesisParams :: (HasChainQueryAPI api) => Kontract api w FrameworkError (GenesisParameters ShelleyEra)
+test_kQueryGenesisParams :: (HasChainQueryAPI api, HasCardanoQueryApi api) => Kontract api w FrameworkError (GenesisParameters ShelleyEra)
 test_kQueryGenesisParams = kQueryGenesisParams
 
 test_kQueryUtxoByAddress :: (HasChainQueryAPI api) => Kontract api w FrameworkError (UTxO BabbageEra)
@@ -36,5 +36,5 @@ test_kQueryUtxoByTxin = kQueryUtxoByTxin $ Set.singleton dummyTxIn
 test_kQueryChainPoint :: (HasChainQueryAPI api) => Kontract api w FrameworkError ChainPoint
 test_kQueryChainPoint = kQueryChainPoint
 
-test_kQueryCurrentEra :: (HasChainQueryAPI api) => Kontract api w FrameworkError AnyCardanoEra
+test_kQueryCurrentEra :: (HasChainQueryAPI api, HasCardanoQueryApi api) => Kontract api w FrameworkError AnyCardanoEra
 test_kQueryCurrentEra = kQueryCurrentEra
