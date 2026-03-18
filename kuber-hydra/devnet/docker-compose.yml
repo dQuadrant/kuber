@@ -55,7 +55,7 @@ services:
       , "--testnet-magic", "42"
       , "--node-socket", "/devnet/runtime/node.socket"
       , "--persistence-dir", "/devnet/runtime/persistence/alice"
-      , "--contestation-period", "10s"
+      , "--contestation-period", "8s"
       ]
     networks:
       hydra_net:
