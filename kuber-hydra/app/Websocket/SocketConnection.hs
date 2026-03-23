@@ -39,10 +39,11 @@ data AppConfig = AppConfig
 
 createAppConfig :: String -> Maybe String -> Int -> ChainConnectInfo -> AppConfig
 createAppConfig rawUrl serverIp serverPort chainInfo =
-  let (host, port) = getHydraIpAndPort rawUrl
+  let normalizedUrl = normalizeHydraUrl rawUrl
+      (host, port) = getHydraIpAndPort normalizedUrl
       scheme
-        | any (`isPrefixOf` rawUrl) ["https://", "wss://"] = "https://"
-        | any (`isPrefixOf` rawUrl) ["http://", "ws://"] = "http://"
+        | any (`isPrefixOf` normalizedUrl) ["https://", "wss://"] = "https://"
+        | any (`isPrefixOf` normalizedUrl) ["http://", "ws://"] = "http://"
         | otherwise = error $ "Invalid scheme in kuber-url: " ++ rawUrl ++ ". Expected one of ws://, wss://, http://, or https://"
       baseUrl = scheme ++ host ++ ":" ++ show port ++ "/"
   in AppConfig host port baseUrl serverIp serverPort chainInfo
@@ -60,7 +61,8 @@ getHydraIpAndPort url =
       | Just rest <- stripPrefix "https://" u = Just rest
       | otherwise = Nothing
 
-    mStripped = removeProtocol url
+    normalizedUrl = normalizeHydraUrl url
+    mStripped = removeProtocol normalizedUrl
   in
     case mStripped of
       Nothing -> error $ "Invalid URL: " ++ url ++ ". URL must start with ws://, wss://, http://, or https://"
@@ -75,6 +77,11 @@ getHydraIpAndPort url =
             ('/':_) -> (host, 8080)
             "" -> (host, 8080)
             _ -> error $ "Invalid URL format: " ++ url
+
+normalizeHydraUrl :: String -> String
+normalizeHydraUrl url
+  | any (`isPrefixOf` url) ["ws://", "wss://", "http://", "https://"] = url
+  | otherwise = "ws://" ++ url
 
 hydraBaseUrl :: AppConfig -> String
 hydraBaseUrl = hydraApiBaseUrl
