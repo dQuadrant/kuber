@@ -22,7 +22,7 @@ A `Promise` that resolves to an object with a `state` property, which is a strin
 const { KuberHydraApiProvider } = require("kuber-client");
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
 
   try {
     const headState = await hydra.queryHeadState();

@@ -22,12 +22,13 @@ A `Promise` that resolves to an object containing information about the close pr
 const { KuberHydraApiProvider } = require("kuber-client");
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
 
   try {
     console.log("Closing Hydra head...");
-    const result = await hydra.close(true); // Wait for closure to complete
-    console.log("Hydra head closed:", result);
+    await hydra.close(true); // Wait for closure to complete
+    const headState = await hydra.queryHeadState();
+    console.log("Hydra head state:", headState.state);
   } catch (error) {
     console.error("Error closing Hydra head:", error);
   }

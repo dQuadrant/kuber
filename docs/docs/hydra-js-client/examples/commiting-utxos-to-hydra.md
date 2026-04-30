@@ -11,7 +11,7 @@ The Kuber Hydra Client can be integrated with a CIP-30 compatible wallet to sign
 
 - Node.js environment
 - `libcardano` and `libcardano-wallet` installed.
-- Access to a running Hydra node and its credentials (e.g., `node.addr`, `funds.sk`).
+- Access to a running Hydra node and its credentials (e.g., `node.addr`, `alice-funds.sk`).
 
 This example demonstrates how to set up a `SimpleCip30Wallet` and use it to sign and submit a transaction to a Hydra Head.
 
@@ -22,9 +22,18 @@ import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
 import { KuberHydraApiProvider } from "kuber-client"; // Adjust path as needed
 import { UTxO } from "libcardano/serialization";
 
+function formatUtxo(utxo: UTxO) {
+  return {
+    txIn: `${utxo.txIn.txHash.toString("hex")}#${utxo.txIn.index}`,
+    address: utxo.txOut.address.toBech32(),
+    lovelace: utxo.txOut.value.lovelace.toString(),
+    assetPolicies: Object.keys(utxo.txOut.value.multiassets ?? {}).length,
+  };
+}
+
 async function runCip30CommitExample() {
   // Initialize Hydra API Provider
-  const hydra = new KuberHydraApiProvider("http://172.31.6.1:8082"); // Replace with your Hydra node URL
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
 
   // Load node address and test wallet signing key
   const node_addr_path = process.env.HOME + "/.cardano/preview/hydra-0/credentials/node.addr";
@@ -32,10 +41,13 @@ async function runCip30CommitExample() {
 
   // Setup Shelley wallet
   const testWalletSigningKey = await CardanoKeyAsync.fromCardanoCliJson(
-    JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
+    JSON.parse(readFileSync("../../kuber-hydra/devnet/credentials/alice-funds.sk", "utf-8")),
   );
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);
-  console.log("Wallet", shelleyWallet.toJSON());
+  console.table({
+    paymentKeyHash: shelleyWallet.paymentKey.publicKeyHash().toString("hex"),
+    networkId: 0,
+  });
 
   // Create SimpleCip30Wallet instance
   // The first two arguments are for the L1 API provider and the Hydra API provider, respectively.
@@ -66,10 +78,11 @@ async function runCip30CommitExample() {
 
   const txIn = selectedUtxos[0].txIn;
   const utxoToCommit = [`${txIn.txHash.toString("hex")}#${txIn.index}`];
+  console.table(selectedUtxos.map(formatUtxo));
 
   // Build the commit transaction using Hydra API
   const commitResult = await hydra.commit({ utxos: utxoToCommit });
-  console.log("Transaction to be signed:", commitResult.hash);
+  console.log("Commit transaction hash:", commitResult.hash);
 
   // Sign the transaction using the CIP-30 wallet
   const signResult = await cip30Wallet.signTx(commitResult.cborHex);

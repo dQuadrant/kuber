@@ -39,16 +39,20 @@ A `Promise` that resolves with the total time spent waiting in milliseconds when
 ```typescript
 import { KuberHydraApiProvider } from "kuber-client";
 import { CardanoKeyAsync, Value } from "libcardano";
-import { ShelleyWallet, Cip30ShelleyWallet } from "libcardano-wallet";
+import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
 import { readFileSync } from "fs";
 import { TxInput } from "libcardano/serialization/txinout";
 
+function txInputToString(txInput: TxInput): string {
+  return `${txInput.txHash.toString("hex")}#${txInput.index}`;
+}
+
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
 
   // Load test wallet signing key
   const testWalletSigningKey = await CardanoKeyAsync.fromCardanoCliJson(
-    JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
+    JSON.parse(readFileSync("../../kuber-hydra/devnet/credentials/alice-funds.sk", "utf-8")),
   );
 
   // Setup libcardano crypto and Shelley wallet
@@ -74,16 +78,16 @@ async function main() {
 
   // Define a simple transaction to spend the UTxO
   const transaction = {
-    inputs: [{ txIn: `${txInputToWatch.txHash.toString('hex')}#${txInputToWatch.index}` }],
+    inputs: [{ txIn: txInputToString(txInputToWatch) }],
     outputs: [{ address: walletAddress, value: "1_000_000" }], // Send 1 ADA back to self
   };
 
   try {
     console.log("Building, signing, and submitting transaction to consume UTxO...");
-    const txHash = await hydra.buildAndSubmitWithWallet(cip30Wallet, transaction);
-    console.log("Transaction submitted. Hash:", txHash);
+    const result = await hydra.buildAndSubmitWithWallet(cip30Wallet, transaction);
+    console.log("Transaction hash:", result.transaction.hash().toString("hex"));
 
-    console.log(`Waiting for UTxO ${txInputToWatch.txHash.toString('hex')}#${txInputToWatch.index} to be consumed...`);
+    console.log(`Waiting for UTxO ${txInputToString(txInputToWatch)} to be consumed...`);
     const timeWaited = await hydra.waitForUtxoConsumption(txInputToWatch, 180000, true); // Wait up to 3 minutes, log progress
     console.log(`UTxO consumed after ${timeWaited} ms.`);
   } catch (error) {
@@ -92,3 +96,4 @@ async function main() {
 }
 
 main();
+```

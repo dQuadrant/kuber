@@ -19,28 +19,30 @@ A `Promise` that resolves to a `CommonTxObject` representing the built transacti
 
 ## Example
 
-```javascript
-const { KuberHydraApiProvider } = require("kuber-client");
+```typescript
+import { readFileSync } from "fs";
+import { CardanoKeyAsync } from "libcardano";
+import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
+import { KuberHydraApiProvider } from "kuber-client";
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
+  const signingKey = await CardanoKeyAsync.fromCardanoCliJson(
+    JSON.parse(readFileSync("../../kuber-hydra/devnet/credentials/alice-funds.sk", "utf-8")),
+  );
+  const wallet = new SimpleCip30Wallet(hydra, hydra, new ShelleyWallet(signingKey), 0);
+  const walletAddress = (await wallet.getChangeAddress()).toBech32();
 
   const transaction = {
-    outputs: [
-      {
-        address: "addr_test1qr...", // Recipient address
-        value: {
-          lovelace: "500000", // 0.5 ADA
-        },
-      },
-    ],
-    // Add other transaction parameters as needed, e.g., inputs, metadata
+    selections: [walletAddress],
+    outputs: [{ address: walletAddress, value: "1_000_000" }],
+    changeAddress: walletAddress,
   };
 
   try {
     console.log("Building transaction...");
     const builtTx = await hydra.buildTx(transaction, true); // Submit the transaction
-    console.log("Built transaction:", builtTx);
+    console.log("Transaction hash:", builtTx.hash);
   } catch (error) {
     console.error("Error building transaction:", error);
   }

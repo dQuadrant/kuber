@@ -27,12 +27,12 @@ import { readFileSync } from "fs";
 
 async function runBuildAndSubmitTransactionExample() {
   // Initialize Hydra API Provider (replace with your Hydra node URL)
-  const hydra = new KuberHydraApiProvider("http://172.31.6.1:8082");
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
 
   // Load test wallet signing key
   // Setup Shelley wallet
   const testWalletSigningKey = await CardanoKeyAsync.fromCardanoCliJson(
-    JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
+    JSON.parse(readFileSync("../../kuber-hydra/devnet/credentials/alice-funds.sk", "utf-8")),
   );
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);
   const cip30Wallet = new SimpleCip30Wallet(hydra, hydra, shelleyWallet, 0);
@@ -58,8 +58,8 @@ async function runBuildAndSubmitTransactionExample() {
 
   try {
     // Use the buildAndSubmitWithWallet function from KuberProvider
-    const txHash = await hydra.buildAndSubmitWithWallet(cip30Wallet, txBuilder);
-    console.log("Transaction submitted to Hydra Head. Hash:", txHash);
+    const result = await hydra.buildAndSubmitWithWallet(cip30Wallet, txBuilder);
+    console.log("Transaction hash:", result.transaction.hash().toString("hex"));
 
   } catch (error: unknown) {
     if (error instanceof Error) {

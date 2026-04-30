@@ -22,11 +22,19 @@ A `Promise` that resolves to a `CommonProtocolParameters` object, containing var
 const { KuberHydraApiProvider } = require("kuber-client");
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
 
   try {
     const protocolParams = await hydra.queryProtocolParameters();
-    console.log("Protocol Parameters:", protocolParams);
+    console.table({
+      protocolVersion: `${protocolParams.protocolVersion.major}.${protocolParams.protocolVersion.minor}`,
+      txFeeFixed: protocolParams.txFeeFixed,
+      txFeePerByte: protocolParams.txFeePerByte,
+      maxTxSize: protocolParams.maxTxSize,
+      maxValueSize: protocolParams.maxValueSize,
+      maxCollateralInputs: protocolParams.maxCollateralInputs,
+      utxoCostPerByte: protocolParams.utxoCostPerByte,
+    });
   } catch (error) {
     console.error("Error querying protocol parameters:", error);
   }

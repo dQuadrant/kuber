@@ -33,7 +33,7 @@ async function runBurnNativeTokensExample() {
   const signingKey = await CardanoKeyAsync.fromCardanoCliJson(
     JSON.parse(
       readFileSync(
-        process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk",
+        "../../kuber-hydra/devnet/credentials/alice-funds.sk",
         "utf-8",
       ),
     ),
@@ -54,7 +54,7 @@ async function runBurnNativeTokensExample() {
       {
         script: {
           type: "sig",
-          keyHash: shelleyWallet.paymentKey.pkh.toString("hex"),
+          keyHash: shelleyWallet.paymentKey.publicKeyHash().toString("hex"),
         },
         amount: {
           Token1: -1,
@@ -65,7 +65,7 @@ async function runBurnNativeTokensExample() {
   };
 
   const result = await hydra.buildAndSubmitWithWallet(wallet, burnTx);
-  console.log("Burn transaction submitted:", result.transaction.toBytes().toString("hex"));
+  console.log("Burn transaction hash:", result.transaction.hash().toString("hex"));
 }
 
 runBurnNativeTokensExample().catch((err) => {

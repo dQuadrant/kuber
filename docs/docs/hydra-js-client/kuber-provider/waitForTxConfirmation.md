@@ -32,15 +32,28 @@ A `Promise` that resolves with the total time spent waiting in milliseconds if c
 ## Example
 
 ```typescript
+import { readFileSync } from "fs";
+import { CardanoKeyAsync } from "libcardano";
+import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
 import { KuberHydraApiProvider } from "kuber-client";
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
-  const exampleTxHash = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"; // Replace with a real transaction hash
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
+  const signingKey = await CardanoKeyAsync.fromCardanoCliJson(
+    JSON.parse(readFileSync("../../kuber-hydra/devnet/credentials/alice-funds.sk", "utf-8")),
+  );
+  const wallet = new SimpleCip30Wallet(hydra, hydra, new ShelleyWallet(signingKey), 0);
+  const walletAddress = (await wallet.getChangeAddress()).toBech32();
 
   try {
-    console.log(`Waiting for transaction ${exampleTxHash} to be confirmed...`);
-    const timeWaited = await hydra.waitForTxConfirmation(exampleTxHash, 120000, true); // Wait up to 2 minutes, log progress
+    const result = await hydra.buildAndSubmitWithWallet(wallet, {
+      outputs: [{ address: walletAddress, value: "1_000_000" }],
+      changeAddress: walletAddress,
+    });
+    const txHash = result.transaction.hash().toString("hex");
+
+    console.log(`Waiting for transaction ${txHash} to be confirmed...`);
+    const timeWaited = await hydra.waitForTxConfirmation(txHash, 120000, true);
     console.log(`Transaction confirmed after ${timeWaited} ms.`);
   } catch (error) {
     console.error("Error waiting for transaction confirmation:", error);
@@ -48,3 +61,4 @@ async function main() {
 }
 
 main();
+```

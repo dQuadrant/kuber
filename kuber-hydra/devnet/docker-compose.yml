@@ -27,6 +27,7 @@ services:
   
   hydra-node-1:
     image: ghcr.io/cardano-scaling/hydra-node:1.3.0
+    platform: linux/amd64
     build:
       context: ../
       target: hydra-node
@@ -55,7 +56,7 @@ services:
       , "--testnet-magic", "42"
       , "--node-socket", "/devnet/runtime/node.socket"
       , "--persistence-dir", "/devnet/runtime/persistence/alice"
-      , "--contestation-period", "8s"
+      , "--contestation-period", "10s"
       ]
     networks:
       hydra_net:
@@ -64,6 +65,7 @@ services:
     
   hydra-node-2:
     image: ghcr.io/cardano-scaling/hydra-node:1.3.0
+    platform: linux/amd64
     
     build:
       context: ../
@@ -101,6 +103,7 @@ services:
 
   hydra-node-3:
     image: ghcr.io/cardano-scaling/hydra-node:1.3.0
+    platform: linux/amd64
    
     build:
       context: ../
@@ -139,7 +142,6 @@ services:
   kuber-hydra-1:
     image: ghcr.io/dquadrant/kuber-hydra:v4
    
-    platform: linux/amd64
     ports:
       - "8082:8081"
     volumes:
@@ -158,7 +160,6 @@ services:
   kuber-hydra-2:
     image: ghcr.io/dquadrant/kuber-hydra:v4
    
-    platform: linux/amd64
     ports: 
       - "8083:8081"
     volumes:
@@ -177,7 +178,6 @@ services:
   kuber-hydra-3:
     image: ghcr.io/dquadrant/kuber-hydra:v4
    
-    platform: linux/amd64
     ports:
       - "8084:8081"
     volumes:
@@ -201,6 +201,3 @@ networks:
       config:
         - subnet: 172.16.238.0/24
           gateway: 172.16.238.1
-
-
-

@@ -22,12 +22,13 @@ A `Promise` that resolves to an object containing information about the initiali
 const { KuberHydraApiProvider } = require("kuber-client");
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
 
   try {
     console.log("Initializing Hydra head...");
-    const result = await hydra.initialize(true); // Wait for initialization to complete
-    console.log("Hydra head initialized:", result);
+    await hydra.initialize(true); // Wait for initialization to complete
+    const headState = await hydra.queryHeadState();
+    console.log("Hydra head state:", headState.state);
   } catch (error) {
     console.error("Error initializing Hydra head:", error);
   }

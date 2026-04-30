@@ -38,11 +38,11 @@ import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
 import { readFileSync } from "fs";
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
 
   // Load test wallet signing key
   const testWalletSigningKey = await CardanoKeyAsync.fromCardanoCliJson(
-    JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
+    JSON.parse(readFileSync("../../kuber-hydra/devnet/credentials/alice-funds.sk", "utf-8")),
   );
 
   // Setup libcardano crypto and Shelley wallet
@@ -58,10 +58,11 @@ async function main() {
   try {
     console.log("Building transaction with wallet...");
     const builtTx = await hydra.buildWithWallet(cip30Wallet, transaction);
-    console.log("Built transaction:", builtTx);
+    console.log("Transaction hash:", builtTx.hash);
   } catch (error) {
     console.error("Error building transaction with wallet:", error);
   }
 }
 
 main();
+```

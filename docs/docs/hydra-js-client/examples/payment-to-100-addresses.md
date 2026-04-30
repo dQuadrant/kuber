@@ -49,7 +49,7 @@ async function runBulkPaymentExample() {
   const signingKey = await CardanoKeyAsync.fromCardanoCliJson(
     JSON.parse(
       readFileSync(
-        process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk",
+        "../../kuber-hydra/devnet/credentials/alice-funds.sk",
         "utf-8",
       ),
     ),
@@ -82,8 +82,8 @@ async function runBulkPaymentExample() {
       changeAddress,
     };
 
-    const txHash = await hydra.buildAndSubmitWithWallet(wallet, txBuilder);
-    console.log(`Batch ${batchIndex + 1}/${batches.length} submitted:`, txHash);
+    const result = await hydra.buildAndSubmitWithWallet(wallet, txBuilder);
+    console.log(`Batch ${batchIndex + 1}/${batches.length} transaction hash:`, result.transaction.hash().toString("hex"));
   }
 }
 

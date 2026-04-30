@@ -22,12 +22,13 @@ A `Promise` that resolves to an object containing information about the abort pr
 const { KuberHydraApiProvider } = require("kuber-client");
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
 
   try {
     console.log("Aborting Hydra head initialization...");
-    const result = await hydra.abort(true); // Wait for abort to complete
-    console.log("Hydra head aborted:", result);
+    await hydra.abort(true); // Wait for abort to complete
+    const headState = await hydra.queryHeadState();
+    console.log("Hydra head state:", headState.state);
   } catch (error) {
     console.error("Error aborting Hydra head:", error);
   }

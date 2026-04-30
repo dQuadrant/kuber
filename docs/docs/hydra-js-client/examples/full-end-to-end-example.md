@@ -128,9 +128,9 @@ The script targets three relays:
 
 Signing keys are loaded from:
 
-- `kuber-hydra/devnet/credentials/alice-hydra.sk`
-- `kuber-hydra/devnet/credentials/bob-hydra.sk`
-- `kuber-hydra/devnet/credentials/carol-hydra.sk`
+- `kuber-hydra/devnet/credentials/alice-funds.sk`
+- `kuber-hydra/devnet/credentials/bob-funds.sk`
+- `kuber-hydra/devnet/credentials/carol-funds.sk`
 
 ### Deterministic start
 
@@ -218,7 +218,7 @@ import { UTxO } from "libcardano/serialization";
 
 // Set your work directory and paths according to your local setup. 
 // This example assumes a specific structure for the devnet, so adjust as necessary for your environment. 
-const WORK_DIR = process.env.HOME + "/work/kuber/kuber-hydra/devnet";
+const WORK_DIR = "../../kuber-hydra/devnet";
 
 const hydraAlice = new KuberHydraApiProvider("http://localhost:8082");
 const hydraBob = new KuberHydraApiProvider("http://localhost:8083");
@@ -237,9 +237,9 @@ type PartyRuntime = PartyConfig & {
 };
 
 const PARTIES: PartyConfig[] = [
-  { name: "Alice", skPath: WORK_DIR + "/credentials/alice-hydra.sk", hydra: hydraAlice },
-  { name: "Bob", skPath: WORK_DIR + "/credentials/bob-hydra.sk", hydra: hydraBob },
-  { name: "Carol", skPath: WORK_DIR + "/credentials/carol-hydra.sk", hydra: hydraCarol },
+  { name: "Alice", skPath: WORK_DIR + "/credentials/alice-funds.sk", hydra: hydraAlice },
+  { name: "Bob", skPath: WORK_DIR + "/credentials/bob-funds.sk", hydra: hydraBob },
+  { name: "Carol", skPath: WORK_DIR + "/credentials/carol-funds.sk", hydra: hydraCarol },
 ];
 
 const DEVNET_RELAYS = [8082, 8083, 8084];
@@ -654,4 +654,3 @@ runHydraE2EFlow();
 }
 
 ```
-

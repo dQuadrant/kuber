@@ -22,12 +22,13 @@ A `Promise` that resolves to an object containing information about the fanout p
 const { KuberHydraApiProvider } = require("kuber-client");
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
 
   try {
     console.log("Initiating fanout...");
-    const result = await hydra.fanout(true); // Wait for fanout to complete
-    console.log("Fanout completed:", result);
+    await hydra.fanout(true); // Wait for fanout to complete
+    const headState = await hydra.queryHeadState();
+    console.log("Hydra head state:", headState.state);
   } catch (error) {
     console.error("Error during fanout:", error);
   }

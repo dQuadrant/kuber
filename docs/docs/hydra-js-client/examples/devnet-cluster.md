@@ -12,9 +12,9 @@ This tutorial shows how to use `HydraTestCluster` from `kuber-client` to control
 - Local devnet is running (`cardano-node`, `hydra-node-{1,2,3}`, and `kuber-hydra-{1,2,3}`).
 - Devnet credentials exist in `kuber-hydra/devnet/credentials`.
 - You can reach relay endpoints:
-  - `http://localhost:8082` (alice)
-  - `http://localhost:8083` (bob)
-  - `http://localhost:8084` (carol)
+- `http://localhost:8082` (alice)
+- `http://localhost:8083` (bob)
+- `http://localhost:8084` (carol)
 
 ## 1) Configure cluster participants
 
@@ -38,20 +38,20 @@ const cluster = new HydraTestCluster();
 
 cluster.addParticipantConfig(
   "http://localhost:8082",
-  "../kuber-hydra/devnet/credentials/alice-funds.sk",
-  "../kuber-hydra/devnet/credentials/alice-hydra.sk"
+  "../../kuber-hydra/devnet/credentials/alice-funds.sk",
+  "../../kuber-hydra/devnet/credentials/alice-hydra.sk"
 );
 
 cluster.addParticipantConfig(
   "http://localhost:8083",
-  "../kuber-hydra/devnet/credentials/bob-funds.sk",
-  "../kuber-hydra/devnet/credentials/bob-hydra.sk"
+  "../../kuber-hydra/devnet/credentials/bob-funds.sk",
+  "../../kuber-hydra/devnet/credentials/bob-hydra.sk"
 );
 
 cluster.addParticipantConfig(
   "http://localhost:8084",
-  "../kuber-hydra/devnet/credentials/carol-funds.sk",
-  "../kuber-hydra/devnet/credentials/carol-hydra.sk"
+  "../../kuber-hydra/devnet/credentials/carol-funds.sk",
+  "../../kuber-hydra/devnet/credentials/carol-hydra.sk"
 );
 ```
 
@@ -79,9 +79,11 @@ async function runClusterFlow(cluster) {
   const bobHydra = bob.getKuberHydraApiProvider();
   const carolHydra = carol.getKuberHydraApiProvider();
 
-  console.log("Alice head:", await aliceHydra.queryHeadState());
-  console.log("Bob head:", await bobHydra.queryHeadState());
-  console.log("Carol head:", await carolHydra.queryHeadState());
+  console.table([
+    { participant: "alice", state: (await aliceHydra.queryHeadState()).state },
+    { participant: "bob", state: (await bobHydra.queryHeadState()).state },
+    { participant: "carol", state: (await carolHydra.queryHeadState()).state },
+  ]);
 
   await cluster.resetClusterToClosedState({ fanoutReady: true });
   await aliceHydra.fanout(true);
