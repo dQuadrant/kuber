@@ -78,7 +78,7 @@ executable kuber-hydra
     -- Other library packages from which modules are imported.
     build-depends:    base >=4.17.0.0
                     , websockets
-                    , cardano-api
+                    , cardano-api ^>= 11.0
                     , plutus-ledger-api
                     , plutus-tx
                     , aeson
@@ -123,7 +123,6 @@ executable kuber-hydra
                     , text-conversions
                     , case-insensitive
                     , unordered-containers
-                    , dotenv
                     , optparse-applicative
                     , kuber-server
     -- Directories containing source files.

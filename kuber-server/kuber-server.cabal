@@ -1,4 +1,4 @@
-cabal-version:      2.4
+cabal-version:      3.0
 name:               kuber-server
 version:            4.0.0.2
 
@@ -41,6 +41,7 @@ library
     , cardano-ledger-core
     , cardano-ledger-shelley
     , cardano-ledger-alonzo >= 1.6.0
+    , cardano-ledger-conway >= 1.22.1.0
     , text
     , bytestring
     , containers
@@ -87,11 +88,12 @@ executable kuber-server
     , cardano-api 
     , cardano-data 
     , cardano-ledger-alonzo >= 1.6.0
+    , cardano-ledger-conway >= 1.22.1.0
     , cardano-ledger-shelley
     , cardano-slotting 
     , plutus-ledger-api
     , plutus-tx
-    , ouroboros-network
+    , ouroboros-network:{api, ouroboros-network, protocols}
     , kuber
     , servant
     , servant-server

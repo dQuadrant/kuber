@@ -4,7 +4,7 @@ volumes:
   node-db:
 services:
   cardano-node:
-    image: ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-10.6.2}
+    image: ghcr.io/intersectmbo/cardano-node:${CARDANO_NODE_VERSION:-11.0.1}
     environment:
       NETWORK: ${NETWORK:-preprod}
     volumes:
@@ -31,5 +31,4 @@ services:
       options:
         max-size: "2M"
         max-file: "10"
-
 

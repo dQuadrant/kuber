@@ -65,7 +65,7 @@ function hnode() {
       docker run --rm -it \
         --pull always \
         -v ${SCRIPT_DIR}:/devnet \
-        ghcr.io/cardano-scaling/hydra-node:1.3.0 -- ${@}
+        ghcr.io/cardano-scaling/hydra-node:${HYDRA_VERSION:-2.1.0} -- ${@}
   fi
 }
 
