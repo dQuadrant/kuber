@@ -25,13 +25,13 @@ appWithEra dcinfo = do
     eraStr <- case nodeEra of
               BabbageEra -> do
                 putStrLn "Connected to Node at Babbage era"
-                pure "conway"
+                pure "babbage"
               ConwayEra -> do
                  putStrLn "Connected to Node at Conway era"
                  pure "conway"
               era -> do
-                putStrLn $ "Node is at " ++ show era ++" Kuber will start in Conway era"
-                pure "conway"
+                putStrLn $ "Node is at " ++ show era ++" Kuber will start in Babbage era"
+                pure "babbage"
     era <- case maybeEra of
           Nothing -> pure eraStr
           Just  era -> do

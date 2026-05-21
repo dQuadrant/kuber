@@ -15,15 +15,12 @@ module Kuber.Server.Spec where
 
 import Cardano.Api
 import qualified Cardano.Api.Ledger as Cardano.Ledger.Core.Era
-import Cardano.Api.Shelley (LedgerProtocolParameters, ProtocolParameters)
-import qualified Cardano.Api.Shelley as Cardano.Api.Eon.ShelleyBasedEra
 import Cardano.Kuber.Api
 import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Data.Parsers
 import Cardano.Kuber.Http.Spec
 import Cardano.Kuber.Util
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (ExUnits))
-import qualified Cardano.Ledger.Crypto
 import Control.Exception
   ( Exception,
     IOException,

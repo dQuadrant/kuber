@@ -14,7 +14,7 @@
 
 module Cardano.Kuber.Data.TxBuilderAeson where
 
-import Cardano.Api hiding (txFee, txMetadata)
+import Cardano.Api hiding (txFee, txMetadata, parseTxIn, parseAssetName)
 import Cardano.Api.Shelley
   ( ReferenceScript (ReferenceScript, ReferenceScriptNone),
     scriptDataToJsonDetailedSchema,
@@ -439,11 +439,28 @@ instance FromJSON TxPlutusScript where
   parseJSON (A.Object o) = do
     _type :: T.Text <- o .: "type"
     case _type of
-      "PlutusScriptV1" -> o .: "cborHex" >>= parseCborHex @T.Text <&> TxPlutusScriptV1
-      "PlutusScriptV2" -> o .: "cborHex" >>= parseCborHex @T.Text <&> TxPlutusScriptV2
-      "PlutusScriptV3" -> o .: "cborHex" >>= parseCborHex @T.Text <&> TxPlutusScriptV3
+      "PlutusScriptV1" -> parsePlutusScriptV1 o <&> TxPlutusScriptV1
+      "PlutusScriptV2" -> parsePlutusScriptV2 o <&> TxPlutusScriptV2
+      "PlutusScriptV3" -> parsePlutusScriptV3 o <&> TxPlutusScriptV3
       _ -> fail "Expected either PlutsScriptV1 or PlutusScriptV2 or PlutusScriptV3 type"
   parseJSON _ = error "Expected Object"
+
+parsePlutusScriptV1 :: A.Object -> Parser (PlutusScript PlutusScriptV1)
+parsePlutusScriptV1 = parsePlutusScriptBy AsPlutusScriptV1
+
+parsePlutusScriptV2 :: A.Object -> Parser (PlutusScript PlutusScriptV2)
+parsePlutusScriptV2 = parsePlutusScriptBy AsPlutusScriptV2
+
+parsePlutusScriptV3 :: A.Object -> Parser (PlutusScript PlutusScriptV3)
+parsePlutusScriptV3 = parsePlutusScriptBy AsPlutusScriptV3
+
+parsePlutusScriptBy :: HasTypeProxy lang => AsType lang -> A.Object -> Parser (PlutusScript lang)
+parsePlutusScriptBy asType obj = do
+  cborHex <- obj .: "cborHex" :: Parser T.Text
+  bs <- parseHexString cborHex :: Parser BS.ByteString
+  case deserialiseFromCBOR (AsPlutusScript asType) bs of
+    Left err -> fail $ "Invalid plutus script CBOR: " ++ show err
+    Right script -> pure script
 
 instance FromJSON TxScript where
   parseJSON v@(A.Object o) = do
@@ -524,7 +541,7 @@ outputContentJsonPair v = case v of
       ++ ( case txoutData of
              TxOutDatumNone -> []
              TxOutDatumHash aeo ha -> ["datumHash" .= serialiseToRawBytesHexText ha]
-             TxOutDatumInTx aeo hsd -> ["datum" .= scriptDataToJsonDetailedSchema hsd, "inlineDatum" .= False]
+             TxOutSupplementalDatum aeo hsd -> ["datum" .= scriptDataToJsonDetailedSchema hsd, "inlineDatum" .= False]
              TxOutDatumInline beo hsd -> ["datum" .= scriptDataToJsonDetailedSchema hsd]
              --  TxOutDatumHash sdsie ha -> ["datumHash" .= serialiseToRawBytesHexText ha]
              --  TxOutDatumInline rtisidsie sd -> ["datum" .= scriptDataToJsonDetailedSchema sd]
@@ -570,7 +587,7 @@ instance (IsTxBuilderEra era) => FromJSON (TxInputSelection era) where
       Nothing -> txinOrUtxoParser' (\x -> TxSelectableTxIn [x]) TxSelectableUtxos v
       Just envelopeType -> do
         envelope <- parseJSON v
-        case deserialiseFromTextEnvelope (AsSigningKey AsPaymentKey) envelope of
+        case (deserialiseFromTextEnvelope envelope :: Either TextEnvelopeError (SigningKey PaymentKey)) of
           Left tee -> fail $ ".selections " ++ "Got type=\"" ++ envelopeType ++ "\" But parse failed."
           Right sk -> pure $ TxSelectableSkey [sk]
   parseJSON _ = fail "Expected json or object"
@@ -687,7 +704,7 @@ instance (IsTxBuilderEra era) => FromJSON (TxOutput (TxOutputContent era)) where
               Just (Right dh) -> TxOutDatumHash bAlonzoOnward dh
             else
               ( case datumHashE of
-                  Just (Left datum) -> TxOutDatumInTx bAlonzoOnward datum
+                  Just (Left datum) -> TxOutSupplementalDatum bAlonzoOnward datum
                   Just (Right dh) -> TxOutDatumHash bAlonzoOnward dh
                   _ -> TxOutDatumNone
               )
@@ -757,7 +774,7 @@ instance (IsTxBuilderEra era) => FromJSON (TxOutput (TxOutputContent era)) where
               Nothing -> v .:? "dataHash"
               Just any -> pure datumHashM_
             case datumHashM of
-              Just dHash -> case deserialiseFromRawBytesHex (AsHash AsScriptData) (T.encodeUtf8 dHash) of
+              Just dHash -> case (deserialiseFromRawBytesHex (T.encodeUtf8 dHash) :: Either RawBytesHexError (Hash ScriptData)) of
                 Left e -> fail "Expected hex string "
                 Right dh -> pure $ pure $ pure dh
               Nothing -> pure Nothing

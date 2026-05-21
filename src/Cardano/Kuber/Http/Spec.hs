@@ -47,7 +47,7 @@ type CardanoApi era =
 
 type KuberApi era =
   "tx" :> QueryParam "submit" Bool :> ReqBody '[JSON] (TxBuilder_ era) :> Post '[JSON] TxModal
-    :<|> "tx" :> "submit" :> ReqBody '[JSON] SubmitTxModal :> Post '[JSON] TxModal
+    :<|> "tx" :> "submit" :> ReqBody '[CBORBinary, CBORText, JSON] SubmitTxModal :> Post '[JSON] TxModal
     :<|> "time" :> Get '[JSON] TranslationResponse
     :<|> "time" :> "toslot" :> ReqBody '[JSON] TimeTranslationReq :> Post '[JSON] TranslationResponse
     :<|> "time" :> "fromSlot" :> ReqBody '[JSON] SlotTranslationReq :> Post '[JSON] TranslationResponse

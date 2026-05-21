@@ -8,12 +8,10 @@ import Cardano.Api hiding (queryCurrentEra)
 import Cardano.Kuber.Error
     ( ErrorType(EraMisMatch, NodeQueryError, TxSubmissionError, ConnectionError, FeatureNotSupported),
       FrameworkError(FrameworkError) )
-import Cardano.Api.Shelley (ProtocolParameters, TxBody (ShelleyTxBody), LedgerProtocolParameters (LedgerProtocolParameters), ShelleyLedgerEra)
+import Cardano.Api.Shelley (TxBody (ShelleyTxBody), LedgerProtocolParameters (LedgerProtocolParameters), ShelleyLedgerEra)
 import Cardano.Slotting.Time (SystemStart)
 import qualified Data.Set as Set
 import Data.Set (Set)
-import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(SubmitSuccess))
-import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult(SubmitFail))
 import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
 import Cardano.Kuber.Utility.DataTransformation ( addressInEraToAddressAny )
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (EraMismatch(EraMismatch))
@@ -21,7 +19,8 @@ import qualified Data.Text as T
 import Control.Exception (throw, catch, SomeException (SomeException), IOException)
 import Cardano.Kuber.Data.Parsers (parseAnyScript)
 import qualified Cardano.Ledger.Api as Ledger
-import Cardano.Api.Ledger (StandardCrypto, Credential, KeyRole (DRepRole), DRepState, DRep, Coin)
+import Cardano.Ledger.Keys (DRepRole)
+import Cardano.Api.Ledger (Credential, DRepState, DRep, Coin)
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra)
 import GHC.IO.Exception (IOException(..), IOErrorType (..))
 import Data.Map (Map)
@@ -129,18 +128,18 @@ queryConstitution  conn  =performShelleyQuery  conn QueryConstitution "Constitut
 queryGovState :: IsShelleyBasedEra era => LocalNodeConnectInfo  -> IO      (Either FrameworkError (Ledger.GovState (ShelleyLedgerEra era)))
 queryGovState  conn  =performShelleyQuery   conn QueryGovState "GovState"
 
-queryDRepState :: ShelleyBasedEra era -> LocalNodeConnectInfo  -> Set (Credential 'DRepRole StandardCrypto) -> IO      (Either  FrameworkError   (Map   (Credential   'DRepRole StandardCrypto)  (DRepState StandardCrypto)))
+queryDRepState :: ShelleyBasedEra era -> LocalNodeConnectInfo  -> Set (Credential DRepRole) -> IO (Either FrameworkError (Map (Credential DRepRole) DRepState))
 queryDRepState  era conn drep =performShelleyQuery' era  conn (QueryDRepState drep ) "DrepState"
 
-queryDRepDistribution :: ShelleyBasedEra era -> LocalNodeConnectInfo  -> Set ( DRep StandardCrypto) -> IO (Either  FrameworkError   (Map   (DRep StandardCrypto)  Coin)) 
+queryDRepDistribution :: ShelleyBasedEra era -> LocalNodeConnectInfo  -> Set DRep -> IO (Either FrameworkError (Map DRep Coin))
 queryDRepDistribution era conn drep = performShelleyQuery' era conn (QueryDRepStakeDistr drep) "DrepStakeDistribution"
 
 submitTx :: LocalNodeConnectInfo  -> InAnyCardanoEra Tx -> IO  (Either FrameworkError ())
 submitTx conn  (InAnyCardanoEra era tx)= withErrorHandler "SubmitTx" conn $ do
       res <-submitTxToNodeLocal conn $  TxInMode (getErainMode' era) tx 
       case res of
-        SubmitSuccess ->  pure $ pure ()
-        SubmitFail reason ->
+        TxSubmitSuccess ->  pure $ pure ()
+        TxSubmitFail reason ->
           case reason of
             TxValidationErrorInCardanoMode err ->  pure $ Left  $ FrameworkError TxSubmissionError  (show  err)
             TxValidationEraMismatch mismatchErr -> pure $ Left $ FrameworkError TxSubmissionError ("Era Mismatch : " ++ show mismatchErr)

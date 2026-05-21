@@ -36,9 +36,8 @@ function copyExecutable(){
   then
     echo "Copying $1"
     mkdir -p "$WORKDIR$(dirname $1)"
-    cp -u --preserve=timestamps,mode $1 "$WORKDIR$1"
+    cp -u --preserve=timestamps,mode "$1" "$WORKDIR$1"
   fi
-  $D
 
   #Copy the deps
   for dep in $deps
@@ -50,11 +49,24 @@ function copyExecutable(){
 }
 
 function findExecutable() {
-  find "$DIST_NEWSTYLE_DIR/build" -type f -name "$1" | grep "$(getVersion $1)"
+  local exe=$1
+  local version
+  version="$(getVersion "$exe")"
+  find "$DIST_NEWSTYLE_DIR/build" -type f -name "$exe" \
+    | grep "/${exe}-${version}/" \
+    | sort \
+    | tail -n 1
 }
 
 function getVersion(){
-  grep -i '^version' $1.cabal  | grep -Eo '[[:digit:]]+(\.[[:digit:]]+)*'
+  local pkg=$1
+  local cabal_file
+  case "$pkg" in
+    kuber-server) cabal_file="$ROOT_DIR/kuber-server/kuber-server.cabal" ;;
+    kuber-hydra) cabal_file="$ROOT_DIR/kuber-hydra/kuber-hydra.cabal" ;;
+    *) cabal_file="$ROOT_DIR/$pkg.cabal" ;;
+  esac
+  grep -i '^version' "$cabal_file" | grep -Eo '[[:digit:]]+(\.[[:digit:]]+)*'
 }
 
 #Get the library dependencies

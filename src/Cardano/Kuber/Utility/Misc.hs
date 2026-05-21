@@ -43,17 +43,14 @@ import Data.Maybe (mapMaybe)
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra (bCardanoEra))
 
 
-calculateTxoutMinLovelaceOrErr :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Ledger.Coin
+calculateTxoutMinLovelaceOrErr :: TxOut CtxTx ConwayEra -> LedgerProtocolParameters ConwayEra -> Ledger.Coin
 calculateTxoutMinLovelaceOrErr t p = case calculateTxoutMinLovelace t p of
   Nothing -> error "Error calculating minlovelace"
   Just lo -> lo
 
-calculateTxoutMinLovelace :: TxOut CtxTx ConwayEra -> ProtocolParameters -> Maybe Ledger.Coin
-calculateTxoutMinLovelace txout pParams = do
-  bpparams <- case convertToLedgerProtocolParameters ShelleyBasedEraConway pParams  of
-    Left ppce -> fail "Couldn't conver protocol parameters."
-    Right bpp -> pure bpp
-  pure $ calculateMinimumUTxO ShelleyBasedEraConway txout (unLedgerProtocolParameters bpparams)
+calculateTxoutMinLovelace :: TxOut CtxTx ConwayEra -> LedgerProtocolParameters ConwayEra -> Maybe Ledger.Coin
+calculateTxoutMinLovelace txout pParams =
+  pure $ calculateMinimumUTxO ShelleyBasedEraConway (unLedgerProtocolParameters pParams) txout
 
 txoutMinLovelace :: (IsCardanoEra era,IsShelleyBasedEra era) => Leger.PParams (ShelleyLedgerEra era) -> TxOut CtxUTxO era -> Ledger.Coin
 txoutMinLovelace  = withCardanoEra cardanoEra
@@ -131,15 +128,13 @@ evaluateExUnitMapWithUtxos = evaluateExUnitMapWithUtxos_ bCardanoEra
     evaluateExUnitMapWithUtxos_ :: CardanoEra era -> SystemStart -> LedgerEpochInfo -> LedgerProtocolParameters era -> UTxO era -> TxBody era -> Either      FrameworkError      (ExUnitResult era)
     evaluateExUnitMapWithUtxos_ bera  ss leInfo lPparam utxo txbody = do
         let     lTxBody = case txbody of ShelleyTxBody sbe tb scs tbsd m_ad tsv ->  tb
-        exMap <- case evaluateTransactionExecutionUnits
+        let exMap = evaluateTransactionExecutionUnits
               (toCardanoEra bera)
               ss
               leInfo
               lPparam
               utxo
-              txbody of
-          Left tve -> Left $ FrameworkError ExUnitCalculationError (show tve)
-          Right map -> pure map
+              txbody
         case bera of
           BabbageEra -> do
             result <- evaluateExUnitMapWithUtxos__ txbody exMap
@@ -177,7 +172,7 @@ evaluateExUnitMapWithUtxos__ txBody exMap= do
   where
     lTxBody = case txBody of ShelleyTxBody sbe tb scs tbsd m_ad tsv ->  tb
     inputList = Set.toAscList (lTxBody ^. Ledger.inputsTxBodyL)
-    policyList   = case lTxBody  ^. mintTxBodyL of { MultiAsset  mp ->  map  (\(PolicyID sh) -> PolicyId $ fromShelleyScriptHash sh )  $ Set.toAscList$  Map.keysSet mp }
+    policyList   = case lTxBody  ^. Ledger.mintTxBodyL of { MultiAsset  mp ->  map  (\(PolicyID sh) -> PolicyId $ fromShelleyScriptHash sh )  $ Set.toAscList$  Map.keysSet mp }
 
     inputMap (i, mExUnitResult) = case i of
         ScriptWitnessIndexTxIn wo ->
@@ -272,4 +267,3 @@ slotToTimestamp sstart (EraHistory interpreter) slotNo = case Qry.interpretQuery
   (Qry.slotToWallclock slotNo) of
   Left phe -> error $ "Unexpected : " ++ show phe
   Right (rt, _) -> utcTimeToPOSIXSeconds $ fromRelativeTime sstart rt
-

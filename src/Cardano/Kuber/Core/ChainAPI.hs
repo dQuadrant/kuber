@@ -7,13 +7,9 @@ module Cardano.Kuber.Core.ChainAPI where
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Error
 import Cardano.Api.Shelley
-import Cardano.Api
-import Cardano.Slotting.Time (SystemStart)
-import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Set (Set)
-import PlutusTx.Prelude (traceError)
-import qualified Cardano.Ledger.Api as Ledger
-import Cardano.Api.Ledger (StandardCrypto, GovState, DRepState, Credential, KeyRole (DRepRole), DRep, Coin)
+import Cardano.Ledger.Keys (DRepRole)
+import Cardano.Api.Ledger (GovState, DRepState, Credential, DRep, Coin)
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra)
 import Data.Map (Map)
 
@@ -31,9 +27,9 @@ class HasCardanoQueryApi a where
   kQueryGenesisParams     :: Kontract a w FrameworkError (GenesisParameters ShelleyEra)
   kQueryCurrentEra        :: Kontract a w FrameworkError AnyCardanoEra
   kQueryStakeDeposit      :: Set StakeCredential -> Kontract a w FrameworkError (Map StakeCredential Coin)
-  kQueryDrepState         :: Set (Credential 'DRepRole StandardCrypto) -> Kontract a w FrameworkError (Map (Credential 'DRepRole StandardCrypto) (DRepState StandardCrypto))
+  kQueryDrepState         :: Set (Credential DRepRole) -> Kontract a w FrameworkError (Map (Credential DRepRole) DRepState)
   kQueryGovState          :: IsTxBuilderEra era => Kontract a w FrameworkError (GovState (ShelleyLedgerEra era))
-  kQueryDRepDistribution  :: Set (DRep StandardCrypto) -> Kontract a w FrameworkError (Map   (DRep StandardCrypto)  Coin)
+  kQueryDRepDistribution  :: Set DRep -> Kontract a w FrameworkError (Map DRep Coin)
 
   
 

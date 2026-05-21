@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Cardano.Kuber.Core.LocalNodeChainApi where
@@ -10,7 +12,7 @@ import Cardano.Api.Shelley hiding (queryChainPoint, queryCurrentEra, queryEraHis
 import Cardano.Kuber.Core.ChainAPI
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra (bCardanoEra), TxBuilder)
-import Cardano.Kuber.Data.EraUpdate (updatePParamEra)
+import Cardano.Kuber.Data.EraUpdate (updatePParamEra, upgradeBabbagePParams)
 import Cardano.Kuber.Error
 import Cardano.Kuber.Utility.QueryHelper (queryChainPoint, queryCurrentEra, queryDRepDistribution, queryDRepState, queryEraHistory, queryGenesesisParams, queryGenesesisParams', queryGovState, queryProtocolParam, queryStakeDeposits, querySystemStart, queryTxins, queryUtxos, submitTx)
 import qualified Cardano.Ledger.Babbage.Tx as Ledger
@@ -33,7 +35,7 @@ class HasLocalNodeAPI a where
 newtype ChainConnectInfo = ChainConnectInfo LocalNodeConnectInfo
 
 instance HasChainQueryAPI LocalNodeConnectInfo where
-  kQueryProtocolParams = liftLnciQuery queryProtocolParam
+  kQueryProtocolParams = KLift queryProtocolParamsForNodeEra
   kQueryUtxoByAddress = liftLnciQuery2 queryUtxos
   kQueryUtxoByTxin = liftLnciQuery2 queryTxins
   kQueryChainPoint = liftLnciQuery queryChainPoint
@@ -55,7 +57,7 @@ instance HasSubmitApi LocalNodeConnectInfo where
   kSubmitTx = liftLnciQuery2 submitTx
 
 instance HasChainQueryAPI ChainConnectInfo where
-  kQueryProtocolParams = liftCinfoQuery queryProtocolParam
+  kQueryProtocolParams = KLift $ \(ChainConnectInfo c) -> queryProtocolParamsForNodeEra c
   kQueryUtxoByAddress = liftCinfoQuery2 queryUtxos
   kQueryUtxoByTxin = liftCinfoQuery2 queryTxins
   kQueryChainPoint = liftCinfoQuery queryChainPoint
@@ -84,24 +86,38 @@ liftLnciQuery q = KLift $ \c -> q c
 
 liftLnciQuery2 q p = KLift $ \c -> q c p
 
+queryProtocolParamsForNodeEra :: forall era. IsTxBuilderEra era => LocalNodeConnectInfo -> IO (Either FrameworkError (LedgerProtocolParameters era))
+queryProtocolParamsForNodeEra conn = do
+  queryCurrentEra conn >>= \case
+    Left fe -> pure $ Left fe
+    Right (AnyCardanoEra currentEra) -> case bCardanoEra @era of
+      BabbageEra -> case currentEra of
+        BabbageEra -> queryProtocolParam @BabbageEra conn
+        ConwayEra -> queryProtocolParam @ConwayEra conn <&> fmap (updatePParamEra BabbageEra)
+        _ -> pure $ Left $ FrameworkError FeatureNotSupported ("Protocol parameter queries require a Babbage-or-later node, current era is " ++ show currentEra)
+      ConwayEra -> case currentEra of
+        BabbageEra -> queryProtocolParam @BabbageEra conn <&> (>>= upgradeBabbagePParams)
+        ConwayEra -> queryProtocolParam @ConwayEra conn
+        _ -> pure $ Left $ FrameworkError FeatureNotSupported ("Protocol parameter queries require a Babbage-or-later node, current era is " ++ show currentEra)
+      requestedEra -> pure $ Left $ FrameworkError FeatureNotSupported ("Protocol parameter queries require a Babbage-or-Conway target era, requested " ++ show requestedEra)
+
 kEvaluateExUnits' :: (HasChainQueryAPI a, HasCardanoQueryApi a, HasLocalNodeAPI a, IsTxBuilderEra era) => TxBody era -> UTxO era -> Kontract a w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
 kEvaluateExUnits' txbody utxos = do
   sStart <- kQuerySystemStart
   eHhistory <- kQueryEraHistory
   pParams <- kQueryProtocolParams
-  case evaluateTransactionExecutionUnits
-    cardanoEra
-    sStart
-    (toLedgerEpochInfo eHhistory)
-    pParams
-    utxos
-    txbody of
-    Left tve -> KError $ FrameworkError ExUnitCalculationError (show tve)
-    Right mp ->
-      pure $
-        Map.map
-          ( \case
-              Left see -> Left (fromScriptExecutionError see txbody)
-              Right (_, eu) -> pure eu
-          )
-          mp
+  let mp =
+        evaluateTransactionExecutionUnits
+          cardanoEra
+          sStart
+          (toLedgerEpochInfo eHhistory)
+          pParams
+          utxos
+          txbody
+  pure $
+    Map.map
+      ( \case
+          Left see -> Left (fromScriptExecutionError see txbody)
+          Right (_, eu) -> pure eu
+      )
+      mp

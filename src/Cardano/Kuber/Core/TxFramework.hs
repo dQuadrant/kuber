@@ -16,24 +16,12 @@
 module Cardano.Kuber.Core.TxFramework where
 
 import Cardano.Api hiding (PaymentCredential)
-import Cardano.Api.Ledger (Coin (unCoin), ConwayDelegCert (..), ConwayGovCert (..), ConwayTxCert (..), EraCrypto, PoolCert (..), StandardCrypto, StrictMaybe (..))
+import Cardano.Api.Ledger (ConwayDelegCert (..), ConwayGovCert (..), ConwayTxCert (..), PoolCert (..), StrictMaybe (..))
 import qualified Cardano.Api.Ledger as L
+import qualified Cardano.Api.Experimental.Certificate as Exp
 import Cardano.Api.Shelley
     ( toLedgerEpochInfo,
-      Hash(PaymentKeyHash),
-      TxBodyContent(txCertificates, txFee, txMetadata, txAuxScripts),
-      TxCertificates(TxCertificates),
-      Tx(ShelleyTx),
-      ReferenceScript(ReferenceScriptNone, ReferenceScript),
-      fromShelleyAddr,
-      fromShelleyAddrToAny,
-      fromShelleyStakeCredential,
-      toShelleyAddr,
-      fromShelleyScriptHash,
-      ShelleyLedgerEra,
-      Proposal,
-      LedgerProtocolParameters(..),
-      SimpleScriptOrReferenceInput(SScript) )
+      TxBodyContent(txCertificates, txFee, txMetadata, txAuxScripts) )
 import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (..), HasCardanoQueryApi (..))
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Core.LocalNodeChainApi (HasLocalNodeAPI (..))
@@ -63,16 +51,16 @@ import Cardano.Ledger.Api
   )
 import qualified Cardano.Ledger.Api as Ledger
 import Cardano.Ledger.Api.PParams (ppKeyDepositL)
-import Cardano.Ledger.CertState (DRepState (DRepState))
-import Cardano.Ledger.Coin (Coin (Coin))
+import Cardano.Ledger.Compactible (fromCompact)
+import Cardano.Ledger.Core (TxLevel (TopTx))
 import Cardano.Ledger.Conway.Governance (ConwayEraGov (constitutionGovStateL, proposalsGovStateL), PRoot (prRoot), constitutionScriptL, pRootsL, proposalsGovStateL)
 import Cardano.Ledger.Conway.PParams (ppDRepDepositL)
+import Cardano.Ledger.DRep (DRepState (DRepState))
 import qualified Cardano.Ledger.Conway.PParams as Ledger
 import Cardano.Ledger.Shelley.API (Credential (KeyHashObj), KeyHash (KeyHash))
 import Cardano.Ledger.Slot (EpochInfo)
 import Cardano.Slotting.EpochInfo (hoistEpochInfo)
 import Control.Lens ((^.))
-import Data.Aeson (ToJSON (toJSON))
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Key as A
 import qualified Data.Aeson.KeyMap as A
@@ -85,8 +73,6 @@ import qualified Data.HashMap.Lazy as HMap
 import Data.List (find, intercalate, sortBy)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Map.Ordered.Strict (OMap)
-import qualified Data.Map.Ordered.Strict as OMap
 import Data.Maybe (fromJust, fromMaybe, mapMaybe)
 import qualified Data.OSet.Strict as OSet
 import Data.Set (Set)
@@ -95,7 +81,6 @@ import qualified Data.Text as T
 import qualified Data.Text as Text
 import Data.Word (Word64)
 import qualified Debug.Trace as Debug
-import Ouroboros.Consensus.HardFork.History.EpochInfo (interpreterToEpochInfo)
 import PlutusLedgerApi.V2 (PubKeyHash (PubKeyHash), fromBuiltin)
 
 type BoolChange = Bool
@@ -128,6 +113,16 @@ type ParseMintsF m era = Map PolicyId ExecutionUnits -> m TxMintValue BuildTx er
 type ParseInputsF m era = Map TxIn ExecutionUnits -> [TxIn] -> m [(TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn era))]
 
 type ParseProposalF m era = Map (L.ProposalProcedure (ShelleyLedgerEra era)) ExecutionUnits -> TxProposalProcedures BuildTx era
+
+toMaryEraOnwards' :: BabbageEraOnwards era -> MaryEraOnwards era
+toMaryEraOnwards' BabbageEraOnwardsBabbage = MaryEraOnwardsBabbage
+toMaryEraOnwards' BabbageEraOnwardsConway = MaryEraOnwardsConway
+toMaryEraOnwards' BabbageEraOnwardsDijkstra = MaryEraOnwardsDijkstra
+
+toAlonzoEraOnwards' :: BabbageEraOnwards era -> AlonzoEraOnwards era
+toAlonzoEraOnwards' BabbageEraOnwardsBabbage = AlonzoEraOnwardsBabbage
+toAlonzoEraOnwards' BabbageEraOnwardsConway = AlonzoEraOnwardsConway
+toAlonzoEraOnwards' BabbageEraOnwardsDijkstra = AlonzoEraOnwardsDijkstra
 
 valueToRequiredEra :: CardanoEra era -> Value -> TxOutValue era
 valueToRequiredEra cera val = case cera of
@@ -218,7 +213,7 @@ executeRawTxBuilder builder pParam = do
     applyPrevGovActionIdNDeposit beraOnward pParam props =
       case beraOnward of
         Just v@ConwayEraOnwardsConway -> do
-          govAction <- kQueryGovState
+          govAction :: Ledger.GovState (ShelleyLedgerEra ConwayEra) <- kQueryGovState
           let enactions = govAction ^. proposalsGovStateL ^. pRootsL
           let constitutionScript = govAction ^. constitutionGovStateL ^. constitutionScriptL
 
@@ -265,7 +260,7 @@ executeRawTxBuilder builder pParam = do
         val <- updateConwayCert pParam ctc
         pure $ ConwayCertificate ceo val
 
-    updateConwayCert :: (HasChainQueryAPI api, HasCardanoQueryApi api, Ledger.ConwayEraPParams ledgerera, EraCrypto ledgerera ~ StandardCrypto) => Ledger.PParams ledgerera -> ConwayTxCert ledgerera -> Kontract api w FrameworkError (ConwayTxCert ledgerera)
+    updateConwayCert :: (HasChainQueryAPI api, HasCardanoQueryApi api, Ledger.ConwayEraPParams ledgerera) => Ledger.PParams ledgerera -> ConwayTxCert ledgerera -> Kontract api w FrameworkError (ConwayTxCert ledgerera)
     updateConwayCert pParam ctc = case ctc of
       ConwayTxCertDeleg cdc ->
         ( case cdc of
@@ -296,7 +291,7 @@ executeRawTxBuilder builder pParam = do
                   drepState <- kQueryDrepState (Set.singleton cre)
 
                   case Map.toList drepState of
-                    [(cre', DRepState _epochNo _sm co' _delegators)] -> pure $ ConwayUnRegDRep cre co'
+                    [(cre', DRepState _epochNo _sm co' _delegators)] -> pure $ ConwayUnRegDRep cre (fromCompact co')
                     _ -> kError TxValidationError $ "Drep  is not registered : " ++ show cre
             ConwayUpdateDRep cre mAnchor -> pure $ ConwayUpdateDRep cre mAnchor
             ConwayAuthCommitteeHotKey cre cre' -> pure $ ConwayAuthCommitteeHotKey cre cre'
@@ -402,13 +397,20 @@ txBuilderToTxBody
               inEonForEra
                 (Left $ FrameworkError FeatureNotSupported "Certificate are not supported in Babbage era in Kuber")
                 ( \conwayOnward ->
-                    pure $
-                      ( Cardano.Api.Shelley.TxCertificates
-                          (conwayEraOnwardsToShelleyBasedEra conwayOnward)
-                          certs
-                          (BuildTxWith mempty),
-                        totalCertDeposits certs
-                      )
+                    case conwayOnward of
+                      ConwayEraOnwardsConway ->
+                        let expCerts =
+                              map
+                                ( \cert -> case cert of
+                                    ConwayCertificate _ conwayCert -> (Exp.Certificate conwayCert, Nothing)
+                                )
+                                certs
+                         in pure $
+                              ( mkTxCertificates
+                                  (conwayEraOnwardsToShelleyBasedEra conwayOnward)
+                                  expCerts,
+                                totalCertDeposits certs
+                              )
                 )
                 txCardanoEra
           )
@@ -425,7 +427,7 @@ txBuilderToTxBody
                 { txIns = parsedInputs ++ ins,
                   txInsCollateral = if null collaterals then TxInsCollateralNone else TxInsCollateral txAlonzoEraOnwards (map fst collaterals),
                   txOuts = outs,
-                  txInsReference = if Set.null references then TxInsReferenceNone else TxInsReference bBabbageOnward (Set.toList references),
+                  txInsReference = if Set.null references then TxInsReferenceNone else TxInsReference bBabbageOnward (Set.toList references) (BuildTxWith mempty),
                   txTotalCollateral = TxTotalCollateralNone,
                   txReturnCollateral = TxReturnCollateralNone,
                   Cardano.Api.Shelley.txFee = TxFeeExplicit txShelleyBasedEra fee,
@@ -467,7 +469,10 @@ txBuilderToTxBody
           txMintValue' postResolved =
             if null (valueToList totalMintVal)
               then TxMintNone
-              else TxMintValue txMaryEraOnwards totalMintVal (BuildTxWith (Map.fromList $ parsedMints <> postResolved))
+              else
+                let mintAssets = valueToPolicyAssets totalMintVal
+                    mintWitnesses = Map.fromList $ map (second BuildTxWith) (parsedMints <> postResolved)
+                 in TxMintValue txMaryEraOnwards (Map.intersectionWith (,) mintAssets mintWitnesses)
           builderInputUtxo = foldMap resolvedInputUtxo resolvedInputs
           fixedInputSum = utxoMapSum builderInputUtxo <> totalMintVal <> negateValue (cDeposits <> pDeposits)
 
@@ -706,8 +711,8 @@ txBuilderToTxBody
       txEra = toCardanoEra bBabbageOnward
       txCardanoEra = txEra
       txShelleyBasedEra = babbageEraOnwardsToShelleyBasedEra bBabbageOnward
-      txMaryEraOnwards = babbageEraOnwardsToMaryEraOnwards bBabbageOnward
-      txAlonzoEraOnwards = babbageEraOnwardsToAlonzoEraOnwards bBabbageOnward
+      txMaryEraOnwards = toMaryEraOnwards' bBabbageOnward
+      txAlonzoEraOnwards = toAlonzoEraOnwards' bBabbageOnward
       txAllegraEraOnwards = bAllegraOnward
 
       parseMints mp = do
@@ -824,8 +829,7 @@ txBuilderToTxBody
           -- sort based on following conditions => Utxos having >4ada come eariler and the lesser ones come later.
           -- this will sort the items in descending order when using sortBy.
           collateralSortingFunc :: (TxIn, a, Integer) -> (TxIn, a, Integer) -> Ordering
-          collateralSortingFunc (_, _, v1) (_, _, v2) =
-            Debug.trace (show v1 ++ " compare " ++ show v2 ++ "=" ++ show doCompare) doCompare
+          collateralSortingFunc (_, _, v1) (_, _, v2) = doCompare
             where
               doCompare
                 | v1 <= 10_000_000 = if v2 <= 10_000_000 then v1 `compare` v2 else LT
@@ -1167,10 +1171,10 @@ toLedgerEpochInfo (EraHistory interpreter) =
 --       proposals = txBody ^. proposalProceduresTxBodyL
 --     in mempty
 
-fromLedgerKeyHash_ :: KeyHash r Ledger.StandardCrypto -> Hash PaymentKey
+fromLedgerKeyHash_ :: KeyHash r -> Hash PaymentKey
 fromLedgerKeyHash_ (KeyHash kh) = PaymentKeyHash (KeyHash kh)
 
-fromLedgerKeyHash :: forall targetEra (r :: Ledger.KeyRole). ShelleyBasedEra targetEra -> KeyHash r (EraCrypto (ShelleyLedgerEra targetEra)) -> Hash PaymentKey
+fromLedgerKeyHash :: forall targetEra (r :: Ledger.KeyRole). ShelleyBasedEra targetEra -> KeyHash r -> Hash PaymentKey
 fromLedgerKeyHash cera = case cera of
   ShelleyBasedEraShelley -> fromLedgerKeyHash_
   ShelleyBasedEraAllegra -> fromLedgerKeyHash_
@@ -1329,7 +1333,7 @@ makeTxProposals conOnward (UTxO utxos) proposals = do
           TxProposalScript (ProposalProcedureModal pp) _ _ -> proposalDeposit pp
           TxProposalScriptReference (ProposalProcedureModal pp) _ _ -> proposalDeposit pp
 
-ledgerCredToPaymentKeyHash :: ShelleyBasedEra targetEra -> Credential r (EraCrypto (ShelleyLedgerEra targetEra)) -> Maybe (Hash PaymentKey)
+ledgerCredToPaymentKeyHash :: ShelleyBasedEra targetEra -> Credential r -> Maybe (Hash PaymentKey)
 ledgerCredToPaymentKeyHash sbera cred = case cred of
   KeyHashObj kh -> Just $ fromLedgerKeyHash sbera kh
   _ -> Nothing
@@ -1353,7 +1357,7 @@ computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam) utxo bodyConte
   -- Debug.traceM $ "ComputeBody:"
   --            ++  "\n mintValue: " ++ show txMintValue'
   --            ++  "\n fee: " ++ show fee
-  let mEraOnward = babbageEraOnwardsToMaryEraOnwards beraOnward
+  let mEraOnward = toMaryEraOnwards' beraOnward
       mkChangeUtxo q = TxOut changeAddr (valueToRequiredEra bCardanoEra q) TxOutDatumNone ReferenceScriptNone
   changeTxOut <- case findChange fixedOutputs of
     Nothing -> do
@@ -1388,7 +1392,7 @@ computeBody beraOnward cpParam@(LedgerProtocolParameters lpparam) utxo bodyConte
   where
     unSMaybe (SJust v) d = v
     unSMaybe SNothing d = d
-    toLedgerTx :: TxBody era -> Ledger.Tx (ShelleyLedgerEra era)
+    toLedgerTx :: TxBody era -> Ledger.Tx TopTx (ShelleyLedgerEra era)
     toLedgerTx tb = case makeSignedTransaction [] tb of
       ShelleyTx _ tx -> tx
     fixedOutputSum = foldMap txOutputVal fixedOutputs

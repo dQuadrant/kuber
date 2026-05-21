@@ -1,9 +1,10 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 module Test.ParserTest where
 
 import qualified Data.Text as T
-import Cardano.Api
+import Cardano.Api hiding (parseAssetId)
 import Cardano.Kuber.Util hiding (toHexString)
 import Data.Text.Conversions
 import Data.ByteString (ByteString)
@@ -16,8 +17,12 @@ import qualified Data.ByteString as BS
 import Cardano.Kuber.Console.ConsoleWritable (ConsoleWritable(toConsoleText, toConsoleTextNoPrefix))
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Char8 as BS8
+import qualified Data.Aeson as A
+import qualified Data.Aeson.KeyMap as KM
 import Cardano.Ledger.Shelley.API (ScriptHash(ScriptHash))
 import PlutusLedgerApi.V1 (PubKeyHash(..), fromBuiltin)
+import Cardano.Kuber.Data.Models (submitTxModalValue)
+import Control.Applicative ((<|>))
 
 main :: IO ()
 main = defaultMain tests
@@ -29,6 +34,7 @@ tests =
   ,  parseutxoWithOnlyLovelace
   ,  parseUtxoWithAsset
   , parseAssetIdTest
+  , submitTxModalJsonShape
 
   ]
 
@@ -53,13 +59,25 @@ parseUtxoWithAsset =  testCase  "should parse utxo with asset" $
 
 parseAssetIdTest :: TestTree
 parseAssetIdTest = testCase " should parse with dot"  (parseAssetId (T.pack " 4b36a781645ef8eea2a75687edc16b2d0aa4be3016eeed04f59d3d36.Flowery. Video\n ")
-   @?= Just (AssetId  ( forceRight $  deserialiseFromRawBytesHex AsPolicyId  $ BS8.pack "4b36a781645ef8eea2a75687edc16b2d0aa4be3016eeed04f59d3d36") (AssetName $ BS8.pack "Flowery. Video" ))
+   @?= Just (AssetId  ( forceRight $  (deserialiseFromRawBytesHex (BS8.pack "4b36a781645ef8eea2a75687edc16b2d0aa4be3016eeed04f59d3d36") :: Either RawBytesHexError PolicyId)) (forceRight $ deserialiseFromRawBytes AsAssetName (BS8.pack "Flowery. Video")))
   )
 
 parseAssetIdHex :: TestTree
 parseAssetIdHex = testCase " should parse assetId Hex"  (parseAssetId (T.pack " 4b36a781645ef8eea2a75687edc16b2d0aa4be3016eeed04f59d3d3604f59d3d36\n ")
-   @?= Just (AssetId  ( forceRight $  deserialiseFromRawBytesHex AsPolicyId  $ BS8.pack "4b36a781645ef8eea2a75687edc16b2d0aa4be3016eeed04f59d3d36") ( forceRight $  deserialiseFromRawBytesHex AsAssetName  $ BS8.pack "04f59d3d36" ))
+   @?= Just (AssetId  ( forceRight $  (deserialiseFromRawBytesHex (BS8.pack "4b36a781645ef8eea2a75687edc16b2d0aa4be3016eeed04f59d3d36") :: Either RawBytesHexError PolicyId)) ( forceRight $  (deserialiseFromRawBytesHex (BS8.pack "04f59d3d36") :: Either RawBytesHexError AssetName)))
   )
+
+submitTxModalJsonShape :: TestTree
+submitTxModalJsonShape = testCase "SubmitTxModal encodes using the tx wrapper field" $ do
+  let encoded = submitTxModalValue (TextEnvelope "Tx ConwayEra" "" "deadbeef") Nothing
+  case encoded of
+    A.Object obj -> do
+      KM.lookup "tx" obj /= Nothing @?= True
+      KM.lookup "cborHex" obj /= Nothing @?= True
+      case KM.lookup "tx" obj of
+        Just (A.Object txObj) -> KM.lookup "cborHex" txObj /= Nothing @?= True
+        _ -> error "Expected tx field to contain an object"
+    _ -> error "Expected SubmitTxModal to encode as an object"
 
 
 toHexString :: (FromText a1, ToText (Base16 a2)) => a2 -> a1

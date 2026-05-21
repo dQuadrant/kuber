@@ -9,8 +9,7 @@
 
 module Websocket.Aeson where
 
-import Cardano.Api (ExecutionUnitPrices)
-import Cardano.Api.Shelley (ExecutionUnits)
+import Cardano.Api (ExecutionUnitPrices, ExecutionUnits)
 import Data.Aeson
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as Aeson

@@ -5,14 +5,12 @@
 
 module Kuber.Server.Core where
 
-import Cardano.Api
-import Cardano.Api.Shelley (LedgerProtocolParameters, TxBody (ShelleyTxBody), fromShelleyTxIn)
+import Cardano.Api hiding (parseTxIn)
 import Cardano.Kuber.Api
 import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Data.Parsers (parseAddressBech32, parseTxIn)
 import Cardano.Kuber.Util
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (ExUnits))
-import Cardano.Ledger.Alonzo.TxBody (inputs')
 import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Ledger.TxIn as Ledger
 import Control.Exception (throw, try)

@@ -3,8 +3,7 @@
 
 module Test.TestGen where
 
-import Cardano.Api
-import Cardano.Api.Shelley
+import Cardano.Api hiding (parseTxIn)
 import Data.Functor
 import Data.Functor.Identity (Identity)
 import qualified Data.Map as Map
@@ -32,12 +31,12 @@ genSomeWalelt netid = do
         value <- genVal
         txid <- genTxIn
         address <- element addresses
-        pure (txid, TxOut address (TxOutValueShelleyBased ShelleyBasedEraConway value) TxOutDatumNone ReferenceScriptNone)
+        pure (txid, TxOut address (TxOutValueShelleyBased ShelleyBasedEraConway (toLedgerValue MaryEraOnwardsConway value)) TxOutDatumNone ReferenceScriptNone)
       genAdaUtxo genVal = do
         value <- genVal
         txid <- genTxIn
         address <- element addresses
-        pure (txid, TxOut address (TxOutValueByron value) TxOutDatumNone ReferenceScriptNone)
+        pure (txid, TxOut address (TxOutValueShelleyBased ShelleyBasedEraConway (toLedgerValue MaryEraOnwardsConway (lovelaceToValue value))) TxOutDatumNone ReferenceScriptNone)
       genAdaVal = do
         Gen.integral (Range.linear 2_000_000 3_000_000_000_000) <&> Coin
       genCollateralVal = do

@@ -76,10 +76,10 @@ import Cardano.Kuber.Utility.QueryHelper
 import Cardano.Kuber.Utility.ScriptUtil (fromPlutusV1Script, fromPlutusV2Script)
 import Cardano.Kuber.Utility.Text
 import Cardano.Kuber.Utility.WalletUtil (getDefaultSignKey, readSignKey)
+import Cardano.Api.Ledger (StandardCrypto)
 import qualified Cardano.Ledger.Alonzo as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as LedgerBody
-import Cardano.Ledger.Babbage.TxBody (btbInputs, mint')
-import Cardano.Ledger.Crypto (StandardCrypto)
+import Cardano.Ledger.Babbage.TxBody (btbInputs)
 import Cardano.Ledger.Shelley.API (Credential (KeyHashObj, ScriptHashObj), KeyHash (KeyHash), StakeReference (StakeRefNull))
 import qualified Cardano.Ledger.Shelley.API as Ledger
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley

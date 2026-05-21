@@ -13,7 +13,6 @@
 module Websocket.Commands where
 
 import Cardano.Api
-import Cardano.Api.Shelley
 import Cardano.Kuber.Api
 import Cardano.Kuber.Data.Models
 import Cardano.Kuber.Data.Parsers

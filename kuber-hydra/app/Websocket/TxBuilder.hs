@@ -12,7 +12,6 @@ module Websocket.TxBuilder where
 
 import Cardano.Api
 import qualified Cardano.Api.Ledger as L
-import Cardano.Api.Shelley
 import Cardano.Kuber.Api
 import Cardano.Kuber.Data.Models (TxModal(..))
 import Cardano.Kuber.Util
@@ -130,61 +129,45 @@ toCardanoTxBody txb hpp = do
       builtTx
 
 hydraProtocolParamsToLedgerParams :: HydraProtocolParameters -> Either FrameworkError (LedgerProtocolParameters ConwayEra)
-hydraProtocolParamsToLedgerParams hpp = case convertToLedgerProtocolParameters ShelleyBasedEraConway $
-  ProtocolParameters
-    ( major ppVersion,
-      minor ppVersion
-    )
-    (toRational <$> decentralization hpp)
-    Nothing
-    (maxBlockHeaderSize hpp)
-    (maxBlockBodySize hpp)
-    (maxTxSize hpp)
-    (L.Coin $ toInteger $ txFeeFixed hpp)
-    (L.Coin $ toInteger $ txFeePerByte hpp)
-    ( case minUTxOValue hpp of
-        Nothing -> Nothing
-        Just x -> Just $ L.Coin $ toInteger x
-    )
-    (L.Coin $ toInteger $ stakeAddressDeposit hpp)
-    (L.Coin $ toInteger $ stakePoolDeposit hpp)
-    (L.Coin $ toInteger $ minPoolCost hpp)
-    (L.EpochInterval $ fromIntegral $ poolRetireMaxEpoch hpp)
-    (fromIntegral $ stakePoolTargetNum hpp)
-    (poolPledgeInfluence hpp)
-    (monetaryExpansion hpp)
-    (treasuryCut hpp)
-    costModel
-    (executionUnitPrices hpp)
-    (maxTxExecutionUnits hpp)
-    (maxBlockExecutionUnits hpp)
-    (maxValueSize hpp)
-    (collateralPercentage hpp)
-    (maxCollateralInputs hpp)
-    ( case utxoCostPerByte hpp of
-        Nothing -> Nothing
-        Just x -> Just $ L.Coin $ toInteger x
-    ) of
-  Left err -> Left $ FrameworkError ParserError ("hydraProtocolParamsToLedgerParams: Conversion error: " <> show err)
-  Right lpp -> Right lpp
+hydraProtocolParamsToLedgerParams hpp = case A.fromJSON hydraParamsJson of
+  A.Error err -> Left $ FrameworkError ParserError ("hydraProtocolParamsToLedgerParams: Conversion error: " <> err)
+  A.Success lpp -> Right lpp
   where
     ppVersion = fromJust $ protocolVersion hpp
-    costModel =
-      Map.fromList $
-        Maybe.mapMaybe
-          ( \(pv, cm) -> do
-              let parsedCostModel = CostModel (fmap fromIntegral cm)
-               in if pv == "PlutusV1"
-                    then Just (AnyPlutusScriptVersion PlutusScriptV1, parsedCostModel)
-                    else
-                      if pv == "PlutusV2"
-                        then Just (AnyPlutusScriptVersion PlutusScriptV2, parsedCostModel)
-                        else
-                          if pv == "PlutusV2"
-                            then Just (AnyPlutusScriptVersion PlutusScriptV3, parsedCostModel)
-                            else Nothing
-          )
-          (Map.toList $ costModels hpp)
+    hydraParamsJson =
+      object $
+        [ "ProtocolVersion" .= ppVersion
+        , "MaxBHSize" .= maxBlockHeaderSize hpp
+        , "MaxBBSize" .= maxBlockBodySize hpp
+        , "MaxTxSize" .= maxTxSize hpp
+        , "MinFeeA" .= L.Coin (toInteger $ txFeePerByte hpp)
+        , "MinFeeB" .= L.Coin (toInteger $ txFeeFixed hpp)
+        , "KeyDeposit" .= L.Coin (toInteger $ stakeAddressDeposit hpp)
+        , "PoolDeposit" .= L.Coin (toInteger $ stakePoolDeposit hpp)
+        , "MinPoolCost" .= L.Coin (toInteger $ minPoolCost hpp)
+        , "EMax" .= L.EpochInterval (fromIntegral $ poolRetireMaxEpoch hpp)
+        , "NOpt" .= (fromIntegral (stakePoolTargetNum hpp) :: Integer)
+        , "A0" .= poolPledgeInfluence hpp
+        , "Rho" .= monetaryExpansion hpp
+        , "Tau" .= treasuryCut hpp
+        , "CostModels" .= costModels hpp
+        ]
+        ++ opt "CoinsPerUTxOByte" (L.Coin . toInteger <$> utxoCostPerByte hpp)
+        ++ opt "Prices" (executionUnitPrices hpp)
+        ++ opt "MaxTxExUnits" (maxTxExecutionUnits hpp)
+        ++ opt "MaxBlockExUnits" (maxBlockExecutionUnits hpp)
+        ++ opt "MaxValSize" (maxValueSize hpp)
+        ++ opt "CollateralPercentage" (collateralPercentage hpp)
+        ++ opt "MaxCollateralInputs" (maxCollateralInputs hpp)
+        ++ opt "PoolVotingThresholds" (poolVotingThresholds hpp)
+        ++ opt "DRepVotingThresholds" (dRepVotingThresholds hpp)
+        ++ opt "CommitteeMinSize" (committeeMinSize hpp)
+        ++ opt "CommitteeMaxTermLength" (committeeMaxTermLength hpp)
+        ++ opt "GovActionLifetime" (govActionLifetime hpp)
+        ++ opt "GovActionDeposit" (L.Coin . toInteger <$> govActionDeposit hpp)
+        ++ opt "DRepDeposit" (L.Coin . toInteger <$> dRepDeposit hpp)
+        ++ opt "DRepActivity" (fromIntegral <$> dRepActivity hpp :: Maybe Integer)
+    opt key = maybe [] (\v -> [key .= v])
 
 rawBuildHydraTx :: AppConfig -> TxBuilder_ ConwayEra -> IO (Either FrameworkError (Tx ConwayEra))
 rawBuildHydraTx appConfig txb = do

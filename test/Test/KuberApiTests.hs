@@ -16,11 +16,11 @@ import PlutusTx.Trace
 import System.Directory
 import Test.TestGen
 
-txMaker :: FilePath -> TxBuilder_ BabbageEra
+txMaker :: FilePath -> TxBuilder_ ConwayEra
 txMaker txJsonFileName =
   case A.decode txJson of
     Nothing -> error "Invalid Tx"
-    Just any -> any :: TxBuilder_ BabbageEra
+    Just any -> any :: TxBuilder_ ConwayEra
   where
     filePath :: FilePath
     filePath = unsafePerformIO getCurrentDirectory ++ "/test/Test/TransactionJSON/" ++ txJsonFileName ++ ".json"
@@ -28,23 +28,23 @@ txMaker txJsonFileName =
     txJson :: BS8.ByteString
     txJson = unsafePerformIO $ BS8.readFile filePath
 
-test_kBuildTx_simplePay :: (HasKuberAPI api, IsTxBuilderEra BabbageEra) => Kontract api w FrameworkError (Tx BabbageEra)
+test_kBuildTx_simplePay :: (HasKuberAPI api, IsTxBuilderEra ConwayEra) => Kontract api w FrameworkError (Tx ConwayEra)
 test_kBuildTx_simplePay = kBuildTx $ txMaker "simplePay"
 
-test_kBuildTx_simpleMint :: (HasKuberAPI api, IsTxBuilderEra BabbageEra) => Kontract api w FrameworkError (Tx BabbageEra)
+test_kBuildTx_simpleMint :: (HasKuberAPI api, IsTxBuilderEra ConwayEra) => Kontract api w FrameworkError (Tx ConwayEra)
 test_kBuildTx_simpleMint = kBuildTx $ txMaker "simpleMint"
 
-test_kBuildTx_redeemWithReferenceInput :: (HasKuberAPI api, IsTxBuilderEra BabbageEra) => Kontract api w FrameworkError (Tx BabbageEra)
+test_kBuildTx_redeemWithReferenceInput :: (HasKuberAPI api, IsTxBuilderEra ConwayEra) => Kontract api w FrameworkError (Tx ConwayEra)
 test_kBuildTx_redeemWithReferenceInput = kBuildTx $ txMaker "redeemWithReferenceInput"
 
-test_kBuildTx_redeemFromSmartContract :: (HasKuberAPI api, IsTxBuilderEra BabbageEra) => Kontract api w FrameworkError (Tx BabbageEra)
+test_kBuildTx_redeemFromSmartContract :: (HasKuberAPI api, IsTxBuilderEra ConwayEra) => Kontract api w FrameworkError (Tx ConwayEra)
 test_kBuildTx_redeemFromSmartContract = kBuildTx $ txMaker "redeemFromSmartContract"
 
-test_kBuildTx_supportMetadata :: (HasKuberAPI api, IsTxBuilderEra BabbageEra) => Kontract api w FrameworkError (Tx BabbageEra)
+test_kBuildTx_supportMetadata :: (HasKuberAPI api, IsTxBuilderEra ConwayEra) => Kontract api w FrameworkError (Tx ConwayEra)
 test_kBuildTx_supportMetadata = kBuildTx $ txMaker "simplePayWithMetadata"
 
-test_kBuildTx_supportDatumInAuxData :: (HasKuberAPI api, IsTxBuilderEra BabbageEra) => Kontract api w FrameworkError (Tx BabbageEra)
+test_kBuildTx_supportDatumInAuxData :: (HasKuberAPI api, IsTxBuilderEra ConwayEra) => Kontract api w FrameworkError (Tx ConwayEra)
 test_kBuildTx_supportDatumInAuxData = kBuildTx $ txMaker "mintWithDatumInAuxData"
 
-test_ex_units :: (HasKuberAPI api, IsTxBuilderEra BabbageEra) => Kontract api w FrameworkError (Tx BabbageEra)
+test_ex_units :: (HasKuberAPI api, IsTxBuilderEra ConwayEra) => Kontract api w FrameworkError (Tx ConwayEra)
 test_ex_units = kBuildTx $ txMaker "exUnitsMultisig"

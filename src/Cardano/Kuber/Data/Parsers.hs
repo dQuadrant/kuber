@@ -8,7 +8,7 @@
 
 module Cardano.Kuber.Data.Parsers where
 
-import           Cardano.Api
+import           Cardano.Api hiding (parseAssetId, parseTxIn)
 import           Cardano.Binary               (decodeFull)
 import           Cardano.Kuber.Utility.Text
 
@@ -33,7 +33,7 @@ import           Data.Text.Encoding           (encodeUtf8)
 import qualified Data.Text.Encoding           as TSE
 import           Text.Read                    (readMaybe)
 import qualified Data.Aeson.Types as A
-import Cardano.Ledger.Crypto (StandardCrypto)
+import Cardano.Api.Ledger (StandardCrypto)
 import qualified Cardano.Ledger.Babbage.TxOut as Babbage
 
 import qualified Cardano.Ledger.Api.Era as Conway
@@ -50,7 +50,7 @@ parseSignKey :: MonadFail m => Text -> m (SigningKey PaymentKey)
 parseSignKey txt
   | T.null txt = fail "Empty value for SignKey"
   | T.head txt /= '{' =
-    case deserialiseFromBech32 (AsSigningKey AsPaymentKey) txt of
+    case deserialiseFromBech32 txt of
       Left ide -> case convertText txt <&> unBase16 of
         Nothing -> fail "SignKey is neither Bech32 nor Hex encoded"
         Just bs -> case deserialiseFromCBOR (AsSigningKey AsPaymentKey) bs of
@@ -66,7 +66,7 @@ parseSignKey txt
 signKeyParser ::  A.Value -> A.Parser (SigningKey PaymentKey)
 signKeyParser v@(A.Object _) = do
   textEnvelope <- parseJSON v
-  case deserialiseFromTextEnvelope (AsSigningKey AsPaymentKey) textEnvelope of
+  case deserialiseFromTextEnvelope textEnvelope of
       Left tee -> case tee of
         TextEnvelopeTypeError tets tet -> fail  $ "Invalid text envelope type for "++ show tet
         TextEnvelopeDecodeError de -> fail $ "Failed to decode signKey " ++ show de
@@ -91,8 +91,8 @@ parseAssetId assetText
         | T.length policy < 56 = fail "ParserError : Too short input for assetId"
         | otherwise =  parsePair (T.take 56 policy ) (T.drop 56 policy)
       parsePair policyText nameText=do
-              let policyId = deserialiseFromRawBytesHex AsPolicyId $ encodeUtf8 policyText
-              let assetName = case deserialiseFromRawBytesHex AsAssetName $ encodeUtf8 nameText
+              let policyId = deserialiseFromRawBytesHex (encodeUtf8 policyText) :: Either RawBytesHexError PolicyId
+              let assetName = case deserialiseFromRawBytesHex (encodeUtf8 nameText) :: Either RawBytesHexError AssetName
                               of
                                 Left _  -> deserialiseFromRawBytes AsAssetName $ encodeUtf8 nameText
                                 Right an -> pure an
@@ -103,7 +103,7 @@ parseAssetId assetText
                   Right an -> pure $ AssetId pi an
 
 parseAssetName :: MonadFail f =>Text -> f AssetName
-parseAssetName txt =case deserialiseFromRawBytesHex AsAssetName utf8
+parseAssetName txt =case (deserialiseFromRawBytesHex utf8 :: Either RawBytesHexError AssetName)
       of
         Left _  -> case deserialiseFromRawBytes AsAssetName utf8 of
           Left _ -> fail $  "Invalid assetname :" ++ T.unpack txt
@@ -176,13 +176,13 @@ anyScriptParser v@(A.Object o) =do
   _type :: T.Text <- o  .: "type"
   case _type of
     "PlutusScriptV1" -> do
-      sc <- o.: "cborHex"  >>= parseCborHex @T.Text
+      sc <- o .: "cborHex" >>= parsePlutusScriptCborHex AsPlutusScriptV1
       pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1) (PlutusScript PlutusScriptV1 sc)
     "PlutusScriptV2" -> do
-      sc <- o.: "cborHex"  >>= parseCborHex @T.Text
+      sc <- o .: "cborHex" >>= parsePlutusScriptCborHex AsPlutusScriptV2
       pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2) (PlutusScript PlutusScriptV2 sc)
     "PlutusScriptV3" -> do 
-      sc <- o.:  "cborHex"  >>= parseCborHex @T.Text
+      sc <- o .: "cborHex" >>= parsePlutusScriptCborHex AsPlutusScriptV3
       pure $ ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV3) (PlutusScript PlutusScriptV3 sc)
     _ -> do
       v ::SimpleScript <- parseJSON v
@@ -271,7 +271,7 @@ parseTxIn :: MonadFail m =>  Text -> m TxIn
 parseTxIn txt = do
   case T.split (== '#') txt of
       [txHash, index] ->
-        case deserialiseFromRawBytesHex AsTxId (TSE.encodeUtf8 txHash) of
+        case (deserialiseFromRawBytesHex (TSE.encodeUtf8 txHash) :: Either RawBytesHexError TxId) of
           Right txid -> case readMaybe (T.unpack index) of
             Just txindex -> pure $ TxIn txid (TxIx txindex)
             Nothing      -> fail $ "Failed to parse txIndex in " ++ T.unpack txt
@@ -307,7 +307,7 @@ parseUtxoCbor_ sbe bs = do
 parseTxOut :: MonadFail m => Text -> m (TxOut CtxTx   ConwayEra)
 parseTxOut  val = decodeCbor <&> fromShelleyTxOut ShelleyBasedEraConway
   where
-    decodeCbor :: MonadFail m => m (Babbage.TxOut (Conway.ConwayEra StandardCrypto))
+    decodeCbor :: MonadFail m => m (Babbage.TxOut Conway.ConwayEra)
     decodeCbor = parseHexString  val >>= parseCbor
 
 parseHexString :: (FromText (Maybe (Base16 a1)), ToText a2, MonadFail f) =>a2 -> f a1
@@ -344,7 +344,7 @@ parseRawBytes' t v msg = case deserialiseFromRawBytes t v of
   Right a -> pure a
 
 parseBech32Type :: (SerialiseAsBech32 a, MonadFail m) => Text -> AsType a -> m a
-parseBech32Type bs  t  = case deserialiseFromBech32  t bs of
+parseBech32Type bs  _  = case deserialiseFromBech32 bs of
     Left e ->  fail $ "Parse Error :" ++ show e
     Right v -> pure v
 
@@ -388,7 +388,7 @@ parseRawBech32_   bech32Str = do
 
 
 parseBech32Type' :: (SerialiseAsBech32 a, MonadFail m) => Text -> AsType a -> ErrorMessage -> m a
-parseBech32Type' bs  t msg = case deserialiseFromBech32  t bs of
+parseBech32Type' bs  _ msg = case deserialiseFromBech32 bs of
     Left e ->  fail  msg
     Right v -> pure v
 
@@ -402,6 +402,13 @@ parseBech32OrCBOR' :: (FromCBOR  a, SerialiseAsBech32 a, MonadFail m) => Text ->
 parseBech32OrCBOR' bs t msg = case parseHexString bs of
   Just unhexed -> parseCbor' unhexed msg
   Nothing -> parseBech32Type' bs t msg
+
+parsePlutusScriptCborHex :: (MonadFail m, HasTypeProxy lang) => AsType lang -> Text -> m (PlutusScript lang)
+parsePlutusScriptCborHex langAsType txt = do
+  cbor <- parseHexString txt
+  case deserialiseFromCBOR (AsPlutusScript langAsType) cbor of
+    Left de -> fail $ "Not in required cbor format: " ++ show de
+    Right script -> pure script
 
 
 txinOrUtxoParser  :: (IsTxBuilderEra era) =>  A.Value -> A.Parser (Either TxIn (UTxO era))

@@ -3,6 +3,7 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Kuber.Data.EraUpdate where
 
@@ -10,7 +11,10 @@ import Cardano.Api
 import qualified Cardano.Api.Ledger as L
 import Cardano.Api.Shelley
 import Cardano.Kuber.Core.TxBuilder (IsTxBuilderEra (..))
+import Cardano.Kuber.Data.Models ()
+import Cardano.Kuber.Error (ErrorType (LibraryError), FrameworkError (FrameworkError))
 import Cardano.Ledger.Api (downgradePParams)
+import qualified Data.Aeson as A
 import qualified Data.Map as Map
 
 updateUtxoEra :: IsTxBuilderEra era => UTxO era1 -> UTxO era
@@ -35,7 +39,7 @@ updateTxOutDatum' datum = case datum of
   TxOutDatumNone -> TxOutDatumNone
   TxOutDatumHash aeo ha -> TxOutDatumHash bAlonzoOnward ha
   TxOutDatumInline beo hsd -> TxOutDatumInline bBabbageOnward hsd
-  TxOutDatumInTx aeo hsd -> TxOutDatumInTx bAlonzoOnward hsd
+  TxOutSupplementalDatum aeo hsd -> TxOutSupplementalDatum bAlonzoOnward hsd
   _ -> error "Cardano.Kuber.Core.Data.EraUpdate.updateTxOutDatum' : Impossible"
 
 updateTxOutDatum :: IsTxBuilderEra era => TxOutDatum ctx era1 -> TxOutDatum ctx era
@@ -80,3 +84,9 @@ updatePParamEra cera ulP@(LedgerProtocolParameters pparam) = case cera of
   BabbageEra -> (LedgerProtocolParameters (downgradePParams () pparam) :: LedgerProtocolParameters BabbageEra)
   ConwayEra -> ulP
   _ -> error "Unexpected"
+
+upgradeBabbagePParams :: LedgerProtocolParameters BabbageEra -> Either FrameworkError (LedgerProtocolParameters ConwayEra)
+upgradeBabbagePParams pparams =
+  case A.fromJSON (A.toJSON pparams) of
+    A.Success translated -> Right translated
+    A.Error err -> Left $ FrameworkError LibraryError ("Unable to translate protocol parameters across eras: " ++ err)

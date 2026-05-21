@@ -25,9 +25,8 @@
 module Cardano.Kuber.Data.Models where
 
 import Cardano.Api
-import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData, scriptDataFromJsonDetailedSchema, scriptDataToJsonDetailedSchema, ReferenceScript (ReferenceScript, ReferenceScriptNone), Proposal, ShelleyLedgerEra, StakeAddress (StakeAddress), StakePoolKey, Hash (..), toShelleyStakeAddr, toShelleyTxId, fromShelleyTxIn, fromShelleyStakeAddr, LedgerProtocolParameters (LedgerProtocolParameters), createGovernanceActionId, createPreviousGovernanceActionId)
+import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData, scriptDataFromJsonDetailedSchema, scriptDataToJsonDetailedSchema, ReferenceScript (ReferenceScript, ReferenceScriptNone), Proposal, ShelleyLedgerEra, StakeAddress (StakeAddress), StakePoolKey, Hash (..), toShelleyStakeAddr, toShelleyTxId, fromShelleyTxIn, fromShelleyStakeAddr, LedgerProtocolParameters (LedgerProtocolParameters))
 import Cardano.Binary (ToCBOR (toCBOR), decodeFull, fromCBOR)
-import Cardano.Ledger.Babbage.Tx (BabbageTxBody (btbTxFee))
 import Codec.CBOR.Write (toLazyByteString)
 import Data.Aeson (KeyValue ((.=)), encode, object, (.!=), ToJSONKey, FromJSONKey)
 import Data.Aeson.Types (FromJSON (parseJSON), Parser, ToJSON (toJSON), Value (Object, String), (.:), (.:?))
@@ -52,13 +51,11 @@ import Data.Word (Word64, Word8)
 import qualified Data.Map as Map
 import Data.Vector.Primitive (Vector(Vector))
 import qualified Data.Vector as Vector
-import Cardano.Api.Ledger (ConwayTxCert(..), ConwayGovCert (..), StrictMaybe (SNothing, SJust), Credential (KeyHashObj, ScriptHashObj), Coin (Coin), StandardCrypto, Url, textToUrl, ShelleyTxCert (..), ShelleyDelegCert (..), ConwayDelegCert (..), KeyHash (KeyHash), Delegatee (..), KeyRole (DRepRole), hashFromBytes, DRep (..), GovActionId (GovActionId), boundRational, unboundRational, PoolCert (..))
+import Cardano.Api.Ledger (ConwayTxCert(..), ConwayGovCert (..), StrictMaybe (SNothing, SJust), Credential (KeyHashObj, ScriptHashObj), Coin (Coin), StandardCrypto, Url, textToUrl, ShelleyTxCert (..), ShelleyDelegCert (..), ConwayDelegCert (..), KeyHash (KeyHash), Delegatee (..), KeyRole (DRepRole), hashFromBytes, DRep (..), GovActionId (GovActionId), boundRational, unboundRational, PoolCert (..), PParamsHKD, AccountAddress, Crypto)
 import Data.Text.Encoding (encodeUtf8)
 import Cardano.Ledger.Hashes as Hashes
-import Cardano.Ledger.Api (Constitution (Constitution), Anchor (Anchor), GovAction (..), ProposalProcedure (ProposalProcedure), Crypto (ADDRHASH), PParamsUpdate, emptyPParamsUpdate, ppuMaxBBSizeL, GovPurposeId (GovPurposeId), GovActionIx (GovActionIx), PParams, GovActionPurpose)
+import Cardano.Ledger.Api (Constitution (Constitution), Anchor (Anchor), GovAction (..), ProposalProcedure (ProposalProcedure), PParamsUpdate, emptyPParamsUpdate, ppuMaxBBSizeL, GovPurposeId (GovPurposeId), GovActionIx (GovActionIx), PParams, GovActionPurpose)
 import qualified Cardano.Ledger.Api as Ledger
-import Cardano.Ledger.SafeHash (unsafeMakeSafeHash)
-import Cardano.Ledger.Core (EraCrypto, PParamsUpdate (..), EraPParams (..))
 import qualified Cardano.Api.Shelley as CAPI
 import qualified Data.ByteString as BS
 import Data.Typeable (Typeable)
@@ -105,7 +102,7 @@ class Wrapper  m a  where
 newtype AssetModal = AssetModal AssetId deriving (Show)
 
 newtype AddressModal  = AddressModal (AddressInEra ConwayEra) deriving (Show)
-newtype RewardAcntModal crypto = RewardAcntModal (Ledger.RewardAcnt crypto) deriving (Show,Eq)
+newtype RewardAcntModal crypto = RewardAcntModal AccountAddress deriving (Show,Eq)
 
 
 newtype SignKeyModal = SignKeyModal (SigningKey PaymentKey) deriving (Show)
@@ -130,7 +127,7 @@ newtype ConstitutionModal era  = ConstitutionModal (Constitution era)
 
 -- ConwaEra~ (ShelleyLedgerEra (Ledger.ConwayEra StandardCrypto))
 
-newtype AnchorModal era = AnchorModal (Anchor era)
+newtype AnchorModal era = AnchorModal Anchor
 -- newtype LProposalProcedureModal era  = LProposalProcedureModal (ProposalProcedure era)
 
 -- ProposalProcedureModal (CAPI.ConwayEra) => ProposalProcedudure (ShelleyLedgerEra ( ShelleyLedgerEra (L.ConwayEra StandardCrypto) ))
@@ -151,23 +148,17 @@ instance Wrapper VoteModal Ledger.Vote where
   unWrap (VoteModal vote) = vote
 
 
--- instance   ToJSON (LedgerProtocolParameters BabbageEra)where
---   toJSON (LedgerProtocolParameters param)=toJSON param
-
--- instance   ToJSON (LedgerProtocolParameters ConwayEra)where
---   toJSON (LedgerProtocolParameters param)=toJSON param
-
-
-instance (IsTxBuilderEra era, ToJSON (PParamsHKD Identity (ShelleyLedgerEra era))) => ToJSON (LedgerProtocolParameters era)where
+instance ToJSON (LedgerProtocolParameters BabbageEra)where
   toJSON (LedgerProtocolParameters param)=toJSON param
 
-instance  (Ledger.ConwayEraPParams
-                      (ShelleyLedgerEra era),EraCrypto (ShelleyLedgerEra era)
-                    ~ StandardCrypto)=> FromJSON (LedgerProtocolParameters era)where
+instance ToJSON (LedgerProtocolParameters ConwayEra)where
+  toJSON (LedgerProtocolParameters param)=toJSON param
+
+instance Ledger.ConwayEraPParams (ShelleyLedgerEra era) => FromJSON (LedgerProtocolParameters era)where
   parseJSON (A.Object obj)=
     let hmap=  A.fromHashMapText $  HM.mapKeys (T.toLower . A.toText ) $ toHashMap obj
         pparams=Ledger.emptyPParams
-        paramParser :: (FromJSON a , EraCrypto ledgerera ~ StandardCrypto) => T.Text
+        paramParser :: FromJSON a => T.Text
             -> Lens' (PParams ledgerera) b
             -> (a -> b)
             -> PParams ledgerera
@@ -210,12 +201,12 @@ instance  (Ledger.ConwayEraPParams
       ) <&> LedgerProtocolParameters
   parseJSON _= fail "Expected pParams object"
 
-newtype DrepModal era = DrepModal (DRep era)
+newtype DrepModal era = DrepModal DRep
 
-instance Wrapper (DrepModal era) (DRep era) where
+instance Wrapper (DrepModal era) DRep where
   unWrap(DrepModal drep) = drep
 
-data CredentialModal (r::KeyRole)  era = CredentialModal (Credential r era) deriving (Show, Eq)
+data CredentialModal (r::KeyRole)  era = CredentialModal (Credential r) deriving (Show, Eq)
 
 
 instance Wrapper (UtxoModal era) (UTxO era) where
@@ -246,7 +237,7 @@ instance Wrapper (ConstitutionModal era) (Constitution era) where
 instance Wrapper (ProposalModal era) (Proposal era) where
   unWrap (ProposalModal v) = v
 
-instance Wrapper (AnchorModal era) (Anchor era) where
+instance Wrapper (AnchorModal era) Anchor where
   unWrap (AnchorModal a) = a
 
 instance Wrapper (GovActionModal era) (GovAction era) where
@@ -255,7 +246,7 @@ instance Wrapper (GovActionModal era) (GovAction era) where
 -- instance Wrapper (ProposalProcedureModal era) (ProposalProcedure (ShelleyLedgerEra era)) where
 --   unWrap (ProposalProcedureModal p) =p
 
-instance Wrapper (RewardAcntModal era) (Ledger.RewardAcnt era) where
+instance Wrapper (RewardAcntModal era) AccountAddress where
   unWrap (RewardAcntModal ra) =ra
 
 unAssetModal (AssetModal a) = a
@@ -286,34 +277,46 @@ data SubmitTxModal = SubmitTxModal
   }
 
 instance FromJSON SubmitTxModal where
-  parseJSON (Object o) =
-    do
-      SubmitTxModal
-      <$> (o .: "tx" >>= anyTxParser)
-      <*> (o .:? "witness" <&> fmap unWitnessModal)
+  parseJSON v@(Object o) =
+    parseWrapped o
+      <|> parseLegacyEnvelope v (o .:? "witness" <&> fmap unWitnessModal)
+      <|> parseLegacyTxModal v
     where
-      anyTxParser te = case deserialiseFromTextEnvelopeAnyOf
-          [ --FromSomeType (AsTx AsByronEra)   (InAnyCardanoEra ByronEra),
-           FromSomeType (AsTx AsShelleyEra) (InAnyCardanoEra ShelleyEra)
-          , FromSomeType (AsTx AsAllegraEra) (InAnyCardanoEra AllegraEra)
-          , FromSomeType (AsTx AsMaryEra)    (InAnyCardanoEra MaryEra)
-          , FromSomeType (AsTx AsAlonzoEra)  (InAnyCardanoEra AlonzoEra)
-          , FromSomeType (AsTx AsBabbageEra) (InAnyCardanoEra BabbageEra)
-          , FromSomeType (AsTx AsConwayEra) (InAnyCardanoEra ConwayEra)
-          ]  te of
-            Left err -> fail "Couldn't deserialise transaction"
-            Right val -> pure val
-  parseJSON _ = fail "Expected SubmitTx Object"
+      parseWrapped obj =
+        SubmitTxModal
+          <$> (obj .: "tx" >>= parseInAnyTxEnvelope)
+          <*> (obj .:? "witness" <&> fmap unWitnessModal)
+      parseLegacyEnvelope val witnessParser =
+        SubmitTxModal
+          <$> (parseJSON val >>= parseInAnyTxEnvelope)
+          <*> witnessParser
+      parseLegacyTxModal val = do
+        TxModal tx <- parseJSON val
+        pure $ SubmitTxModal tx Nothing
+  parseJSON v =
+    parseLegacyEnvelope v <|> parseLegacyTxModal v
+    where
+      parseLegacyEnvelope val = SubmitTxModal <$> (parseJSON val >>= parseInAnyTxEnvelope) <*> pure Nothing
+      parseLegacyTxModal val = do
+        TxModal tx <- parseJSON val
+        pure $ SubmitTxModal tx Nothing
 
 instance ToJSON SubmitTxModal where
-  toJSON (SubmitTxModal (InAnyCardanoEra era tx) witness) = toJSON $ serialiseTxLedgerCddl (case era of
-    ByronEra -> error "Byron Era Unsupported"
-    ShelleyEra -> ShelleyBasedEraShelley
-    AllegraEra -> ShelleyBasedEraAllegra
-    MaryEra -> ShelleyBasedEraMary
-    AlonzoEra -> ShelleyBasedEraAlonzo
-    BabbageEra -> ShelleyBasedEraBabbage
-    ConwayEra -> ShelleyBasedEraConway) tx
+  toJSON (SubmitTxModal tx witness) =
+    submitTxModalValue
+      (serialiseInAnyTxEnvelope tx)
+      (fmap (\w -> toJSON (WitnessModal w)) witness)
+
+submitTxModalValue :: TextEnvelope -> Maybe A.Value -> A.Value
+submitTxModalValue txEnvelope witnessValue =
+  object $
+    [ "tx" .= txEnvelope
+    ]
+    ++ txEnvelopePairs txEnvelope
+    ++ maybe [] (\w -> ["witness" .= w]) witnessValue
+
+instance IsTxBuilderEra era => ToJSON (WitnessModal era) where
+  toJSON (WitnessModal witness) = toJSON (toHexString (serialiseToCBOR witness) :: Text)
 
 instance IsTxBuilderEra era => FromJSON (WitnessModal era) where
   parseJSON (String str) = do
@@ -338,17 +341,38 @@ instance  FromJSON TxModal  where
   parseJSON _ = fail "Expected Tx cbor hex string"
 
 instance ToJSON TxModal where
-  toJSON (TxModal (InAnyCardanoEra era tx)) = case toJSON $ serialiseTxLedgerCddl (case era of
-    ByronEra -> error "Byron Era Unsupported"
-    ShelleyEra -> ShelleyBasedEraShelley
-    AllegraEra -> ShelleyBasedEraAllegra
-    MaryEra -> ShelleyBasedEraMary
-    AlonzoEra -> ShelleyBasedEraAlonzo
-    BabbageEra -> ShelleyBasedEraBabbage
-    ConwayEra -> ShelleyBasedEraConway) tx of
+  toJSON (TxModal tx@(InAnyCardanoEra _ body)) = case toJSON $ serialiseInAnyTxEnvelope tx of
     Object km -> let hsmapTxt = A.toHashMapText km
-      in A.toJSON $  HM.insert "hash" ( toJSON $ serialiseToRawBytesHexText $  getTxId $  getTxBody tx) hsmapTxt
+      in A.toJSON $  HM.insert "hash" ( toJSON $ serialiseToRawBytesHexText $  getTxId $  getTxBody body) hsmapTxt
     val -> val
+
+serialiseInAnyTxEnvelope :: InAnyCardanoEra Tx -> TextEnvelope
+serialiseInAnyTxEnvelope (InAnyCardanoEra era tx) = case era of
+  ByronEra -> error "Byron Era Unsupported"
+  ShelleyEra -> serialiseToTextEnvelope Nothing tx
+  AllegraEra -> serialiseToTextEnvelope Nothing tx
+  MaryEra -> serialiseToTextEnvelope Nothing tx
+  AlonzoEra -> serialiseToTextEnvelope Nothing tx
+  BabbageEra -> serialiseToTextEnvelope Nothing tx
+  ConwayEra -> serialiseToTextEnvelope Nothing tx
+
+parseInAnyTxEnvelope :: MonadFail m => TextEnvelope -> m (InAnyCardanoEra Tx)
+parseInAnyTxEnvelope te = case deserialiseFromTextEnvelopeAnyOf
+    [ --FromSomeType (AsTx AsByronEra)   (InAnyCardanoEra ByronEra),
+      FromSomeType (AsTx AsShelleyEra) (InAnyCardanoEra ShelleyEra)
+    , FromSomeType (AsTx AsAllegraEra) (InAnyCardanoEra AllegraEra)
+    , FromSomeType (AsTx AsMaryEra)    (InAnyCardanoEra MaryEra)
+    , FromSomeType (AsTx AsAlonzoEra)  (InAnyCardanoEra AlonzoEra)
+    , FromSomeType (AsTx AsBabbageEra) (InAnyCardanoEra BabbageEra)
+    , FromSomeType (AsTx AsConwayEra)  (InAnyCardanoEra ConwayEra)
+    ] te of
+      Left _ -> fail "Couldn't deserialise transaction"
+      Right val -> pure val
+
+txEnvelopePairs :: TextEnvelope -> [A.Pair]
+txEnvelopePairs txEnvelope = case A.toJSON txEnvelope of
+  Object obj -> A.toList obj
+  _ -> []
 
 instance  FromJSON AddressModal  where
   parseJSON (String s)=  case deserialiseAddress (AsAddressInEra AsConwayEra) s of
@@ -676,7 +700,7 @@ instance FromJSON ExUnitsResponseModal where
 
     parseJSON _ = fail "parseError : Expected Object"
 
-instance Ledger.Crypto era => FromJSON (AnchorModal era) where
+instance FromJSON (AnchorModal era) where
   parseJSON (A.Object o) = do
      url <- o .: "url"
      dataHash <- o .:? "dataHash"
@@ -689,13 +713,13 @@ instance Ledger.Crypto era => FromJSON (AnchorModal era) where
 
   parseJSON  _ = fail "Expected Anchor Object"
 
-instance (Crypto era) => ToJSON (AnchorModal era) where
+instance ToJSON (AnchorModal era) where
   toJSON (AnchorModal (Anchor url hash)) = A.object [
         "url" .= url
       , "hash" .= hash
     ]
 
-instance EraCrypto ledgerera ~ StandardCrypto =>  FromJSON  (ConstitutionModal ledgerera) where
+instance FromJSON  (ConstitutionModal ledgerera) where
   parseJSON (A.Object o) = do
       url <- o .: "url"
       dataHash <- o .: "dataHash"
@@ -708,7 +732,7 @@ instance EraCrypto ledgerera ~ StandardCrypto =>  FromJSON  (ConstitutionModal l
   parseJSON  _ = fail "Expected Proposal Object"
 
 
-instance  EraCrypto ledgerera ~ StandardCrypto =>  FromJSON  (GovActionModal ledgerera) where
+instance FromJSON  (GovActionModal ledgerera) where
   parseJSON (A.Object o) = do
     certType <- o .: "type"
     case T.toLower certType of
@@ -731,10 +755,10 @@ instance FromJSON  (ProposalProcedureModal ConwayEra) where
           result <- o.:? key
           maybe onMissing mapper  result
 
-        prevGovActionId :: EraCrypto (ShelleyLedgerEra era)~ StandardCrypto => StrictMaybe (GovPurposeId purpose (ShelleyLedgerEra era))
+        prevGovActionId :: StrictMaybe (GovPurposeId purpose)
         prevGovActionId =case mUtxoIdModal of
             Nothing -> SNothing
-            Just (UtxoIdModal ( prevGovTxId, TxIx prevGovTxIx)) -> SJust $ createPreviousGovernanceActionId prevGovTxId (fromIntegral prevGovTxIx)
+            Just (UtxoIdModal ( prevGovTxId, TxIx prevGovTxIx)) -> SJust $ GovPurposeId (GovActionId (toShelleyTxId prevGovTxId) (GovActionIx $ fromIntegral prevGovTxIx))
         knownKeys = [
           "refundaccount","deposit","anchor","prevgovaction"
           ,"newconstitution","noconfidence","info","withdraw","hardfork","updatecommittee","parameterupdate","guardrailscript","script","executionunits"
@@ -939,8 +963,7 @@ instance (era ~ ConwayEra)  =>  FromJSON (CertificateModal era) where
                                       stakeCred
                                       depositAmount
       "delegate" -> do
-          let spoParser :: MonadFail m =>  T.Text -> m (Hash StakePoolKey)
-              spoParser val= do
+          let spoParser val= do
                 case parseBech32Type val (AsHash AsStakePoolKey) of
                     Just p -> pure p
                     Nothing -> parseHexString val >>= parseRawBytes (AsHash AsStakePoolKey)
@@ -985,8 +1008,7 @@ instance (era ~ ConwayEra)  =>  FromJSON (CertificateModal era) where
   parseJSON  _ = fail "Expected Certificate Object"
 
 
-instance ( Crypto (EraCrypto (ShelleyLedgerEra era)),EraCrypto (ShelleyLedgerEra era)
-                    ~ StandardCrypto) => ToJSON (CertificateModal era ) where
+instance ToJSON (CertificateModal era ) where
   toJSON (CertificateModal cert) = A.object  $case cert of
     ShelleyRelatedCertificate stbe stc -> case stc of
       ShelleyTxCertDelegCert sdc -> []
@@ -1021,7 +1043,7 @@ instance ( Crypto (EraCrypto (ShelleyLedgerEra era)),EraCrypto (ShelleyLedgerEra
 
 
 
-instance ( ledgerera ~ StandardCrypto ,Crypto ledgerera) => FromJSON (CredentialModal r ledgerera) where
+instance FromJSON (CredentialModal r ledgerera) where
   parseJSON :: A.Value -> Parser (CredentialModal r ledgerera)
   parseJSON (A.Object o) = do
     cred <- asum [parser1 o, parser2 o]
@@ -1047,7 +1069,7 @@ instance Ord (CredentialModal r cre) where
 
 
 
-instance ( era ~ StandardCrypto, Typeable r ) => ToJSONKey (CredentialModal r era) where
+instance Typeable r => ToJSONKey (CredentialModal r era) where
   toJSONKey  =A.toJSONKeyText anctToJsonKey
     where
       anctToJsonKey (CredentialModal cre) = case cre of
@@ -1070,14 +1092,14 @@ instance ToJSON VoteModal where
     Ledger.VoteYes -> A.Bool True
     Ledger.Abstain -> "abstain"
 
-instance (Crypto (EraCrypto era)) => FromJSON (VotingProcedureModal era) where
+instance FromJSON (VotingProcedureModal era) where
   parseJSON (A.Object o) = do
      mAnchor <- o .:? "anchor"
      (VoteModal vote) <- o .: "vote"
      pure $ VotingProcedureModal (Ledger.VotingProcedure vote (toStrictMaybe mAnchor))
   parseJSON _ = fail "Expected VotingProcedure Object"
 
-instance  (IsTxBuilderEra era ,EraCrypto  (ShelleyLedgerEra era)~StandardCrypto) => FromJSON (TxVote era) where
+instance IsTxBuilderEra era => FromJSON (TxVote era) where
   parseJSON (A.Object o) = do
       govAction <- o .: "govAction" <|> o .: "proposal"
       mAnchor <- o.:? "anchor"
@@ -1115,7 +1137,7 @@ instance  (IsTxBuilderEra era ,EraCrypto  (ShelleyLedgerEra era)~StandardCrypto)
                 =  GovActionId (toShelleyTxId prevGovTxId) (GovActionIx $ fromIntegral prevGovTxIx)
   parseJSON _ = fail "Expected Vote Object"
 
-instance  (Crypto (EraCrypto (ShelleyLedgerEra era)),EraCrypto (ShelleyLedgerEra era) ~ StandardCrypto) => ToJSON (TxVote era) where
+instance ToJSON (TxVote era) where
   toJSON (TxVote ( TxVoteL (GovActionId txid (GovActionIx index)) (Ledger.VotingProcedure vote mAnchor) voter) ) = A.object $ [
           "vote" .= VoteModal vote
         , "proposal" .= renderTxIn ( fromShelleyTxIn  $ Ledger.TxIn txid ( Ledger.TxIx $ fromIntegral index))
@@ -1125,10 +1147,10 @@ instance  (Crypto (EraCrypto (ShelleyLedgerEra era)),EraCrypto (ShelleyLedgerEra
           Ledger.DRepVoter cre -> ["voter" .=CredentialModal cre,"role" .= A.String "drep"]
           Ledger.StakePoolVoter kh -> ["voter" .=CredentialModal (KeyHashObj kh) , "role" .= A.String "stakePool"])
 
-instance ( ledgerera ~ StandardCrypto ,Crypto ledgerera) => FromJSONKey (CredentialModal r ledgerera) where
+instance FromJSONKey (CredentialModal r ledgerera) where
   fromJSONKey  = A.FromJSONKeyTextParser  parseCredentialText
 
-instance (Crypto ledgerera, Typeable r) => ToJSON (CredentialModal r ledgerera) where
+instance Typeable r => ToJSON (CredentialModal r ledgerera) where
   toJSON (CredentialModal cre) = case cre of
     ScriptHashObj sh -> A.object ["scriptHash" .= sh ]
     KeyHashObj kh -> A.String $ T.drop 4 $ serializeAsHexText kh
@@ -1147,7 +1169,7 @@ instance (Crypto ledgerera, Typeable r) => ToJSON (CredentialModal r ledgerera) 
 -- --                           \       `Is Mainnet Address
 -- --                            `Account Credential is a Script
 
-rawBytesToCred :: (HashAlgorithm (ADDRHASH c), MonadFail f) => Crypto.ByteString -> Bool -> f (Credential kr c)
+rawBytesToCred :: MonadFail f => Crypto.ByteString -> Bool -> f (Credential kr)
 rawBytesToCred bytes stripPrefix
   | BS.length bytes == 28 =  doConvert bytes <&> KeyHashObj. KeyHash
   | BS.length bytes ==29 && stripPrefix = let
@@ -1159,14 +1181,14 @@ rawBytesToCred bytes stripPrefix
                 else doConvert hash <&> ScriptHashObj . Hashes.ScriptHash
   | otherwise = fail "Credential Hash is not of 28 byte length "
   where
-    doConvert :: (HashAlgorithm h, MonadFail m) => BS8.ByteString -> m (Crypto.Hash h a)
+    doConvert :: MonadFail m => BS8.ByteString -> m (Crypto.Hash ADDRHASH a)
     doConvert bytes
       = case hashFromBytes bytes of
               Nothing
                 -> fail "Credential Hash .fromBytes, invalid credentialHash"
               Just ha -> pure ha
 
-instance (era ~ StandardCrypto) =>  FromJSON  (DrepModal era) where
+instance FromJSON (DrepModal era) where
 
   parseJSON :: A.Value -> Parser (DrepModal era)
   parseJSON (A.Object o ) = do
@@ -1189,7 +1211,7 @@ instance (era ~ StandardCrypto) =>  FromJSON  (DrepModal era) where
 
   parseJSON  _ = fail "Expected Drep Object"
 
-instance (era ~ StandardCrypto) => ToJSON (DrepModal era) where
+instance ToJSON (DrepModal era) where
   toJSON (DrepModal drep)= case drep of
       DRepCredential cre -> toJSON (CredentialModal cre)
       DRepAlwaysAbstain -> A.String "abstain"
@@ -1217,13 +1239,11 @@ mapStrictMaybe :: StrictMaybe a -> (a -> b) -> Maybe b
 mapStrictMaybe (SJust v) f = Just (f v)
 mapStrictMaybe SNothing _ = Nothing
 
-type PrevGovAction purpose = (StrictMaybe (Ledger.GovPurposeId purpose StandardCrypto))
-type LedgerAnchor = (Ledger.Anchor StandardCrypto)
+type PrevGovAction purpose = StrictMaybe (Ledger.GovPurposeId purpose)
+type LedgerAnchor = Ledger.Anchor
 
 toGovernanceAction
-  ::   EraCrypto ledgerera ~ StandardCrypto
-  =>
-  PrevGovAction purpose -> LedgerAnchor
+  :: PrevGovAction purpose -> LedgerAnchor
   -> Ledger.Constitution ledgerera
 toGovernanceAction  prevGovAction anchor =  Constitution anchor SNothing
 

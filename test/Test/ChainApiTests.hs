@@ -4,9 +4,7 @@
 module Test.ChainApiTests where
 
 import Cardano.Api
-import Cardano.Api.Shelley
 import Cardano.Kuber.Api
-import Cardano.Kuber.Data.Parsers (parseAddress, parseAddressBech32, parseTxIn)
 import Cardano.Kuber.Util (addressInEraToAddressAny)
 import Cardano.Slotting.Time
 import Data.Functor.Identity (Identity)

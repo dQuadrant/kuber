@@ -89,6 +89,7 @@ getNetworkFromEnv envKey = do
       "testnet" -> ("testnet", Testnet (NetworkMagic 1097911063))
       "preprod" -> ("preprod", Testnet (NetworkMagic 1))
       "preview" -> ("preview", Testnet (NetworkMagic 2))
+      "devnet" -> ("devnet", Testnet (NetworkMagic 42))
       "sancho" -> pure (Testnet $ NetworkMagic 4)
       "sanchonet" -> pure (Testnet $ NetworkMagic 4)
       val -> do

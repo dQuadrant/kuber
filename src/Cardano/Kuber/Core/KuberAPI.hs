@@ -9,7 +9,7 @@
 module Cardano.Kuber.Core.KuberAPI where
 
 import Cardano.Api
-import Cardano.Api.Shelley (LedgerProtocolParameters (unLedgerProtocolParameters), TxBody (ShelleyTxBody), convertToLedgerProtocolParameters, fromShelleyTxIn)
+import Cardano.Api.Shelley (LedgerProtocolParameters (unLedgerProtocolParameters), TxBody (ShelleyTxBody), fromShelleyTxIn)
 import Cardano.Kuber.Core.ChainAPI
 import Cardano.Kuber.Core.Kontract
 import Cardano.Kuber.Core.LocalNodeChainApi (ChainConnectInfo, HasLocalNodeAPI (..), kEvaluateExUnits')
@@ -18,7 +18,7 @@ import Cardano.Kuber.Core.TxFramework (executeTxBuilder, executeRawTxBuilder)
 import Cardano.Kuber.Error
 import Cardano.Kuber.Utility.Misc
 import Cardano.Ledger.Api (EraTxBody (inputsTxBodyL))
-import Cardano.Ledger.Babbage.TxBody (BabbageEraTxBody (referenceInputsTxBodyL))
+import qualified Cardano.Ledger.Babbage.TxBody as Babbage (BabbageEraTxBody (referenceInputsTxBodyL))
 import Control.Lens ((^.))
 import Data.Functor ((<&>))
 import Data.Map (Map)
@@ -86,7 +86,7 @@ resolveEra sbera body = case sbera of
 getTxUnknownInputs txBody =
   let ledgerTxBody = case txBody of ShelleyTxBody sbe tb scs tbsd m_ad tsv -> tb
       ins = ledgerTxBody ^. inputsTxBodyL
-      refs = ledgerTxBody ^. referenceInputsTxBodyL --case txBody of { ShelleyTxBody sbe tb scs tbsd m_ad tsv -> btbReferenceInputs tb }
+      refs = ledgerTxBody ^. Babbage.referenceInputsTxBodyL --case txBody of { ShelleyTxBody sbe tb scripts scriptData mAuxData validity -> btbReferenceInputs tb }
     in Set.map fromShelleyTxIn (ins <> refs)
 
 kCalculateMinFee' :: (HasChainQueryAPI a, IsTxBuilderEra era) => Tx era -> Kontract a w FrameworkError Coin

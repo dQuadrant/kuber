@@ -41,7 +41,7 @@ makeTxPlutusScriptWitness era script mtxIn = case script of
       toWitnessPScript :: PlutusScript lang-> PlutusScriptOrReferenceInput lang
       toWitnessPScript ps = case mtxIn of
         Nothing -> PScript ps
-        Just ti -> PReferenceScript ti Nothing
+        Just ti -> PReferenceScript ti
       validatePv1 = validateLang  era (PlutusScriptLanguage PlutusScriptV1) $ "PlutusScriptV1 not supported in " ++ show era
       validatePv2 = validateLang era (PlutusScriptLanguage PlutusScriptV2) $ "PlutusScriptV2 not supported in " ++ show era
       validatePv3 = validateLang era (PlutusScriptLanguage PlutusScriptV3) $ "PlutusScriptV3 not supported in " ++ show era
@@ -51,7 +51,7 @@ makeTxSimpleScriptWitness cera simpleSc mtxIn = do
     lang <- validateSimpleScript
     pure $ SimpleScriptWitness lang (case mtxIn of
       Nothing -> SScript simpleSc
-      Just ti ->  SReferenceScript ti Nothing)
+      Just ti ->  SReferenceScript ti)
 
   where
     validateSimpleScript = validateLang cera SimpleScriptLanguage ("Simple Script not supported for this era" ++ show cera)
@@ -63,14 +63,14 @@ makeTxScriptWitness era script mtxIn = case script of
     lang <- validateSimpleScript
     pure$ Right $ SimpleScriptWitness lang (case mtxIn of
       Nothing -> SScript tss
-      Just ti ->  SReferenceScript ti Nothing)
+      Just ti ->  SReferenceScript ti)
     -- pure $ ScriptInEra lang (SimpleScript tss)
   TxScriptPlutus tps -> makeTxPlutusScriptWitness era tps mtxIn <&> Left
   where
       toWitnessPScript :: PlutusScript lang-> PlutusScriptOrReferenceInput lang
       toWitnessPScript ps = case mtxIn of
         Nothing -> PScript ps
-        Just ti -> PReferenceScript ti Nothing
+        Just ti -> PReferenceScript ti
       validateSimpleScript = validateLang era SimpleScriptLanguage ("Simple script not supported for this era" ++ show era)
 
 

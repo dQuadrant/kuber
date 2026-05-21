@@ -14,7 +14,7 @@
 module Cardano.Kuber.Core.TxBuilder where
 
 import Cardano.Api hiding (txCertificates, txFee, txMetadata,txAuxScripts)
-import Cardano.Api.Ledger (EraCrypto, StandardCrypto)
+import Cardano.Api.Ledger (StandardCrypto)
 import Cardano.Api.Shelley hiding (txCertificates, txFee, txMetadata,txAuxScripts)
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Api as Ledger
@@ -27,8 +27,6 @@ import GHC.Generics (Generic)
 import PlutusLedgerApi.V3 (PubKeyHash)
 import qualified Cardano.Ledger.Api as L
 import Cardano.Kuber.Core.TxScript
-import Cardano.Ledger.Api (Babbage)
-import Data.Either (fromRight)
 
 throwEraError source = error (source ++ ": Can only Support Babbage and Conway Era")
 
@@ -44,9 +42,9 @@ getEra era = case era of
 
 data TxVoteL ledgerera
   = TxVoteL
-      (Ledger.GovActionId (EraCrypto ledgerera))
+      Ledger.GovActionId
       (Ledger.VotingProcedure ledgerera)
-      (Ledger.Voter (EraCrypto ledgerera))
+      Ledger.Voter
   deriving (Show, Eq)
 
 newtype TxVote era = TxVote (TxVoteL (ShelleyLedgerEra era)) deriving (Show, Eq)
@@ -114,7 +112,7 @@ data TxChangeAddr era
   deriving (Show)
 
 data TxInputSelection era
-  = TxSelectableAddresses [Ledger.Addr StandardCrypto]
+  = TxSelectableAddresses [Ledger.Addr]
   | TxSelectableUtxos (UTxO era)
   | TxSelectableTxIn [TxIn]
   | TxSelectableSkey [SigningKey PaymentKey]
@@ -408,8 +406,8 @@ txPayToScriptWithDataInTx_ addr v d = txPayToScriptWithDataInTx_' bCardanoEra ad
 
 txPayToScriptWithDataInTx_' :: CardanoEra era -> AddressInEra era -> Value -> HashableScriptData -> TxBuilder_ era
 txPayToScriptWithDataInTx_' era addr v d = case era of 
-  BabbageEra -> txOutput $ TxOutput (TxOutNative $ TxOut addr (TxOutValueShelleyBased ShelleyBasedEraBabbage (toMaryValue v)) (TxOutDatumInTx AlonzoEraOnwardsBabbage d) ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
-  ConwayEra -> txOutput $ TxOutput (TxOutNative $ TxOut addr (TxOutValueShelleyBased ShelleyBasedEraConway (toMaryValue v)) (TxOutDatumInTx AlonzoEraOnwardsConway d) ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
+  BabbageEra -> txOutput $ TxOutput (TxOutNative $ TxOut addr (TxOutValueShelleyBased ShelleyBasedEraBabbage (toMaryValue v)) (TxOutSupplementalDatum AlonzoEraOnwardsBabbage d) ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
+  ConwayEra -> txOutput $ TxOutput (TxOutNative $ TxOut addr (TxOutValueShelleyBased ShelleyBasedEraConway (toMaryValue v)) (TxOutSupplementalDatum AlonzoEraOnwardsConway d) ReferenceScriptNone) False False OnInsufficientUtxoAdaUnset
   _ -> throwEraError "txPayToWithReferenceScript" 
 
 -- | Pay to script address with datumHash

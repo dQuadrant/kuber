@@ -1,19 +1,23 @@
 import Cardano.Kuber.Api
+import Control.Exception (finally)
 import Control.Exception (throw)
 import Control.Monad.IO.Class
 import Debug.Trace as Debug
 import System.Directory (getCurrentDirectory)
 import Test.ApiTest
 import Test.ChainApiTests
+import Test.IntegrationSetup (bootstrapIntegration)
 import Test.KuberApiTests
 import qualified Test.ParserTest as ParserTest
 import Test.Tasty
 
 main :: IO ()
-main = defaultMain tests
+main = do
+  cleanup <- bootstrapIntegration
+  defaultMain tests `finally` cleanup
 
 tests :: TestTree
-tests = testGroup "Tests" [chainApiTests, kuberApiTests]
+tests = testGroup "Tests" [chainApiTests, kuberApiTests, ParserTest.tests]
 
 chainApiTests :: TestTree
 chainApiTests =
@@ -37,7 +41,10 @@ kuberApiTests =
       testBuildTxSimpleMint,
       testBuildTxSimpleRedeem,
       testBuildTxRedeemFromSmartContract,
+      testRedeemFromSmartContractE2E,
       testBuildTxSupportMetadata,
       testBuildTxSupportDatumInAuxData,
-      testExUnits
+      testExUnits,
+      testCalculateFee,
+      testSubmitTx
     ]

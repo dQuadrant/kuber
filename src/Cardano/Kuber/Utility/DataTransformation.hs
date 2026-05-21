@@ -4,14 +4,13 @@
 module Cardano.Kuber.Utility.DataTransformation where
 
 import Cardano.Api
-import Cardano.Api.Shelley (Address (ShelleyAddress), StakeCredential (StakeCredentialByKey, StakeCredentialByScript), fromPlutusData, fromShelleyAddr, fromShelleyPaymentCredential, fromShelleyStakeReference, shelleyPayAddrToPlutusPubKHash)
+import Cardano.Api.Shelley (Address (ShelleyAddress))
 import qualified Cardano.Api.Shelley as Shelley
-import Cardano.Kuber.Data.Parsers (parseAddress)
 import qualified Cardano.Ledger.Plutus.TxInfo as Alonzo
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Shelley.API (Credential, Ptr (Ptr), StakeReference (StakeRefNull, StakeRefPtr))
+import Cardano.Ledger.Credential (SlotNo32 (SlotNo32))
 import Data.Functor ((<&>))
-import Data.Maybe (fromJust)
 import Data.String (fromString)
 import PlutusLedgerApi.V1.Value (AssetClass (AssetClass), adaSymbol, adaToken, assetClass, flattenValue, assetClassValue)
 import PlutusLedgerApi.V2 (CurrencySymbol (CurrencySymbol), PubKeyHash (PubKeyHash, getPubKeyHash), ToData, TokenName (TokenName), fromBuiltin, toBuiltin, toData, TxOutRef (TxOutRef))
@@ -117,7 +116,7 @@ unstakeAddr a = case a of
 
 -- | Create Plutus library AssetClass structure from Cardano.Api's AssetId
 toPlutusAssetClass :: AssetId -> AssetClass
-toPlutusAssetClass (AssetId (PolicyId hash) (AssetName name)) = AssetClass (CurrencySymbol $ toBuiltin $ serialiseToRawBytes hash, TokenName $ toBuiltin name)
+toPlutusAssetClass (AssetId (PolicyId hash) name) = AssetClass (CurrencySymbol $ toBuiltin $ serialiseToRawBytes hash, TokenName $ toBuiltin $ serialiseToRawBytes name)
 toPlutusAssetClass AdaAssetId = AssetClass (CurrencySymbol $ fromString "", TokenName $ fromString "")
 
 -- | Convert (ToData) (i.e. Plutus data) to Cardano.Api's ScriptData structure
@@ -128,7 +127,7 @@ dataToScriptData sData = fromPlutusData $ toData sData
 -- toPlutusScriptHash = Alonzo.transScriptHash
 
 -- | Convert Credential (cardano-api type)  to Credential (plutus type)
-toPlutusCredential :: Cardano.Ledger.Shelley.API.Credential keyrole crypto -> Plutus.Credential
+toPlutusCredential :: Cardano.Ledger.Shelley.API.Credential keyrole -> Plutus.Credential
 toPlutusCredential = Alonzo.transCred
 
 -- | Extract Payment Credential from Shelley Address (cardano-api type) and return  Plutus Credential (plutus type)
@@ -189,7 +188,7 @@ fromPlutusAddress network (Plutus.Address cre m_sc) = makeShelleyAddress network
             )
               <&> StakeCredentialByScript
               <&> StakeAddressByValue
-        Plutus.StakingPtr n i j -> Just $ fromShelleyStakeReference $ Cardano.Ledger.Shelley.API.StakeRefPtr (Cardano.Ledger.Shelley.API.Ptr (SlotNo $ fromInteger n) (Ledger.TxIx $ fromInteger i) (Ledger.CertIx $ fromInteger j))
+        Plutus.StakingPtr n i j -> Just $ fromShelleyStakeReference $ Cardano.Ledger.Shelley.API.StakeRefPtr (Cardano.Ledger.Shelley.API.Ptr (SlotNo32 $ fromInteger n) (Ledger.TxIx $ fromInteger i) (Ledger.CertIx $ fromInteger j))
 
 plutusAssetClassToAssetId :: AssetClass -> AssetId
 plutusAssetClassToAssetId plutusAssetClass =

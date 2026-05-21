@@ -27,25 +27,13 @@
                 "fields": [],
                 "constructor": 0
             }
-        },
-        {
-            "utxo": {
-                "address": "addr_test1wqag3rt979nep9g2wtdwu8mr4gz6m4kjdpp5zp705km8wys6t2kla",
-                "txin": "022b440450e28c33a785e7521edd13c8aa51fa8e0708fb0aff946d646712c9a7#0",
-                "value": {
-                    "lovelace": 29167525003
-                }
-            }
         }
     ],
     "changeAddress": "addr_test1qr0k5uczwvzdt6g6c2e9l92r24f528dfnmu9qq6lssrc3z56l3lczn30u56k4vlf948etel5d63zj20yg6wymu2gp4gsyum3sz",
-    "collaterals": {
-        "address": "addr_test1qr0k5uczwvzdt6g6c2e9l92r24f528dfnmu9qq6lssrc3z56l3lczn30u56k4vlf948etel5d63zj20yg6wymu2gp4gsyum3sz",
-        "txin": "5f40b522ea06816aae59003a995bdf7dede505a1dae9e9b0c9b3d19b80c1aeba#0",
-        "value": {
-            "lovelace": 5000000
-        }
-    },
+    "selections": [
+        "addr_test1qr0k5uczwvzdt6g6c2e9l92r24f528dfnmu9qq6lssrc3z56l3lczn30u56k4vlf948etel5d63zj20yg6wymu2gp4gsyum3sz",
+        "addr_test1wqag3rt979nep9g2wtdwu8mr4gz6m4kjdpp5zp705km8wys6t2kla"
+    ],
     "referenceInputs": [
         {
             "address": "addr_test1qr0k5uczwvzdt6g6c2e9l92r24f528dfnmu9qq6lssrc3z56l3lczn30u56k4vlf948etel5d63zj20yg6wymu2gp4gsyum3sz",

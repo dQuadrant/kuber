@@ -79,6 +79,9 @@ instance MimeUnrender CBORBinary  SubmitTxModal where
          (TxModal result) <- mimeUnrender proxy bs
          pure $ SubmitTxModal result Nothing
 
+instance MimeRender CBORBinary SubmitTxModal where
+  mimeRender proxy (SubmitTxModal tx _) = mimeRender proxy (TxModal tx)
+
 
 data CBORText =CBORText
 

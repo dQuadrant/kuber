@@ -101,12 +101,15 @@ fromScriptExecutionError see  _txbody= case see of
                 ScriptErrorMissingTxIn ti -> makeErr  ("Input Missing : " ++ T.unpack (renderTxIn ti))
                 ScriptErrorTxInWithoutDatum ti -> makeErr  ("Input doesn't have datum " ++  T.unpack (renderTxIn ti))
                 ScriptErrorWrongDatum ha ->  makeErr  ("Worng datum provided for hash " ++  BS8.unpack (serialiseToRawBytesHex ha))
-                ScriptErrorEvaluationFailed ee txts -> case ee of
-                  CekError ewc -> mkPlutusErr ("CekError : " ++ show ewc ++ " : " ++ show txts)
-                  DeBruijnError fve -> mkPlutusErr ("DeBruijnError : " ++ show fve ++ " : " ++ show txts)
-                  CodecError df -> mkPlutusErr ("CodecError Deserialization : " ++ show df ++ " : " ++ show txts)
-                  CostModelParameterMismatch -> mkPlutusErr "Unexpected costModel Parameter Mismatch"
-                  InvalidReturnValue -> mkPlutusErr "Script returned invalid type"
+                ScriptErrorEvaluationFailed dpf ->
+                  let ee = dpfEvaluationError dpf
+                      txts = dpfExecutionLogs dpf
+                   in case ee of
+                        CekError ewc -> mkPlutusErr ("CekError : " ++ show ewc ++ " : " ++ show txts)
+                        DeBruijnError fve -> mkPlutusErr ("DeBruijnError : " ++ show fve ++ " : " ++ show txts)
+                        CodecError df -> mkPlutusErr ("CodecError Deserialization : " ++ show df ++ " : " ++ show txts)
+                        CostModelParameterMismatch -> mkPlutusErr "Unexpected costModel Parameter Mismatch"
+                        InvalidReturnValue -> mkPlutusErr "Script returned invalid type"
                 ScriptErrorExecutionUnitsOverflow -> makeErr "Execution Units Overflowed "
                 ScriptErrorNotPlutusWitnessedTxIn _swi sh -> makeErr $ "Trying to execute non-plutus script : " ++  BS8.unpack (serialiseToRawBytesHex sh)
                 ScriptErrorRedeemerPointsToUnknownScriptHash swi -> makeErr $ "Unknown scriptHash for " ++ (case swi of
