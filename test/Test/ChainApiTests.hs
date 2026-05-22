@@ -25,10 +25,10 @@ test_kQuerySystemStart = kQuerySystemStart
 test_kQueryGenesisParams :: (HasChainQueryAPI api, HasCardanoQueryApi api) => Kontract api w FrameworkError (GenesisParameters ShelleyEra)
 test_kQueryGenesisParams = kQueryGenesisParams
 
-test_kQueryUtxoByAddress :: (HasChainQueryAPI api) => Kontract api w FrameworkError (UTxO BabbageEra)
+test_kQueryUtxoByAddress :: (HasChainQueryAPI api) => Kontract api w FrameworkError (UTxO ConwayEra)
 test_kQueryUtxoByAddress = kQueryUtxoByAddress $ Set.singleton $ addressInEraToAddressAny dummyAddressInBabbageEra
 
-test_kQueryUtxoByTxin :: (HasChainQueryAPI api) => Kontract api w FrameworkError (UTxO BabbageEra)
+test_kQueryUtxoByTxin :: (HasChainQueryAPI api) => Kontract api w FrameworkError (UTxO ConwayEra)
 test_kQueryUtxoByTxin = kQueryUtxoByTxin $ Set.singleton dummyTxIn
 
 test_kQueryChainPoint :: (HasChainQueryAPI api) => Kontract api w FrameworkError ChainPoint
@@ -36,3 +36,6 @@ test_kQueryChainPoint = kQueryChainPoint
 
 test_kQueryCurrentEra :: (HasChainQueryAPI api, HasCardanoQueryApi api) => Kontract api w FrameworkError AnyCardanoEra
 test_kQueryCurrentEra = kQueryCurrentEra
+
+test_kQueryEraHistory :: (HasChainQueryAPI api, HasCardanoQueryApi api) => Kontract api w FrameworkError EraHistory
+test_kQueryEraHistory = kQueryEraHistory

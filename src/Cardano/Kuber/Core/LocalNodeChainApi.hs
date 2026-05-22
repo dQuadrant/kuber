@@ -27,9 +27,6 @@ class ChainInfo v where
   getConnectInfo :: v -> LocalNodeConnectInfo
   getNetworkId :: v -> NetworkId
 
-class HasLocalNodeAPI a where
-  kQueryEraHistory :: Kontract a w FrameworkError EraHistory
-
 -- ChainConnectInfo wraps (LocalNodeConnectInfo CardanoMode)
 -- This is the minimal information required to connect to a cardano node
 newtype ChainConnectInfo = ChainConnectInfo LocalNodeConnectInfo
@@ -45,13 +42,11 @@ instance HasCardanoQueryApi LocalNodeConnectInfo where
   kQueryGenesisParams = liftLnciQuery queryGenesesisParams'
   kGetNetworkId = KLift $ \c -> pure $ pure $ localNodeNetworkId c
   kQueryCurrentEra = liftLnciQuery queryCurrentEra
+  kQueryEraHistory = liftLnciQuery queryEraHistory
   kQueryGovState = liftLnciQuery queryGovState
   kQueryStakeDeposit = liftLnciQuery2 (queryStakeDeposits ShelleyBasedEraConway)
   kQueryDrepState = liftLnciQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepState ShelleyBasedEraConway)
   kQueryDRepDistribution = liftLnciQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepDistribution ShelleyBasedEraConway)
-
-instance HasLocalNodeAPI LocalNodeConnectInfo where
-  kQueryEraHistory = liftLnciQuery queryEraHistory
 
 instance HasSubmitApi LocalNodeConnectInfo where
   kSubmitTx = liftLnciQuery2 submitTx
@@ -67,13 +62,11 @@ instance HasCardanoQueryApi ChainConnectInfo where
   kQueryGenesisParams = liftCinfoQuery queryGenesesisParams'
   kGetNetworkId = KLift $ \(ChainConnectInfo c) -> pure $ pure $ localNodeNetworkId c
   kQueryCurrentEra = liftCinfoQuery queryCurrentEra
+  kQueryEraHistory = liftCinfoQuery queryEraHistory
   kQueryGovState = liftCinfoQuery queryGovState
   kQueryStakeDeposit = liftCinfoQuery2 (queryStakeDeposits ShelleyBasedEraConway)
   kQueryDrepState = liftCinfoQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepState ShelleyBasedEraConway)
   kQueryDRepDistribution = liftCinfoQuery2 (Cardano.Kuber.Utility.QueryHelper.queryDRepDistribution ShelleyBasedEraConway)
-
-instance HasLocalNodeAPI ChainConnectInfo where
-  kQueryEraHistory = liftCinfoQuery queryEraHistory
 
 instance HasSubmitApi ChainConnectInfo where
   kSubmitTx tx = KLift $ \(ChainConnectInfo c) -> submitTx c tx
@@ -101,7 +94,7 @@ queryProtocolParamsForNodeEra conn = do
         _ -> pure $ Left $ FrameworkError FeatureNotSupported ("Protocol parameter queries require a Babbage-or-later node, current era is " ++ show currentEra)
       requestedEra -> pure $ Left $ FrameworkError FeatureNotSupported ("Protocol parameter queries require a Babbage-or-Conway target era, requested " ++ show requestedEra)
 
-kEvaluateExUnits' :: (HasChainQueryAPI a, HasCardanoQueryApi a, HasLocalNodeAPI a, IsTxBuilderEra era) => TxBody era -> UTxO era -> Kontract a w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
+kEvaluateExUnits' :: (HasChainQueryAPI a, HasCardanoQueryApi a, IsTxBuilderEra era) => TxBody era -> UTxO era -> Kontract a w FrameworkError (Map ScriptWitnessIndex (Either FrameworkError ExecutionUnits))
 kEvaluateExUnits' txbody utxos = do
   sStart <- kQuerySystemStart
   eHhistory <- kQueryEraHistory

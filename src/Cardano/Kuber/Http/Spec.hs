@@ -41,6 +41,7 @@ type QueryApi era =
 type CardanoApi era =
   "system-start" :> Get '[JSON] SystemStartModal
     :<|> "current-era" :> Get '[JSON] AnyCardanoEraModal
+    :<|> "era-history" :> Get '[JSON] EraHistoryModal
     :<|> "genesis-params" :> Get '[JSON] (GenesisParamModal ShelleyEra)
     :<|> "health" :> Get '[JSON] HealthStatusModal
 

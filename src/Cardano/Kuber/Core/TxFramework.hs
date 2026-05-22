@@ -24,7 +24,6 @@ import Cardano.Api.Shelley
       TxBodyContent(txCertificates, txFee, txMetadata, txAuxScripts) )
 import Cardano.Kuber.Core.ChainAPI (HasChainQueryAPI (..), HasCardanoQueryApi (..))
 import Cardano.Kuber.Core.Kontract
-import Cardano.Kuber.Core.LocalNodeChainApi (HasLocalNodeAPI (..))
 import Cardano.Kuber.Core.TxBuilder
 import Cardano.Kuber.Core.TxScript
 import Cardano.Kuber.Data.EraUpdate
@@ -132,7 +131,7 @@ valueToRequiredEra cera val = case cera of
   ConwayEra -> TxOutValueShelleyBased ShelleyBasedEraConway (toLedgerValue MaryEraOnwardsConway val)
   _ -> error "Unexpected"
 
-executeRawTxBuilder :: (HasChainQueryAPI api, HasCardanoQueryApi api, HasLocalNodeAPI api, IsTxBuilderEra era) => TxBuilder_ era -> LedgerProtocolParameters era -> Kontract api w FrameworkError (Cardano.Api.TxBody era, Tx era)
+executeRawTxBuilder :: (HasChainQueryAPI api, HasCardanoQueryApi api, IsTxBuilderEra era) => TxBuilder_ era -> LedgerProtocolParameters era -> Kontract api w FrameworkError (Cardano.Api.TxBody era, Tx era)
 executeRawTxBuilder builder pParam = do
   network <- kGetNetworkId
   systemStart <- kQuerySystemStart
@@ -305,7 +304,7 @@ executeRawTxBuilder builder pParam = do
 -- then updates the deposit amounts and previousGovActionId if required.
 -- finally it calls the pure txBuilderToTxBody function
 
-executeTxBuilder :: (HasChainQueryAPI api, HasCardanoQueryApi api, HasLocalNodeAPI api, IsTxBuilderEra era) => TxBuilder_ era -> Kontract api w FrameworkError (Cardano.Api.TxBody era, Tx era)
+executeTxBuilder :: (HasChainQueryAPI api, HasCardanoQueryApi api, IsTxBuilderEra era) => TxBuilder_ era -> Kontract api w FrameworkError (Cardano.Api.TxBody era, Tx era)
 executeTxBuilder builder = do
   -- first determine the addresses and txins that need to be queried for value and address.
   pParam <- kQueryProtocolParams
@@ -793,14 +792,7 @@ txBuilderToTxBody
           v ->
             let sorted = sortBy collateralSortingFunc v
                 selected = collectCollateral 0 sorted []
-             in Debug.trace
-                  ( "sorted: "
-                      ++ (intercalate "\n" $ map show sorted)
-                      ++ "selected: "
-                      ++ (intercalate "\n" $ map show selected)
-                  )
-                  $ Just
-                  $ selected
+             in Just selected
         v -> Just v
         where
           collectCollateral _ [] selected = selected

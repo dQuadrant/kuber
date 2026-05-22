@@ -80,6 +80,16 @@ This section provides detailed documentation for the Kuber backend API endpoints
 
 <ApiEndpoint
   method="GET"
+  path="/api/v3/era-history"
+  title="Retrieve Era History"
+  description="Retrieves the Cardano era timeline with readable era names, slot boundaries, and timestamps."
+  responses={[
+    { code: "200 OK", description: "Returns the era history timeline." },
+  ]}
+/>
+
+<ApiEndpoint
+  method="GET"
   path="/api/v3/genesis-params"
   title="Retrieve Genesis Parameters"
   description="Retrieves the genesis parameters of the Cardano network."

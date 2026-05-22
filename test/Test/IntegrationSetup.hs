@@ -5,14 +5,16 @@ where
 
 import Control.Concurrent (threadDelay)
 import Control.Exception (SomeException, finally, try)
-import System.Directory (doesFileExist, getHomeDirectory)
+import System.Directory (createDirectoryIfMissing, doesFileExist, getHomeDirectory)
 import System.Environment (getEnvironment, lookupEnv, setEnv)
 import System.Exit (ExitCode (ExitSuccess))
 import System.FilePath ((</>))
+import System.IO (Handle, IOMode (AppendMode), hClose, hPutStrLn, openFile)
 import System.Process
 
 data ManagedProcess = ManagedProcess
   { mpHandle :: ProcessHandle
+  , mpLogHandle :: Maybe Handle
   }
 
 bootstrapIntegration :: IO (IO ())
@@ -69,7 +71,7 @@ ensureNodeRunning adaupNetwork socketPath networkMagic = do
     else do
       home <- getHomeDirectory
       let cardanoPath = home </> ".venv" </> "bin" </> "cardano"
-      processHandle <- startProcess cardanoPath ["node", adaupNetwork]
+      processHandle <- startNodeProcess adaupNetwork cardanoPath ["node", adaupNetwork]
       waitForNodeSetup adaupNetwork socketPath networkMagic
       pure $ Just processHandle
 
@@ -153,6 +155,23 @@ waitFor label attempts action = do
 startProcess :: FilePath -> [String] -> IO ManagedProcess
 startProcess cmd args = startProcessWithEnv [] cmd args
 
+startNodeProcess :: String -> FilePath -> [String] -> IO ManagedProcess
+startNodeProcess network cmd args = do
+  logDir <- pure "test-reports"
+  createDirectoryIfMissing True logDir
+  let logPath = logDir </> ("cardano-node-" ++ network ++ ".log")
+  logHandle <- openFile logPath AppendMode
+  hPutStrLn logHandle $ "\n=== starting " ++ unwords (cmd : args) ++ " ==="
+  baseEnv <- getEnvironment
+  (_, _, _, handle) <-
+    createProcess
+      (proc cmd args)
+        { env = Just baseEnv
+        , std_out = UseHandle logHandle
+        , std_err = UseHandle logHandle
+        }
+  pure $ ManagedProcess handle (Just logHandle)
+
 startProcessWithEnv :: [(String, String)] -> FilePath -> [String] -> IO ManagedProcess
 startProcessWithEnv envVars cmd args = do
   baseEnv <- getEnvironment
@@ -163,15 +182,17 @@ startProcessWithEnv envVars cmd args = do
           std_out = Inherit,
           std_err = Inherit
         }
-  pure $ ManagedProcess handle
+  pure $ ManagedProcess handle Nothing
 
 stopManagedProcess :: Maybe ManagedProcess -> IO ()
 stopManagedProcess Nothing = pure ()
-stopManagedProcess (Just (ManagedProcess handle)) = do
+stopManagedProcess (Just (ManagedProcess handle logHandle)) = do
   status <- getProcessExitCode handle
   case status of
-    Nothing -> terminateProcess handle `finally` waitForProcess handle >> pure ()
-    Just _ -> pure ()
+    Nothing -> terminateProcess handle `finally` waitForProcess handle >> closeManagedHandles
+    Just _ -> closeManagedHandles
+  where
+    closeManagedHandles = maybe (pure ()) hClose logHandle
 
 mergeEnv :: [(String, String)] -> [(String, String)] -> [(String, String)]
 mergeEnv overrides base = overrides ++ filter (\(key, _) -> key `notElem` keys) base

@@ -26,12 +26,11 @@ class HasCardanoQueryApi a where
   kGetNetworkId           :: Kontract  a w FrameworkError NetworkId
   kQueryGenesisParams     :: Kontract a w FrameworkError (GenesisParameters ShelleyEra)
   kQueryCurrentEra        :: Kontract a w FrameworkError AnyCardanoEra
+  kQueryEraHistory        :: Kontract a w FrameworkError EraHistory
   kQueryStakeDeposit      :: Set StakeCredential -> Kontract a w FrameworkError (Map StakeCredential Coin)
   kQueryDrepState         :: Set (Credential DRepRole) -> Kontract a w FrameworkError (Map (Credential DRepRole) DRepState)
   kQueryGovState          :: IsTxBuilderEra era => Kontract a w FrameworkError (GovState (ShelleyLedgerEra era))
   kQueryDRepDistribution  :: Set DRep -> Kontract a w FrameworkError (Map DRep Coin)
-
-  
 
 class HasSubmitApi a where
   kSubmitTx :: InAnyCardanoEra Tx ->  Kontract  a w FrameworkError ()

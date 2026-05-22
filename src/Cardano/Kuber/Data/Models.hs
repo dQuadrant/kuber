@@ -25,76 +25,54 @@
 module Cardano.Kuber.Data.Models where
 
 import Cardano.Api
-import Cardano.Api.Shelley (TxBody (ShelleyTxBody), toAlonzoData, scriptDataFromJsonDetailedSchema, scriptDataToJsonDetailedSchema, ReferenceScript (ReferenceScript, ReferenceScriptNone), Proposal, ShelleyLedgerEra, StakeAddress (StakeAddress), StakePoolKey, Hash (..), toShelleyStakeAddr, toShelleyTxId, fromShelleyTxIn, fromShelleyStakeAddr, LedgerProtocolParameters (LedgerProtocolParameters))
-import Cardano.Binary (ToCBOR (toCBOR), decodeFull, fromCBOR)
-import Codec.CBOR.Write (toLazyByteString)
-import Data.Aeson (KeyValue ((.=)), encode, object, (.!=), ToJSONKey, FromJSONKey)
-import Data.Aeson.Types (FromJSON (parseJSON), Parser, ToJSON (toJSON), Value (Object, String), (.:), (.:?))
-import qualified Data.ByteString.Lazy as LBS
-import Data.ByteString.Lazy.Char8 (toStrict)
+import Data.Aeson (KeyValue ((.=)), object, (.!=))
+import Data.Aeson.Types (Parser, Value (Object, String), (.:), (.:?))
 import Data.Functor ( (<&>) )
-import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Conversions (Base16 (Base16), convertText)
-import qualified Data.Text.Encoding as T
-import qualified Data.Text.Encoding as TSE
 import GHC.Generics (Generic)
-import Text.Read (readMaybe)
 import Cardano.Kuber.Utility.Text (toHexString)
-import Cardano.Kuber.Data.Parsers (signKeyParser, txinOrUtxoParser, parseHexString, parseRawBytes', parseRawBytes, parseBech32OrCBOR', parseRawBech32, parseBech32Type, parseHexString', parseRawBech32', txInParser, parseRawBech32_, parseRawCBorAnyOf, parseRawTxInAnyEra)
-import Cardano.Slotting.Time (SystemStart(SystemStart))
+import Cardano.Kuber.Data.Parsers (txinOrUtxoParser, parseHexString, parseRawBytes', parseRawBytes, parseRawBech32, parseBech32Type, parseHexString', parseRawBech32', txInParser, parseRawBech32_, parseRawTxInAnyEra)
+import Cardano.Slotting.Time (fromRelativeTime)
+import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, POSIXTime)
 import Cardano.Kuber.Error (FrameworkError)
 import qualified Data.Aeson.Key as A
 import qualified Data.Aeson as A
 import Data.Word (Word64, Word8)
 import qualified Data.Map as Map
-import Data.Vector.Primitive (Vector(Vector))
 import qualified Data.Vector as Vector
-import Cardano.Api.Ledger (ConwayTxCert(..), ConwayGovCert (..), StrictMaybe (SNothing, SJust), Credential (KeyHashObj, ScriptHashObj), Coin (Coin), StandardCrypto, Url, textToUrl, ShelleyTxCert (..), ShelleyDelegCert (..), ConwayDelegCert (..), KeyHash (KeyHash), Delegatee (..), KeyRole (DRepRole), hashFromBytes, DRep (..), GovActionId (GovActionId), boundRational, unboundRational, PoolCert (..), PParamsHKD, AccountAddress, Crypto)
-import Data.Text.Encoding (encodeUtf8)
+import Cardano.Api.Ledger (ConwayTxCert(..), ConwayGovCert (..), StrictMaybe (SNothing, SJust), Credential (KeyHashObj, ScriptHashObj), StandardCrypto, ShelleyTxCert (..), ConwayDelegCert (..), Delegatee (..), hashFromBytes, DRep (..), GovActionId (GovActionId), boundRational, unboundRational, PoolCert (..), AccountAddress)
 import Cardano.Ledger.Hashes as Hashes
-import Cardano.Ledger.Api (Constitution (Constitution), Anchor (Anchor), GovAction (..), ProposalProcedure (ProposalProcedure), PParamsUpdate, emptyPParamsUpdate, ppuMaxBBSizeL, GovPurposeId (GovPurposeId), GovActionIx (GovActionIx), PParams, GovActionPurpose)
+import Cardano.Ledger.Api (Constitution (Constitution), Anchor (Anchor), GovAction (..), ProposalProcedure (ProposalProcedure), PParamsUpdate, emptyPParamsUpdate, ppuMaxBBSizeL, GovPurposeId (GovPurposeId), GovActionIx (GovActionIx), PParams)
 import qualified Cardano.Ledger.Api as Ledger
 import qualified Cardano.Api.Shelley as CAPI
 import qualified Data.ByteString as BS
 import Data.Typeable (Typeable)
 import qualified Data.Set as Set
-import Data.Aeson.KeyMap (toHashMapText, toHashMap)
+import Data.Aeson.KeyMap (toHashMap)
 import qualified Data.HashMap.Internal as HM
-import qualified Data.Foldable as Foldable
-import Cardano.Crypto.Hash (HashAlgorithm, hashToStringAsHex, hashToTextAsHex)
 import qualified Data.ByteString.Char8 as BS8
 import Control.Applicative ((<|>))
 import Data.Foldable (asum)
 import Data.Map (Map)
-import Data.Ratio ((%))
-import Cardano.Ledger.BaseTypes (UnitInterval)
-import Data.Default (def)
 import Data.Bits ((.&.))
 import qualified Cardano.Crypto.Hash as Crypto
-import Control.Lens ((&), (.~), ASetter, Lens', (^.), Getting)
-import Cardano.Ledger.HKD
-import GHC.Natural (Natural)
+import Control.Lens ((&), (.~), Lens', (^.), Getting)
 import qualified Data.Aeson.Types as A
 import qualified Data.Aeson.KeyMap as A
 import qualified Cardano.Ledger.Conway.PParams as Ledger
-import Data.ByteString (ByteString)
-import Codec.CBOR.Magic (intToWord)
 import Data.List (intercalate)
 import qualified Cardano.Ledger.TxIn as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Binary.Plain (serializeAsHexText)
 import Cardano.Ledger.Credential (parseCredential)
-import Cardano.Kuber.Core.TxBuilder (TxVote (..), TxVoteL (..), IsTxBuilderEra (bAsEra, bCardanoEra, bBabbageOnward), ProposalProcedureModal (..))
-import Data.Functor.Identity (Identity)
-import qualified Data.Maybe
-import qualified Cardano.Ledger.Api.Era as L
+import Cardano.Kuber.Core.TxBuilder (TxVote (..), TxVoteL (..), IsTxBuilderEra (bAsEra), ProposalProcedureModal (..))
 import qualified Cardano.Ledger.Conway.Governance as L
-import qualified Debug.Trace as Debug
-import Data.Maybe (fromJust, fromMaybe)
-import Cardano.Crypto.Hash.Class (castHash, hashFromStringAsHex)
+import Data.Maybe (fromMaybe)
+import qualified Ouroboros.Consensus.HardFork.History.Qry as Qry
+import Ouroboros.Consensus.HardFork.History.Summary (Bound (..), EraEnd (..), EraSummary (..))
 
 class Wrapper  m a  where
   unWrap :: m  ->  a
@@ -133,8 +111,21 @@ newtype AnchorModal era = AnchorModal Anchor
 -- ProposalProcedureModal (CAPI.ConwayEra) => ProposalProcedudure (ShelleyLedgerEra ( ShelleyLedgerEra (L.ConwayEra StandardCrypto) ))
 
 newtype SystemStartModal = SystemStartModal SystemStart
-newtype EraHistoryModal = EraHistoryModal EraHistory
+data EraHistoryModal = EraHistoryModal (Maybe SystemStart) EraHistory
 newtype GenesisParamModal era = GenesisParamModal (GenesisParameters era)
+
+data EraHistoryBoundModal = EraHistoryBoundModal
+  { ehbmSlot :: SlotNo
+  , ehbmEpoch :: EpochNo
+  , ehbmTimestamp :: POSIXTime
+  , ehbmTime :: UTCTime
+  }
+
+data EraHistoryEntryModal = EraHistoryEntryModal
+  { ehemEra :: Text
+  , ehemStart :: EraHistoryBoundModal
+  , ehemEnd :: Maybe EraHistoryBoundModal
+  }
 
 newtype VotingProcedureModal era = VotingProcedureModal (Ledger.VotingProcedure era)
 
@@ -219,7 +210,7 @@ instance Wrapper SystemStartModal SystemStart where
   unWrap  (SystemStartModal ss )= ss
 
 instance Wrapper  EraHistoryModal EraHistory  where
-  unWrap (EraHistoryModal eh) = eh
+  unWrap (EraHistoryModal _ eh) = eh
 
 instance Wrapper  (GenesisParamModal era) (GenesisParameters era) where
   unWrap (GenesisParamModal gp) = gp
@@ -394,6 +385,44 @@ instance FromJSON SystemStartModal where
     ss <- o A..: "systemStart"
     pure (SystemStartModal $ SystemStart ss)
   parseJSON _ = fail "expected SystemStart Object"
+
+instance ToJSON EraHistoryBoundModal where
+  toJSON (EraHistoryBoundModal slot epoch timestamp time) =
+    A.object
+      [ "slot" .= slot
+      , "epoch" .= epoch
+      , "timestamp" .= timestamp
+      , "time" .= time
+      ]
+
+instance ToJSON EraHistoryEntryModal where
+  toJSON (EraHistoryEntryModal era start end) =
+    A.object
+      [ "era" .= era
+      , "start" .= start
+      , "end" .= end
+      ]
+
+instance ToJSON EraHistoryModal where
+  toJSON (EraHistoryModal mSystemStart eraHistory) =
+    A.object $
+      [ "query" .= ("eraHistory" :: Text)
+      , "format" .= ("kuber-era-history/v1" :: Text)
+      , "rawCborHex" .= (toHexString (serialiseToCBOR eraHistory) :: Text)
+      , "eras" .= maybe [] (`eraHistoryEntries` eraHistory) mSystemStart
+      ]
+      <> maybe [] (\systemStart -> ["systemStart" .= SystemStartModal systemStart]) mSystemStart
+
+instance FromJSON EraHistoryModal where
+  parseJSON (A.Object o) = do
+    rawCborHex :: Text <- o A..: "rawCborHex"
+    systemStart <- (o A..:? "systemStart" :: Parser (Maybe SystemStartModal)) <&> fmap unWrap
+    rawCbor <- parseHexString' rawCborHex "Invalid era history CBOR hex"
+    eraHistory <- case deserialiseFromCBOR (proxyToAsType (Proxy :: Proxy EraHistory)) rawCbor of
+      Left decoderError -> fail $ "Failed to decode EraHistory CBOR: " ++ show decoderError
+      Right decoded -> pure decoded
+    pure $ EraHistoryModal systemStart eraHistory
+  parseJSON _ = fail "Expected EraHistory object"
 
 instance ToJSON (GenesisParamModal ShelleyEra) where
   toJSON (GenesisParamModal ss)= case ss of { GenesisParameters ut ni ra n es sl i j x lo pp -> A.object[
@@ -594,6 +623,50 @@ instance FromJSON AnyCardanoEraModal where
       "ConwayEra" -> pure $ AnyCardanoEraModal (AnyCardanoEra ConwayEra)
       _ -> fail "Could not deduce Era"
   parseJSON _ = fail "Expected AnyCardanoEra Modal"
+
+eraHistoryEntries :: SystemStart -> EraHistory -> [EraHistoryEntryModal]
+eraHistoryEntries systemStart eraHistory =
+  zipWith mkEntry eraNames summaries
+  where
+    summaries = eraHistorySummaries eraHistory
+    eraNames = take (length summaries) (knownEraNames <> fallbackNames)
+    fallbackNames = [T.pack ("Era" ++ show i) | i <- [(length knownEraNames + 1) ..]]
+    mkEntry eraName summary =
+      EraHistoryEntryModal
+        eraName
+        (boundToModal systemStart $ eraStart summary)
+        (eraEndToModal systemStart $ eraEnd summary)
+
+eraHistorySummaries :: EraHistory -> [EraSummary]
+eraHistorySummaries eraHistory =
+  case slotToEpoch (SlotNo maxBound) eraHistory of
+    Left pastHorizon -> Qry.pastHorizonSummary pastHorizon
+    Right _ -> []
+
+knownEraNames :: [Text]
+knownEraNames =
+  [ "Byron"
+  , "Shelley"
+  , "Allegra"
+  , "Mary"
+  , "Alonzo"
+  , "Babbage"
+  , "Conway"
+  ]
+
+boundToModal :: SystemStart -> Bound -> EraHistoryBoundModal
+boundToModal systemStart (Bound relativeTime slotNo epochNo _) =
+  let utcTime = fromRelativeTime systemStart relativeTime
+   in EraHistoryBoundModal
+        slotNo
+        epochNo
+        (utcTimeToPOSIXSeconds utcTime)
+        utcTime
+
+eraEndToModal :: SystemStart -> EraEnd -> Maybe EraHistoryBoundModal
+eraEndToModal systemStart = \case
+  EraEnd bound -> Just $ boundToModal systemStart bound
+  EraUnbounded -> Nothing
 
 
 

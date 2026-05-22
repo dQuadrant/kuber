@@ -83,6 +83,7 @@ queryServer queryEra a =
 cardanoServer cardanoEra a =
   (makeHandler a kQuerySystemStart <&> SystemStartModal)
     :<|> makeHandler a (kQueryCurrentEra <&> AnyCardanoEraModal)
+    :<|> makeHandler a ((\systemStart eraHistory -> EraHistoryModal (Just systemStart) eraHistory) <$> kQuerySystemStart <*> kQueryEraHistory)
     :<|> (makeHandler a kQueryGenesisParams <&> GenesisParamModal)
     :<|> (queryHeahtlHandler a)
 
@@ -112,7 +113,6 @@ corsMiddlewarePolicy =
 appWithBackenAndEra ::
   ( HasChainQueryAPI a,
     HasCardanoQueryApi a,
-    HasLocalNodeAPI a,
     HasSubmitApi a,
     HasKuberAPI a
   ) =>

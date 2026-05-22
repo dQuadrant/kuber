@@ -48,6 +48,7 @@ cQueryUtxos :: [Text] -> [Text] -> ClientM (UtxoModal ConwayEra)
 cQuerySystemStart :: ClientM SystemStartModal
 cQueryGenesisParams :: ClientM (GenesisParamModal ShelleyEra)
 cGetHealthStatus :: ClientM HealthStatusModal
+cQueryEraHistory :: ClientM EraHistoryModal
 cBuildTx :: Maybe Bool -> TxBuilder_ ConwayEra -> ClientM TxModal
 cSubmitTx :: SubmitTxModal -> ClientM TxModal
 cQueryTime :: ClientM TranslationResponse
@@ -61,6 +62,7 @@ cEvaluateExUnits :: TxModal -> ClientM ExUnitsResponseModal
   )
   :<|> ( cQuerySystemStart
            :<|> cQueryCurrentEra
+           :<|> cQueryEraHistory
            :<|> cQueryGenesisParams
            :<|> cGetHealthStatus
          )
@@ -95,6 +97,9 @@ instance HasCardanoQueryApi RemoteKuberConnection where
   kQuerySystemStart = liftHttpReq cQuerySystemStart <&> unWrap
   kQueryGenesisParams = liftHttpReq cQueryGenesisParams <&> unWrap
   kQueryCurrentEra = liftHttpReq cQueryCurrentEra <&> unWrap
+  kQueryEraHistory = liftHttpReq cQueryEraHistory <&> unWrap
+  kQueryStakeDeposit = error "TODO Cardano.Kuber.Http.Client.RemoteKuberConnection.queryStakeDeposit"
+  kQueryDrepState = error "TODO Cardano.Kuber.Http.Client.RemoteKuberConnection.queryDrepState"
   kQueryGovState = error "TODO Cardano.Kuber.Http.Client.RemoteKuberConnection.queryGovState"
   kQueryDRepDistribution = error "TODO Cardano.Kuber.Http.Client.RemoteKuberConnection.queryDRepDistribution"
 
@@ -305,6 +310,9 @@ mapClientError = \case
       Network.HTTP.Client.HttpZlibException ze -> FrameworkError LibraryError $ "Error reading response HttpZlibException : " ++ show ze
       Network.HTTP.Client.InvalidProxyEnvironmentVariable txt txt' -> FrameworkError LibraryError $ "SetupError InvalidProxyEnvironmentVariable expected=" ++ T.unpack txt ++ "got=" ++ T.unpack txt'
       Network.HTTP.Client.ConnectionClosed -> FrameworkError Cardano.Kuber.Error.ConnectionError "KuberBackend Connection was Closed"
+      Network.HTTP.Client.TooManyHeaderFields ->
+        FrameworkError Cardano.Kuber.Error.ConnectionError
+          "Kuber Backend Server : Responded with too many header fields"
       Network.HTTP.Client.InvalidProxySettings txt -> FrameworkError LibraryError $ "SetupError InvalidProxySettings expected=" ++ T.unpack txt
       where
         uri = Network.HTTP.Client.getUri re

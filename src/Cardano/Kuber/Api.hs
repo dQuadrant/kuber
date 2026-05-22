@@ -189,7 +189,6 @@ module Cardano.Kuber.Api(
     , HasCardanoQueryApi(..)
     , HasSubmitApi(..)
     , HasKuberAPI(..)
-    , HasLocalNodeAPI(..)
 
     -- * Chain info Structures
     ,   ChainConnectInfo(..)
