@@ -38,7 +38,7 @@ This section provides detailed documentation for the Kuber backend API endpoints
   method="GET"
   path="/api/v3/chain-point"
   title="Retrieve Chain Point"
-  description="Retrieves the current chain point (block number and hash) of the Cardano network."
+  description="Retrieves the current network's head point (block hash, number)."
   responses={[
     { code: "200 OK", description: "Returns the current chain point." },
   ]}

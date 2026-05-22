@@ -25,9 +25,10 @@ Here's a quick example of how to use `KuberHydraApiProvider` to interact with a 
 const { KuberHydraApiProvider } = require("kuber-client");
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
 
-  console.log("Head state:", await hydra.queryHeadState());
+  const headState = await hydra.queryHeadState();
+  console.log("Head state:", headState.state);
 
   // Example: Close the head
   await hydra.close(true);

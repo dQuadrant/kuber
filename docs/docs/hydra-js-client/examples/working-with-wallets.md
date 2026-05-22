@@ -11,7 +11,7 @@ This guide demonstrates how to interact with wallets to query UTxOs from both th
 
 - Node.js environment
 - `libcardano` and `libcardano-wallet` installed.
-- Access to a running Hydra node and its credentials (e.g., `node.addr`, `funds.sk`).
+- Access to a running Hydra node and its credentials (e.g., `node.addr`, `alice-funds.sk`).
 - An active Hydra Head (can be in any state, but "Open" is ideal for demonstrating Hydra UTxOs).
 
 ## Example: Querying UTxOs from L1 and Hydra
@@ -24,18 +24,37 @@ import { loadCrypto, Ed25519Key } from "libcardano";
 import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
 import { KuberHydraApiProvider } from "kuber-client"; // Adjust path as needed
 
+function formatAssets(assets: Record<string, Record<string, bigint>> = {}) {
+  return Object.fromEntries(
+    Object.entries(assets).map(([policyId, tokens]) => [
+      policyId,
+      Object.fromEntries(Object.entries(tokens).map(([assetName, quantity]) => [assetName, quantity.toString()])),
+    ]),
+  );
+}
+
+function formatValue(value) {
+  return {
+    lovelace: value.lovelace.toString(),
+    assets: formatAssets(value.multiassets),
+  };
+}
+
 async function runWalletQueryExample() {
   // Initialize Hydra API Provider
-  const hydra = new KuberHydraApiProvider("http://172.31.6.1:8082"); // Replace with your Hydra node URL
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
 
   // Load test wallet signing key
   // Setup libcardano crypto and Shelley wallet
   await loadCrypto();
   const testWalletSigningKey = await Ed25519Key.fromCardanoCliJson(
-    JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
+    JSON.parse(readFileSync("../../kuber-hydra/devnet/credentials/alice-funds.sk", "utf-8")),
   );
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);
-  console.log("Base Shelley Wallet:", shelleyWallet.toJSON());
+  console.table({
+    paymentKeyHash: shelleyWallet.paymentKey.publicKeyHash().toString("hex"),
+    networkId: 0,
+  });
 
   // Create a wallet instance for Hydra operations
   const hydraWallet = new SimpleCip30Wallet(hydra, hydra, shelleyWallet, 0);
@@ -54,12 +73,12 @@ async function runWalletQueryExample() {
   console.log("\n--- Querying Balance from Layer 1 (L1) Chain using layer1Wallet ---");
   // Use the layer1Wallet's getBalance() method (CIP-30)
   const l1Balance = await layer1Wallet.getBalance();
-  console.log(`L1 Balance for address ${layer1WalletAddress}: ${l1Balance.lovelace} lovelace`);
+  console.table({ scope: "L1", address: layer1WalletAddress, ...formatValue(l1Balance) });
 
   console.log("\n--- Querying Balance from Hydra Head using hydraWallet ---");
   // Use the hydraWallet's getBalance() method (CIP-30)
   const hydraBalance = await hydraWallet.getBalance();
-  console.log(`Hydra Head Balance for address ${hydraWalletAddress}: ${hydraBalance.lovelace} lovelace`);
+  console.table({ scope: "Hydra", address: hydraWalletAddress, ...formatValue(hydraBalance) });
 
 }
 

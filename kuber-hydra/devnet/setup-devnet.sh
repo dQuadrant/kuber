@@ -3,6 +3,8 @@
 #if directory exists, it will be removed 
 
 set -eo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 BASEDIR=${BASEDIR:-$(realpath $(dirname $(realpath $0))/..)}
 TARGETDIR=${TARGETDIR:-runtime}
@@ -45,11 +47,8 @@ chmod 600 "$TARGETDIR/cardano-node/faucet.vk"
 chmod 600 "$TARGETDIR/cardano-node/kes.skey"
 chmod 600 "$TARGETDIR/cardano-node/vrf.skey"
 
-if [ ! -f .env ]; then
-    cat > .env << 'EOF'
+cat > .env << 'EOF'
 HYDRA_SCRIPTS_TX_ID=
 EOF
-    
-fi
-echo "Prepared devnet, you can start the cluster now"
 
+echo "Prepared devnet, you can start the cluster now"

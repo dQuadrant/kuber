@@ -43,7 +43,7 @@ Here with docker we run `kuber server` along with a Cardano node and Hydra node.
     Ensure all services are up and healthy.
 
 3.  **Access the Kuber-Hydra Relay API:**
-    The API will be accessible at `http://localhost:8081`.
+    The API will be accessible at `http://localhost:8082`.
 
 
 #### **With cabal**
@@ -61,7 +61,7 @@ cabal run kuber-hydra -- --hydra-url ws://172.16.238.10:4001 --port 8081
 -   `--hydra-url`: The WebSocket URL of your Hydra node. This is a **required** command-line argument.
 -   `--port`: The port for the Kuber-Hydra relay server. If not specified, it defaults to `8081`.
 
-> The Kuber relay API will be accessible at `http://localhost:8081`.
+> The Kuber relay API will be accessible at `http://localhost:8082`.
 
 
 

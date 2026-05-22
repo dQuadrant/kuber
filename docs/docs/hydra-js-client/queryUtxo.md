@@ -22,16 +22,49 @@ A `Promise` that resolves to an array of `UTxO` objects. Each `UTxO` object cont
 
 ### Example
 
-```javascript
-const { KuberHydraApiProvider } = require("kuber-client");
+```typescript
+import { readFileSync } from "fs";
+import { CardanoKeyAsync } from "libcardano";
+import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
+import { KuberHydraApiProvider } from "kuber-client";
+
+function formatAssets(assets: Record<string, Record<string, bigint>> = {}) {
+  return Object.fromEntries(
+    Object.entries(assets).map(([policyId, tokens]) => [
+      policyId,
+      Object.fromEntries(Object.entries(tokens).map(([assetName, quantity]) => [assetName, quantity.toString()])),
+    ]),
+  );
+}
+
+function formatValue(value) {
+  return {
+    lovelace: value.lovelace.toString(),
+    assets: formatAssets(value.multiAssetsUtf8 ? value.multiAssetsUtf8() : value.multiassets),
+  };
+}
+
+function formatUtxo(utxo) {
+  return {
+    txIn: `${utxo.txIn.txHash.toString("hex")}#${utxo.txIn.index}`,
+    address: utxo.txOut.address.toBech32(),
+    value: formatValue(utxo.txOut.value),
+    datum: utxo.txOut.datum ? "inline" : utxo.txOut.datumHash?.toString("hex"),
+    referenceScript: Boolean(utxo.txOut.referenceScript),
+  };
+}
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
-  const walletAddress = "addr_test1qr..."; // Replace with your wallet address
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
+  const signingKey = await CardanoKeyAsync.fromCardanoCliJson(
+    JSON.parse(readFileSync("../../kuber-hydra/devnet/credentials/alice-funds.sk", "utf-8")),
+  );
+  const wallet = new SimpleCip30Wallet(hydra, hydra, new ShelleyWallet(signingKey), 0);
+  const walletAddress = (await wallet.getChangeAddress()).toBech32();
 
   try {
     const utxos = await hydra.queryUTxOByAddress(walletAddress);
-    console.log("UTxOs for address:", utxos);
+    console.table(utxos.map(formatUtxo));
   } catch (error) {
     console.error("Error querying UTxOs:", error);
   }
@@ -62,16 +95,56 @@ A `Promise` that resolves to an array of `UTxO` objects. Each `UTxO` object cont
 
 ### Example
 
-```javascript
-const { KuberHydraApiProvider } = require("kuber-client");
+```typescript
+import { readFileSync } from "fs";
+import { CardanoKeyAsync } from "libcardano";
+import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
+import { KuberHydraApiProvider } from "kuber-client";
+
+function formatAssets(assets: Record<string, Record<string, bigint>> = {}) {
+  return Object.fromEntries(
+    Object.entries(assets).map(([policyId, tokens]) => [
+      policyId,
+      Object.fromEntries(Object.entries(tokens).map(([assetName, quantity]) => [assetName, quantity.toString()])),
+    ]),
+  );
+}
+
+function formatValue(value) {
+  return {
+    lovelace: value.lovelace.toString(),
+    assets: formatAssets(value.multiAssetsUtf8 ? value.multiAssetsUtf8() : value.multiassets),
+  };
+}
+
+function formatUtxo(utxo) {
+  return {
+    txIn: `${utxo.txIn.txHash.toString("hex")}#${utxo.txIn.index}`,
+    address: utxo.txOut.address.toBech32(),
+    value: formatValue(utxo.txOut.value),
+    datum: utxo.txOut.datum ? "inline" : utxo.txOut.datumHash?.toString("hex"),
+    referenceScript: Boolean(utxo.txOut.referenceScript),
+  };
+}
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
-  const transactionInput = "yourTxHash#0"; // Replace with a valid transaction input
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
+  const signingKey = await CardanoKeyAsync.fromCardanoCliJson(
+    JSON.parse(readFileSync("../../kuber-hydra/devnet/credentials/alice-funds.sk", "utf-8")),
+  );
+  const wallet = new SimpleCip30Wallet(hydra, hydra, new ShelleyWallet(signingKey), 0);
+  const walletAddress = (await wallet.getChangeAddress()).toBech32();
 
   try {
+    const walletUtxos = await hydra.queryUTxOByAddress(walletAddress);
+    if (walletUtxos.length === 0) {
+      console.log(`No UTxOs found for ${walletAddress}`);
+      return;
+    }
+
+    const transactionInput = `${walletUtxos[0].txIn.txHash.toString("hex")}#${walletUtxos[0].txIn.index}`;
     const utxos = await hydra.queryUTxOByTxIn(transactionInput);
-    console.log("UTxOs for transaction input:", utxos);
+    console.table(utxos.map(formatUtxo));
   } catch (error) {
     console.error("Error querying UTxOs by TxIn:", error);
   }

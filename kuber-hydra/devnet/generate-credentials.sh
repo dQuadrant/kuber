@@ -57,9 +57,10 @@ function ccli_() {
 # Invoke hydra-node in a container or via provided executable
 function hnode() {
   if [[ -n ${HYDRA_NODE_CMD} ]]; then
-      ${HYDRA_NODE_CMD} ${@}
+      ${HYDRA_NODE_CMD} ${@} 
   else
       docker run --rm -it \
+                --platform linux/amd64 \
                 --user "$(id -u):$(id -g)" \
         --workdir /devnet \
         -v ${SCRIPT_DIR}/:/devnet/ \

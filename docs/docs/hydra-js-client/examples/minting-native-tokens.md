@@ -19,20 +19,18 @@ This example demonstrates how to build and submit a transaction that mints nativ
 
 ```typescript
 import { KuberHydraApiProvider } from "kuber-client";
-import { Value, CardanoKeyAsync } from "libcardano";
-import { parseTransaction } from 'libcardano/serialization';
-
+import { CardanoKeyAsync } from "libcardano";
 import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
 import { readFileSync } from "fs";
 
 async function runMintNativeTokensExample() {
   // Initialize Hydra API Provider (replace with your Hydra node URL)
-  const hydra = new KuberHydraApiProvider("http://172.31.6.1:8082");
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
 
   // Load test wallet signing key (used for signing the transaction)
   // Setup Shelley wallet
   const testWalletSigningKey = await CardanoKeyAsync.fromCardanoCliJson(
-    JSON.parse(readFileSync(process.env.HOME + "/.cardano/preview/hydra-0/credentials/funds.sk", "utf-8")),
+    JSON.parse(readFileSync("../../kuber-hydra/devnet/credentials/alice-funds.sk", "utf-8")),
   );
   const shelleyWallet = new ShelleyWallet(testWalletSigningKey);
   const cip30Wallet = new SimpleCip30Wallet(hydra, hydra, shelleyWallet, 0);
@@ -56,7 +54,7 @@ async function runMintNativeTokensExample() {
       {
         script: {
           type: "sig",
-          keyHash: shelleyWallet.paymentKey.pkh.toString('hex'), 
+          keyHash: shelleyWallet.paymentKey.publicKeyHash().toString("hex"),
         },
         amount: {
           Token1: 2,
@@ -69,8 +67,7 @@ async function runMintNativeTokensExample() {
   try {
     // Use the buildAndSubmitWithWallet function from KuberProvider to mint tokens
     const mintResult = await hydra.buildAndSubmitWithWallet(cip30Wallet, mintingTransaction);
-    console.log("Minting transaction submitted to Hydra Head");
-    console.log("CBOR Hex:", mintResult.transaction.toBytes().toString('hex'));
+    console.log("Mint transaction hash:", mintResult.transaction.hash().toString("hex"));
   } catch (error: unknown) {
     if (error instanceof Error) {
       console.error("Error building or submitting minting transaction:", error.message);
@@ -81,3 +78,4 @@ async function runMintNativeTokensExample() {
 }
 
 runMintNativeTokensExample();
+```

@@ -18,21 +18,30 @@ A `Promise` that resolves to a `CommonTxObject` representing the submitted trans
 
 ## Example
 
-```javascript
-const { KuberHydraApiProvider } = require("kuber-client");
+```typescript
+import { readFileSync } from "fs";
+import { CardanoKeyAsync } from "libcardano";
+import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
+import { KuberHydraApiProvider } from "kuber-client";
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
-
-  // This is a placeholder. In a real application, you would build and sign a transaction
-  // to get a valid CBOR string.
-  const signedCborTx = "840081825820..."; // Replace with your signed CBOR transaction string
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
+  const signingKey = await CardanoKeyAsync.fromCardanoCliJson(
+    JSON.parse(readFileSync("../../kuber-hydra/devnet/credentials/alice-funds.sk", "utf-8")),
+  );
+  const wallet = new SimpleCip30Wallet(hydra, hydra, new ShelleyWallet(signingKey), 0);
+  const walletAddress = (await wallet.getChangeAddress()).toBech32();
 
   try {
+    const builtTx = await hydra.buildWithWallet(wallet, {
+      outputs: [{ address: walletAddress, value: "1_000_000" }],
+      changeAddress: walletAddress,
+    });
+    const signedTx = await wallet.signTx(builtTx.cborHex, true);
+
     console.log("Submitting transaction...");
-    const result = await hydra.submitTx(signedCborTx);
-    console.log("Transaction submitted. Hash:", result.hash);
-    console.log("CBOR Hex:", result.cborHex);
+    const result = await hydra.submitTx(signedTx.transaction.toBytes().toString("hex"));
+    console.log("Transaction hash:", result.hash);
   } catch (error) {
     console.error("Error submitting transaction:", error);
   }

@@ -19,25 +19,33 @@ A `Promise` that resolves to a `DecommitResult` object containing information ab
 
 ## Example
 
-```javascript
-const { KuberHydraApiProvider } = require("kuber-client");
+```typescript
+import { readFileSync } from "fs";
+import { CardanoKeyAsync } from "libcardano";
+import { ShelleyWallet, SimpleCip30Wallet } from "libcardano-wallet";
+import { KuberHydraApiProvider } from "kuber-client";
 
 async function main() {
-  const hydra = new KuberHydraApiProvider("http://localhost:8081"); // Replace with your Hydra API URL
+  const hydra = new KuberHydraApiProvider("http://localhost:8082");
+  const signingKey = await CardanoKeyAsync.fromCardanoCliJson(
+    JSON.parse(readFileSync("../../kuber-hydra/devnet/credentials/alice-funds.sk", "utf-8")),
+  );
+  const wallet = new SimpleCip30Wallet(hydra, hydra, new ShelleyWallet(signingKey), 0);
+  const walletAddress = (await wallet.getChangeAddress()).toBech32();
 
-  // First, create the decommit transaction
-  const utxoToDecommit = "yourTxHash#0"; // Replace with a valid UTxO from the head
-  const decommitTx = await hydra.createDecommitTx(utxoToDecommit);
+  const headUtxos = await hydra.queryUTxOByAddress(walletAddress);
+  if (headUtxos.length === 0) {
+    throw new Error(`Alice has no UTxO in the Hydra head at ${walletAddress}`);
+  }
 
-  // Then, sign the transaction (assuming you have a wallet setup)
-  // const signedTx = await wallet.signTx(decommitTx.cborHex); // Replace 'wallet' with your actual wallet instance
-  const signedTxCbor = decommitTx.cborHex; // For demonstration, using unsigned CBOR
+  const txIn = `${headUtxos[0].txIn.txHash.toString("hex")}#${headUtxos[0].txIn.index}`;
+  const decommitTx = await hydra.createDecommitTx(txIn);
+  const signedTx = await wallet.signTx(decommitTx.cborHex);
 
   try {
     console.log("Decommitting UTxOs...");
-    const result = await hydra.decommit(signedTxCbor, true); // Pass the signed transaction CBOR and wait
-    console.log("Decommit result:", result);
-    console.log("Decommit transaction hash:", result.decommitTx.txHash);
+    const result = await hydra.decommit(signedTx.transaction.toBytes().toString("hex"), true);
+    console.log("Decommit transaction hash:", result.decommitTx.hash);
   } catch (error) {
     console.error("Error decommitting UTxOs:", error);
   }
